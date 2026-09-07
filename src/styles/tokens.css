@@ -1,0 +1,159 @@
+/* 디자인 토큰 — 설계서 §16.
+ *
+ * 색 예산은 네 개뿐이다:
+ *   파랑 = 상호작용 (링크·선택·포커스)
+ *   적   = 무효 (정정, 섹션/문서 없음, 끊김)
+ *   앰버 = 경고 (후속·밀림·미작성·미등재·인덱스 불일치)
+ *   보라 = 미결 (행동 대기)
+ *
+ * --success 토큰은 정의하지 않는다. 정의해두면 언젠가 누가 "유효"에 쓴다(§13-①).
+ * "유효"는 정상 상태이고, 정상 상태에 색을 주면 화면의 90%가 초록이 되어 색이
+ * 의미를 잃는다. 그리고 적·초록 쌍은 색약 사용자에게 최악의 조합이다.
+ * 정상은 조용하고 이상만 소리를 낸다. */
+
+:root {
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f2;
+  --surface-3: #ececea;
+  --border: #e4e4e0;
+  --border-strong: #cfcfc9;
+  --text: #1a1a19;
+  --text-2: #5c5c58;
+  --text-3: #8a8a84;
+  --accent: #2f6fdb;
+  --accent-bg: #eaf1fd;
+  --danger: #c0392b;
+  --danger-bg: #fdeceb;
+  --warn: #8a5d00;
+  --warn-bg: #fdf6e3;
+  --pending: #6247c4;
+  --pending-bg: #f0edfd;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+
+  --r-card: 8px;
+  --r-badge: 4px;
+
+  --topbar-h: 44px;
+  --statusbar-h: 24px;
+
+  /* §27.7 — 읽는 사람이 정한다. JS 가 이 둘을 덮어쓴다 */
+  --doc-size: 15px;
+  --doc-measure: 760px;
+
+  --font-sans: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI',
+    'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  /* D2Coding · Sarasa Mono K 는 한글이 라틴 2배 폭으로 설계된 폰트다. 있으면
+   * 박스문자 다이어그램의 정렬이 맞는다(§27.2). 없으면 라틴만 정확하고 한글
+   * 정렬은 어긋난다 — 근본 해결이 없는 알려진 한계이므로 번들하지 않는다. */
+  --font-mono: D2Coding, 'Sarasa Mono K', 'Cascadia Mono', 'Cascadia Code', Consolas, 'Nanum Gothic Coding',
+    monospace;
+}
+
+:root[data-theme='dark'],
+:root[data-theme='auto-dark'] {
+  --bg: #17181a;
+  --surface: #1e2023;
+  --surface-2: #25282c;
+  --surface-3: #2c3034;
+  --border: #2e3033;
+  --border-strong: #3d4046;
+  --text: #e8e8e6;
+  --text-2: #a8a8a3;
+  --text-3: #77776f;
+  --accent: #6fa4f5;
+  --accent-bg: #1c2b45;
+  --danger: #e8756a;
+  --danger-bg: #3a201d;
+  --warn: #e0b355;
+  --warn-bg: #33290f;
+  --pending: #a894f5;
+  --pending-bg: #241c44;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* 날짜·개수가 흔들리면 훑기가 안 된다(§16.2) */
+.num,
+time,
+.count {
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* 포커스 링을 지우지 않는다(§29.1) */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--accent-bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* 스크롤바 — 조용하게 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+  background-clip: content-box;
+}

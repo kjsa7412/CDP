@@ -1,0 +1,1226 @@
+/* 셸 레이아웃 — 설계서 §15.
+ * 3분할은 "찾을 때"의 레이아웃이다. 읽을 때는 ⌘. 로 접는다(§27.5). */
+
+.app {
+  display: grid;
+  grid-template-rows: var(--topbar-h) 1fr var(--statusbar-h);
+  height: 100%;
+}
+
+/* 패널 배치는 flex 로 한다.
+ * grid 로 하면 안 된다 — display:none 인 그리드 아이템은 흐름에서 아예
+ * 빠지므로 뒤 패널들이 엉뚱한 트랙으로 밀린다. 사이드바를 접었을 때
+ * 본문이 목록 폭에 갇히는 버그가 정확히 그것이었다. */
+.panes {
+  display: flex;
+  min-height: 0;
+}
+.pane {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* ── 왼쪽: 찾는 곳 ─────────────────────────────────────────────────────
+   위(시작점) + 아래(뻗어나가기). 하나의 열이다 -- 사이드바·목록·관계 패널
+   셋을 여기로 접었다. 열이 넷이던 것이 둘이 됐다. */
+.pane--find {
+  width: var(--w-find, 400px);
+  flex: none;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+}
+.find__top {
+  height: var(--h-find-top, 46%);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* 위아래 경계 -- 끌어서 비율을 바꾼다 */
+.find__gut {
+  height: 1px;
+  flex: none;
+  background: var(--border);
+  cursor: row-resize;
+  position: relative;
+}
+.find__gut::after { content: ''; position: absolute; inset: -3px 0; }
+.find__gut:hover { background: var(--accent); }
+.find__bot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.find__label {
+  flex: none;
+  padding: 7px 14px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+.find__scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* 본문은 남은 폭 전부를 받는다. 읽기 폭 제한은 .docwrap 이 한다 */
+.pane--doc {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+}
+
+/* 접기 — 읽기 모드(§27.5) */
+.app[data-mode='focus'] .pane--find,
+.app[data-mode='focus'] .gutter {
+  display: none;
+}
+
+/* 읽기 모드는 상태바까지 접는다(§27.5). 그런데 감시가 끊기면 화면이 낡았을
+ * 수 있고, 그때 조용한 화면으로 읽고 있으면 안 되므로 되살린다(§23.3). */
+.app[data-mode='focus'][data-force-status='0'] {
+  grid-template-rows: var(--topbar-h) 1fr 0;
+}
+.app[data-mode='focus'][data-force-status='0'] .statusbar {
+  display: none;
+}
+
+/* 리사이즈 핸들 — 드래그 + 키보드(§15.2) */
+.gutter {
+  background: var(--border);
+  cursor: col-resize;
+  position: relative;
+}
+.gutter::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+}
+.gutter:hover,
+.gutter:focus-visible {
+  background: var(--accent);
+}
+
+/* ── 상단 바 ─────────────────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.topbar__name {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.topbar__spacer {
+  flex: 1;
+}
+.topbar__search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 200px;
+  max-width: 340px;
+  flex: 1;
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-badge);
+}
+.topbar__search:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.kbd {
+  font: 11px/1 var(--font-mono);
+  padding: 3px 5px;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.iconbtn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-badge);
+  color: var(--text-2);
+}
+.iconbtn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.iconbtn[aria-pressed='true'] {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.hostwarn {
+  padding: var(--sp-1) var(--sp-2);
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-radius: var(--r-badge);
+}
+
+/* ── 상태바 — §23.3. 새로고침 버튼을 없앴으므로 이 표시가 화면을 믿을
+ *    수 있는 유일한 근거다 ─────────────────────────────────────────── */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-3);
+  font-size: 11.5px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.statusbar b {
+  color: var(--text);
+  font-weight: 600;
+}
+.statusbar__sep {
+  color: var(--border-strong);
+}
+.statusbar button {
+  color: var(--accent);
+}
+.statusbar .is-warn {
+  color: var(--warn);
+  font-weight: 600;
+}
+.statusbar .is-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ── 사이드바 ────────────────────────────────────────────────────────── */
+.nav {
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+.nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 5px var(--sp-2);
+  border-radius: var(--r-badge);
+  color: var(--text-2);
+  text-align: left;
+}
+.nav__item:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.nav__item[aria-current='true'] {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+.nav__count {
+  margin-left: auto;
+  font-size: 11px;
+}
+.nav__item .is-error {
+  color: var(--danger);
+}
+.nav__item .is-warn {
+  color: var(--warn);
+}
+.nav__item .is-pending {
+  color: var(--pending);
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sectitle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.sectitle__count {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.filterbox {
+  margin: var(--sp-2) var(--sp-3) 0;
+}
+.filterbox input {
+  width: 100%;
+  padding: 5px var(--sp-2);
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-badge);
+}
+
+/* 좌표 트리 — §21.1 */
+.tree__type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px var(--sp-3);
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+.tree__type:hover {
+  background: var(--surface-3);
+}
+.tree__type .count {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.tree__coord {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 3px var(--sp-3) 3px var(--sp-6);
+  color: var(--text-2);
+  text-align: left;
+}
+.tree__coord:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.tree__coord[aria-current='true'] {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+.tree__coord .count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.tree__coord .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* deprecated 좌표 — 흐리게 + 후속 좌표 링크. 삭제하지 않는다(프로토콜 §9.7) */
+.tree__coord.is-deprecated .name {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.tree__succ {
+  padding: 2px var(--sp-3) var(--sp-1) var(--sp-8);
+  font-size: 11px;
+  color: var(--warn);
+}
+/* 미등재 섹션 — 0건이어도 남긴다. 없어진 게 아니라 없다는 뜻이 되어야 한다 */
+.tree__unreg {
+  color: var(--warn);
+}
+.tree__unreg .sectitle {
+  color: var(--warn);
+}
+.tree__unreg-docs {
+  padding: 0 var(--sp-3) var(--sp-1) var(--sp-8);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.empty {
+  padding: var(--sp-6) var(--sp-4);
+  color: var(--text-3);
+  text-align: center;
+  line-height: 1.7;
+}
+
+/* ── 목록 ────────────────────────────────────────────────────────────── */
+.listhead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.listhead__title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* §13-② 절단을 조용히 하지 않는다. 다 보여줄 때도 개수를 적는다 */
+.listhead__count {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.listhead select {
+  font: inherit;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-badge);
+  padding: 2px 4px;
+}
+
+.row {
+  display: block;
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.row:hover {
+  background: var(--surface-2);
+}
+.row[aria-current='true'] {
+  background: var(--accent-bg);
+}
+.row__top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.row__dot {
+  flex: none;
+  width: 7px;
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.row__dot.is-read {
+  color: var(--border-strong);
+}
+.row__date {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.row__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.app[data-density='comfortable'] .row__title {
+  white-space: normal;
+}
+.row__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding-left: 13px;
+  /* 제목(12.5)과 메타(11)의 차이를 벌린다. 1px 차이로는 눈이 위계를 못 읽고,
+     그러면 두 줄이 같은 무게로 보여 목록이 빽빽해 보인다. */
+  font-size: 11px;
+  color: var(--text-3);
+}
+.app[data-density='compact'] .row {
+  padding: 3px var(--sp-3);
+}
+.app[data-density='compact'] .row__meta {
+  display: none;
+}
+/* 촘촘 모드에서도 ⛔ 와 ⚠ 는 절대 생략하지 않는다(§15.4) */
+.app[data-density='compact'] .row__inline {
+  display: inline-flex;
+  gap: 5px;
+  margin-left: 4px;
+}
+.row__inline {
+  display: none;
+}
+/* 정정된 문서 — 흐리게. 지우지 않는다(프로토콜 §9.7) */
+.row.is-superseded .row__title,
+.row.is-superseded .row__date {
+  color: var(--text-3);
+}
+
+/* 배지 — 색만으로 신호를 주지 않는다. 아이콘 + 텍스트를 항상 동반(§29.1) */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--r-badge);
+  white-space: nowrap;
+}
+.badge--danger {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.badge--warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+.badge--pending {
+  color: var(--pending);
+  background: var(--pending-bg);
+}
+.badge--quiet {
+  color: var(--text-2);
+  background: var(--surface-3);
+  font-weight: 500;
+}
+.badge--plain {
+  color: var(--text-3);
+  padding: 1px 0;
+  font-weight: 500;
+}
+
+.collapsed-note {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.collapsed-note > :first-child {
+  flex: 1 1 100%;
+}
+.collapsed-note code,
+.collapsed-note .coords {
+  font: 11px var(--font-mono);
+  word-break: break-all;
+}
+.collapsed-note button {
+  color: var(--accent);
+}
+
+/* ── ⌘K 팔레트 — §20.1 ──────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 9vh;
+  z-index: 50;
+}
+.palette {
+  width: min(720px, 92vw);
+  max-height: 76vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-card);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+.palette__input {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.palette__input input {
+  flex: 1;
+  font: 15px/1.4 var(--font-sans);
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+.palette__body {
+  overflow-y: auto;
+}
+.palette__group {
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.palette__group:last-child {
+  border-bottom: 0;
+}
+.palette__label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3) var(--sp-1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.palette__label .count {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+/* 대조 블록이 이 화면의 주인공이다 — 몰래 해주면 사용자는 정본을 영원히
+ * 모른다(§13-⑤). 어떤 표현이 어떤 정본으로, _vocab.md 몇 줄이 근거인지 */
+.recon {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--accent-bg);
+  border-radius: var(--r-badge);
+  flex-wrap: wrap;
+}
+.recon__from {
+  color: var(--text-2);
+}
+.recon__to {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent);
+}
+.recon__why {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.recon__copy {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 11.5px;
+}
+.recon.is-miss {
+  background: var(--warn-bg);
+}
+.recon.is-miss .recon__to {
+  color: var(--warn);
+}
+.palette__hit {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 4px var(--sp-3);
+  text-align: left;
+}
+.palette__hit:hover,
+.palette__hit[data-active='true'] {
+  background: var(--surface-2);
+}
+.palette__hit .row__title {
+  font-weight: 500;
+}
+.palette__foot {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 11px;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+
+/* ── 설정 팝오버 ─────────────────────────────────────────────────────── */
+.popover {
+  position: absolute;
+  top: calc(var(--topbar-h) - 4px);
+  right: var(--sp-3);
+  width: 300px;
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-card);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  z-index: 40;
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+}
+.field > span:first-child {
+  flex: 1;
+  color: var(--text-2);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-badge);
+  overflow: hidden;
+}
+.seg button {
+  padding: 2px 7px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.seg button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+.hr {
+  height: 1px;
+  margin: var(--sp-2) 0;
+  background: var(--border);
+}
+
+/* ── 반응형 — 목표는 모바일이 아니라 분할 화면.
+ *    열이 둘뿐이라 분기도 둘이면 된다. 왼쪽은 고정, 본문이 줄어든다. ── */
+
+@media (max-width: 1100px) {
+  .app:not([data-mode='focus']) .pane--find { width: clamp(300px, 38vw, 400px); }
+}
+
+/* <860px — 단일 열. 찾는 곳 <-> 문서 전환.
+ * 모바일은 비목표다. 깨지지 않게만 한다. */
+@media (max-width: 860px) {
+  .app .gutter { display: none; }
+  .app[data-nodoc='0'] .pane--find { display: none; }
+  .app[data-nodoc='1'] .pane--doc { display: none; }
+  .app[data-nodoc='1'] .pane--find { width: auto; flex: 1; }
+}
+
+/* ── 현황 ─────────────────────────────────────────────────────────────────
+   작업환경 v1.1 §12·§13·§17. 앱은 계기판이지 편집기가 아니다 —
+   이 화면이 그 계기판의 본체다. 정상이면 각 칸이 사라진다. */
+.statusview {
+  max-width: 900px;
+  padding: 22px 26px 60px;
+  overflow-y: auto;
+}
+.statusview h1 { margin: 0 0 16px; font-size: 19px; font-weight: 650; }
+.statusview .dim { color: var(--text-3); }
+
+.sgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.scell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+}
+.scell b { font-size: 19px; font-weight: 650; line-height: 1.1; }
+.scell span { font-size: 11.5px; color: var(--text-3); }
+.scell[data-hot='true']     { border-color: var(--warn); background: var(--warn-bg); }
+.scell[data-hot='true'] b   { color: var(--warn); }
+.scell[data-pending='true'] b { color: var(--pending); }
+.scell--bad                 { border-color: var(--danger); background: var(--danger-bg); }
+.scell--bad b               { color: var(--danger); }
+
+.ssec { margin: 22px 0 0; }
+.ssec__head { margin-bottom: 7px; }
+.ssec h2 { margin: 0; font-size: 13.5px; font-weight: 650; }
+.ssec h2 .count { margin-left: 5px; color: var(--text-3); font-weight: 400; }
+.ssec__note { margin: 2px 0 0; font-size: 11.5px; color: var(--text-3); line-height: 1.5; }
+
+.srow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.srow__days { flex: none; min-width: 52px; color: var(--text-3); font-size: 11.5px; }
+.srow__days[data-hot='true'] { color: var(--pending); font-weight: 650; }
+.srow__title { flex: 1 1 240px; text-align: left; color: var(--text-1); }
+.srow__title:hover { color: var(--accent); text-decoration: underline; }
+.srow__who { flex: none; color: var(--text-3); font-size: 11.5px; }
+.srow__coords code,
+.srow__coord {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+.srow__coords code:hover, .srow__coord:hover { color: var(--accent); }
+.srow__coord { flex: none; min-width: 200px; }
+.srow__state { flex: none; min-width: 76px; font-size: 11.5px; }
+.srow__state[data-state='stale'] { color: var(--warn); font-weight: 600; }
+.srow__state[data-state='anchor-missing'],
+.srow__state[data-state='doc-missing'],
+.srow__state[data-state='orphan'] { color: var(--danger); font-weight: 600; }
+.srow__doc { flex: none; min-width: 110px; color: var(--text-3); font-size: 11.5px; }
+.srow__items { flex: 1 1 240px; display: flex; flex-direction: column; gap: 1px; }
+.srow__items button { text-align: left; color: var(--accent); font-size: 11.5px; }
+
+/* ── 좌표 화면 (v0.3 의 중심) ────────────────────────────────────────────
+   작업환경 v1.1 §18 "대상" · 수행 v1.0 §6.1.
+   좌표를 찾은 사람이 원하는 것은 "지금 어떤 상태인가" 다. 섹션 본문이 위로 온다. */
+.coordview { max-width: 860px; padding: 20px 26px 60px; overflow-y: auto; }
+.coordview .dim { color: var(--text-3); }
+
+.cv__head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.cv__coord {
+  font-size: 15px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.cv__label { font-size: 13.5px; color: var(--text-2); }
+.cv__aliases { margin: 5px 0 0; font-size: 11.5px; color: var(--text-2); }
+
+/* 지금 상태 — 정상이면 테두리만, 밀리면 amber, 깨지면 red.
+   색 예산 안에서만 쓴다. */
+.cv__now {
+  margin: 15px 0 0;
+  border: 1px solid var(--border);
+  border-left-width: 2px;
+  border-radius: 0 5px 5px 0;
+  background: var(--surface);
+}
+.cv__now[data-state='stale']          { border-left-color: var(--warn); }
+.cv__now[data-state='anchor-missing'],
+.cv__now[data-state='doc-missing'],
+.cv__now[data-state='orphan']         { border-left-color: var(--danger); }
+.cv__now--none { background: none; border-style: dashed; }
+
+.cv__nowhead {
+  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.cv__now--none .cv__nowhead { border-bottom: none; }
+.cv__nowtag { flex: none; color: var(--text-3); font-size: 10.5px; letter-spacing: 0.04em; }
+.cv__nowdoc { color: var(--text-1); font-weight: 600; }
+.cv__nowdoc:hover { color: var(--accent); text-decoration: underline; }
+.cv__nowanchor { font-size: 11px; color: var(--text-3); }
+.cv__nowstate { flex: 1 1 auto; font-size: 11.5px; }
+.cv__nowstate--warn { color: var(--warn); }
+.cv__nowstate--bad  { color: var(--danger); }
+.cv__nowstate code  { font-size: 10.5px; }
+
+/* 밀렸으면 무엇이 안 반영됐는지 바로 — "밀렸다"만 알려주면 어디를 볼지 모른다 */
+.cv__missing {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 7px 13px;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--border);
+}
+.cv__missing button { text-align: left; color: var(--warn); font-size: 11.5px; }
+.cv__missing button:hover { text-decoration: underline; }
+
+.doc--section { padding: 4px 13px 13px; }
+.doc--section > :first-child { margin-top: 8px; }
+.cv__empty { margin: 0; padding: 11px 13px; font-size: 12px; }
+
+.cv__sec { margin: 26px 0 0; }
+.cv__sec h2 { margin: 0 0 7px; font-size: 13.5px; font-weight: 650; }
+.cv__sec h2 .count { margin-left: 5px; color: var(--text-3); font-weight: 400; }
+.cv__works { display: flex; flex-direction: column; }
+.cv__work {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.cv__work[data-running='true'] { background: var(--surface-2); }
+.cv__date { flex: none; min-width: 46px; color: var(--text-3); font-size: 11.5px; }
+.cv__wtitle { flex: 1 1 240px; text-align: left; }
+.cv__wtitle:hover { color: var(--accent); text-decoration: underline; }
+.cv__later { flex: none; min-width: 58px; font-size: 11.5px; }
+.cv__later-hot { color: var(--warn); }
+.cv__who, .cv__rel { flex: none; font-size: 11.5px; }
+
+/* ── 작업 필터 ─────────────────────────────────────────────────────────── */
+.wfilter { display: flex; gap: 4px; flex-wrap: wrap; padding: 6px 10px 8px; }
+.wfilter__item {
+  display: flex; align-items: baseline; gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.wfilter__item:hover { background: var(--surface-2); }
+.wfilter__item[aria-pressed='true'] {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-weight: 600;
+}
+.wfilter__item .num { color: var(--text-3); font-size: 11px; }
+.wfilter__item[data-kind='pending'][aria-pressed='true'] { color: var(--pending); border-color: var(--pending); }
+
+/* ── 대상 뷰 첫 화면 ─────────────────────────────────────────────────────
+   문서 목록을 놓지 않는다 — 그건 작업 뷰의 일이고, 대상 뷰의 입구는
+   "무엇을 찾을 것인가" 여야 한다. */
+.cland { max-width: 860px; padding: 22px 26px 60px; overflow-y: auto; }
+.cland h1 { margin: 0 0 8px; font-size: 19px; font-weight: 650; }
+.cland .dim { color: var(--text-3); line-height: 1.6; }
+.cland__types {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.cland__type { border: 1px solid var(--border); border-radius: 5px; padding: 10px 12px; }
+.cland__thead { display: flex; gap: 7px; align-items: baseline; margin-bottom: 6px; font-size: 12.5px; }
+.cland__coords { display: flex; flex-wrap: wrap; gap: 4px; }
+.cland__coords button {
+  display: flex; align-items: baseline; gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+}
+.cland__coords button:hover { color: var(--accent); }
+.cland__coords .num { color: var(--text-3); font-size: 10.5px; }
+.cland kbd {
+  padding: 0 4px; border: 1px solid var(--border-strong); border-radius: 3px;
+  font-size: 10.5px; font-family: var(--font-mono);
+}
+
+/* 관리 문서 목록 — 좌표를 거치지 않고 문서 자체를 여는 길.
+   아직 좌표가 붙지 않은 섹션은 좌표 경로로 도달할 수가 없다. */
+.cland__managed { margin-top: 18px; }
+.cland__mhead { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; font-size: 12.5px; }
+.cland__mrows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 3px;
+}
+.cland__mrow {
+  display: grid;
+  grid-template-columns: 1fr max-content max-content;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12.5px;
+  text-align: left;
+}
+.cland__mrow:hover { border-color: var(--accent); }
+.cland__mrow:hover .cland__mname { color: var(--accent); }
+.cland__mname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cland__mcount { font-size: 11.5px; color: var(--text-2); }
+.cland__mmark { display: flex; gap: 5px; }
+.cland__mmark em { font-style: normal; font-size: 10.5px; padding: 0 4px; border-radius: 3px; }
+.cland__mmark .is-stale { color: var(--warn); background: var(--warn-bg); }
+.cland__mmark .is-none  { color: var(--text-3); background: var(--surface-2); }
+
+/* ── 좌표 그래프 — 13단계 (검토결과 §C) ──────────────────────────────────
+   노드는 좌표, 2D, 의존성 0. 배치는 결정론적이라 같은 레포면 언제 열어도
+   같은 그림이 나온다 — 매번 흔들리면 눈이 그림을 못 외운다.
+
+   **색 예산 그대로.** 정상 노드는 무채색이고, 그래야 문제가 눈에 띈다. */
+
+.cland__head { display: flex; align-items: center; gap: 12px; }
+.cland__head h1 { margin: 0; }
+
+.graph {
+  position: relative;
+  margin: 16px 0 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.graph__empty { padding: 40px; color: var(--text-3); text-align: center; }
+.graph__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.graph__btn {
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-badge);
+}
+.graph__btn[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); }
+.graph__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 7px 12px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+.graph__legend [data-s='stale'] { color: var(--warn); }
+.graph__legend [data-s='none']  { color: var(--pending); }
+.graph__legend [data-s='bad']   { color: var(--danger); }
+.graph__legend [data-s='ok']    { color: var(--text-3); }
+
+.graph__svg { display: block; width: 100%; height: auto; cursor: grab; user-select: none; }
+.graph__svg:active { cursor: grabbing; }
+
+.graph__edge {
+  stroke: var(--border-strong);
+  opacity: 0.55;
+}
+.graph__edge[data-lit='1'] { stroke: var(--accent); opacity: 1; }
+.graph__edge[data-dim='1'] { opacity: 0.12; }
+
+.graph__node { cursor: pointer; }
+.graph__node circle {
+  fill: var(--text-3);
+  stroke: var(--surface-2);
+  stroke-width: 1.5;
+}
+.graph__node text {
+  font: 10.5px var(--font-mono);
+  fill: var(--text-2);
+  pointer-events: none;
+}
+.graph__node[data-state='stale'] circle { fill: var(--warn); }
+.graph__node[data-state='none']  circle { fill: var(--pending); }
+.graph__node[data-state='bad']   circle { fill: var(--danger); }
+.graph__node[data-dim='1']       { opacity: 0.18; }
+.graph__node:hover circle { stroke: var(--accent); stroke-width: 2.5; }
+
+.graph__card {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 7px 11px;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-badge);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+}
+.graph__card code { font: 11.5px var(--font-mono); color: var(--text); }
+.graph__card b[data-s='stale'] { color: var(--warn); }
+.graph__card b[data-s='none']  { color: var(--pending); }
+.graph__card b[data-s='bad']   { color: var(--danger); }
+
+/* ── 시작점 (왼쪽 위) ─────────────────────────────────────────────────── */
+.fd { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.fd__tabs {
+  display: flex; align-items: center; gap: 2px; flex: none;
+  padding: 6px 8px 0; border-bottom: 1px solid var(--border);
+}
+.fd__tab {
+  padding: 5px 11px 6px; font-size: 12.5px; color: var(--text-2);
+  border-radius: 5px 5px 0 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.fd__tab:hover { background: var(--surface-3); color: var(--text); }
+.fd__tab[aria-selected='true'] {
+  color: var(--accent); border-bottom-color: var(--accent);
+  font-weight: 600; background: var(--surface);
+}
+.fd__spacer { flex: 1; }
+.fd__q {
+  width: 120px; padding: 3px 7px; font: inherit; font-size: 11.5px;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--r-badge);
+}
+.fd__q:focus { border-color: var(--accent); outline: none; }
+.fd__body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+.fd__head {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 10px 14px 3px; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.05em; color: var(--text-3);
+}
+.fd__hn { margin-left: auto; font-family: var(--font-mono); font-weight: 400; }
+.fd__row {
+  display: flex; align-items: baseline; gap: 7px; width: 100%;
+  padding: 4px 14px 5px; text-align: left; font-size: 12.5px;
+  color: var(--text); border-left: 2px solid transparent; line-height: 1.4;
+}
+.fd__row:hover { background: var(--surface-3); }
+.fd__row[aria-current='true'] { background: var(--surface); border-left-color: var(--accent); }
+.fd__date { flex: none; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.fd__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd__name.mono { font-family: var(--font-mono); font-size: 12px; }
+.fd__n { margin-left: auto; flex: none; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.fd__m { flex: none; padding: 0 5px; border-radius: 3px; font-size: 10.5px; }
+.fd__m--w { color: var(--warn); background: var(--warn-bg); }
+.fd__m--d { color: var(--danger); background: var(--danger-bg); }
+.fd__m--q { color: var(--text-3); background: var(--surface-3); }
+
+/* ── 뻗어나가기 (왼쪽 아래) — 이 화면의 핵심 ────────────────────────────
+   **가로로 뻗는다.** 열 하나가 레벨 하나. 세로로 쌓으면 깊어질수록 시작점이
+   화면 밖으로 나가는데, 가로면 지나온 길이 왼쪽에 그대로 남는다.
+   항목 사이는 트리 선(├ └)으로 잇고, 다음 열로 뻗은 항목은 그 선이
+   오른쪽 끝까지 이어진다. */
+
+.xp {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+}
+.xp__empty { padding: 26px 16px; color: var(--text-3); font-size: 12px; line-height: 1.6; }
+.xp__busy { align-self: center; padding: 0 12px; color: var(--text-3); }
+
+.xp__col {
+  flex: none;
+  width: 226px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+.xp__head {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex: none;
+  padding: 6px 10px 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.xp__hname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xp__scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 10px; }
+
+.xp__g { padding-top: 6px; }
+.xp__glabel {
+  padding: 2px 10px 3px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  letter-spacing: 0.03em;
+}
+/* 트리 선 — 그룹 하나가 한 갈래다 */
+.xp__items { position: relative; padding-left: 14px; }
+.xp__it {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 8px 3px 12px;
+  text-align: left;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+/* 세로 줄기 — 마지막 항목은 절반에서 끊는다 */
+.xp__it::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border-strong);
+}
+.xp__it:last-child::before { bottom: auto; height: 11px; }
+/* 가로 가지 */
+.xp__it::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 8px;
+  border-top: 1px solid var(--border-strong);
+}
+.xp__it:hover { background: var(--surface-3); color: var(--text); }
+/* 다음 열로 뻗은 항목 — 가지가 열 끝까지 이어진다 */
+.xp__it[aria-current='true'] {
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--accent-bg);
+}
+.xp__it[aria-current='true']::before,
+.xp__it[aria-current='true']::after { border-color: var(--accent); }
+.xp__it[aria-current='true'] .xp__ico { color: var(--accent); }
+
+.xp__ico { flex: none; font-size: 9.5px; color: var(--text-3); }
+.xp__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xp__n { flex: none; font-size: 10.5px; color: var(--text-3); font-family: var(--font-mono); }
+.xp__m { flex: none; margin-left: auto; padding: 0 4px; border-radius: 3px; font-size: 10px; }
+.xp__m--w { color: var(--warn); background: var(--warn-bg); }
+.xp__m--d { color: var(--danger); background: var(--danger-bg); }
+.xp__m--q { color: var(--text-3); background: var(--surface-3); }
+.xp__none { padding: 10px; font-size: 11.5px; color: var(--text-3); }
+
+/* 좌우 비율 — 문서 : 찾는 곳 */
+.seg--ratio button { font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; }
+
+/* ── 3D 좌표 그래프 — 무채색 · 고요함 · 잔잔함 · 부드러움 ────────────────
+   배경은 테마를 따른다. 색으로 상태를 말하지 않고 **형태와 농도**로 말한다:
+   정상은 옅게 채운 원, 미작성은 빈 원, 밀림은 진한 원 + 링, 없음은 두 겹 링.
+   발광은 없다 — 어두운 바탕에서만 성립하는데 여기는 두 바탕을 다 쓴다. */
+.gr { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--surface); }
+.gr__empty { padding: 30px 16px; color: var(--text-3); font-size: 12px; }
+
+.gr__bar {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  padding: 6px 10px; font-size: 11.5px; color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+.gr__btn {
+  min-width: 22px; padding: 1px 7px; font-size: 12px; line-height: 1.5;
+  color: var(--text-2); border: 1px solid var(--border); border-radius: var(--r-badge);
+  background: none;
+}
+.gr__btn:hover { border-color: var(--border-strong); color: var(--text); }
+.gr__btn[aria-pressed='false'] { color: var(--text-3); }
+.gr__zoom {
+  min-width: 38px; text-align: center;
+  font: 11px var(--font-mono); color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.gr__legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px; flex: none;
+  padding: 6px 10px; font-size: 10.5px; color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+}
+.gr__legend i { display: inline-flex; align-items: center; gap: 5px; font-style: normal; }
+.gr__hint { color: var(--text-3); }
+/* 범례도 캔버스와 같은 형태 규칙을 쓴다 — 두 곳이 다르면 범례가 거짓말이 된다 */
+.gr__d { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.gr__d--ok    { background: var(--text-3); }
+.gr__d--none  { background: none; border: 1.2px solid var(--text-3); }
+.gr__d--stale { background: var(--text); box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 2.5px var(--text-2); }
+.gr__d--bad   { background: var(--text); box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 2.5px var(--text-2),
+                0 0 0 4px var(--surface), 0 0 0 5px var(--text-2); }
+
+.gr__wrap { flex: 1; min-height: 160px; }
+.gr__cv { display: block; width: 100%; height: 100%; cursor: grab; }
+.gr__cv:active { cursor: grabbing; }
