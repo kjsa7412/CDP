@@ -199,3 +199,64 @@ if (missing.length) {
   for (const m of missing) log('   ' + m)
   process.exitCode = 1
 }
+
+// ── 5) 보관 안내 ────────────────────────────────────────────────────────
+// 버전 폴더는 하나가 68MB 다 -- 사실상 `cdp.exe` 하나가 그만큼이다.
+// 쌓이면 exe 만 쌓인다.
+//
+// **지우지는 않는다.** 배포본을 프로그램이 말없이 지우면 안 된다.
+// 대신 되살릴 수 있는 것과 없는 것을 갈라서 알려준다 -- 태그가 없는
+// 버전은 지우면 끝이므로, 지워도 된다고 말하지 않는다.
+const KEEP = 2
+
+const tags = (() => {
+  try {
+    return new Set(
+      execFileSync('git', ['tag'], { cwd: ROOT, encoding: 'utf8' }).split('\n').map((s) => s.trim())
+    )
+  } catch {
+    return null // git 이 없거나 저장소가 아니다 -- 그러면 아무 말도 하지 않는다
+  }
+})()
+
+const semver = (v) => v.replace(/^v/, '').split('.').map(Number)
+const older = fs
+  .readdirSync(path.join(ROOT, 'release'), { withFileTypes: true })
+  .filter((e) => e.isDirectory() && /^v\d/.test(e.name))
+  .sort((a, b) => {
+    const [x, y] = [semver(b.name), semver(a.name)]
+    return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]
+  })
+  .slice(KEEP)
+
+if (older.length && tags) {
+  const size = (d) => {
+    let n = 0
+    ;(function w(p) {
+      for (const e of fs.readdirSync(p, { withFileTypes: true })) {
+        const q = path.join(p, e.name)
+        e.isDirectory() ? w(q) : (n += fs.statSync(q).size)
+      }
+    })(d)
+    return (n / 1048576).toFixed(0) + 'MB'
+  }
+  const safe = older.filter((e) => tags.has(e.name))
+  const risky = older.filter((e) => !tags.has(e.name))
+
+  log('')
+  log('보관: 버전 폴더 %d개 -- 최근 %d개를 넘습니다'
+    .replace('%d', older.length + KEEP).replace('%d', KEEP))
+  for (const e of safe) log('   %s  %s  태그 있음 -- 지워도 다시 만들 수 있습니다'
+    .replace('%s', e.name).replace('%s', size(path.join(ROOT, 'release', e.name))))
+  for (const e of risky) log('   %s  %s  **태그 없음 -- 지우면 되살릴 수 없습니다**'
+    .replace('%s', e.name).replace('%s', size(path.join(ROOT, 'release', e.name))))
+  if (safe.length) {
+    log('')
+    log('   되살리는 법:  git checkout %s && npm ci && ops\\release.cmd %s'
+      .replace('%s', safe[0].name).replace('%s', safe[0].name.slice(1)))
+  }
+  if (risky.length) {
+    log('')
+    log('   태그를 먼저 다세요:  git tag -a %s <그 시점 커밋>'.replace('%s', risky[0].name))
+  }
+}
