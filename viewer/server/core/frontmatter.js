@@ -27,10 +27,29 @@ export function layerOf(p) {
   return null
 }
 
+// `date` 는 날짜만이거나 **시각까지**다.
+//
+//   2026-08-19            날짜만 — 하루 안의 순서를 모른다
+//   2026-08-19 14:30      시각까지 — 순서가 결판난다
+//
+// 시각을 붙이면 **같은 날 사각지대가 닫힌다.** 하루에 같은 좌표를 두 번
+// 건드려도 어느 것이 나중인지 알 수 있으므로 파생 누락이 오류로 잡힌다
+// (validity.later 참고). `id` 와 파일명은 그대로 날짜 단위다 — 하루에 한 사람이
+// 같은 slug 를 두 번 쓸 일은 없고, 파일명이 길어지면 읽기 어렵다.
+//
+// 정렬은 문자열 비교로 한다. 자리수가 고정이라 사전순 = 시간순이고,
+// `2026-08-19` < `2026-08-19 14:30` 도 자연히 성립한다.
 function normDate(v) {
   if (v == null) return null
   // js-yaml 은 인용 없는 2026-08-19 를 Date 객체로 만든다. 문자열로 되돌린다.
-  if (v instanceof Date) return v.toISOString().slice(0, 10)
+  //
+  // **UTC 로 읽고 UTC 로 되돌린다.** 시각이 붙은 값도 js-yaml 은 타임존 없는
+  // 것을 UTC 로 보므로, 같은 규칙으로 되돌리면 왕복이 어긋나지 않는다.
+  // 여기서 지역 시간으로 바꾸면 아침에 쓴 기록이 전날로 밀린다.
+  if (v instanceof Date) {
+    const iso = v.toISOString()
+    return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso.slice(0, 16).replace('T', ' ')
+  }
   return String(v).trim()
 }
 

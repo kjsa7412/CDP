@@ -14,6 +14,7 @@
 
 import { useMemo, useState } from 'react'
 import CoordGraph from './CoordGraph.jsx'
+import { shortDate } from '../lib/format.js'
 
 export default function Finder({ docs, managed, tree, root, onPick, readMap = {}, myCoords = [], onToggleMine }) {
   const [mode, setMode] = useState('managed')
@@ -68,7 +69,7 @@ export default function Finder({ docs, managed, tree, root, onPick, readMap = {}
               >
                 {/* 안 읽은 것에만 점을 찍는다. 읽은 것은 조용하다 */}
                 <span className="fd__dot" data-on={readMap[d.id] ? '0' : '1'} aria-hidden="true" />
-                <span className="fd__date">{String(d.date || '').slice(5)}</span>
+                <span className="fd__date">{shortDate(d.date)}</span>
                 <span className="fd__name">{d.title}</span>
                 {/* 작성자 — **누가 썼나가 이 목록에서 가장 자주 묻는 것이다.**
                     남의 작업 사이에서 내 것을 찾거나, 물어볼 사람을 찾을 때

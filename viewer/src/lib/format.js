@@ -4,9 +4,20 @@
 // 날짜를 알 수 없고, "2026-08-19"만 있으면 감각이 없다.
 // 그리고 나이는 절대 색을 갖지 않는다 — 그것은 CSS 쪽 규칙이다(§13-①).
 
+// `date` 는 `2026-08-19` 이거나 `2026-08-19 14:30` 이다. 앞 10자가 날짜다.
+export function dayPart(dateStr) {
+  return String(dateStr || '').slice(0, 10)
+}
+
+// 시각 부분. 없으면 빈 문자열.
+export function timePart(dateStr) {
+  const m = String(dateStr || '').match(/\d{2}:\d{2}(:\d{2})?/)
+  return m ? m[0].slice(0, 5) : ''
+}
+
 export function relDays(dateStr, now = new Date()) {
   if (!dateStr) return null
-  const d = new Date(`${dateStr}T00:00:00`)
+  const d = new Date(`${dayPart(dateStr)}T00:00:00`)
   if (Number.isNaN(+d)) return null
   const days = Math.floor((startOfDay(now) - startOfDay(d)) / 86400000)
   return days
@@ -32,13 +43,16 @@ export function relLabel(dateStr, now = new Date()) {
 
 export function shortDate(dateStr) {
   if (!dateStr) return ''
-  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  return m ? `${m[2]}-${m[3]}` : String(dateStr)
+  const m = dayPart(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return String(dateStr)
+  const t = timePart(dateStr)
+  return t ? `${m[2]}-${m[3]} ${t}` : `${m[2]}-${m[3]}`
 }
 
+// `2026-08-19` · `2026-08-19 14:30` · `2026-08-19 14:30:05` 를 받는다.
 export function isBadDate(dateStr) {
   if (!dateStr) return false
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))) return true
+  if (!/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/.test(String(dateStr))) return true
   const days = relDays(dateStr)
   return days != null && days < 0
 }

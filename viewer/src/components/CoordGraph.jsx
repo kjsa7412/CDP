@@ -85,12 +85,18 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
   const railRef = useRef(null)
   const [, force] = useState(0)
 
+  // **캔버스 비율.** 배치가 이것을 따른다 (layout3d 참고).
+  //
+  // 0.25 단위로 뭉뚱그린다 — 창을 1px 끌 때마다 O(n^2) 배치를 다시 풀면
+  // 283개에서 눈에 띄게 멈춘다. 비율이 실제로 달라졌을 때만 다시 푼다.
+  const [aspect, setAspect] = useState(1.75)
+
   const key = useMemo(() => {
     const cs = (tree?.types || []).flatMap((t) => t.coords.map((c) => `${c.coord}:${c.count}:${c.sec || ''}`))
-    return cs.join('|') + '#' + (docs || []).map((d) => (d.touches || []).join(',')).join(';')
-  }, [tree, docs])
+    return cs.join('|') + '#' + (docs || []).map((d) => (d.touches || []).join(',')).join(';') + '#' + aspect
+  }, [tree, docs, aspect])
 
-  const g = useMemo(() => build(tree, docs), [key])
+  const g = useMemo(() => build(tree, docs, aspect), [key])
 
   useEffect(() => {
     if (!g || !cvRef.current) return
@@ -498,7 +504,15 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
     // 박스가 바뀌므로, 캔버스를 관찰하면 자기가 만든 변화를 다시 받거나(루프)
     // 브라우저가 그것을 눌러 아예 안 오거나 한다 -- 실측에서 후자였다.
     // 부모는 이 콜백이 건드리지 않으니 안전하다.
+    const bucket = () => {
+      const r = cv.getBoundingClientRect()
+      if (r.width < 4 || r.height < 4) return
+      const a = Math.max(0.6, Math.min(3.2, r.width / r.height))
+      const b = Math.round(a * 4) / 4
+      setAspect((prev) => (prev === b ? prev : b))
+    }
     const sizeObs = new ResizeObserver(() => {
+      bucket()
       // **손댄 배율은 지키다.** 확대해 놓고 창을 넓혔는데 배율이 되돌아가면
       // 보던 자리를 잃는다. 아직 안 손댔으면 새 크기에 맞춘다.
       if (!S.touched) S.needFit = true
@@ -510,6 +524,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
 
     paintRef.current = now
     spinRef.current = spinOn
+    bucket()
     draw()
     return () => {
       paintRef.current = null
@@ -661,7 +676,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
   )
 }
 
-function build(tree, docs) {
+function build(tree, docs, aspect) {
   if (!tree?.types) return null
   const nodes = []
   for (const t of tree.types) {
@@ -686,7 +701,7 @@ function build(tree, docs) {
   const nbr = nodes.map(() => new Set())
   for (const [i, j] of edges) { nbr[i].add(j); nbr[j].add(i) }
 
-  layout3d(nodes, edges)
+  layout3d(nodes, edges, aspect)
 
 
   const seen = new Set(); let comps = 0, iso = 0
@@ -704,17 +719,40 @@ function build(tree, docs) {
 // **순수 force 만으로는 값이 안 난다.** 실측 성분 분포가 23 · 7 · 5 · 2 · 그리고
 // 1이 18개다. 그대로 풀면 떠다니는 점 구름이 된다. 타입별로 구(球) 위에 자리를
 // 먼저 주고 그 위에서 force 가 푼다 — 고립 노드도 자기 타입 구역에 남는다.
-function layout3d(nodes, edges) {
+// `aspect` = 캔버스 가로/세로. 배치가 **그 비율을 따른다.**
+//
+// 전에는 타입 중심을 구 위에 놓았다. 그래서 노드 뭉치가 공 모양이 되고,
+// 공의 지름은 **캔버스의 짧은 변**에 갇힌다 — 가로로 긴 화면에서 좌우가
+// 통째로 비고, 좌표가 283개쯤 되면 가운데가 엉겨 이름을 읽을 수 없다.
+//
+// 렌즈로 바꾼다. 타입 중심을 **xy 평면의 타원** 위에 놓고 z 는 얕게 준다.
+//
+//   Rx = R * sqrt(aspect)     넓은 화면이면 좌우로 벌어진다
+//   Ry = R / sqrt(aspect)     그만큼 위아래를 줄인다  (면적은 보존된다)
+//   Rz = R * 0.34             깊이는 시차만 준다
+//
+// 깊이를 아주 없애지는 않는다. 회전이 이 그래프의 읽기 수단이고, 완전한
+// 평면은 돌려도 아무것도 드러나지 않는다.
+function layout3d(nodes, edges, aspect = 1.6) {
   const rand = rng(0x5eed)
   const types = [...new Set(nodes.map((n) => n.type))]
     .sort((a, b) => (TYPES.indexOf(a) + 99) % 99 - (TYPES.indexOf(b) + 99) % 99 || a.localeCompare(b))
+  const A = Math.max(0.6, Math.min(3.2, aspect))
+  const R = 150
+  const RX = R * Math.sqrt(A)
+  const RY = R / Math.sqrt(A)
+  const RZ = R * 0.34
   const C = new Map()
   types.forEach((t, i) => {
-    // 구 위에 고르게 — 황금각 나선
-    const y = 1 - (i / Math.max(1, types.length - 1)) * 2
-    const r = Math.sqrt(Math.max(0, 1 - y * y))
+    // 타원 위에 고르게. 황금각으로 돌려 이웃 타입이 붙지 않게 한다.
     const th = i * 2.399963
-    C.set(t, { x: Math.cos(th) * r * 130, y: y * 110, z: Math.sin(th) * r * 130 })
+    // 안쪽에도 놓아 가장자리만 붐비지 않게 — 타입이 많아지면 두 겹이 된다
+    const k = types.length > 6 ? 0.62 + 0.38 * ((i * 7) % 5) / 4 : 1
+    C.set(t, {
+      x: Math.cos(th) * RX * k,
+      y: Math.sin(th) * RY * k,
+      z: Math.cos(th * 1.7) * RZ,
+    })
   })
   for (const n of nodes) {
     const c = C.get(n.type)
@@ -747,9 +785,14 @@ function layout3d(nodes, edges) {
     }
     for (let i = 0; i < N; i++) {
       const n = nodes[i], c = C.get(n.type)
-      F[i][0] += (c.x - n.x) * 0.02 - n.x * 0.004
-      F[i][1] += (c.y - n.y) * 0.02 - n.y * 0.004
-      F[i][2] += (c.z - n.z) * 0.02 - n.z * 0.004
+      // **원점으로 당기는 힘을 축마다 다르게 준다.**
+      //
+      // 같은 세기로 당기면 렌즈가 다시 공으로 뭉친다 — 중심 배치만 타원으로
+      // 놓아 봐야 반발력이 등방이라 결국 둥글어진다. 짧은 축을 더 세게 당겨
+      // 모양을 유지한다.
+      F[i][0] += (c.x - n.x) * 0.02 - n.x * (0.004 / A)
+      F[i][1] += (c.y - n.y) * 0.02 - n.y * (0.004 * A)
+      F[i][2] += (c.z - n.z) * 0.02 - n.z * 0.012
       const m = Math.hypot(F[i][0], F[i][1], F[i][2]), cap = 8 * al + 0.3, k = m > cap ? cap / m : 1
       n.x += F[i][0] * k; n.y += F[i][1] * k; n.z += F[i][2] * k
     }

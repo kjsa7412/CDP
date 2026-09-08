@@ -87,7 +87,18 @@ export function buildCoordIndex(works, opts = {}) {
       //
       // 그래서 따로 센다. `check` 가 이것을 **경고**로 낸다. 오탐이 무서운
       // 이유는 오류라서 커밋을 막기 때문이고, 경고는 틀려도 부식되지 않는다.
-      const peers = list.filter((o) => o.id !== refDoc.id && (o.date || '') === (refDoc.date || ''))
+      // **시각이 있으면 동배가 아니다.**
+      //
+      // `2026-09-08 14:30` 과 `2026-09-08 16:05` 는 순서가 결판나므로 위의
+      // `items` 가 잡는다. 동배로 남는 것은 **둘 다 날짜만 있어 순서를 모르는**
+      // 경우뿐이다. 시각을 쓰기 시작하면 이 목록은 옛 기록에서만 나온다.
+      const hhmm = (d) => /\d{2}:\d{2}/.test(d || '')
+      const peers = list.filter(
+        (o) =>
+          o.id !== refDoc.id &&
+          (o.date || '') === (refDoc.date || '') &&
+          !(hhmm(o.date) && hhmm(refDoc.date))
+      )
       return { ...base, ref: refDoc.id, refDate: refDoc.date, count: items.length, items: items.map(slim), peers: peers.map(slim) }
     },
 

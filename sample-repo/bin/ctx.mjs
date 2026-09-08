@@ -3349,7 +3349,10 @@ function layerOf(p) {
 }
 function normDate(v) {
   if (v == null) return null;
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date) {
+    const iso = v.toISOString();
+    return iso.endsWith("T00:00:00.000Z") ? iso.slice(0, 10) : iso.slice(0, 16).replace("T", " ");
+  }
   return String(v).trim();
 }
 function normStatus(v) {
@@ -3599,7 +3602,10 @@ function buildCoordIndex(works, opts = {}) {
         return { ...base, ref: String(ref), refUnknown: true, count: list.length, items: list.map(slim) };
       }
       const items = list.filter((o) => o.id !== refDoc.id && (o.date || "") > (refDoc.date || ""));
-      const peers = list.filter((o) => o.id !== refDoc.id && (o.date || "") === (refDoc.date || ""));
+      const hhmm = (d) => /\d{2}:\d{2}/.test(d || "");
+      const peers = list.filter(
+        (o) => o.id !== refDoc.id && (o.date || "") === (refDoc.date || "") && !(hhmm(o.date) && hhmm(refDoc.date))
+      );
       return { ...base, ref: refDoc.id, refDate: refDoc.date, count: items.length, items: items.map(slim), peers: peers.map(slim) };
     },
     latest(coord) {
@@ -4073,10 +4079,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-08 08:20";
+var BUILT = "2026-09-08 08:59";
 var BS2 = String.fromCharCode(92);
 var SEP = path4.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 08:20)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 08:59)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131

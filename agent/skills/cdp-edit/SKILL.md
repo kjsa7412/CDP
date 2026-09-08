@@ -241,7 +241,7 @@ $ C:/cdp/bin/ctx where screen:EXD020        ← 작업 목록에서 20MB 를 적
 ---
 id: 2026-0922-EXD020-첨부용량
 title: EXD020 사진 첨부 용량 10MB — 문서 반영
-date: 2026-09-22
+date: 2026-09-22 10:15
 author: kjsa
 touches:
   - screen:EXD020

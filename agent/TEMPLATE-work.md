@@ -1,7 +1,9 @@
 ---
 id: YYYY-MMDD-slug
 title:
-date: YYYY-MM-DD
+date: YYYY-MM-DD HH:MM   # 시각까지 적는다 — 하루에 같은 좌표를 두 번
+                         # 건드려도 순서가 결판난다. 날짜만 적어도 되지만
+                         # 그러면 같은 날 것끼리 선후를 알 수 없다
 author:
 touches:
   # 이 작업이 **바꾼** 대상만 적는다 (신설·변경·삭제).
