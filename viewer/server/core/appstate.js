@@ -48,6 +48,12 @@ const DEFAULTS = {
   panes: { sidebar: 264, list: 360 },
   // §27.5~27.7 — 읽기는 부가 기능이 아니라 본체다
   reading: { mode: 'browse', fontSize: 15, measure: 760, coordLinks: true },
+  // 작업 레포 목록 — **개인 설정이다.**
+  //
+  // 지식 레포에 두면 팀원마다 경로가 달라 맞지 않는다. 그리고 한 사람이
+  // 여러 작업 레포를 걸 수 있다 — 중요한 것은 **지식 레포가 하나**인 것이지
+  // 작업 레포의 수가 아니다.
+  workRepos: [],
   myCoords: [],
   read: {}, // id → ISO 시각
   scroll: {}, // id → { ratio, at }

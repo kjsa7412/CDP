@@ -13,6 +13,7 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { planSetup, applySetup } from '../server/core/setup.js'
 import { loadRepo, repoStatus, unregisteredCoords } from '../server/core/repo.js'
 import { runBuiltinCheck } from '../server/core/check.js'
 import { reconcile, normKey } from '../server/core/vocab.js'
@@ -42,7 +43,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx brief                 두 줄 요약 (절차 + 살아 있는 레포 상태)
   ctx sync [--pull]         원격과의 차이. --pull 은 ff 만 한다 (실패면 exit 1)
   ctx version               이 번들이 언제 만들어졌나
-  ctx setup <작업 레포>      그 레포에 규약과 skill 을 넣는다
+  ctx setup <작업 레포>      그 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기)
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
   --json                    기계 판독용 출력
@@ -57,6 +58,7 @@ function parseArgs(argv) {
     if (a === '--json') out.json = true
     else if (a === '--pull') out.pull = true
     else if (a === '--repo') out.repo = argv[++i]
+    else if (a === '--dry') out.dry = true
     else if (a === '-h' || a === '--help' || a === 'help') out.cmd = out.cmd || 'help'
     else if (!out.cmd) out.cmd = a
     else out.args.push(a)
@@ -70,6 +72,24 @@ async function findRepo(explicit) {
   const cands = []
   if (explicit) cands.push(path.resolve(explicit))
   if (process.env.CDP_REPO) cands.push(path.resolve(process.env.CDP_REPO))
+
+  // **작업 레포의 포인터.** `ctx setup` 이 넣어 둔다.
+  //
+  // 지식 레포는 사람마다 다른 자리에 있다. 그 경로를 커밋되는 파일에 박으면
+  // 팀원 수만큼 서로 다른 값이 커밋을 오간다. 그래서 커밋하지 않는 포인터
+  // 파일에 두고, 여기서 읽는다.
+  {
+    let d = process.cwd()
+    for (let i = 0; i < 8; i++) {
+      try {
+        const j = JSON.parse(await fs.readFile(path.join(d, '.claude', 'cdp.json'), 'utf8'))
+        if (j?.knowledgeRepo) { cands.push(path.resolve(j.knowledgeRepo)); break }
+      } catch {}
+      const up = path.dirname(d)
+      if (up === d) break
+      d = up
+    }
+  }
 
   let dir = process.cwd()
   for (let i = 0; i < 6; i++) {
@@ -491,62 +511,33 @@ async function cmdSetup(r, opt) {
     err('  예:  ctx setup C:' + BS + 'gdi')
     return 2
   }
-  const dst = path.resolve(target)
-  const okDst = await fs.stat(dst).then((x) => x.isDirectory()).catch(() => false)
-  if (!okDst) {
-    err(`ctx: 폴더가 없습니다 -- ${dst}`)
-    return 2
-  }
-  if (path.resolve(r.root) === dst) {
-    err('ctx: 지식 레포 자신에는 설치하지 않습니다. 작업 레포(코드가 있는 곳)를 지정하세요.')
+  const plan = await planSetup(r.root, target)
+  if (!plan.ok) {
+    err('ctx: ' + plan.reason)
     return 2
   }
 
-  const done = []
+  const label = { create: '새로', update: '갱신', append: '블록 추가', remove: '제거', same: '같음' }
+  const show = (a) =>
+    a.kind === 'skill'
+      ? `  ${label[a.op].padEnd(9)} .claude${SEP}skills${SEP}${a.name}`
+      : a.kind === 'claude'
+        ? `  ${label[a.op].padEnd(9)} CLAUDE.md`
+        : `  ${label[a.op].padEnd(9)} .claude${SEP}cdp.json   지식 레포 = ${plan.knowledge}`
 
-  // skill -- 지식 레포의 것을 그대로. 정본은 배포본이고 여기 것도 그 사본이다
-  const sSrc = path.join(r.root, '.claude', 'skills')
-  const sDst = path.join(dst, '.claude', 'skills')
-  const hasSkills = await fs.stat(sSrc).then((x) => x.isDirectory()).catch(() => false)
-  if (!hasSkills) {
-    err(`ctx: ${sSrc} 가 없습니다. 지식 레포에 배포본을 부었는지 확인하세요.`)
-    return 2
+  if (opt.dry) {
+    out(`ctx setup --dry: ${plan.work}`)
+    for (const a of plan.actions) out(show(a))
+  } else {
+    const done = await applySetup(plan)
+    out(`ctx setup: ${plan.work}`)
+    for (const a of plan.actions) if (a.op !== 'same') out(show(a))
+    if (!done.length) out('  (바뀐 것 없음)')
   }
-  await fs.rm(sDst, { recursive: true, force: true })
-  await fs.cp(sSrc, sDst, { recursive: true })
-  const names = (await fs.readdir(sSrc)).sort()
-  done.push(`.claude${SEP}skills${SEP}   ${names.join(' · ')}`)
 
-  // 규약 -- 서식의 {{REPO}} 를 이 지식 레포의 실제 경로로
-  const tpl = path.join(r.root, '.claude', 'work-repo', 'CLAUDE.md')
-  const body = await fs.readFile(tpl, 'utf8').catch(() => null)
-  if (body == null) {
-    err(`ctx: 서식이 없습니다 -- ${tpl}`)
-    err('     배포본 repo-kit 을 다시 부으면 들어옵니다.')
-    return 2
-  }
-  const claude = path.join(dst, 'CLAUDE.md')
-  const had = await fs.access(claude).then(() => true).catch(() => false)
-  if (had) {
-    await fs.copyFile(claude, claude + '.bak')
-    done.push('CLAUDE.md.bak     원래 있던 것을 옮겨 두었습니다')
-  }
-  await fs.writeFile(claude, body.split('{{REPO}}').join(r.root), 'utf8')
-  done.push(`CLAUDE.md         지식 레포 = ${r.root}`)
-
-  out(`ctx setup: ${dst}`)
-  for (const d of done) out('  ' + d)
-
-  // **.gitignore 가 삼키는지 본다.** 넣어 놓고 팀에 안 퍼지는 것이 가장 나쁘다
-  // -- 내 PC 에서만 되니 되는 줄 안다.
-  const gi = await fs.readFile(path.join(dst, '.gitignore'), 'utf8').catch(() => null)
-  if (gi && /^[.]claude\/[*]?\s*$/m.test(gi) && !/^![.]claude\/skills/m.test(gi)) {
+  for (const w of plan.warnings) {
     out('')
-    out('[주의] .gitignore 가 .claude 를 통째로 막고 있습니다.')
-    out('       이대로면 skill 이 **이 PC 에만** 남고 팀은 받지 못합니다.')
-    out('       아래 한 줄을 넣으세요 --')
-    out('')
-    out('         !.claude/skills/')
+    out('[주의] ' + String(w).split(String.fromCharCode(10)).join(String.fromCharCode(10) + '       '))
   }
   return 0
 }

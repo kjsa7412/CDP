@@ -57,6 +57,9 @@ export class ApiError extends Error {
 export const api = {
   repo: () => req('/repo'),
   probe: (p) => req(`/repo/probe?path=${encodeURIComponent(p)}`),
+  // 작업 레포 세팅. `apply` 없이 부르면 **무엇을 쓸지만** 돌려준다.
+  setup: (p, apply = false) =>
+    req('/setup', { method: 'POST', body: JSON.stringify({ path: p, apply }) }),
   // 경로 지정 — 설정 저장과 스캔 대상 변경을 한 번에 한다
   setRepo: (p) => req('/repo', { method: 'POST', body: JSON.stringify({ path: p }) }),
   docs: () => req('/docs'),

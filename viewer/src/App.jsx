@@ -597,6 +597,11 @@ const MANUAL_RE = new RegExp('^MANUAL(-.+)?[.]md$', 'i')
 const MANUAL_MAIN = new RegExp('^MANUAL[.]md$', 'i')
 const PSEP = String.fromCharCode(92)
 
+const OPLBL = { create: '새로  ', update: '갱신  ', append: '블록  ', remove: '제거  ', same: '같음  ' }
+// 긴 절대경로를 다 보여 줄 자리가 없다. **무엇이 바뀌는지**만 보이면 된다.
+const shortOf = (a) =>
+  a.kind === 'skill' ? `.claude/skills/${a.name}` : a.kind === 'claude' ? 'CLAUDE.md' : '.claude/cdp.json'
+
 function Settings({ state, repo, patch, reading, docs = [], onOpen, onClose }) {
   // **경로를 바꾸면 앱이 다른 레포를 본다.** 그래서 마우스가 벗어나도 닫지
   // 않는다 -- 입력 중에 닫히면 타이핑한 것이 사라진다.
@@ -607,6 +612,12 @@ function Settings({ state, repo, patch, reading, docs = [], onOpen, onClose }) {
   // 않는다**(local): 설정을 열 때마다 네트워크를 치면 안 된다.
   const [gitInfo, setGitInfo] = useState(null)
   const dirty = !!path.trim() && path.trim() !== (state.repoPath || '')
+
+  // 작업 레포 — 여럿이다. **지식 레포가 하나인 것이 중요하지 작업 레포의
+  // 수가 아니다.** 목록은 개인 설정에 있다(경로는 기계마다 다르다).
+  const [wr, setWr] = useState('')
+  const [plan, setPlan] = useState(null)     // { path, actions, warnings } | { path, error }
+  const [inst, setInst] = useState(null)     // 설치 중인 경로
 
   useEffect(() => {
     api.git(false).then(setGitInfo).catch(() => setGitInfo(null))
@@ -631,6 +642,41 @@ function Settings({ state, repo, patch, reading, docs = [], onOpen, onClose }) {
       location.reload()
     } finally {
       setBusy(false)
+    }
+  }
+
+  const addWr = () => {
+    const v = wr.trim()
+    if (!v) return
+    const list = state.workRepos || []
+    if (!list.includes(v)) patch({ workRepos: [...list, v] })
+    setWr('')
+  }
+
+  // **계획을 먼저 보여 준다.** 레포 밖에 쓰는 일이라, 무엇을 쓸지 모르고
+  // 누르게 하지 않는다.
+  const doPlan = async (w) => {
+    setPlan(null)
+    setInst(w)
+    try {
+      const r = await api.setup(w, false)
+      setPlan({ path: r.work, actions: r.actions, warnings: r.warnings })
+    } catch (e) {
+      setPlan({ path: w, error: String(e?.reason || e?.message || e) })
+    } finally {
+      setInst(null)
+    }
+  }
+
+  const doApply = async (w) => {
+    setInst(w)
+    try {
+      const r = await api.setup(w, true)
+      setPlan({ path: r.work, actions: r.actions, warnings: r.warnings, done: true })
+    } catch (e) {
+      setPlan({ path: w, error: String(e?.reason || e?.message || e) })
+    } finally {
+      setInst(null)
     }
   }
 
@@ -686,6 +732,69 @@ function Settings({ state, repo, patch, reading, docs = [], onOpen, onClose }) {
           </div>
         )}
       </div>
+
+      <div className="hr" />
+      <div className="popover__cap">작업 레포 — 에이전트 설치</div>
+
+      {/* **앱이 레포 밖에 파일을 쓰는 유일한 자리다.**
+          그래서 먼저 무엇을 쓸지 보여 주고, 사람이 누르면 쓴다.
+          대상이 git 레포가 아니면 서버가 거부한다. */}
+      <div className="popover__note">
+        코드가 있는 레포에 규약과 skill 을 넣는다. <b>하네스는 프로젝트 루트의
+        <code> .claude/skills/</code> 만 읽으므로</b>, 넣지 않으면 그 레포에서
+        절차가 통째로 없다.
+      </div>
+
+      {(state.workRepos || []).map((w) => (
+        <div className="field" key={w}>
+          <span className="popover__mono" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{w}</span>
+          <button className="linkbtn" disabled={!!inst} onClick={() => doPlan(w)}>
+            {inst === w ? '설치 중…' : '에이전트 설치'}
+          </button>
+          <button className="linkbtn" onClick={() => patch({ workRepos: (state.workRepos || []).filter((x) => x !== w) })}>
+            빼기
+          </button>
+        </div>
+      ))}
+
+      <div className="field field--stack">
+        <span>레포 추가</span>
+        <input
+          className="popover__in"
+          value={wr}
+          onChange={(e) => setWr(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addWr()}
+          placeholder={'C:' + PSEP + 'gdi'}
+          spellCheck={false}
+        />
+        {wr.trim() && (
+          <div className="popover__note">
+            <button className="linkbtn" onClick={addWr}>목록에 넣기</button>
+          </div>
+        )}
+      </div>
+
+      {plan && (
+        <div className="popover__note">
+          {plan.error ? (
+            <b>{plan.error}</b>
+          ) : (
+            <>
+              <b>{plan.path}</b> 에 이렇게 씁니다 —
+              <div className="popover__mono" style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>
+                {plan.actions.filter((a) => a.op !== 'same').map((a) => `${OPLBL[a.op]}  ${shortOf(a)}`).join(String.fromCharCode(10)) || '(바뀔 것 없음)'}
+              </div>
+              {plan.warnings.map((w, i) => (
+                <div key={i} style={{ color: 'var(--warn, var(--text-2))' }}>⚠ {w}</div>
+              ))}
+              <button className="linkbtn" disabled={!!inst} onClick={() => doApply(plan.path)}>
+                {inst ? '쓰는 중…' : '이대로 설치'}
+              </button>{' '}
+              <button className="linkbtn" onClick={() => setPlan(null)}>취소</button>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="field">
         <span>원격</span>

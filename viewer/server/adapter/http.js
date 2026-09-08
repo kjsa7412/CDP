@@ -157,6 +157,32 @@ async function handleApi({ req, res, url, send, store, appState, clients, beat, 
     return send(res, 200, { ...info, keepAlive: state.keepAlive() })
   }
 
+  // 작업 레포에 에이전트 세팅을 넣는다.
+  //
+  // **여기가 앱이 레포 밖에 파일을 쓰는 유일한 자리다.** 그래서 좁게 연다 —
+  //   · 대상이 git 레포일 때만 (core/setup.js 가 확인한다)
+  //   · 쓰는 파일은 정해진 셋뿐 (CLAUDE.md 블록 · .claude/skills/cdp-* · .claude/cdp.json)
+  //   · dry 가 먼저다. 화면이 무엇을 쓸지 보여 주고 사람이 누른다
+  //
+  // 경로는 **사람이 입력한 것만** 온다. 문서나 검색 결과에서 온 경로를 그대로
+  // 넘기지 않는다 -- 화면이 지키는 규칙이다.
+  if (p === '/setup' && method === 'POST') {
+    const body = await readJson(req)
+    const target = String(body?.path || '').trim()
+    if (!target) return send(res, 400, { error: 'path required' })
+    const { planSetup, applySetup } = await import('../core/setup.js')
+    const plan = await planSetup(store.root, target)
+    if (!plan.ok) return send(res, 400, { error: 'plan', reason: plan.reason })
+    if (body?.apply) await applySetup(plan)
+    return send(res, 200, {
+      applied: !!body?.apply,
+      work: plan.work,
+      knowledge: plan.knowledge,
+      actions: plan.actions.map(({ kind, name, to, op }) => ({ kind, name, to, op })),
+      warnings: plan.warnings,
+    })
+  }
+
   if (p === '/repo/probe') {
     const target = url.searchParams.get('path')
     const { probe } = await import('../core/scan.js')

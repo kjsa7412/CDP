@@ -113,16 +113,159 @@ var init_vocab = __esm({
 });
 
 // viewer/bin/ctx-cli.mjs
-import fs4 from "node:fs/promises";
-import path4 from "node:path";
+import fs5 from "node:fs/promises";
+import path5 from "node:path";
 
-// viewer/server/core/repo.js
-import fs2 from "node:fs/promises";
-import path2 from "node:path";
-
-// viewer/server/core/scan.js
+// viewer/server/core/setup.js
 import fs from "node:fs/promises";
 import path from "node:path";
+var BEGIN = "<!-- cdp:begin -- \uC774 \uBE14\uB85D\uC740 ctx setup \uC774 \uAD00\uB9AC\uD55C\uB2E4. \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C -->";
+var END = "<!-- cdp:end -->";
+var PREFIX = "cdp-";
+async function isDir(p) {
+  return fs.stat(p).then((s) => s.isDirectory()).catch(() => false);
+}
+async function read(p) {
+  return fs.readFile(p, "utf8").catch(() => null);
+}
+async function sameTree(a, b) {
+  const la = await fs.readdir(a, { withFileTypes: true }).catch(() => null);
+  const lb = await fs.readdir(b, { withFileTypes: true }).catch(() => null);
+  if (!la || !lb || la.length !== lb.length) return false;
+  const na = la.map((e) => e.name).sort();
+  const nb = lb.map((e) => e.name).sort();
+  if (na.join("|") !== nb.join("|")) return false;
+  for (const e of la) {
+    const pa = path.join(a, e.name);
+    const pb = path.join(b, e.name);
+    if (e.isDirectory()) {
+      if (!await sameTree(pa, pb)) return false;
+    } else {
+      const [x, y] = [await read(pa), await read(pb)];
+      if (x == null || x !== y) return false;
+    }
+  }
+  return true;
+}
+function blockOf(body) {
+  return `${BEGIN}
+${body.trim()}
+${END}
+`;
+}
+function mergeClaude(existing, body) {
+  const block = blockOf(body);
+  if (existing == null) return block;
+  const i = existing.indexOf(BEGIN);
+  const j = existing.indexOf(END);
+  if (i >= 0 && j > i) {
+    return existing.slice(0, i) + block.trimEnd() + existing.slice(j + END.length);
+  }
+  if (/^\s*<!--[\s\S]{0,200}?CDP 작업 레포 설정/.test(existing)) return block;
+  return existing.replace(/\s*$/, "") + "\n\n" + block;
+}
+async function planSetup(knowledgeRoot, workRoot) {
+  const kn = path.resolve(knowledgeRoot);
+  const wk = path.resolve(workRoot);
+  const bad = (reason) => ({ ok: false, reason, knowledge: kn, work: wk, actions: [], warnings: [] });
+  if (!await isDir(wk)) return bad(`\uD3F4\uB354\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4 \u2014 ${wk}`);
+  if (kn === wk) return bad("\uC9C0\uC2DD \uB808\uD3EC \uC790\uC2E0\uC5D0\uB294 \uC124\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uCF54\uB4DC\uAC00 \uC788\uB294 \uB808\uD3EC\uB97C \uC9C0\uC815\uD558\uC138\uC694.");
+  const isGit = await isDir(path.join(wk, ".git")) || await read(path.join(wk, ".git")) != null;
+  if (!isGit) return bad(`git \uB808\uD3EC\uAC00 \uC544\uB2D9\uB2C8\uB2E4 \u2014 ${wk}
+\uC791\uC5C5 \uB808\uD3EC(\uCF54\uB4DC\uAC00 \uC788\uACE0 .git \uC774 \uC788\uB294 \uACF3)\uB97C \uC9C0\uC815\uD558\uC138\uC694.`);
+  const sSrc = path.join(kn, ".claude", "skills");
+  if (!await isDir(sSrc)) return bad(`${sSrc} \uAC00 \uC5C6\uC2B5\uB2C8\uB2E4. \uC9C0\uC2DD \uB808\uD3EC\uC5D0 \uBC30\uD3EC\uBCF8\uC744 \uBD80\uC5C8\uB294\uC9C0 \uD655\uC778\uD558\uC138\uC694.`);
+  const tpl = path.join(kn, ".claude", "work-repo", "CLAUDE.md");
+  const body = await read(tpl);
+  if (body == null) return bad(`\uC11C\uC2DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4 \u2014 ${tpl}
+\uBC30\uD3EC\uBCF8 repo-kit \uC744 \uB2E4\uC2DC \uBD80\uC73C\uBA74 \uB4E4\uC5B4\uC635\uB2C8\uB2E4.`);
+  const actions = [];
+  const warnings = [];
+  const src = (await fs.readdir(sSrc, { withFileTypes: true })).filter((e) => e.isDirectory() && e.name.startsWith(PREFIX)).map((e) => e.name).sort();
+  const sDst = path.join(wk, ".claude", "skills");
+  const cur = (await fs.readdir(sDst, { withFileTypes: true }).catch(() => [])).filter((e) => e.isDirectory()).map((e) => e.name);
+  for (const n of src) {
+    const from = path.join(sSrc, n);
+    const to = path.join(sDst, n);
+    const same = await isDir(to) && await sameTree(from, to);
+    actions.push({
+      kind: "skill",
+      name: n,
+      from,
+      to,
+      op: same ? "same" : await isDir(to) ? "update" : "create"
+    });
+  }
+  for (const n of cur) {
+    if (n.startsWith(PREFIX) && !src.includes(n)) {
+      actions.push({ kind: "skill", name: n, to: path.join(sDst, n), op: "remove" });
+    }
+  }
+  const kept = cur.filter((n) => !n.startsWith(PREFIX));
+  if (kept.length) warnings.push(`\uC774 \uB808\uD3EC\uC758 \uB2E4\uB978 skill \uC740 \uAC74\uB4DC\uB9AC\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4 \u2014 ${kept.join(" \xB7 ")}`);
+  const claude = path.join(wk, "CLAUDE.md");
+  const had = await read(claude);
+  const next = mergeClaude(had, body);
+  actions.push({
+    kind: "claude",
+    to: claude,
+    op: had == null ? "create" : had === next ? "same" : had.includes(BEGIN) ? "update" : "append",
+    content: next
+  });
+  const ptr = path.join(wk, ".claude", "cdp.json");
+  const curPtr = await read(ptr);
+  const nextPtr = JSON.stringify({ knowledgeRepo: kn.split(path.sep).join("/") }, null, 2) + "\n";
+  actions.push({
+    kind: "pointer",
+    to: ptr,
+    op: curPtr == null ? "create" : curPtr === nextPtr ? "same" : "update",
+    content: nextPtr
+  });
+  const gi = await read(path.join(wk, ".gitignore")) || "";
+  const claudeBlocked = /^[.]claude\/[*]?\s*$/m.test(gi);
+  const skillsFreed = /^![.]claude\/skills/m.test(gi);
+  const ptrIgnored = claudeBlocked || /^[.]claude\/cdp[.]json\s*$/m.test(gi);
+  if (claudeBlocked && !skillsFreed) {
+    warnings.push(
+      ".gitignore \uAC00 .claude \uB97C \uD1B5\uC9F8\uB85C \uB9C9\uACE0 \uC788\uC2B5\uB2C8\uB2E4. \uC774\uB300\uB85C\uBA74 skill \uC774 **\uC774 PC \uC5D0\uB9CC** \uB0A8\uACE0\n\uD300\uC740 \uBC1B\uC9C0 \uBABB\uD569\uB2C8\uB2E4. `!.claude/skills/` \uD55C \uC904\uC744 \uB123\uC73C\uC138\uC694."
+    );
+  }
+  if (!ptrIgnored) {
+    warnings.push(
+      ".claude/cdp.json \uC740 **\uCEE4\uBC0B\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4** \u2014 \uC9C0\uC2DD \uB808\uD3EC \uACBD\uB85C\uB294 \uC0AC\uB78C\uB9C8\uB2E4 \uB2E4\uB985\uB2C8\uB2E4.\n.gitignore \uC5D0 `.claude/cdp.json` \uC744 \uB123\uC73C\uC138\uC694."
+    );
+  }
+  return { ok: true, knowledge: kn, work: wk, actions, warnings };
+}
+async function applySetup(plan) {
+  if (!plan?.ok) throw new Error(plan?.reason || "plan \uC774 \uC5C6\uC2B5\uB2C8\uB2E4");
+  const done = [];
+  for (const a of plan.actions) {
+    if (a.op === "same") continue;
+    if (a.kind === "skill") {
+      if (a.op === "remove") {
+        await fs.rm(a.to, { recursive: true, force: true });
+      } else {
+        await fs.rm(a.to, { recursive: true, force: true });
+        await fs.mkdir(path.dirname(a.to), { recursive: true });
+        await fs.cp(a.from, a.to, { recursive: true });
+      }
+    } else {
+      await fs.mkdir(path.dirname(a.to), { recursive: true });
+      await fs.writeFile(a.to, a.content, "utf8");
+    }
+    done.push(a);
+  }
+  return done;
+}
+
+// viewer/server/core/repo.js
+import fs3 from "node:fs/promises";
+import path3 from "node:path";
+
+// viewer/server/core/scan.js
+import fs2 from "node:fs/promises";
+import path2 from "node:path";
 
 // node_modules/js-yaml/dist/js-yaml.mjs
 function getDefaultExportFromCjs(x) {
@@ -3396,7 +3539,7 @@ function bodyWeight(body) {
   const text = body.split("\n").filter((l) => !/^\s*(---|<!--|#{1,6}\s)/.test(l)).join(" ").replace(/\s+/g, " ").trim();
   return { chars: text.length, thin: text.length > 0 && text.length < THIN_CHARS };
 }
-function parseDoc(path5, text) {
+function parseDoc(path6, text) {
   const m = text.match(FM);
   const errors = [];
   let fm = {};
@@ -3414,13 +3557,13 @@ function parseDoc(path5, text) {
       fm = {};
     }
   }
-  const fileId = path5.replace(/^.*\//, "").replace(/\.md$/i, "");
+  const fileId = path6.replace(/^.*\//, "").replace(/\.md$/i, "");
   const id = fm.id ? String(fm.id).trim() : fileId;
-  const layer = layerOf(path5);
+  const layer = layerOf(path6);
   const headings = outline(body);
   const weight = bodyWeight(body);
   const doc = {
-    path: path5,
+    path: path6,
     id,
     fileId,
     layer,
@@ -3469,13 +3612,13 @@ function readText(text) {
   return text.includes("\r") ? text.replace(/\r\n?/g, "\n") : text;
 }
 function posix(p) {
-  return p.split(path.sep).join("/");
+  return p.split(path2.sep).join("/");
 }
 async function* walk(root, rel = "") {
-  const dir = rel ? path.join(root, rel) : root;
+  const dir = rel ? path2.join(root, rel) : root;
   let entries;
   try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
+    entries = await fs2.readdir(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -3492,25 +3635,25 @@ async function scan(root, cache, { onProgress } = {}) {
   const docs = [];
   const bodies = /* @__PURE__ */ new Map();
   const seen = /* @__PURE__ */ new Set();
-  let read = 0;
+  let read2 = 0;
   let reused = 0;
   const started = Date.now();
   const files = [];
   for await (const f of walk(root)) {
-    const ext = path.extname(f).toLowerCase();
+    const ext = path2.extname(f).toLowerCase();
     if (TEXT_EXT.has(ext) || isImage(ext)) files.push(f);
   }
   for (let i = 0; i < files.length; i++) {
     const relPath = posix(files[i]);
-    const abs = path.join(root, relPath);
+    const abs = path2.join(root, relPath);
     seen.add(relPath);
     let st;
     try {
-      st = await fs.stat(abs);
+      st = await fs2.stat(abs);
     } catch {
       continue;
     }
-    const ext = path.extname(relPath).toLowerCase();
+    const ext = path2.extname(relPath).toLowerCase();
     if (isImage(ext)) continue;
     const hit = cache.get(relPath);
     if (hit && hit.mtime === st.mtimeMs && hit.size === st.size) {
@@ -3520,7 +3663,7 @@ async function scan(root, cache, { onProgress } = {}) {
     } else {
       let text;
       try {
-        text = readText(await fs.readFile(abs, "utf8"));
+        text = readText(await fs2.readFile(abs, "utf8"));
       } catch {
         continue;
       }
@@ -3530,7 +3673,7 @@ async function scan(root, cache, { onProgress } = {}) {
       cache.set(relPath, { mtime: st.mtimeMs, size: st.size, doc, body: text });
       docs.push(doc);
       bodies.set(relPath, text);
-      read++;
+      read2++;
     }
     if (onProgress && i % 25 === 0) onProgress({ done: i + 1, total: files.length });
   }
@@ -3538,7 +3681,7 @@ async function scan(root, cache, { onProgress } = {}) {
   return {
     docs,
     bodies,
-    stats: { total: docs.length, read, reused, ms: Date.now() - started, scannedAt: (/* @__PURE__ */ new Date()).toISOString() }
+    stats: { total: docs.length, read: read2, reused, ms: Date.now() - started, scannedAt: (/* @__PURE__ */ new Date()).toISOString() }
   };
 }
 function isImage(ext) {
@@ -3727,7 +3870,7 @@ function buildValidity(docs) {
 
 // viewer/server/core/repo.js
 async function readOr(root, name, fallback = "") {
-  const t = await fs2.readFile(path2.join(root, name), "utf8").catch(() => null);
+  const t = await fs3.readFile(path3.join(root, name), "utf8").catch(() => null);
   return t == null ? fallback : readText(t);
 }
 async function loadRepo(root, { cache = /* @__PURE__ */ new Map(), settings = {}, onProgress } = {}) {
@@ -3974,8 +4117,8 @@ init_vocab();
 
 // viewer/server/core/git.js
 import { execFile } from "node:child_process";
-import fs3 from "node:fs/promises";
-import path3 from "node:path";
+import fs4 from "node:fs/promises";
+import path4 from "node:path";
 function run(cwd, args, { timeout = 2e4 } = {}) {
   return new Promise((resolve) => {
     execFile(
@@ -3994,7 +4137,7 @@ function run(cwd, args, { timeout = 2e4 } = {}) {
   });
 }
 async function isRepo(root) {
-  return await fs3.access(path3.join(root, ".git")).then(() => true).catch(() => false);
+  return await fs4.access(path4.join(root, ".git")).then(() => true).catch(() => false);
 }
 async function status(root) {
   if (!await isRepo(root)) return { repo: false };
@@ -4079,10 +4222,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-08 08:59";
+var BUILT = "2026-09-08 09:20";
 var BS2 = String.fromCharCode(92);
-var SEP = path4.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 08:59)
+var SEP = path5.sep;
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 09:20)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -4094,7 +4237,7 @@ var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09
   ctx brief                 \uB450 \uC904 \uC694\uC57D (\uC808\uCC28 + \uC0B4\uC544 \uC788\uB294 \uB808\uD3EC \uC0C1\uD0DC)
   ctx sync [--pull]         \uC6D0\uACA9\uACFC\uC758 \uCC28\uC774. --pull \uC740 ff \uB9CC \uD55C\uB2E4 (\uC2E4\uD328\uBA74 exit 1)
   ctx version               \uC774 \uBC88\uB4E4\uC774 \uC5B8\uC81C \uB9CC\uB4E4\uC5B4\uC84C\uB098
-  ctx setup <\uC791\uC5C5 \uB808\uD3EC>      \uADF8 \uB808\uD3EC\uC5D0 \uADDC\uC57D\uACFC skill \uC744 \uB123\uB294\uB2E4
+  ctx setup <\uC791\uC5C5 \uB808\uD3EC>      \uADF8 \uB808\uD3EC\uC5D0 \uADDC\uC57D\uACFC skill \uC744 \uB123\uB294\uB2E4 (--dry \uB85C \uBBF8\uB9AC\uBCF4\uAE30)
 
   --repo <\uACBD\uB85C>             \uC9C0\uC2DD \uB808\uD3EC \uACBD\uB85C (\uAE30\uBCF8: CDP_REPO \uB610\uB294 \uD604\uC7AC \uD3F4\uB354 \uC0C1\uC704 \uD0D0\uC0C9)
   --json                    \uAE30\uACC4 \uD310\uB3C5\uC6A9 \uCD9C\uB825
@@ -4106,6 +4249,7 @@ function parseArgs(argv) {
     if (a === "--json") out2.json = true;
     else if (a === "--pull") out2.pull = true;
     else if (a === "--repo") out2.repo = argv[++i];
+    else if (a === "--dry") out2.dry = true;
     else if (a === "-h" || a === "--help" || a === "help") out2.cmd = out2.cmd || "help";
     else if (!out2.cmd) out2.cmd = a;
     else out2.args.push(a);
@@ -4114,23 +4258,39 @@ function parseArgs(argv) {
 }
 async function findRepo(explicit) {
   const cands = [];
-  if (explicit) cands.push(path4.resolve(explicit));
-  if (process.env.CDP_REPO) cands.push(path4.resolve(process.env.CDP_REPO));
+  if (explicit) cands.push(path5.resolve(explicit));
+  if (process.env.CDP_REPO) cands.push(path5.resolve(process.env.CDP_REPO));
+  {
+    let d = process.cwd();
+    for (let i = 0; i < 8; i++) {
+      try {
+        const j = JSON.parse(await fs5.readFile(path5.join(d, ".claude", "cdp.json"), "utf8"));
+        if (j?.knowledgeRepo) {
+          cands.push(path5.resolve(j.knowledgeRepo));
+          break;
+        }
+      } catch {
+      }
+      const up = path5.dirname(d);
+      if (up === d) break;
+      d = up;
+    }
+  }
   let dir = process.cwd();
   for (let i = 0; i < 6; i++) {
     cands.push(dir);
-    cands.push(path4.join(dir, "knowledge-repo"));
-    const up = path4.dirname(dir);
+    cands.push(path5.join(dir, "knowledge-repo"));
+    const up = path5.dirname(dir);
     if (up === dir) break;
     dir = up;
   }
   for (const self of [process.argv[1], process.execPath]) {
     if (!self) continue;
-    const d = path4.dirname(path4.resolve(self));
-    cands.push(d, path4.dirname(d));
+    const d = path5.dirname(path5.resolve(self));
+    cands.push(d, path5.dirname(d));
   }
   for (const c of cands) {
-    const ok = await fs4.access(path4.join(c, "_vocab.md")).then(() => true).catch(() => false);
+    const ok = await fs5.access(path5.join(c, "_vocab.md")).then(() => true).catch(() => false);
     if (ok) return c;
   }
   return null;
@@ -4186,7 +4346,7 @@ async function cmdIndex(r) {
     rows.push(`| ${d.id} | ${d.date || ""} | ${d.status || ""} | ${d.touches.join(", ") || "-"} |`);
   }
   const head = ["# INDEX", "", `\uC790\uB3D9 \uC0DD\uC131 - \`ctx index\`. \uC791\uC5C5 \uAE30\uB85D ${r.works.length}\uAC74.`, "", ""];
-  await fs4.writeFile(path4.join(r.root, "INDEX.md"), head.concat(rows).join("\n") + "\n", "utf8");
+  await fs5.writeFile(path5.join(r.root, "INDEX.md"), head.concat(rows).join("\n") + "\n", "utf8");
   const lines = ["# INDEX (\uC88C\uD45C\uBCC4)", "", "\uC790\uB3D9 \uC0DD\uC131 - `ctx index`.", ""];
   const byType = /* @__PURE__ */ new Map();
   for (const c of r.allCoords) {
@@ -4207,7 +4367,7 @@ async function cmdIndex(r) {
     }
     lines.push("");
   }
-  await fs4.writeFile(path4.join(r.root, "INDEX-by-coord.md"), lines.join("\n") + "\n", "utf8");
+  await fs5.writeFile(path5.join(r.root, "INDEX-by-coord.md"), lines.join("\n") + "\n", "utf8");
   out(`ctx index: INDEX.md ${r.works.length}\uD589 / INDEX-by-coord.md \uC88C\uD45C ${r.allCoords.length}\uAC1C`);
   return 0;
 }
@@ -4439,53 +4599,25 @@ async function cmdSetup(r, opt) {
     err("  \uC608:  ctx setup C:" + BS2 + "gdi");
     return 2;
   }
-  const dst = path4.resolve(target);
-  const okDst = await fs4.stat(dst).then((x) => x.isDirectory()).catch(() => false);
-  if (!okDst) {
-    err(`ctx: \uD3F4\uB354\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4 -- ${dst}`);
+  const plan = await planSetup(r.root, target);
+  if (!plan.ok) {
+    err("ctx: " + plan.reason);
     return 2;
   }
-  if (path4.resolve(r.root) === dst) {
-    err("ctx: \uC9C0\uC2DD \uB808\uD3EC \uC790\uC2E0\uC5D0\uB294 \uC124\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC791\uC5C5 \uB808\uD3EC(\uCF54\uB4DC\uAC00 \uC788\uB294 \uACF3)\uB97C \uC9C0\uC815\uD558\uC138\uC694.");
-    return 2;
+  const label = { create: "\uC0C8\uB85C", update: "\uAC31\uC2E0", append: "\uBE14\uB85D \uCD94\uAC00", remove: "\uC81C\uAC70", same: "\uAC19\uC74C" };
+  const show = (a) => a.kind === "skill" ? `  ${label[a.op].padEnd(9)} .claude${SEP}skills${SEP}${a.name}` : a.kind === "claude" ? `  ${label[a.op].padEnd(9)} CLAUDE.md` : `  ${label[a.op].padEnd(9)} .claude${SEP}cdp.json   \uC9C0\uC2DD \uB808\uD3EC = ${plan.knowledge}`;
+  if (opt.dry) {
+    out(`ctx setup --dry: ${plan.work}`);
+    for (const a of plan.actions) out(show(a));
+  } else {
+    const done = await applySetup(plan);
+    out(`ctx setup: ${plan.work}`);
+    for (const a of plan.actions) if (a.op !== "same") out(show(a));
+    if (!done.length) out("  (\uBC14\uB010 \uAC83 \uC5C6\uC74C)");
   }
-  const done = [];
-  const sSrc = path4.join(r.root, ".claude", "skills");
-  const sDst = path4.join(dst, ".claude", "skills");
-  const hasSkills = await fs4.stat(sSrc).then((x) => x.isDirectory()).catch(() => false);
-  if (!hasSkills) {
-    err(`ctx: ${sSrc} \uAC00 \uC5C6\uC2B5\uB2C8\uB2E4. \uC9C0\uC2DD \uB808\uD3EC\uC5D0 \uBC30\uD3EC\uBCF8\uC744 \uBD80\uC5C8\uB294\uC9C0 \uD655\uC778\uD558\uC138\uC694.`);
-    return 2;
-  }
-  await fs4.rm(sDst, { recursive: true, force: true });
-  await fs4.cp(sSrc, sDst, { recursive: true });
-  const names = (await fs4.readdir(sSrc)).sort();
-  done.push(`.claude${SEP}skills${SEP}   ${names.join(" \xB7 ")}`);
-  const tpl = path4.join(r.root, ".claude", "work-repo", "CLAUDE.md");
-  const body = await fs4.readFile(tpl, "utf8").catch(() => null);
-  if (body == null) {
-    err(`ctx: \uC11C\uC2DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4 -- ${tpl}`);
-    err("     \uBC30\uD3EC\uBCF8 repo-kit \uC744 \uB2E4\uC2DC \uBD80\uC73C\uBA74 \uB4E4\uC5B4\uC635\uB2C8\uB2E4.");
-    return 2;
-  }
-  const claude = path4.join(dst, "CLAUDE.md");
-  const had = await fs4.access(claude).then(() => true).catch(() => false);
-  if (had) {
-    await fs4.copyFile(claude, claude + ".bak");
-    done.push("CLAUDE.md.bak     \uC6D0\uB798 \uC788\uB358 \uAC83\uC744 \uC62E\uACA8 \uB450\uC5C8\uC2B5\uB2C8\uB2E4");
-  }
-  await fs4.writeFile(claude, body.split("{{REPO}}").join(r.root), "utf8");
-  done.push(`CLAUDE.md         \uC9C0\uC2DD \uB808\uD3EC = ${r.root}`);
-  out(`ctx setup: ${dst}`);
-  for (const d of done) out("  " + d);
-  const gi = await fs4.readFile(path4.join(dst, ".gitignore"), "utf8").catch(() => null);
-  if (gi && /^[.]claude\/[*]?\s*$/m.test(gi) && !/^![.]claude\/skills/m.test(gi)) {
+  for (const w of plan.warnings) {
     out("");
-    out("[\uC8FC\uC758] .gitignore \uAC00 .claude \uB97C \uD1B5\uC9F8\uB85C \uB9C9\uACE0 \uC788\uC2B5\uB2C8\uB2E4.");
-    out("       \uC774\uB300\uB85C\uBA74 skill \uC774 **\uC774 PC \uC5D0\uB9CC** \uB0A8\uACE0 \uD300\uC740 \uBC1B\uC9C0 \uBABB\uD569\uB2C8\uB2E4.");
-    out("       \uC544\uB798 \uD55C \uC904\uC744 \uB123\uC73C\uC138\uC694 --");
-    out("");
-    out("         !.claude/skills/");
+    out("[\uC8FC\uC758] " + String(w).split(String.fromCharCode(10)).join(String.fromCharCode(10) + "       "));
   }
   return 0;
 }
