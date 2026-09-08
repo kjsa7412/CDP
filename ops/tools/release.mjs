@@ -94,6 +94,8 @@ need('agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
 need('repo-kit/pre-commit', 'repo-kit/.githooks/pre-commit')
 need('repo-kit/manual-user.md', 'repo-kit/MANUAL.md')
 need('repo-kit/manual-admin.md', 'repo-kit/MANUAL-관리자.md')
+// **정본.** CDP 가 지금 무엇인지. 설계서는 여기까지 온 기록이고 이것이 답이다.
+need('repo-kit/manual-system.md', 'repo-kit/MANUAL-시스템.md')
 // 설치 시나리오는 **배포본 루트**다. 지식 레포가 아직 없을 때 읽는 문서라
 // repo-kit 안에 두면 부은 뒤에야 보인다 -- 순서가 거꾸로다.
 need('repo-kit/manual-install.md', '설치.md')
@@ -136,6 +138,7 @@ repo-kit/        지식 레포를 새로 세울 때 넣는 것
   .claude/work-repo/CLAUDE.md
                  작업 레포용 서식. ctx setup 이 읽는다
   TEMPLATE-work.md
+  MANUAL-시스템.md      **정본 — CDP 가 무엇인지**
   MANUAL.md            하루 쓰는 법
   MANUAL-관리자.md      설치 · 배포 · 어휘 운영
 sample-repo/     바로 열어 볼 수 있는 샘플 지식 레포
