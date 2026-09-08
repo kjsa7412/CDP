@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// 생성물 -- 손으로 고치지 마세요. `node tools/build-ctx.mjs` 가 만듭니다.
-// 원본: server/core/ + bin/ctx-cli.mjs  (작업환경 설계서 3.1)
+// 생성물 -- 손으로 고치지 마세요. `node ops/tools/build-ctx.mjs` 가 만듭니다.
+// 원본: viewer/server/core/ + viewer/bin/ctx-cli.mjs  (작업환경 설계서 3.1)
 
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
 
-// server/core/vocab.js
+// viewer/server/core/vocab.js
 function parseVocab(text) {
   if (!text) return { types: [], coords: /* @__PURE__ */ new Map(), aliasIndex: /* @__PURE__ */ new Map(), errors: [] };
   const lines = text.split("\n");
@@ -107,20 +107,20 @@ function reconcile(vocab, query) {
 }
 var COORD;
 var init_vocab = __esm({
-  "server/core/vocab.js"() {
+  "viewer/server/core/vocab.js"() {
     COORD = /^[A-Za-z][A-Za-z0-9_-]*:\S+$/;
   }
 });
 
-// bin/ctx-cli.mjs
+// viewer/bin/ctx-cli.mjs
 import fs4 from "node:fs/promises";
 import path4 from "node:path";
 
-// server/core/repo.js
+// viewer/server/core/repo.js
 import fs2 from "node:fs/promises";
 import path2 from "node:path";
 
-// server/core/scan.js
+// viewer/server/core/scan.js
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -3190,7 +3190,7 @@ var {
   safeDump
 } = yaml;
 
-// server/core/managed.js
+// viewer/server/core/managed.js
 var BS = String.fromCharCode(92);
 var RE_SPECIAL = ".+?^${}()|[]" + BS;
 var coordValue = (coord) => coord.slice(coord.indexOf(":") + 1);
@@ -3339,7 +3339,7 @@ function buildManagedIndex(registry, managedDocs) {
   };
 }
 
-// server/core/frontmatter.js
+// viewer/server/core/frontmatter.js
 var FM = /^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 function layerOf(p) {
   if (/^work\/(?!assets\/)[^/]+\.md$/i.test(p)) return "work";
@@ -3351,6 +3351,10 @@ function normDate(v) {
   if (v == null) return null;
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return String(v).trim();
+}
+function normStatus(v) {
+  const t = v ? String(v).trim() : "";
+  return !t || t === "\uD655\uC815" ? null : t;
 }
 function toArray(v) {
   if (v == null) return [];
@@ -3423,7 +3427,12 @@ function parseDoc(path5, text) {
     title: fm.title ? String(fm.title).trim() : fileId,
     date: normDate(fm.date),
     author: fm.author ? String(fm.author).trim() : null,
-    status: fm.status ? String(fm.status).trim() : null,
+    // **`확정` 은 읽는 경계에서 지운다.**
+    //
+    // 기본값이라 아무것도 구별하지 않는다(30건 중 28건). 여기서 지우면 화면·
+    // 클립보드·검사 전부가 자동으로 조용해지고, 이미 `status: 확정` 이 적힌
+    // 기존 기록도 그대로 둔 채 동작한다 -- 데이터를 고치러 다니지 않는다.
+    status: normStatus(fm.status),
     touches: toArray(fm.touches),
     hasTouchesKey: Object.prototype.hasOwnProperty.call(fm, "touches"),
     supersedes: normalizeSupersedes(fm.supersedes),
@@ -3435,7 +3444,7 @@ function parseDoc(path5, text) {
     headings,
     bodyChars: weight.chars,
     // 진행중은 본문이 비어 있는 것이 정상이다 (작업환경 §12)
-    bodyThin: layer === "work" && weight.thin && String(fm.status || "").trim() !== "\uC9C4\uD589\uC911",
+    bodyThin: layer === "work" && weight.thin && normStatus(fm.status) !== "\uC9C4\uD589\uC911",
     // 형식을 강요하지 않으므로 목차 레일은 항상 실제 제목으로 만든다
     sections: [],
     conforms: false,
@@ -3449,7 +3458,7 @@ function parseDoc(path5, text) {
   return doc;
 }
 
-// server/core/scan.js
+// viewer/server/core/scan.js
 var IGNORED_DIRS = /* @__PURE__ */ new Set([".git", "design", ".claude", "node_modules", "dist", "build", ".vite", ".cache", ".idea", ".vscode"]);
 var TEXT_EXT = /* @__PURE__ */ new Set([".md", ".markdown", ".txt", ".json", ".yml", ".yaml", ".sql", ".csv"]);
 function readText(text) {
@@ -3535,10 +3544,10 @@ function countIndexRows(text) {
   return text.split("\n").filter((l) => /^\|/.test(l.trim()) && !/^\|[\s:\-|]+\|$/.test(l.trim())).filter((l) => !/^\|\s*id\s*\|/i.test(l.trim())).length;
 }
 
-// server/core/repo.js
+// viewer/server/core/repo.js
 init_vocab();
 
-// server/core/validity.js
+// viewer/server/core/validity.js
 function cmpDateDesc(a, b) {
   const da = a.date || "";
   const db = b.date || "";
@@ -3573,10 +3582,10 @@ function buildCoordIndex(works, opts = {}) {
     // 섹션의 `applied` 는 **하나만 가리킬 수 있는데** 하루에 같은 좌표를 두 번
     // 건드리면 섹션은 둘 다 반영하고 `applied` 는 그중 하나만 적는다.
     //
-    // id 문자열 비교로 순서를 매기면 그때 남은 하나가 "밀림"으로 잡힌다 --
-    // 실측에서 `screen:PLA011` 이 그랬다. 셋 다 반영했는데 밀림 1건이 떴다.
+    // id 문자열 비교로 순서를 매기면 그때 남은 하나가 파생 누락으로 잡힌다 --
+    // 실측에서 `screen:PLA011` 이 그랬다. 셋 다 반영했는데 1건이 남았다.
     //
-    // **밀림 목록의 오탐은 부식성이 크다.** 한 번 틀리면 사람들이 그 목록 전체를
+    // **이 목록의 오탐은 부식성이 크다.** 한 번 틀리면 사람들이 그 목록 전체를
     // 안 믿는다. 그래서 같은 날짜는 동료로 본다 -- 선후를 모르니 단정하지 않는다.
     //
     // 대가 — 같은 날 실제로 반영 안 된 작업을 놓친다. 그것은 섹션의 `변경` 목록이
@@ -3707,7 +3716,7 @@ function buildValidity(docs) {
   };
 }
 
-// server/core/repo.js
+// viewer/server/core/repo.js
 async function readOr(root, name, fallback = "") {
   const t = await fs2.readFile(path2.join(root, name), "utf8").catch(() => null);
   return t == null ? fallback : readText(t);
@@ -3746,26 +3755,24 @@ async function loadRepo(root, { cache = /* @__PURE__ */ new Map(), settings = {}
   };
 }
 function repoStatus(r, { today = /* @__PURE__ */ new Date() } = {}) {
-  const bad = /* @__PURE__ */ new Set(["stale", "orphan", "anchor-missing", "doc-missing"]);
-  const stale = r.sections.filter((x) => bad.has(x.state));
-  const unwritten = r.sections.filter((x) => x.state === "unwritten" || x.state === "empty");
+  const broken = /* @__PURE__ */ new Set(["orphan", "anchor-missing", "doc-missing"]);
+  const pendingDerive = r.sections.filter((x) => x.state === "stale" || x.state === "unwritten");
+  const brokenSections = r.sections.filter((x) => broken.has(x.state));
   const days = (d) => d ? Math.max(0, Math.round((today - new Date(d)) / 864e5)) : null;
   return {
     docs: r.docs.length,
     works: r.works.length,
     managedDocs: r.managedDocs.length,
     coords: r.vocab.coords.size,
-    stale,
-    staleCount: stale.length,
-    unwritten,
-    unwrittenCount: unwritten.length,
+    pendingDerive,
+    brokenSections,
     unregistered: unregisteredCoords(r),
-    // **미결은 CDP 의 것이 아니다** (정정_판정모델_v2 §2).
+    // **아젠다는 CDP 의 것이 아니다** (정정_판정모델_v2 §2).
     //
     // 지식공유문서는 **작업의 완료에서 발생하는 문서**다. 결정을 기다리는
     // 것은 아젠다이고, 아젠다는 이슈관리·TODO 같은 스케줄 문서가 다룬다.
-    // 남아 있는 `status: 미결` 은 상태가 아니라 **이관 대상**이다.
-    legacyPending: r.works.filter((d) => d.status === "\uBBF8\uACB0").map((d) => ({ id: d.id, title: d.title, author: d.author, date: d.date, days: days(d.date), touches: d.touches })).sort((a, b) => (b.days ?? 0) - (a.days ?? 0)),
+    // `미결` 과 `제안` 은 같은 것 — 둘 다 상태가 아니라 **이관 대상**이다.
+    legacyPending: r.works.filter((d) => d.status === "\uBBF8\uACB0" || d.status === "\uC81C\uC548").map((d) => ({ id: d.id, title: d.title, author: d.author, date: d.date, days: days(d.date), touches: d.touches })).sort((a, b) => (b.days ?? 0) - (a.days ?? 0)),
     running: r.works.filter((d) => d.status === "\uC9C4\uD589\uC911").map((d) => ({ id: d.id, title: d.title, author: d.author, date: d.date, touches: d.touches })),
     thin: r.works.filter((d) => d.bodyThin).map((d) => ({ id: d.id, title: d.title, chars: d.bodyChars })),
     indexStale: r.indexInfo.exists ? r.indexInfo.rows !== r.works.length : null
@@ -3782,8 +3789,9 @@ function unregisteredCoords(r) {
   })).sort((a, b) => b.count - a.count || a.coord.localeCompare(b.coord));
 }
 
-// server/core/check.js
-var REQUIRED = ["id", "title", "date", "author", "status"];
+// viewer/server/core/check.js
+var AGENDA = /* @__PURE__ */ new Set(["\uBBF8\uACB0", "\uC81C\uC548"]);
+var REQUIRED = ["id", "title", "date", "author"];
 function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus }) {
   const findings = [];
   const push = (sev, kind, label, items) => {
@@ -3850,9 +3858,9 @@ function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, secti
   push("warn", "deprecated-coord", "deprecated \uC88C\uD45C \uC0AC\uC6A9", deprecatedUse);
   push(
     "error",
-    "legacy-pending",
-    "status: \uBBF8\uACB0 \u2014 \uC9C0\uC2DD\uACF5\uC720\uBB38\uC11C\uAC00 \uC544\uB2C8\uB77C \uC544\uC820\uB2E4\uC785\uB2C8\uB2E4",
-    units.filter((d) => d.status === "\uBBF8\uACB0").map((d) => ({ id: d.id, path: d.path, detail: "docs/\uC704\uD5D8\uBC0F\uC774\uC288\uAD00\uB9AC\uB300\uC7A5.md \uB85C \uC62E\uAE30\uC138\uC694" }))
+    "agenda-status",
+    "status: \uBBF8\uACB0\xB7\uC81C\uC548 \u2014 \uC9C0\uC2DD\uACF5\uC720\uBB38\uC11C\uAC00 \uC544\uB2C8\uB77C \uC544\uC820\uB2E4\uC785\uB2C8\uB2E4",
+    units.filter((d) => AGENDA.has(d.status)).map((d) => ({ id: d.id, path: d.path, detail: `status: ${d.status} \u2014 docs/\uC704\uD5D8\uBC0F\uC774\uC288\uAD00\uB9AC\uB300\uC7A5.md \uB85C \uC62E\uAE30\uC138\uC694` }))
   );
   if (indexInfo?.exists && indexInfo.rows !== units.length) {
     findings.push({
@@ -3895,18 +3903,12 @@ function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, secti
     );
     push(
       "error",
-      "stale-section",
-      "\uAD00\uB9AC \uBB38\uC11C\uAC00 \uBC00\uB838\uC2B5\uB2C8\uB2E4 \u2014 \uC9C0\uC2DD\uACF5\uC720\uBB38\uC11C\uB97C \uB0A8\uAE30\uBA74 \uD30C\uC0DD \uAC31\uC2E0\uC740 \uD544\uC218\uC785\uB2C8\uB2E4",
-      sections.filter((r) => r.state === "stale").map((r) => ({
+      "derive-missing",
+      "\uAD00\uB9AC \uBB38\uC11C \uD30C\uC0DD \uB204\uB77D \u2014 \uC9C0\uC2DD\uACF5\uC720\uBB38\uC11C\uB97C \uB0A8\uAE30\uBA74 \uD30C\uC0DD \uAC31\uC2E0\uC740 \uD544\uC218\uC785\uB2C8\uB2E4",
+      sections.filter((r) => r.state === "stale" || r.state === "unwritten").map((r) => ({
         coord: r.coord,
-        detail: `${r.doc} \xB7 applied ${r.applied} \uB4A4 \uD6C4\uC18D ${r.count}\uAC74 \u2014 \`ctx apply ${r.coord}\``
+        detail: r.applied ? `${r.doc} \xB7 applied ${r.applied} \uB4A4 \uD6C4\uC18D ${r.count}\uAC74 \u2014 \`ctx apply ${r.coord}\`` : `${r.doc} \xB7 applied \uC5C6\uC74C \xB7 \uC791\uC5C5 ${r.total}\uAC74 \u2014 \`ctx apply ${r.coord}\``
       }))
-    );
-    push(
-      "info",
-      "unwritten-section",
-      "\uC139\uC158\uC774 \uC544\uC9C1 \uBBF8\uC791\uC131 \u2014 \uC791\uC5C5 \uAE30\uB85D\uC740 \uC788\uB2E4",
-      sections.filter((r) => r.state === "unwritten").map((r) => ({ coord: r.coord, detail: `${r.doc} \xB7 \uC791\uC5C5 ${r.total}\uAC74` }))
     );
   }
   if (gitStatus && gitStatus.repo && !gitStatus.hooksPath) {
@@ -3944,10 +3946,10 @@ function vocabHelpers() {
   };
 }
 
-// bin/ctx-cli.mjs
+// viewer/bin/ctx-cli.mjs
 init_vocab();
 
-// server/core/git.js
+// viewer/server/core/git.js
 import { execFile } from "node:child_process";
 import fs3 from "node:fs/promises";
 import path3 from "node:path";
@@ -4053,17 +4055,17 @@ function firstLine(s) {
   return String(s || "").split("\n").find((l) => l.trim()) || null;
 }
 
-// bin/ctx-cli.mjs
-var BUILT = "2026-09-07 01:35";
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-07 01:35)
+// viewer/bin/ctx-cli.mjs
+var BUILT = "2026-09-08 01:55";
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 01:55)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
   ctx match <\uC774\uB984...>       \uC774\uB984 -> \uC815\uBCF8 \uC88C\uD45C (\uB300\uC870)
   ctx where <\uC88C\uD45C>          \uADF8 \uC88C\uD45C\uC758 \uC0C1\uD0DC\uAC00 \uC5B4\uB290 \uBB38\uC11C \uC5B4\uB290 \uC139\uC158\uC5D0 \uC788\uB098
-  ctx stale [--json]        \uBC00\uB9B0 \uC139\uC158 \uBAA9\uB85D
+  ctx derive [--json]       \uD30C\uC0DD\uC774 \uC548 \uB41C \uC139\uC158 \uBAA9\uB85D
   ctx term <\uC774\uB984>           \uC5B4\uD718 \uC870\uD68C (\uC815\uBCF8 / alias / deprecated)
-  ctx apply <\uC88C\uD45C>          \uBC00\uB9B0 \uC139\uC158\uC5D0 \uBD99\uC77C \uBCC0\uACBD \uC904 \uCD08\uC548
+  ctx apply <\uC88C\uD45C>          \uD30C\uC0DD\uD560 \uC139\uC158\uC5D0 \uBD99\uC77C \uBCC0\uACBD \uC904 \uCD08\uC548
   ctx brief                 \uB450 \uC904 \uC694\uC57D (\uC808\uCC28 + \uC0B4\uC544 \uC788\uB294 \uB808\uD3EC \uC0C1\uD0DC)
   ctx sync [--pull]         \uC6D0\uACA9\uACFC\uC758 \uCC28\uC774. --pull \uC740 ff \uB9CC \uD55C\uB2E4 (\uC2E4\uD328\uBA74 exit 1)
   ctx version               \uC774 \uBC88\uB4E4\uC774 \uC5B8\uC81C \uB9CC\uB4E4\uC5B4\uC84C\uB098
@@ -4166,7 +4168,7 @@ async function cmdIndex(r) {
     for (const c of cs) {
       const list = r.coords.byCoord.get(c) || [];
       const sec = r.sections.find((x) => x.coord === c);
-      const mark = !sec ? "" : sec.state === "stale" ? `  **\uBC00\uB9BC ${sec.count}\uAC74**` : sec.state === "ok" ? "" : `  *${sec.state}*`;
+      const mark = "";
       const where = sec && sec.doc ? ` \`${short(sec.doc)}\`` : "";
       lines.push(`- \`${c}\` \uC791\uC5C5 ${list.length}\uAC74${where}${mark}`);
       for (const d of list.slice(0, 3)) lines.push(`  - ${d.date || ""} [${d.title}](work/${d.id}.md)`);
@@ -4237,7 +4239,7 @@ async function cmdWhere(r, opt) {
   out(`  \uBB38\uC11C   ${hit.doc}${hit.whole ? "  (\uBB38\uC11C \uC804\uCCB4)" : ""}`);
   if (!hit.whole) out(`  \uC139\uC158   ${"#".repeat(hit.level)} ${hit.value}`);
   if (sec) {
-    const label = sec.state === "ok" ? "\uBC18\uC601\uB428" : sec.state === "stale" ? `\uBC00\uB9BC ${sec.count}\uAC74 (applied ${sec.applied} \uAE4C\uC9C0\uB9CC \uBC18\uC601)` : sec.state === "unwritten" || sec.state === "empty" ? "\uC544\uC9C1 \uC791\uC131\uB418\uC9C0 \uC54A\uC74C" : sec.state === "anchor-missing" ? "\uC139\uC158\uC774 \uC5C6\uC74C" : sec.state === "doc-missing" ? "\uBB38\uC11C\uAC00 \uC5C6\uC74C" : `applied \uAC00 \uC5C6\uB294 \uAE30\uB85D\uC744 \uAC00\uB9AC\uD0B4 (${sec.applied})`;
+    const label = sec.applied ? `\uBC18\uC601 ${sec.applied}` : sec.state === "anchor-missing" ? "\uC139\uC158\uC774 \uC5C6\uC74C" : sec.state === "doc-missing" ? "\uBB38\uC11C\uAC00 \uC5C6\uC74C" : sec.state === "unwritten" ? `\uD30C\uC0DD \uB0A8\uC74C \u2014 \uC791\uC5C5 ${sec.total}\uAC74 (ctx apply ${coord})` : "\uC544\uC9C1 \uC2E4\uB9B0 \uC791\uC5C5 \uC5C6\uC74C";
     out(`  \uC0C1\uD0DC   ${label}`);
   }
   out(`  \uC791\uC5C5   ${works.length}\uAC74`);
@@ -4245,29 +4247,31 @@ async function cmdWhere(r, opt) {
   if (works.length > 5) out(`    ... ${works.length - 5}\uAC74 \uB354`);
   return 0;
 }
-async function cmdStale(r, opt) {
+async function cmdDerive(r, opt) {
   const st = repoStatus(r);
+  const todo = [...st.pendingDerive];
+  const broken = st.brokenSections;
   if (opt.json) {
-    out(JSON.stringify({ stale: st.stale, unwritten: st.unwritten }, null, 2));
+    out(JSON.stringify({ pendingDerive: todo, brokenSections: broken }, null, 2));
     return 0;
   }
-  if (!st.staleCount) {
-    out("ctx stale: \uBC00\uB9B0 \uC139\uC158 \uC5C6\uC74C" + (st.unwrittenCount ? `  (\uBBF8\uC791\uC131 ${st.unwrittenCount}\uACF3)` : ""));
+  if (!todo.length && !broken.length) {
+    out("ctx derive: \uD30C\uC0DD \uB0A8\uC740 \uC139\uC158 \uC5C6\uC74C");
     return 0;
   }
-  out(`\uBC00\uB9B0/\uAE68\uC9C4 \uC139\uC158 ${st.staleCount}\uACF3`);
-  out("");
-  for (const x of st.stale) {
-    const label = x.state === "stale" ? `\uBC00\uB9BC ${x.count}\uAC74` : x.state === "anchor-missing" ? "\uC139\uC158 \uC5C6\uC74C" : x.state === "doc-missing" ? "\uBB38\uC11C \uC5C6\uC74C" : "applied \uAE68\uC9D0";
-    out(`  ${pad(x.coord, 32)} ${pad(label, 12)} ${short(x.doc)}`);
-    if (x.state === "stale") {
-      out(`  ${" ".repeat(32)} applied ${x.applied}`);
+  if (todo.length) {
+    out(`\uD30C\uC0DD \uB0A8\uC740 \uC139\uC158 ${todo.length}\uACF3`);
+    out("");
+    for (const x of todo) {
+      out(`  ${pad(x.coord, 32)} ${pad(`\uC791\uC5C5 ${x.total}\uAC74`, 12)} ${short(x.doc)}`);
+      if (x.applied) out(`  ${" ".repeat(32)} \uC2E4\uB9B0 \uAC83 ${x.applied}`);
       for (const i of x.items) out(`  ${" ".repeat(32)}   + ${i.date || ""}  ${i.id}`);
     }
   }
-  if (st.unwrittenCount) {
-    out("");
-    out(`\uBBF8\uC791\uC131 ${st.unwrittenCount}\uACF3: ` + st.unwritten.slice(0, 8).map((x) => x.coord).join(", ") + (st.unwrittenCount > 8 ? " ..." : ""));
+  if (broken.length) {
+    if (todo.length) out("");
+    out(`\uAE68\uC9C4 \uC139\uC158 ${broken.length}\uACF3 \u2014 \uB4F1\uB85D\uBD80\uAC00 \uC5C6\uB294 \uC790\uB9AC\uB97C \uAC00\uB9AC\uD0A8\uB2E4`);
+    for (const x of broken) out(`  ${pad(x.coord, 32)} ${pad(x.state, 14)} ${short(x.doc)}`);
   }
   return 0;
 }
@@ -4337,14 +4341,14 @@ async function cmdApply(r, opt) {
 async function cmdBrief(r, opt) {
   const st = repoStatus(r);
   const parts = [`\uC791\uC5C5 \uAE30\uB85D ${st.works}`, `\uAD00\uB9AC \uBB38\uC11C ${st.managedDocs}`];
-  if (st.staleCount) parts.push(`\uBC00\uB9B0 \uC139\uC158 ${st.staleCount}`);
+  if (st.pendingDerive.length) parts.push(`\uD30C\uC0DD \uB0A8\uC74C ${st.pendingDerive.length}`);
   if (st.unregistered.length) parts.push(`\uBBF8\uB4F1\uC7AC \uC88C\uD45C ${st.unregistered.length}`);
-  if (st.pending.length) {
-    const oldest = st.pending[0];
-    parts.push(`\uBBF8\uACB0 ${st.pending.length}(\uCD5C\uC7A5 ${oldest.days}\uC77C \xB7 ${oldest.author || "\uC791\uC131\uC790 \uBBF8\uC0C1"})`);
+  if (st.legacyPending.length) {
+    const oldest = st.legacyPending[0];
+    parts.push(`\uBBF8\uACB0 ${st.legacyPending.length} \u2014 \uC774\uC288 \uB300\uC7A5\uC73C\uB85C \uC774\uAD00 (\uCD5C\uC7A5 ${oldest.days}\uC77C)`);
   }
   if (st.running.length) parts.push(`\uC9C4\uD589\uC911 ${st.running.length}`);
-  if (st.indexStale) parts.push("INDEX \uBC00\uB9BC");
+  if (st.indexStale) parts.push("INDEX \uBD88\uC77C\uCE58");
   if (opt.json) {
     out(JSON.stringify(st, null, 2));
     return 0;
@@ -4421,7 +4425,7 @@ async function main(argv = process.argv.slice(2)) {
     index: cmdIndex,
     match: cmdMatch,
     where: cmdWhere,
-    stale: cmdStale,
+    derive: cmdDerive,
     term: cmdTerm,
     apply: cmdApply,
     brief: cmdBrief,

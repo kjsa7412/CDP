@@ -1,0 +1,783 @@
+/* 읽기 — 설계서 §13-⓿ · §27.
+ *
+ * 이 파일이 뷰어의 본체다. 벡터화하지 않은 대가로 문서가 사람이 읽을 수 있는
+ * 형태로 남았고, 그것을 실제로 읽게 만드는 것이 이 도구의 존재 이유다.
+ * 본문은 화면에서 가장 크고, 가장 조용하고, 가장 잘 읽히는 영역이다. */
+
+.docpane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  position: relative;
+}
+
+.docwrap {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, var(--doc-measure)) 1fr;
+  padding: 0 var(--sp-6) var(--sp-12);
+}
+.docwrap > * {
+  grid-column: 2;
+}
+/* 표·코드블록·다이어그램은 측정폭을 넘어 창 폭까지 쓴다(§27.3).
+ * 프로토콜 설계서의 넓은 표가 실제로 그것을 요구한다. */
+.docwrap > .wide {
+  grid-column: 1 / -1;
+}
+
+/* ── 유효성 블록 — §17. 판단이 끝나면 시야에서 사라져야 한다 ─────────── */
+.vblock {
+  margin: var(--sp-4) 0 var(--sp-6);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+/* 1단과 2단을 가르는 선이 §13-① 의 시각적 강제다 —
+ * 색이 있는 칸과 없는 칸이 눈으로 갈린다 */
+.vblock__tier {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 7px var(--sp-3);
+  flex-wrap: wrap;
+}
+.vblock__tier + .vblock__tier {
+  border-top: 1px solid var(--border);
+}
+/* 1단 — 유효성. 여기만 색을 쓴다 */
+.vblock__validity.is-valid {
+  color: var(--text-2);
+  font-size: 11.5px;
+  padding: 5px var(--sp-3);
+}
+.vblock__validity.is-bad {
+  color: var(--danger);
+  background: var(--danger-bg);
+  font-weight: 600;
+}
+.vblock__validity.is-partial {
+  color: var(--danger);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+/* 2단 — 시간. 색이 없다. 2년 전도 --text-2 (§13-①) */
+.vblock__time {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.vblock__time b {
+  color: var(--text);
+  font-weight: 600;
+}
+.vblock__time .sep {
+  color: var(--border-strong);
+}
+/* 1단의 좌표 요약 -> 관계 패널로 보내는 버튼(12단계).
+   좌표를 여기 나열하지 않는다. 몇 곳인지만 말하고 옆으로 넘긴다. */
+.vblock__jump {
+  color: var(--warn);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+.vblock__jump:hover { text-decoration: underline; }
+
+/* 3단(좌표별 최신성 표)은 **관계 패널로 나갔다**(12단계).
+   `.vblock__settled` `.vblock__coordrow` `.vblock__more` `.secmark` 규칙을
+   같이 지웠다 — 없는 것을 가리키는 CSS 는 없는 것보다 나쁘다.
+   지금 규칙은 `.rel*` 에 있다. */
+
+/* 정정된 문서를 읽는 동안 상단에 고정되는 얇은 바 —
+ * 잘못된 정보를 읽고 있다는 사실은 계속 보여야 한다(§17.6) */
+.stickywarn {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 24px;
+  padding: 0 var(--sp-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-bottom: 1px solid var(--danger);
+}
+
+/* ── 4섹션 레일 — §19.1. 본문 구조를 미리 안다는 이점 ────────────────── */
+.rail {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: var(--sp-2) 0;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.rail__item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px var(--sp-2);
+  font-size: 12px;
+  color: var(--text-2);
+  border-radius: var(--r-badge);
+  white-space: nowrap;
+}
+.rail__item:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.rail__item[data-current='true'] {
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+/* 섹션이 없으면 없다는 사실을 보여준다(§13-③) */
+.rail__item[data-missing='true'] {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+/* "왜"는 문서의 수명을 결정한다(프로토콜 §8.4) */
+.rail__item[data-key='why'] {
+  font-size: 12.5px;
+}
+.rail__mine {
+  padding: 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 8px;
+}
+
+.whywarn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12px;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-radius: var(--r-badge);
+}
+
+.docchanged {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--accent-bg);
+  border-radius: var(--r-badge);
+}
+.docchanged button {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.readmark {
+  position: absolute;
+  top: var(--sp-2);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: 11.5px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 99px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+.readmark button {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── 본문 조판 — §16.2 · §27 ─────────────────────────────────────────── */
+.doc {
+  /* 이 두 줄이 한글 문서 뷰어에서 가장 자주 빠지는 것이다.
+   * keep-all 이 없으면 한글이 어절 중간에서 잘려 가독성이 무너진다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+
+  font-size: var(--doc-size);
+  line-height: 1.75;
+  color: var(--text);
+}
+.doc > *:first-child {
+  margin-top: 0;
+}
+
+.doc h1 {
+  margin: var(--sp-8) 0 var(--sp-4);
+  font-size: calc(var(--doc-size) * 1.67);
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+/* 설계 문서는 h2 가 많다. h3 와 대비를 확실히 둔다(§16.2) */
+.doc h2 {
+  margin: var(--sp-8) 0 var(--sp-3);
+  padding-bottom: 5px;
+  font-size: calc(var(--doc-size) * 1.27);
+  line-height: 1.4;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+.doc h3 {
+  margin: var(--sp-6) 0 var(--sp-2);
+  font-size: calc(var(--doc-size) * 1.07);
+  line-height: 1.5;
+  font-weight: 700;
+}
+.doc h4 {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--doc-size);
+  font-weight: 700;
+  color: var(--text-2);
+}
+.doc p {
+  margin: var(--sp-3) 0;
+}
+.doc strong {
+  font-weight: 700;
+}
+.doc em {
+  font-style: italic;
+  color: var(--text-2);
+}
+.doc hr {
+  margin: var(--sp-8) 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.doc ul,
+.doc ol {
+  margin: var(--sp-3) 0;
+  padding-left: 1.5em;
+}
+.doc li {
+  margin: 4px 0;
+}
+.doc li > ul,
+.doc li > ol {
+  margin: 4px 0;
+}
+
+/* GFM 작업목록 — 읽기 전용이므로 표시만 한다 */
+.doc li.task {
+  list-style: none;
+  margin-left: -1.3em;
+}
+.doc .taskbox {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  vertical-align: -2px;
+}
+.doc li.task--done .taskbox {
+  color: #fff;
+  background: var(--text-3);
+  border-color: var(--text-3);
+}
+.doc li.task--done {
+  color: var(--text-2);
+}
+
+.doc blockquote {
+  margin: var(--sp-4) 0;
+  padding: var(--sp-1) var(--sp-4);
+  color: var(--text-2);
+  border-left: 3px solid var(--border-strong);
+}
+.doc blockquote strong {
+  color: var(--text);
+}
+
+.doc code {
+  font: 0.86em var(--font-mono);
+  padding: 1px 4px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  word-break: break-all;
+}
+.doc strong code {
+  font-weight: 700;
+}
+
+/* 다이어그램은 줄바꿈되는 순간 완전히 무의미해진다(§27.2) */
+.doc pre {
+  margin: var(--sp-4) 0;
+  padding: var(--sp-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+.doc pre code {
+  display: block;
+  font: 12.5px/1.6 var(--font-mono);
+  padding: 0;
+  background: none;
+  white-space: pre;
+  word-break: normal;
+}
+.codeblock {
+  position: relative;
+}
+.codeblock__copy {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-badge);
+  opacity: 0;
+}
+.codeblock:hover .codeblock__copy {
+  opacity: 1;
+}
+
+/* 표 — 자체 스크롤 + 첫 열 sticky. 프로토콜 설계서의 표는 첫 열이
+ * 항목명이라 이게 있으면 훑기가 된다(§27.3) */
+.tablewrap {
+  margin: var(--sp-4) 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+}
+.doc table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+.doc th,
+.doc td {
+  padding: 7px var(--sp-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.doc th:last-child,
+.doc td:last-child {
+  border-right: 0;
+}
+.doc tr:last-child td {
+  border-bottom: 0;
+}
+.doc thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  font-weight: 700;
+  white-space: nowrap;
+  z-index: 2;
+}
+.doc tbody td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.doc tbody tr:hover td {
+  background: var(--surface-2);
+}
+.doc tbody tr:hover td:first-child {
+  background: var(--surface-2);
+}
+/* 인용 안의 표 — 인용 스타일과 표 스타일이 겹쳐도 깨지지 않아야 한다(§27.1) */
+.doc blockquote .tablewrap {
+  background: var(--surface);
+}
+
+.doc img {
+  max-width: 100%;
+  border-radius: var(--r-badge);
+}
+
+/* 제목 앵커 */
+.doc .anchor {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--text-3);
+  opacity: 0;
+}
+.doc h2:hover .anchor,
+.doc h3:hover .anchor {
+  opacity: 1;
+}
+
+/* "왜" 섹션 강조 — 스크롤 중에 눈에 걸린다(§19.2) */
+
+/* 섹션으로 이동 — 왼쪽 아래에서 섹션(좌표) 줄을 눌러 떨어진 자리.
+   **조용히 옮기지 않는다**(§27.6 과 같은 이유) — 어디에 떨어졌는지 한 번
+   보여 주고 사라진다. 남겨 두면 그것이 문서의 일부처럼 읽힌다. */
+.doc h2,
+.doc h3 {
+  transition: background-color 500ms ease, box-shadow 500ms ease;
+}
+.doc h2.doc__at,
+.doc h3.doc__at {
+  /* 글자를 밀지 않는다 — padding 을 켜고 끄면 제목이 좌우로 튄다.
+     안쪽 그림자는 자리를 차지하지 않으므로 레이아웃이 그대로다. */
+  background-color: var(--accent-bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* "누구에게 영향" 개인화 — 자동 스크롤은 하지 않는다(§13-⑥) */
+.doc .mine {
+  box-shadow: inset 2px 0 0 var(--accent);
+  padding-left: var(--sp-3);
+  background: var(--accent-bg);
+  border-radius: 0 var(--r-badge) var(--r-badge) 0;
+}
+
+/* 본문 산문 안의 좌표 — 정본은 링크, alias 는 옅은 밑줄만.
+ * 산문을 링크로 도배하면 읽기가 망가진다(§27.8) */
+/* 본문의 좌표 — **밑줄을 쓰지 않는다.**
+//
+   v0.2 는 정본 좌표에 밑줄, alias 에 점선 밑줄을 그었다. 클릭 가능함을 말하려는
+   것이었는데, 한 문단에 좌표가 다섯 개면 밑줄이 다섯 줄이고 그러면 **본문을
+   읽는 일 자체를 방해한다.** 화면의 주인은 본문이다(뷰어 v0.2 §13-⓿).
+
+   대신 등폭 + 아주 옅은 배경. 클릭 가능함은 hover 에서 말한다 -- 마우스가
+   지나가기 전에는 조용해야 한다. */
+.doc .coordlink {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: inherit;
+  cursor: pointer;
+}
+.doc .aliashint {
+  cursor: pointer;
+  text-underline-offset: 3px;
+  text-decoration: underline dotted color-mix(in srgb, var(--text-3) 45%, transparent);
+}
+.doc .coordlink:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.doc .aliashint:hover {
+  background: var(--accent-bg);
+  text-decoration-color: var(--accent);
+}
+
+/* ── 문서 하단 — 첨부 · 백링크 · 이어 읽기 · 타임라인 ────────────────── */
+.docsec {
+  margin-top: var(--sp-8);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.docsec__title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.docsec__title .count {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.attach {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.attach:last-child {
+  border-bottom: 0;
+}
+.attach__name {
+  font-weight: 500;
+}
+.attach__actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--sp-3);
+  font-size: 11.5px;
+}
+.attach__missing {
+  color: var(--warn);
+  font-size: 11.5px;
+}
+.attach__outside {
+  color: var(--danger);
+  font-size: 11.5px;
+}
+
+.nextread {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  background: var(--surface-2);
+  border-radius: var(--r-badge);
+  font-size: 12.5px;
+}
+.nextread code {
+  font: 11.5px var(--font-mono);
+  color: var(--text-2);
+}
+.nextread a {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+/* 좌표 타임라인 — 최신성을 숫자가 아니라 형태로(§18) */
+.tl__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.tl__head select {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-badge);
+  padding: 2px 4px;
+  max-width: 100%;
+}
+.tl {
+  position: relative;
+  padding-left: var(--sp-6);
+}
+.tl::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--border);
+}
+.tl__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: 5px 0;
+  position: relative;
+  width: 100%;
+  text-align: left;
+}
+.tl__row:hover {
+  background: var(--surface-2);
+}
+.tl__dot {
+  position: absolute;
+  left: calc(var(--sp-6) * -1 + 4px);
+  top: 11px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.tl__row.is-current .tl__dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.tl__row.is-current {
+  font-weight: 600;
+}
+.tl__row.is-superseded .tl__title,
+.tl__row.is-superseded .tl__date {
+  color: var(--text-3);
+}
+.tl__date {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.tl__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* supersedes 관계를 잇는 커넥터 */
+.tl__link {
+  position: absolute;
+  left: calc(var(--sp-6) * -1 + 7px);
+  width: 8px;
+  border-left: 1px solid var(--danger);
+  border-bottom: 1px solid var(--danger);
+  border-bottom-left-radius: 4px;
+}
+.tl__note {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ── 검증 뷰 — §24.1 ────────────────────────────────────────────────── */
+.checkhead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: var(--sp-4) 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-badge);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+/* 출처를 맨 위에 명시한다 — 내장 검사를 정본처럼 보여주면 뷰어와 훅이
+ * 어긋났을 때 사용자가 훅을 의심하지 않는다(§12) */
+.checkhead .src {
+  font-weight: 600;
+}
+.checkhead .src.is-builtin {
+  color: var(--warn);
+}
+.finding {
+  margin: var(--sp-4) 0;
+}
+.finding__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-1);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.finding__head .count {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.finding.sev-error .finding__head {
+  color: var(--danger);
+}
+.finding.sev-warn .finding__head {
+  color: var(--warn);
+}
+.finding.sev-info .finding__head {
+  color: var(--text-2);
+}
+.finding__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: 4px 0;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.finding__item code {
+  font: 11.5px var(--font-mono);
+}
+.finding__suggest {
+  margin-left: var(--sp-4);
+  font-size: 11.5px;
+  color: var(--accent);
+}
+.checkzero {
+  display: flex;
+  gap: var(--sp-4);
+  padding: var(--sp-3);
+  color: var(--text-2);
+}
+
+/* ── 인쇄 — §28.3 ───────────────────────────────────────────────────── */
+@media print {
+  body {
+    overflow: visible;
+  }
+  .topbar,
+  .statusbar,
+  .pane--sidebar,
+  .pane--list,
+  .gutter,
+  .rail,
+  .overlay,
+  .popover,
+  .readmark,
+  .codeblock__copy {
+    display: none !important;
+  }
+  .app,
+  .panes,
+  .pane,
+  .docpane {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .docwrap {
+    display: block;
+    padding: 0;
+  }
+  /* 유효성 블록은 인쇄한다. ⛔정정됨이 안 찍히면 종이가 사람을 속인다 */
+  .vblock {
+    break-inside: avoid;
+    border: 1px solid #999;
+  }
+  .doc pre {
+    white-space: pre-wrap; /* 종이는 스크롤이 없다 */
+  }
+  .tablewrap {
+    overflow: visible;
+  }
+  .doc thead th,
+  .doc tbody td:first-child {
+    position: static;
+  }
+  .doc a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 10px;
+    color: #666;
+  }
+}
+
+
+/* 관계 패널(12단계)의 CSS 는 걷었다.
+
+   16단계에서 화면을 `찾는 곳 | 문서` 로 다시 짜면서 그 패널이 없어졌는데
+   규칙 31개가 남아 있었다. **아무것도 그리지 않으면서** 밀림·미반영 같은
+   없어진 용어를 주석으로 붙들고 있었다 -- 다음에 읽는 사람이 그것을
+   현행 화면으로 믿는다. */

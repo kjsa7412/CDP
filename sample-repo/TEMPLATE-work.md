@@ -3,7 +3,6 @@ id: YYYY-MMDD-slug
 title:
 date: YYYY-MM-DD
 author:
-status: 확정
 touches:
   # 이 작업이 **바꾼** 대상만 적는다 (신설·변경·삭제).
   # 참조·호출·언급만 한 것은 좌표가 아니다. 본문에 쓰면 된다. (수행 §5)

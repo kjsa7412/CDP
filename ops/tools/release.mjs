@@ -1,0 +1,201 @@
+// 원클릭 릴리스 — 화면 → ctx 번들 → exe → 샘플 → **버전 폴더로 묶기**.
+//
+//     npm run release            package.json 의 version 으로
+//     npm run release -- 0.3.0   버전을 지정해서
+//
+// 결과는 `release/v<버전>/` 하나다. **그 폴더를 통째로 옮기면 CDP 를 쓸 수
+// 있다** — 그것이 이 스크립트가 존재하는 이유다.
+//
+// 전에는 `npm run release` 가 `build && build:exe && seed` 를 이어 붙인
+// 문자열이었다. 산출물이 `build/`·`dist/`·`sample-repo/bin/` 에 흩어져 있어서
+// **무엇을 나눠줘야 하는지 사람이 기억해야 했다.** 기억에 의존하면 빠뜨린다.
+
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// **`..` 가 두 번이다.** 이 파일은 `ops/tools/` 에 있으므로 한 번으로는
+// `ops/` 를 가리킨다 -- 그러면 `ops/package.json` 을 찾다가 죽는다.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
+
+const arg = process.argv.slice(2).find((a) => !a.startsWith('-'))
+const VERSION = (arg || pkg.version).replace(/^v/, '')
+const OUT = path.join(ROOT, 'release', 'v' + VERSION)
+
+const log = (...a) => console.log('[release]', ...a)
+const run = (cmd, args) =>
+  execFileSync(cmd, args, { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' })
+
+function copyDir(src, dst) {
+  fs.mkdirSync(dst, { recursive: true })
+  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    // **실행 파일을 두 번 담지 않는다.** 샘플 레포에 옛 cdp.exe 사본이 남아
+    // 있어 릴리스가 68MB → 136MB 가 된 적이 있다. 받는 쪽은 어느 것이
+    // 이번 판인지 알 수 없다.
+    if (e.isFile() && /[.]exe$/i.test(e.name)) continue
+    const s = path.join(src, e.name)
+    const d = path.join(dst, e.name)
+    if (e.isDirectory()) copyDir(s, d)
+    else fs.copyFileSync(s, d)
+  }
+}
+
+function put(src, rel) {
+  const s = path.join(ROOT, src)
+  if (!fs.existsSync(s)) return false
+  const d = path.join(OUT, rel)
+  fs.mkdirSync(path.dirname(d), { recursive: true })
+  if (fs.statSync(s).isDirectory()) copyDir(s, d)
+  else fs.copyFileSync(s, d)
+  return true
+}
+
+// ── 1) 만든다 ───────────────────────────────────────────────────────────
+log('버전 v' + VERSION)
+log('① 화면')
+run('npm', ['run', 'build'])
+log('② ctx 번들')
+run('npm', ['run', 'build:ctx'])
+log('③ 단일 실행 파일 (수 분)')
+run('npm', ['run', 'build:exe'])
+log('④ 샘플 레포')
+run('npm', ['run', 'seed'])
+
+// ── 2) 버전 폴더로 묶는다 ───────────────────────────────────────────────
+//
+// **덮어쓰지 않고 지우고 다시 만든다.** 지난 릴리스의 파일이 섞여 남으면
+// 그것이 이번 판인지 아무도 모른다.
+if (fs.existsSync(OUT)) fs.rmSync(OUT, { recursive: true, force: true })
+fs.mkdirSync(OUT, { recursive: true })
+
+log('⑤ release/v' + VERSION + ' 구성')
+
+const missing = []
+const need = (src, rel) => {
+  if (!put(src, rel)) missing.push(src)
+}
+
+// 실행 파일 — 앱과 ctx 가 한 파일
+need('out/exe/cdp.exe', 'cdp.exe')
+
+// 지식 레포를 새로 세울 때 넣는 것
+need('agent/skills', 'repo-kit/.claude/skills')
+need('agent/CLAUDE.md', 'repo-kit/CLAUDE.md')
+need('agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
+need('repo-kit/pre-commit', 'repo-kit/.githooks/pre-commit')
+need('repo-kit/manual-user.md', 'repo-kit/MANUAL.md')
+need('repo-kit/manual-admin.md', 'repo-kit/MANUAL-관리자.md')
+need('out/ctx/ctx.mjs', 'repo-kit/bin/ctx.mjs')
+need('out/ctx/ctx', 'repo-kit/bin/ctx')
+need('out/ctx/ctx.cmd', 'repo-kit/bin/ctx.cmd')
+
+// 도구를 고칠 사람 몫 — **지식 레포 안으로는 안 들어간다**(§design)
+need('docs/design', 'docs')
+
+// 바로 열어 볼 수 있는 샘플
+need('sample-repo', 'sample-repo')
+
+// ── 3) 설치 안내 ────────────────────────────────────────────────────────
+const stamp = (() => {
+  try {
+    const t = fs.readFileSync(path.join(ROOT, 'out', 'ctx', 'ctx.mjs'), 'utf8')
+    const m = t.match(/BUILT\s*=\s*['"]([^'"]+)['"]/)
+    return m && !m[1].startsWith('__') ? m[1] : '?'
+  } catch {
+    return '?'
+  }
+})()
+
+fs.writeFileSync(
+  path.join(OUT, 'README.md'),
+  `# CDP v${VERSION}
+
+빌드 ${stamp}
+
+**이 폴더를 통째로 옮기면 CDP 를 쓸 수 있다.**
+
+\`\`\`
+cdp.exe          앱 + ctx CLI 가 한 파일 (~68MB)
+repo-kit/        지식 레포를 새로 세울 때 넣는 것
+  bin/           ctx 실행기 (Node 없어도 돈다)
+  .githooks/     pre-commit — 유일한 결정론적 보증
+  .claude/skills 절차 4종 (cdp-work · cdp-load · cdp-save · cdp-managed)
+  CLAUDE.md      레포 규약
+  TEMPLATE-work.md
+  MANUAL.md            하루 쓰는 법
+  MANUAL-관리자.md      설치 · 배포 · 어휘 운영
+sample-repo/     바로 열어 볼 수 있는 샘플 지식 레포
+docs/            설계서 — 도구를 고칠 사람용
+\`\`\`
+
+## 바로 써 보기
+
+\`\`\`
+cdp.exe --repo sample-repo
+\`\`\`
+
+## 새 지식 레포 세우기
+
+\`\`\`
+mkdir knowledge-repo && cd knowledge-repo
+git init
+xcopy /E /I ..\\repo-kit\\* .
+git config core.hooksPath .githooks
+\`\`\`
+
+그다음 \`_vocab.md\` 와 \`_managed.md\` 를 만든다 — **그 둘이 있는 폴더가
+지식 레포다.** 자세한 것은 \`MANUAL-관리자.md\` 2장.
+
+## 폐쇄망으로
+
+파일 두 개만 옮기면 된다.
+
+\`\`\`
+① 이 폴더 (또는 cdp.exe + repo-kit/)
+② git bundle create knowledge.bundle --all     ← 지식 레포
+\`\`\`
+
+**CDN·인터넷을 타는 것이 하나도 없다.** 화면의 폰트까지 base64 로 인라인돼
+있다.
+
+## 확인
+
+\`\`\`
+cdp.exe ctx version      → ${stamp}
+cd <지식 레포> && bin/ctx check
+\`\`\`
+
+세 곳(\`cdp.exe\` · \`repo-kit/bin\` · 레포의 \`bin\`)의 \`ctx version\` 이
+**같아야 한다.** 다르면 그 레포만 옛 답을 낸다.
+`,
+  'utf8'
+)
+
+// ── 4) 보고 ─────────────────────────────────────────────────────────────
+let files = 0
+let bytes = 0
+;(function walk(d) {
+  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name)
+    if (e.isDirectory()) walk(p)
+    else {
+      files++
+      bytes += fs.statSync(p).size
+    }
+  }
+})(OUT)
+
+log('')
+log('완료: release/v' + VERSION)
+log('  파일 %d · %sMB · 번들 %s'.replace('%d', files)
+    .replace('%s', (bytes / 1048576).toFixed(1)).replace('%s', stamp))
+if (missing.length) {
+  // **빠진 것을 조용히 넘기지 않는다.** 없는 채로 배포되면 받는 쪽이
+  // 그것을 없는 기능으로 안다.
+  log('')
+  log('⚠ 빠진 것 %d개 — 배포 전에 확인하세요:'.replace('%d', missing.length))
+  for (const m of missing) log('   ' + m)
+  process.exitCode = 1
+}

@@ -1,2 +1,15 @@
-# Auto detect text files and perform LF normalization
+# 기본 — 텍스트로 판단되면 저장소에는 LF 로 넣는다.
 * text=auto
+
+# ── 줄바꿈이 곧 동작인 파일들 ──────────────────────────────
+# 아래 둘은 sh 가 읽는다. CRLF 가 붙으면 셔뱅 뒤에 \r 이 남아
+# "bad interpreter" 로 죽거나, 더 나쁘게는 조용히 오작동한다.
+# 실제로 이 프로젝트에서 한 번 당했다.
+viewer/bin/ctx      text eol=lf
+repo-kit/pre-commit text eol=lf
+*.sh                text eol=lf
+
+# .cmd 는 cmd.exe 가 읽는다. CRLF 로 고정한다.
+# (내용은 CP949 다 — OEM 코드페이지 949 로 읽히기 때문이다.
+#  git diff 에서 한글이 깨져 보이는 것은 정상이고, 바이트는 그대로다.)
+*.cmd text eol=crlf

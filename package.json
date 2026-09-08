@@ -8,18 +8,16 @@
     "cdp": "server/index.js"
   },
   "scripts": {
-    "dev": "vite",
-    "dev:server": "node server/index.js --repo ./sample-repo --dev http://localhost:5173 --no-open",
-    "build": "vite build",
-    "start": "node server/index.js --repo ./sample-repo",
-    "sample": "python tools/seed_repo.py",
-    "build:exe": "node tools/build-exe.mjs",
-    "icon": "node tools/make-icon.mjs",
-    "ctx": "node bin/ctx-cli.mjs",
-    "build:ctx": "node tools/build-ctx.mjs",
-    "seed": "python tools/seed_repo.py",
-    "sample:gdi-old": "python tools/make_sample_repo_gdi.py",
-    "release": "npm run build && npm run build:exe && npm run sample"
+    "dev": "vite --config viewer/vite.config.js",
+    "dev:server": "node viewer/server/index.js --repo ./sample-repo --dev http://localhost:5173 --no-open",
+    "build": "vite build --config viewer/vite.config.js",
+    "start": "node viewer/server/index.js --repo ./sample-repo",
+    "seed": "python ops/tools/seed_repo.py",
+    "ctx": "node viewer/bin/ctx-cli.mjs",
+    "build:ctx": "node ops/tools/build-ctx.mjs",
+    "build:exe": "node ops/tools/build-exe.mjs",
+    "release": "node ops/tools/release.mjs",
+    "test:tray": "node ops/tools/tray-selftest.mjs"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
