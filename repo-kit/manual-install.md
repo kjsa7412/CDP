@@ -152,7 +152,7 @@ copy <배포본>\cdp.exe tools\           ← 68MB. .gitignore 로 빠져 있다
 따라오는 것 —
 
 ```
-.claude/skills 4종 · .claude/work-repo · .githooks/pre-commit
+.claude/skills · .claude/work-repo · .githooks/pre-commit
 bin/ctx · bin/ctx.cmd · bin/ctx.mjs · CLAUDE.md · MANUAL 2종
 ```
 

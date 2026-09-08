@@ -131,7 +131,7 @@ cdp.exe          앱 + ctx CLI 가 한 파일 (~68MB)
 repo-kit/        지식 레포를 새로 세울 때 넣는 것
   bin/           ctx 실행기 (Node 없어도 돈다)
   .githooks/     pre-commit — 유일한 결정론적 보증
-  .claude/skills 절차 4종 (cdp-work · cdp-load · cdp-save · cdp-managed)
+  .claude/skills 절차 (work · load · save · import · edit · managed)
   CLAUDE.md      레포 규약 — **이 지식 레포용**
   .claude/work-repo/CLAUDE.md
                  작업 레포용 서식. ctx setup 이 읽는다
@@ -180,7 +180,7 @@ git config core.hooksPath .githooks
 tools\\cdp.exe ctx setup C:\\gdi
 \`\`\`
 
-규약(\`CLAUDE.md\`, 지식 레포 경로가 박힌다)과 skill 4종이 함께 들어간다.
+규약(\`CLAUDE.md\`, 지식 레포 경로가 박힌다)과 skill 전부가 함께 들어간다.
 작업 레포의 \`.gitignore\` 가 \`.claude\` 를 막고 있으면 그것도 알려 준다 —
 막힌 채로 두면 **내 PC 에서만 되고 팀은 받지 못한다.**
 

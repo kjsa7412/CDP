@@ -5,7 +5,13 @@
 다음 빌드에 덮인다.
 
 ```
-skills/                 절차 4종 — cdp-work · cdp-load · cdp-save · cdp-managed
+skills/                 절차
+  cdp-work              작업 요청 하나를 검토 → 주입 → 수행
+  cdp-load              좌표의 현재 상태를 주입
+  cdp-save              이 세션에서 한 작업을 기록 + 파생
+  cdp-import            밖에서 온 문서를 작업 기록으로 편입
+  cdp-edit              코드 작업 없이 관리 문서만 고치라는 지시
+  cdp-managed           파생이 남은 섹션 채우기
 CLAUDE-지식레포.md       지식 레포의 CLAUDE.md 로 들어간다
 CLAUDE-프로젝트레포.md    코드가 있는 프로젝트 레포의 CLAUDE.md 로 들어간다
 TEMPLATE-work.md        작업 기록 서식
