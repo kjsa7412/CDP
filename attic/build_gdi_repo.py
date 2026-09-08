@@ -5,7 +5,7 @@
 가짜 데이터를 만들지 않는다 -- 테이블·컬럼·코드·도메인·용어는 개발 DB 덤프에서,
 작업 기록은 회의록·수정요청·화면명세서에서 그대로 가져온다.
 
-    python ops/tools/build_gdi_repo.py [출력경로]
+    python ops/lib/build_gdi_repo.py [출력경로]
 
 **시드가 아니다.** 한 번 만들고 나면 사람이 그 위에서 일한다. 다시 돌리면
 `work/`·`docs/` 를 덮으므로, 이미 쓰던 레포에는 돌리지 않는다.
@@ -24,7 +24,7 @@ SRC_WORK = r'C:/Users/세정아이앤씨/Desktop/[2512-2606] GDI_작업'
 DUMP = SRC_WORK + '/GDI_DE_422_테이블정의서/bac'
 OUT = sys.argv[1] if len(sys.argv) > 1 else r'C:/cdp'
 
-# `..` 가 두 번이다 -- 이 파일은 `ops/tools/` 에 있다.
+# `..` 가 두 번이다 -- 이 파일은 `ops/lib/` 에 있다.
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 # 시드가 만들지 않는 것 -- 도구와 절차는 그대로 둔다
@@ -1965,9 +1965,9 @@ git config core.hooksPath .githooks
 
 # **여기에 내용을 적지 않는다.** 전에는 이 파일과 `seed_repo.py` 에 같은
 # 글이 각각 박혀 있었고, 한쪽만 고쳐져 이미 갈라져 있었다
-# ('산출물' vs '산출물 16종'). 정본은 `agent/CLAUDE-지식레포.md` 하나다.
+# ('산출물' vs '산출물 16종'). 정본은 `kit/agent/CLAUDE-지식레포.md` 하나다.
 CLAUDE_MD = io.open(
-    os.path.join(ROOT, 'agent', 'CLAUDE-지식레포.md'), encoding='utf-8').read()
+    os.path.join(ROOT, 'kit', 'agent', 'CLAUDE-지식레포.md'), encoding='utf-8').read()
 
 TEMPLATE_WORK = """---
 id: YYYY-MMDD-slug

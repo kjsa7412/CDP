@@ -15,7 +15,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// **`..` 가 두 번이다.** 이 파일은 `ops/tools/` 에 있으므로 한 번으로는
+// **`..` 가 두 번이다.** 이 파일은 `ops/lib/` 에 있으므로 한 번으로는
 // `ops/` 를 가리킨다 -- 그러면 `ops/package.json` 을 찾다가 죽는다.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
@@ -81,24 +81,24 @@ const need = (src, rel) => {
 need('out/exe/cdp.exe', 'cdp.exe')
 
 // 지식 레포를 새로 세울 때 넣는 것
-need('agent/skills', 'repo-kit/.claude/skills')
+need('kit/agent/skills', 'repo-kit/.claude/skills')
 // **CLAUDE.md 는 두 종류다.** repo-kit 은 지식 레포에 통째로 복사되므로
 // 그 자리의 `CLAUDE.md` 는 지식 레포판이어야 한다. 프로젝트 레포판은
 // 다른 레포로 사람이 옮기는 것이라 이름을 남긴 채 나란히 둔다.
-need('agent/CLAUDE-지식레포.md', 'repo-kit/CLAUDE.md')
+need('kit/agent/CLAUDE-지식레포.md', 'repo-kit/CLAUDE.md')
 // 작업 레포용 규약은 **서식**이라 지식 레포 루트에 두지 않는다. 루트에 두면
 // 규약이 두 개로 보이고, 어느 쪽이 이 레포의 것인지 알 수 없다.
 // `ctx setup <작업 레포>` 가 여기서 읽어 경로를 박아 넣는다.
-need('agent/CLAUDE-프로젝트레포.md', 'repo-kit/.claude/work-repo/CLAUDE.md')
-need('agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
-need('repo-kit/pre-commit', 'repo-kit/.githooks/pre-commit')
-need('repo-kit/manual-user.md', 'repo-kit/MANUAL.md')
-need('repo-kit/manual-admin.md', 'repo-kit/MANUAL-관리자.md')
+need('kit/agent/CLAUDE-프로젝트레포.md', 'repo-kit/.claude/work-repo/CLAUDE.md')
+need('kit/agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
+need('kit/hooks/pre-commit', 'repo-kit/.githooks/pre-commit')
+need('kit/manual/user.md', 'repo-kit/MANUAL.md')
+need('kit/manual/admin.md', 'repo-kit/MANUAL-관리자.md')
 // **정본.** CDP 가 지금 무엇인지. 설계서는 여기까지 온 기록이고 이것이 답이다.
-need('repo-kit/manual-system.md', 'repo-kit/MANUAL-시스템.md')
+need('kit/manual/system.md', 'repo-kit/MANUAL-시스템.md')
 // 설치 시나리오는 **배포본 루트**다. 지식 레포가 아직 없을 때 읽는 문서라
 // repo-kit 안에 두면 부은 뒤에야 보인다 -- 순서가 거꾸로다.
-need('repo-kit/manual-install.md', '설치.md')
+need('kit/install.md', '설치.md')
 need('out/ctx/ctx.mjs', 'repo-kit/bin/ctx.mjs')
 need('out/ctx/ctx', 'repo-kit/bin/ctx')
 need('out/ctx/ctx.cmd', 'repo-kit/bin/ctx.cmd')

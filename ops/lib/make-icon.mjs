@@ -6,7 +6,7 @@
 // ICO 안에 PNG 를 넣는 형식(Vista+)도 있지만 그러면 zlib 압축이 필요하다.
 // 무압축 DIB(BMP)는 바이트를 그대로 쓰면 되므로 더 단순하다.
 //
-//   node ops/tools/make-icon.mjs [출력경로]
+//   node ops/lib/make-icon.mjs [출력경로]
 
 import fs from 'node:fs'
 import path from 'node:path'

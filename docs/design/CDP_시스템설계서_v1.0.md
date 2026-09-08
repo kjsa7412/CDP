@@ -610,22 +610,35 @@ node 바이너리 복사
 
 ```
 viewer/     뷰어 프로그램      server · src · bin · index.html · vite.config
-agent/      **클로드코드 세팅의 원본**   skills · CLAUDE.md · TEMPLATE-work.md
-repo-kit/   지식 레포가 들고 갈 것       pre-commit · 매뉴얼 2부
+kit/        **받는 사람에게 가는 것의 원본**
+  agent/      CLAUDE.md 2종 · skills · TEMPLATE-work.md
+  hooks/      pre-commit
+  manual/     system(정본) · user · admin
+  install.md  설치 시나리오 — 배포본 루트로 간다
 ops/        **명령** — 사람이 실행하는 `.cmd` 여섯
-  tools/    그 명령이 부르는 구현. 직접 실행하지 않는다
-docs/design 보존되는 설계서
-docs/dev    개발 메모 · TODO — 수명이 끝나는 것
+  lib/      그 명령이 부르는 구현. 직접 실행하지 않는다
+attic/      **한 번 돌고 끝난 것** — GDI 재구성 스크립트와 그 입력
+docs/design 보존되는 설계서 · CDP 개선 작업의 문서 더미
+docs/dev    개발 메모 · TODO · 시나리오
 sample-repo 샘플 지식 레포 (재생성 가능)
 out/        중간 산출물  web · ctx · exe   (추적 안 함)
 release/    버전별 배포본                 (추적 안 함)
 ```
 
+> **정정 (2026-09-08)** — 전에는 `agent/` 와 `repo-kit/` 이 따로 있었다.
+> 둘 다 "지식 레포로 들어가는 것" 인데 *에이전트 세팅이냐 문서·훅이냐*로
+> 나눠 두어서, 릴리스가 두 폴더를 다 알아야 했고 `repo-kit/` 안에는
+> **repo-kit 으로 안 가는 파일**(설치 문서)이 섞여 있었다.
+>
+> `kit/` 하나로 합치고 판정 기준을 **"받는 사람에게 가는가"** 로 바꿨다.
+> 일회성 스크립트는 `attic/` 으로 뺐다 — `ops`(운영 명령) 밑에 있을 것이
+> 아니었다.
+
 **루트에는 도구가 요구하는 것만 남는다** — `package.json`·`package-lock.json`
 은 npm 이, `.gitattributes`·`.gitignore` 는 git 이 루트에서만 읽는다.
 `node_modules/` 도 npm 이 정한다. 그 밖에 루트에 두는 것은 `README.md` 하나다.
 
-**`ops/` 와 `ops/tools/` 를 가른 이유** — 전에는 `tools/` 에
+**`ops/` 와 `ops/lib/` 를 가른 이유** — 전에는 `tools/` 에
 `build-exe.mjs`(스크립트가 부른다)와 `release.cmd`(사람이 더블클릭한다)가
 나란히 있었다. **무엇을 직접 실행해도 되는지**를 파일을 열어 봐야 알았다.
 
@@ -654,7 +667,7 @@ release/    버전별 배포본                 (추적 안 함)
 ```
 release/v0.2.0/
   cdp.exe          앱 + ctx
-  repo-kit/        레포를 세울 때 넣는 것 (bin · .githooks · .claude · 매뉴얼)
+  repo-kit/        레포를 세울 때 넣는 것 (bin · .githooks · .claude · 매뉴얼)  ← 배포본 안의 이름
   sample-repo/     바로 열어 볼 수 있는 샘플
   docs/            설계서 — 도구를 고칠 사람용
   README.md        설치 안내

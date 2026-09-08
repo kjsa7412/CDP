@@ -617,8 +617,11 @@ Node·exe 가 없는 PC 에서 **아무도 커밋을 못 하게 됐다.** 그리
 ## 8.2 정본이 어디인가
 
 ```
-agent/                CLAUDE.md 2종 · skill · TEMPLATE      ← **정본**
-repo-kit/             훅 · 매뉴얼 원본                       ← **정본**
+kit/                  **받는 사람에게 가는 것의 원본**
+  agent/                CLAUDE.md 2종 · skill · TEMPLATE
+  hooks/pre-commit
+  manual/               system · user · admin
+  install.md
 release/v<버전>/      배포본
 <지식 레포>/          배포본의 사본
 <작업 레포>/          ctx setup 이 넣은 사본

@@ -13,8 +13,8 @@ release/
 # ctx 가 바로 돌게 하려고 둔 것뿐이다.
 sample-repo/bin/
 
-# 샘플 레포의 클로드 세팅은 agent/ 에서 생성되는 사본이다.
-# 원본을 고치는 곳은 agent/skills · agent/CLAUDE.md 다.
+# 샘플 레포의 클로드 세팅은 kit/agent/ 에서 생성되는 사본이다.
+# 원본을 고치는 곳은 kit/agent/skills · kit/agent/CLAUDE-지식레포.md 다.
 sample-repo/.claude/
 
 # 로컬 개발 편의 설정 — 절대경로(C:/cdp)가 박혀 있어 사람마다 다르다.

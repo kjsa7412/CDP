@@ -5,7 +5,7 @@
 // 베껴 두면 앱과 CLI 가 갈라진다 — 등록부를 한 곳에 두라고 한 것과 같은 이유로
 // **계산도 한 곳에 있어야 한다.** 그래서 `server/core/` 에서 생성한다.
 //
-//   node ops/tools/build-ctx.mjs [출력경로]
+//   node ops/lib/build-ctx.mjs [출력경로]
 //
 // 기본 출력은 `out/ctx/ctx.mjs`.
 //
@@ -18,7 +18,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// **`..` 가 두 번이다.** 이 파일은 `ops/tools/` 에 있으므로 한 번으로는
+// **`..` 가 두 번이다.** 이 파일은 `ops/lib/` 에 있으므로 한 번으로는
 // `ops/` 를 가리킨다 -- 그러면 `ops/package.json` 을 찾다가 죽는다.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const outFile = path.resolve(process.argv[2] || path.join(root, 'out', 'ctx', 'ctx.mjs'))
@@ -38,7 +38,7 @@ const r = spawnSync(
     '--target=node18',
     '--legal-comments=none',
     '--banner:js=#!/usr/bin/env node\n' +
-      '// 생성물 -- 손으로 고치지 마세요. `node ops/tools/build-ctx.mjs` 가 만듭니다.\n' +
+      '// 생성물 -- 손으로 고치지 마세요. `node ops/lib/build-ctx.mjs` 가 만듭니다.\n' +
       '// 원본: viewer/server/core/ + viewer/bin/ctx-cli.mjs  (작업환경 설계서 3.1)\n',
     "--define:__CTX_BUILT_DEF__='" + stamp + "'",
     '--outfile=' + outFile,

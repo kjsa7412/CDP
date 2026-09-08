@@ -11,7 +11,7 @@
 대신 **화면ID 가 어휘에 있으면 좌표 표기로 쓴다** -- 본문 좌표 링크가 걸려
 그 화면의 지금 상태로 바로 갈 수 있다. 그게 이 반영의 값어치다.
 
-    python ops/tools/import_ops_issues.py <csv> <repo>
+    python ops/lib/import_ops_issues.py <csv> <repo>
 """
 import csv
 import io

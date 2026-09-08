@@ -5,8 +5,8 @@
 | 문서 | |
 |---|---|
 | **시스템 설계** | [`docs/design/CDP_시스템설계서_v1.0.md`](docs/design/CDP_시스템설계서_v1.0.md) — 프로토콜 + 프로그램. **고칠 사람이 먼저 읽는다** |
-| 사용 (하루) | [`repo-kit/manual-user.md`](repo-kit/manual-user.md) → 레포에 `MANUAL.md` 로 들어간다 |
-| 사용 (설치·운영) | [`repo-kit/manual-admin.md`](repo-kit/manual-admin.md) → 레포에 `MANUAL-관리자.md` |
+| 사용 (하루) | [`kit/manual/user.md`](kit/manual/user.md) → 레포에 `MANUAL.md` 로 들어간다 |
+| 사용 (설치·운영) | [`kit/manual/admin.md`](kit/manual/admin.md) → 레포에 `MANUAL-관리자.md` |
 | 전제 문서 | [`docs/design/`](docs/design) — 프로토콜 · 작업환경 · 수행 설계서 |
 | 작업 메모 | `docs/dev/` — 개발 중 검토·정정 기록. **보존 대상이 아니다** |
 
@@ -261,22 +261,24 @@ viewer/                  뷰어 프로그램
   bin/                   ctx CLI (소스) — 번들되어 레포 안으로 들어간다
   index.html  vite.config.js
 
-agent/                   **클로드코드 세팅의 원본**
-  skills/                cdp-work · cdp-load · cdp-save · cdp-managed
-  CLAUDE-지식레포.md      지식 레포에 들어갈 규약
-  CLAUDE-프로젝트레포.md  코드 레포에 들어갈 규약 (둘은 내용이 다르다)
-  TEMPLATE-work.md
-
-repo-kit/                지식 레포가 자기 안에 들고 갈 것
-  pre-commit             git 훅 원본
-  manual-user.md  manual-admin.md
+kit/                     **받는 사람에게 가는 것의 원본**
+  agent/                 클로드코드 세팅
+    skills/              work · load · save · import · edit · managed
+    CLAUDE-지식레포.md    지식 레포에 들어갈 규약
+    CLAUDE-프로젝트레포.md  작업 레포에 **블록으로** 들어갈 규약
+    TEMPLATE-work.md
+  hooks/pre-commit       유일한 결정론적 보증 층
+  manual/                system(정본) · user · admin
+  install.md             설치 시나리오 — 배포본 루트로 간다
 
 ops/                     **명령** — 사람이 실행하는 것
   setup · dev · start · check · seed · release  (.cmd)
-  tools/                 그 명령이 부르는 구현. 직접 실행하지 않는다
+  lib/                   그 명령이 부르는 구현. 직접 실행하지 않는다
 
-docs/design/             CDP 설계서 — 보존
-docs/dev/                개발 메모 · TODO — 수명이 끝나는 것
+attic/                   **한 번 돌고 끝난 것** — GDI 재구성과 그 입력
+
+docs/design/             설계서 — 보존 · CDP 개선 작업의 문서 더미
+docs/dev/                개발 메모 · TODO · 시나리오
 sample-repo/             샘플 지식 레포 (npm start 가 쓴다)
 
 out/                     중간 산출물 — web · ctx · exe   (추적 안 함)

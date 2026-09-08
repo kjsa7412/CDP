@@ -4,7 +4,7 @@
 // 의존을 만들지 않는다(§9). 네이티브 모듈을 하나도 안 쓰기 때문에 이 방식이
 // 성립한다 — SQLite 를 넣었으면 여기서 막혔을 것이다.
 //
-//   node ops/tools/build-exe.mjs
+//   node ops/lib/build-exe.mjs
 //   → out/exe/cdp.exe  (~110MB)
 //
 // 화면(out/web)과 서버(viewer/server/)를 하나의 CJS 번들로 말아 blob 에 넣는다.
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import rcedit from 'rcedit'
 import { buildIco } from './make-icon.mjs'
 
-// **`..` 가 두 번이다.** 이 파일은 `ops/tools/` 에 있으므로 한 번으로는
+// **`..` 가 두 번이다.** 이 파일은 `ops/lib/` 에 있으므로 한 번으로는
 // `ops/` 를 가리킨다 -- 그러면 `ops/package.json` 을 찾다가 죽는다.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const BUILD = path.join(ROOT, 'out', 'exe')
@@ -95,7 +95,7 @@ require('${path.join(ROOT, 'viewer', 'server', 'index.js').replace(/\\/g, '\\\\'
 // 하나만 갱신될 수 없게 묶는다.
 log('ctx 번들 (exe 에 들어갈 같은 코드)')
 {
-  const r0 = spawnSync(process.execPath, [path.join(ROOT, 'ops', 'tools', 'build-ctx.mjs')], { stdio: 'inherit' })
+  const r0 = spawnSync(process.execPath, [path.join(ROOT, 'ops', 'lib', 'build-ctx.mjs')], { stdio: 'inherit' })
   if (r0.status !== 0) {
     console.error('[build-exe] ctx 번들 실패 — exe 를 만들지 않는다')
     process.exit(r0.status || 1)

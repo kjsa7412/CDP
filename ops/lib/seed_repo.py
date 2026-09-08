@@ -30,7 +30,7 @@
   · supersedes        오기재 정정 1쌍 (그 용도로만 남았다 · 수행 §6.3)
   · INDEX.md 불일치   4건 -- `ctx index` 를 안 돌린 상태. 경고 1건(커밋은 된다)
 
-    python ops/tools/seed_repo.py [출력경로]
+    python ops/lib/seed_repo.py [출력경로]
 """
 
 import csv
@@ -43,7 +43,7 @@ BR2 = chr(10) * 2
 import shutil
 import sys
 
-# **`..` 가 두 번이다** -- 이 파일은 `ops/tools/` 에 있다
+# **`..` 가 두 번이다** -- 이 파일은 `ops/lib/` 에 있다
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..', 'sample-repo')
 OUT = os.path.abspath(OUT)
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -1402,7 +1402,7 @@ def main():
     # 전에는 스킬 4개가 `sample-repo/.claude/skills/` 에만 있었다. fixture 안의
     # 사본이 사실상 원본이라, 고칠 때 fixture 를 고치고 다른 레포에는 손으로
     # 복사해야 했다. 레포가 셋이면 세 번이다.
-    agent = os.path.join(ROOT, 'agent')
+    agent = os.path.join(ROOT, 'kit', 'agent')
     sk_src = os.path.join(agent, 'skills')
     if os.path.isdir(sk_src):
         sk_dst = os.path.join(OUT, '.claude', 'skills')
@@ -1410,7 +1410,7 @@ def main():
             shutil.rmtree(sk_dst)
         shutil.copytree(sk_src, sk_dst)
     # **CLAUDE.md 는 두 종류다.** 지식 레포에 들어가는 것과, 그 옆의
-    # 프로젝트 레포에 들어가는 것. 전에는 둘을 구분하지 않고 `agent/CLAUDE.md`
+    # 프로젝트 레포에 들어가는 것. 전에는 둘을 구분하지 않고 `kit/agent/CLAUDE.md`
     # 하나만 두어서, 지식 레포 자리에 프로젝트용이 복사되고 있었다.
     for nm, dst in (('CLAUDE-지식레포.md', 'CLAUDE.md'),
                     ('TEMPLATE-work.md', 'TEMPLATE-work.md'),
@@ -1422,8 +1422,8 @@ def main():
             os.makedirs(os.path.dirname(d), exist_ok=True)
             shutil.copyfile(src, d)
 
-    # git 훅 -- 유일한 결정론적 보증 층. 원본은 `repo-kit/pre-commit`.
-    hook_src = os.path.join(ROOT, 'repo-kit', 'pre-commit')
+    # git 훅 -- 유일한 결정론적 보증 층. 원본은 `kit/hooks/pre-commit`.
+    hook_src = os.path.join(ROOT, 'kit', 'hooks', 'pre-commit')
     if os.path.exists(hook_src):
         dst = os.path.join(OUT, '.githooks', 'pre-commit')
         os.makedirs(os.path.dirname(dst), exist_ok=True)
