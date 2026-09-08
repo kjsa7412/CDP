@@ -86,7 +86,10 @@ need('agent/skills', 'repo-kit/.claude/skills')
 // 그 자리의 `CLAUDE.md` 는 지식 레포판이어야 한다. 프로젝트 레포판은
 // 다른 레포로 사람이 옮기는 것이라 이름을 남긴 채 나란히 둔다.
 need('agent/CLAUDE-지식레포.md', 'repo-kit/CLAUDE.md')
-need('agent/CLAUDE-프로젝트레포.md', 'repo-kit/CLAUDE-프로젝트레포.md')
+// 작업 레포용 규약은 **서식**이라 지식 레포 루트에 두지 않는다. 루트에 두면
+// 규약이 두 개로 보이고, 어느 쪽이 이 레포의 것인지 알 수 없다.
+// `ctx setup <작업 레포>` 가 여기서 읽어 경로를 박아 넣는다.
+need('agent/CLAUDE-프로젝트레포.md', 'repo-kit/.claude/work-repo/CLAUDE.md')
 need('agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
 need('repo-kit/pre-commit', 'repo-kit/.githooks/pre-commit')
 need('repo-kit/manual-user.md', 'repo-kit/MANUAL.md')
@@ -127,8 +130,8 @@ repo-kit/        지식 레포를 새로 세울 때 넣는 것
   .githooks/     pre-commit — 유일한 결정론적 보증
   .claude/skills 절차 4종 (cdp-work · cdp-load · cdp-save · cdp-managed)
   CLAUDE.md      레포 규약 — **이 지식 레포용**
-  CLAUDE-프로젝트레포.md
-                 옆 프로젝트 레포에 넣을 것. 여기 두지 말고 옮긴다
+  .claude/work-repo/CLAUDE.md
+                 작업 레포용 서식. ctx setup 이 읽는다
   TEMPLATE-work.md
   MANUAL.md            하루 쓰는 법
   MANUAL-관리자.md      설치 · 배포 · 어휘 운영
@@ -155,8 +158,18 @@ git config core.hooksPath .githooks
 \`tools\\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
 \`bin/ctx\` 가 이 exe 로 넘어간다 — 없으면 훅이 검사를 건너뛴다.
 
-복사한 뒤 \`CLAUDE-프로젝트레포.md\` 는 **지식 레포에서 꺼내** 옆 프로젝트
-레포의 \`CLAUDE.md\` 로 옮긴다. 지식 레포에 남겨 두면 규약이 두 개로 보인다.
+## 작업 레포에도 넣는다
+
+코드가 있는 레포에서 클로드를 열면 **지식 레포의 skill 이 보이지 않는다** —
+하네스는 프로젝트 루트의 \`.claude/skills/\` 만 읽는다. 한 번 넣어 준다.
+
+\`\`\`
+tools\\cdp.exe ctx setup C:\\gdi
+\`\`\`
+
+규약(\`CLAUDE.md\`, 지식 레포 경로가 박힌다)과 skill 4종이 함께 들어간다.
+작업 레포의 \`.gitignore\` 가 \`.claude\` 를 막고 있으면 그것도 알려 준다 —
+막힌 채로 두면 **내 PC 에서만 되고 팀은 받지 못한다.**
 
 그다음 \`_vocab.md\` 와 \`_managed.md\` 를 만든다 — **그 둘이 있는 폴더가
 지식 레포다.** 자세한 것은 \`MANUAL-관리자.md\` 2장.

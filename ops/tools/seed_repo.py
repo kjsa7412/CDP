@@ -1404,10 +1404,14 @@ def main():
     # 프로젝트 레포에 들어가는 것. 전에는 둘을 구분하지 않고 `agent/CLAUDE.md`
     # 하나만 두어서, 지식 레포 자리에 프로젝트용이 복사되고 있었다.
     for nm, dst in (('CLAUDE-지식레포.md', 'CLAUDE.md'),
-                    ('TEMPLATE-work.md', 'TEMPLATE-work.md')):
+                    ('TEMPLATE-work.md', 'TEMPLATE-work.md'),
+                    # 작업 레포용 서식 -- `ctx setup` 이 여기서 읽는다
+                    ('CLAUDE-프로젝트레포.md', os.path.join('.claude', 'work-repo', 'CLAUDE.md'))):
         src = os.path.join(agent, nm)
         if os.path.exists(src):
-            shutil.copyfile(src, os.path.join(OUT, dst))
+            d = os.path.join(OUT, dst)
+            os.makedirs(os.path.dirname(d), exist_ok=True)
+            shutil.copyfile(src, d)
 
     # git 훅 -- 유일한 결정론적 보증 층. 원본은 `repo-kit/pre-commit`.
     hook_src = os.path.join(ROOT, 'repo-kit', 'pre-commit')

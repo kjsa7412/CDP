@@ -4056,8 +4056,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-08 04:35";
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 04:35)
+var BUILT = "2026-09-08 06:19";
+var BS2 = String.fromCharCode(92);
+var SEP = path4.sep;
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 06:19)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -4069,6 +4071,7 @@ var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09
   ctx brief                 \uB450 \uC904 \uC694\uC57D (\uC808\uCC28 + \uC0B4\uC544 \uC788\uB294 \uB808\uD3EC \uC0C1\uD0DC)
   ctx sync [--pull]         \uC6D0\uACA9\uACFC\uC758 \uCC28\uC774. --pull \uC740 ff \uB9CC \uD55C\uB2E4 (\uC2E4\uD328\uBA74 exit 1)
   ctx version               \uC774 \uBC88\uB4E4\uC774 \uC5B8\uC81C \uB9CC\uB4E4\uC5B4\uC84C\uB098
+  ctx setup <\uC791\uC5C5 \uB808\uD3EC>      \uADF8 \uB808\uD3EC\uC5D0 \uADDC\uC57D\uACFC skill \uC744 \uB123\uB294\uB2E4
 
   --repo <\uACBD\uB85C>             \uC9C0\uC2DD \uB808\uD3EC \uACBD\uB85C (\uAE30\uBCF8: CDP_REPO \uB610\uB294 \uD604\uC7AC \uD3F4\uB354 \uC0C1\uC704 \uD0D0\uC0C9)
   --json                    \uAE30\uACC4 \uD310\uB3C5\uC6A9 \uCD9C\uB825
@@ -4097,6 +4100,11 @@ async function findRepo(explicit) {
     const up = path4.dirname(dir);
     if (up === dir) break;
     dir = up;
+  }
+  for (const self of [process.argv[1], process.execPath]) {
+    if (!self) continue;
+    const d = path4.dirname(path4.resolve(self));
+    cands.push(d, path4.dirname(d));
   }
   for (const c of cands) {
     const ok = await fs4.access(path4.join(c, "_vocab.md")).then(() => true).catch(() => false);
@@ -4402,6 +4410,63 @@ async function cmdSync(r, opt) {
   }
   return 0;
 }
+async function cmdSetup(r, opt) {
+  const target = opt.args[0];
+  if (!target) {
+    err("ctx setup <\uC791\uC5C5 \uB808\uD3EC \uACBD\uB85C>");
+    err("  \uC608:  ctx setup C:" + BS2 + "gdi");
+    return 2;
+  }
+  const dst = path4.resolve(target);
+  const okDst = await fs4.stat(dst).then((x) => x.isDirectory()).catch(() => false);
+  if (!okDst) {
+    err(`ctx: \uD3F4\uB354\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4 -- ${dst}`);
+    return 2;
+  }
+  if (path4.resolve(r.root) === dst) {
+    err("ctx: \uC9C0\uC2DD \uB808\uD3EC \uC790\uC2E0\uC5D0\uB294 \uC124\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC791\uC5C5 \uB808\uD3EC(\uCF54\uB4DC\uAC00 \uC788\uB294 \uACF3)\uB97C \uC9C0\uC815\uD558\uC138\uC694.");
+    return 2;
+  }
+  const done = [];
+  const sSrc = path4.join(r.root, ".claude", "skills");
+  const sDst = path4.join(dst, ".claude", "skills");
+  const hasSkills = await fs4.stat(sSrc).then((x) => x.isDirectory()).catch(() => false);
+  if (!hasSkills) {
+    err(`ctx: ${sSrc} \uAC00 \uC5C6\uC2B5\uB2C8\uB2E4. \uC9C0\uC2DD \uB808\uD3EC\uC5D0 \uBC30\uD3EC\uBCF8\uC744 \uBD80\uC5C8\uB294\uC9C0 \uD655\uC778\uD558\uC138\uC694.`);
+    return 2;
+  }
+  await fs4.rm(sDst, { recursive: true, force: true });
+  await fs4.cp(sSrc, sDst, { recursive: true });
+  const names = (await fs4.readdir(sSrc)).sort();
+  done.push(`.claude${SEP}skills${SEP}   ${names.join(" \xB7 ")}`);
+  const tpl = path4.join(r.root, ".claude", "work-repo", "CLAUDE.md");
+  const body = await fs4.readFile(tpl, "utf8").catch(() => null);
+  if (body == null) {
+    err(`ctx: \uC11C\uC2DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4 -- ${tpl}`);
+    err("     \uBC30\uD3EC\uBCF8 repo-kit \uC744 \uB2E4\uC2DC \uBD80\uC73C\uBA74 \uB4E4\uC5B4\uC635\uB2C8\uB2E4.");
+    return 2;
+  }
+  const claude = path4.join(dst, "CLAUDE.md");
+  const had = await fs4.access(claude).then(() => true).catch(() => false);
+  if (had) {
+    await fs4.copyFile(claude, claude + ".bak");
+    done.push("CLAUDE.md.bak     \uC6D0\uB798 \uC788\uB358 \uAC83\uC744 \uC62E\uACA8 \uB450\uC5C8\uC2B5\uB2C8\uB2E4");
+  }
+  await fs4.writeFile(claude, body.split("{{REPO}}").join(r.root), "utf8");
+  done.push(`CLAUDE.md         \uC9C0\uC2DD \uB808\uD3EC = ${r.root}`);
+  out(`ctx setup: ${dst}`);
+  for (const d of done) out("  " + d);
+  const gi = await fs4.readFile(path4.join(dst, ".gitignore"), "utf8").catch(() => null);
+  if (gi && /^[.]claude\/[*]?\s*$/m.test(gi) && !/^![.]claude\/skills/m.test(gi)) {
+    out("");
+    out("[\uC8FC\uC758] .gitignore \uAC00 .claude \uB97C \uD1B5\uC9F8\uB85C \uB9C9\uACE0 \uC788\uC2B5\uB2C8\uB2E4.");
+    out("       \uC774\uB300\uB85C\uBA74 skill \uC774 **\uC774 PC \uC5D0\uB9CC** \uB0A8\uACE0 \uD300\uC740 \uBC1B\uC9C0 \uBABB\uD569\uB2C8\uB2E4.");
+    out("       \uC544\uB798 \uD55C \uC904\uC744 \uB123\uC73C\uC138\uC694 --");
+    out("");
+    out("         !.claude/skills/");
+  }
+  return 0;
+}
 async function main(argv = process.argv.slice(2)) {
   const opt = parseArgs(argv);
   if (opt.cmd === "version") {
@@ -4429,7 +4494,8 @@ async function main(argv = process.argv.slice(2)) {
     term: cmdTerm,
     apply: cmdApply,
     brief: cmdBrief,
-    sync: cmdSync
+    sync: cmdSync,
+    setup: cmdSetup
   };
   const fn = table[opt.cmd];
   if (!fn) {

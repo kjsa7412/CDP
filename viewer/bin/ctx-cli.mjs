@@ -27,6 +27,9 @@ import * as git from '../server/core/git.js'
 // 그리고 그것은 "모르는 명령" 으로만 나타나서 원인을 짚기 어렵다.
 export const BUILT = '__CTX_BUILT__'
 
+const BS = String.fromCharCode(92)
+const SEP = path.sep
+
 const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
 
   ctx check [--json]        커밋 가능한가. 오류가 있으면 exit 1
@@ -39,6 +42,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx brief                 두 줄 요약 (절차 + 살아 있는 레포 상태)
   ctx sync [--pull]         원격과의 차이. --pull 은 ff 만 한다 (실패면 exit 1)
   ctx version               이 번들이 언제 만들어졌나
+  ctx setup <작업 레포>      그 레포에 규약과 skill 을 넣는다
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
   --json                    기계 판독용 출력
@@ -74,6 +78,23 @@ async function findRepo(explicit) {
     const up = path.dirname(dir)
     if (up === dir) break
     dir = up
+  }
+
+  // **자기가 어디 있는지도 본다.**
+  //
+  // `ctx` 는 지식 레포 안에서 산다 -- `<repo>/bin/ctx.mjs` 이거나
+  // `<repo>/tools/cdp.exe` 다. 그러니 자기 위치의 부모가 곧 레포다.
+  //
+  // 전에는 cwd 에서 위로만 찾았다. 그래서 작업 레포(C:\gdi)에 서서
+  // `C:\cdp\bin\ctx brief` 라고 **전체 경로로 부르는데도** "지식 레포를
+  // 찾을 수 없습니다" 가 나왔다. 형제 폴더는 상위 탐색에 걸리지 않는다.
+  // 부른 사람은 경로를 다 적었는데 못 찾는다는 말을 듣는다.
+  //
+  // cwd 탐색 **뒤에** 둔다 -- 지식 레포 안에 서 있으면 그쪽이 우선이다.
+  for (const self of [process.argv[1], process.execPath]) {
+    if (!self) continue
+    const d = path.dirname(path.resolve(self))
+    cands.push(d, path.dirname(d))
   }
 
   for (const c of cands) {
@@ -453,6 +474,84 @@ async function cmdSync(r, opt) {
   return 0
 }
 
+// **작업 레포에 에이전트 세팅을 넣는다.**
+//
+// 코드가 있는 레포에서 클로드를 열면 지식 레포의 skill 이 보이지 않는다 --
+// 하네스는 **프로젝트 루트의 `.claude/skills/` 만** 읽는다. 설계서 §8.1 은
+// "절차는 지식 레포의 skill 에 있다" 고만 적어 두었는데, 그것은 사람에게
+// 하는 안내지 기계적 연결이 아니다. 실측에서 작업 레포에는 skill 이 하나도
+// 잡히지 않았다.
+//
+// 손으로 복사하게 두지 않는 이유 -- 두 가지(규약 + skill 4종)를 옮겨야 하고,
+// 규약 안의 경로를 실제 경로로 바꿔야 한다. 셋 중 하나만 빠져도 조용히
+// 작동하지 않는다.
+async function cmdSetup(r, opt) {
+  const target = opt.args[0]
+  if (!target) {
+    err('ctx setup <작업 레포 경로>')
+    err('  예:  ctx setup C:' + BS + 'gdi')
+    return 2
+  }
+  const dst = path.resolve(target)
+  const okDst = await fs.stat(dst).then((x) => x.isDirectory()).catch(() => false)
+  if (!okDst) {
+    err(`ctx: 폴더가 없습니다 -- ${dst}`)
+    return 2
+  }
+  if (path.resolve(r.root) === dst) {
+    err('ctx: 지식 레포 자신에는 설치하지 않습니다. 작업 레포(코드가 있는 곳)를 지정하세요.')
+    return 2
+  }
+
+  const done = []
+
+  // skill -- 지식 레포의 것을 그대로. 정본은 배포본이고 여기 것도 그 사본이다
+  const sSrc = path.join(r.root, '.claude', 'skills')
+  const sDst = path.join(dst, '.claude', 'skills')
+  const hasSkills = await fs.stat(sSrc).then((x) => x.isDirectory()).catch(() => false)
+  if (!hasSkills) {
+    err(`ctx: ${sSrc} 가 없습니다. 지식 레포에 배포본을 부었는지 확인하세요.`)
+    return 2
+  }
+  await fs.rm(sDst, { recursive: true, force: true })
+  await fs.cp(sSrc, sDst, { recursive: true })
+  const names = (await fs.readdir(sSrc)).sort()
+  done.push(`.claude${SEP}skills${SEP}   ${names.join(' · ')}`)
+
+  // 규약 -- 서식의 {{REPO}} 를 이 지식 레포의 실제 경로로
+  const tpl = path.join(r.root, '.claude', 'work-repo', 'CLAUDE.md')
+  const body = await fs.readFile(tpl, 'utf8').catch(() => null)
+  if (body == null) {
+    err(`ctx: 서식이 없습니다 -- ${tpl}`)
+    err('     배포본 repo-kit 을 다시 부으면 들어옵니다.')
+    return 2
+  }
+  const claude = path.join(dst, 'CLAUDE.md')
+  const had = await fs.access(claude).then(() => true).catch(() => false)
+  if (had) {
+    await fs.copyFile(claude, claude + '.bak')
+    done.push('CLAUDE.md.bak     원래 있던 것을 옮겨 두었습니다')
+  }
+  await fs.writeFile(claude, body.split('{{REPO}}').join(r.root), 'utf8')
+  done.push(`CLAUDE.md         지식 레포 = ${r.root}`)
+
+  out(`ctx setup: ${dst}`)
+  for (const d of done) out('  ' + d)
+
+  // **.gitignore 가 삼키는지 본다.** 넣어 놓고 팀에 안 퍼지는 것이 가장 나쁘다
+  // -- 내 PC 에서만 되니 되는 줄 안다.
+  const gi = await fs.readFile(path.join(dst, '.gitignore'), 'utf8').catch(() => null)
+  if (gi && /^[.]claude\/[*]?\s*$/m.test(gi) && !/^![.]claude\/skills/m.test(gi)) {
+    out('')
+    out('[주의] .gitignore 가 .claude 를 통째로 막고 있습니다.')
+    out('       이대로면 skill 이 **이 PC 에만** 남고 팀은 받지 못합니다.')
+    out('       아래 한 줄을 넣으세요 --')
+    out('')
+    out('         !.claude/skills/')
+  }
+  return 0
+}
+
 // ── 진입점 ──────────────────────────────────────────────────────────────────
 
 export async function main(argv = process.argv.slice(2)) {
@@ -486,6 +585,7 @@ export async function main(argv = process.argv.slice(2)) {
     apply: cmdApply,
     brief: cmdBrief,
     sync: cmdSync,
+    setup: cmdSetup,
   }
   const fn = table[opt.cmd]
   if (!fn) {
