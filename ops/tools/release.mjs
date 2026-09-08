@@ -148,8 +148,12 @@ cdp.exe --repo sample-repo
 mkdir knowledge-repo && cd knowledge-repo
 git init
 xcopy /E /I ..\\repo-kit\\* .
+mkdir tools && copy ..\\cdp.exe tools\\
 git config core.hooksPath .githooks
 \`\`\`
+
+\`tools\\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
+\`bin/ctx\` 가 이 exe 로 넘어간다 — 없으면 훅이 검사를 건너뛴다.
 
 복사한 뒤 \`CLAUDE-프로젝트레포.md\` 는 **지식 레포에서 꺼내** 옆 프로젝트
 레포의 \`CLAUDE.md\` 로 옮긴다. 지식 레포에 남겨 두면 규약이 두 개로 보인다.
