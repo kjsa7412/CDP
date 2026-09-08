@@ -82,7 +82,11 @@ need('out/exe/cdp.exe', 'cdp.exe')
 
 // 지식 레포를 새로 세울 때 넣는 것
 need('agent/skills', 'repo-kit/.claude/skills')
-need('agent/CLAUDE.md', 'repo-kit/CLAUDE.md')
+// **CLAUDE.md 는 두 종류다.** repo-kit 은 지식 레포에 통째로 복사되므로
+// 그 자리의 `CLAUDE.md` 는 지식 레포판이어야 한다. 프로젝트 레포판은
+// 다른 레포로 사람이 옮기는 것이라 이름을 남긴 채 나란히 둔다.
+need('agent/CLAUDE-지식레포.md', 'repo-kit/CLAUDE.md')
+need('agent/CLAUDE-프로젝트레포.md', 'repo-kit/CLAUDE-프로젝트레포.md')
 need('agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
 need('repo-kit/pre-commit', 'repo-kit/.githooks/pre-commit')
 need('repo-kit/manual-user.md', 'repo-kit/MANUAL.md')
@@ -122,7 +126,9 @@ repo-kit/        지식 레포를 새로 세울 때 넣는 것
   bin/           ctx 실행기 (Node 없어도 돈다)
   .githooks/     pre-commit — 유일한 결정론적 보증
   .claude/skills 절차 4종 (cdp-work · cdp-load · cdp-save · cdp-managed)
-  CLAUDE.md      레포 규약
+  CLAUDE.md      레포 규약 — **이 지식 레포용**
+  CLAUDE-프로젝트레포.md
+                 옆 프로젝트 레포에 넣을 것. 여기 두지 말고 옮긴다
   TEMPLATE-work.md
   MANUAL.md            하루 쓰는 법
   MANUAL-관리자.md      설치 · 배포 · 어휘 운영
@@ -144,6 +150,9 @@ git init
 xcopy /E /I ..\\repo-kit\\* .
 git config core.hooksPath .githooks
 \`\`\`
+
+복사한 뒤 \`CLAUDE-프로젝트레포.md\` 는 **지식 레포에서 꺼내** 옆 프로젝트
+레포의 \`CLAUDE.md\` 로 옮긴다. 지식 레포에 남겨 두면 규약이 두 개로 보인다.
 
 그다음 \`_vocab.md\` 와 \`_managed.md\` 를 만든다 — **그 둘이 있는 폴더가
 지식 레포다.** 자세한 것은 \`MANUAL-관리자.md\` 2장.

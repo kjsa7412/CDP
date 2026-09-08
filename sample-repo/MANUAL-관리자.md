@@ -141,9 +141,20 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 한 번에 들어온다.
 
 ```
-xcopy /E /I <배포본>epo-kit\* .
+xcopy /E /I <배포본>\repo-kit\* .
 git config core.hooksPath .githooks
 ```
+
+복사하면 `CLAUDE.md` 가 두 개처럼 보인다. 하나는 남기고 하나는 옮긴다.
+
+```
+CLAUDE.md                 이 지식 레포의 규약 — 그대로 둔다
+CLAUDE-프로젝트레포.md      옆 프로젝트 레포로 옮긴다
+```
+
+프로젝트 레포(코드가 있는 곳)의 `CLAUDE.md` 로 옮겨 놓아야, 거기서 일하는
+클로드가 **지식 레포가 옆에 있다는 것**을 안다. 지식 레포에 그대로 남겨 두면
+규약이 두 벌로 보이고, 어느 쪽이 이 레포의 규칙인지 알 수 없다.
 
 **`.gitattributes` 를 반드시 같이 둔다.**
 

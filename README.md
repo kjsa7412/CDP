@@ -40,7 +40,7 @@ npm start
 npm run release          # → release/v0.2.0/
 ```
 
-`opselease.cmd` 를 더블클릭해도 된다. **그 폴더를 통째로 옮기면 CDP 를 쓸 수
+`ops\release.cmd` 를 더블클릭해도 된다. **그 폴더를 통째로 옮기면 CDP 를 쓸 수
 있다** — exe · repo-kit · 샘플 · 설계서가 다 들어 있다.
 
 동봉된 샘플 레포(`sample-repo/`)로 뜬다. 다른 레포를 보려면:
@@ -263,7 +263,8 @@ viewer/                  뷰어 프로그램
 
 agent/                   **클로드코드 세팅의 원본**
   skills/                cdp-work · cdp-load · cdp-save · cdp-managed
-  CLAUDE.md              레포 규약
+  CLAUDE-지식레포.md      지식 레포에 들어갈 규약
+  CLAUDE-프로젝트레포.md  코드 레포에 들어갈 규약 (둘은 내용이 다르다)
   TEMPLATE-work.md
 
 repo-kit/                지식 레포가 자기 안에 들고 갈 것

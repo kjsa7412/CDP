@@ -60,6 +60,6 @@ v0.0.1  68MB  **태그 없음 -- 지우면 되살릴 수 없습니다**
 
 ```
 git tag -a v0.2.0 -m "..."
-git checkout v0.2.0 && npm ci && opselease.cmd 0.2.0
+git checkout v0.2.0 && npm ci && ops\release.cmd 0.2.0
 ```
 
