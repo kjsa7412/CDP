@@ -94,6 +94,9 @@ need('agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
 need('repo-kit/pre-commit', 'repo-kit/.githooks/pre-commit')
 need('repo-kit/manual-user.md', 'repo-kit/MANUAL.md')
 need('repo-kit/manual-admin.md', 'repo-kit/MANUAL-관리자.md')
+// 설치 시나리오는 **배포본 루트**다. 지식 레포가 아직 없을 때 읽는 문서라
+// repo-kit 안에 두면 부은 뒤에야 보인다 -- 순서가 거꾸로다.
+need('repo-kit/manual-install.md', '설치.md')
 need('out/ctx/ctx.mjs', 'repo-kit/bin/ctx.mjs')
 need('out/ctx/ctx', 'repo-kit/bin/ctx')
 need('out/ctx/ctx.cmd', 'repo-kit/bin/ctx.cmd')
@@ -137,7 +140,11 @@ repo-kit/        지식 레포를 새로 세울 때 넣는 것
   MANUAL-관리자.md      설치 · 배포 · 어휘 운영
 sample-repo/     바로 열어 볼 수 있는 샘플 지식 레포
 docs/            설계서 — 도구를 고칠 사람용
+설치.md          **설치 시나리오 — 여기부터 읽는다**
 \`\`\`
+
+설치는 \`설치.md\` 를 따른다 — 네 자리(개발 PC · 지식 레포 · 작업
+레포 · 팀원 PC)에서 벌어지고, 한 자리만 보면 반드시 빠뜨린다.
 
 ## 바로 써 보기
 
@@ -158,6 +165,12 @@ git config core.hooksPath .githooks
 \`tools\\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
 \`bin/ctx\` 가 이 exe 로 넘어간다 — 없으면 훅이 검사를 건너뛴다.
 
+그다음 \`_vocab.md\` 와 \`_managed.md\` 를 만든다 — **그 둘이 있는 폴더가
+지식 레포다.** 자세한 것은 \`MANUAL-관리자.md\` 2장.
+
+**\`_vocab.md\` 가 먼저다.** \`ctx setup\` 은 그 파일로 지식 레포를 알아본다 —
+없으면 "지식 레포를 찾을 수 없습니다" 로 멈춘다(exit 2).
+
 ## 작업 레포에도 넣는다
 
 코드가 있는 레포에서 클로드를 열면 **지식 레포의 skill 이 보이지 않는다** —
@@ -170,9 +183,6 @@ tools\\cdp.exe ctx setup C:\\gdi
 규약(\`CLAUDE.md\`, 지식 레포 경로가 박힌다)과 skill 4종이 함께 들어간다.
 작업 레포의 \`.gitignore\` 가 \`.claude\` 를 막고 있으면 그것도 알려 준다 —
 막힌 채로 두면 **내 PC 에서만 되고 팀은 받지 못한다.**
-
-그다음 \`_vocab.md\` 와 \`_managed.md\` 를 만든다 — **그 둘이 있는 폴더가
-지식 레포다.** 자세한 것은 \`MANUAL-관리자.md\` 2장.
 
 ## 폐쇄망으로
 
