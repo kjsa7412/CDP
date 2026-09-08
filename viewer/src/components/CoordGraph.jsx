@@ -61,6 +61,12 @@ function rng(seed) {
 // 발광이 아니라 **분리선**이다 — 헤일로처럼 번지지 않는다.
 const HAIRLINE = 1.5
 
+// 클릭과 끌기의 경계(px).
+//
+// **너무 좁으면 클릭이 안 먹는다.** 누르는 순간 손이 1~3px 은 움직인다.
+// 너무 넓으면 회전이 클릭으로 새어 선택이 멋대로 바뀐다. 6px 은 그 사이다.
+const SLOP = 6
+
 export default function CoordGraph({ tree, docs, onPick, picked }) {
   const cvRef = useRef(null)
   const paintRef = useRef(null)
@@ -72,10 +78,11 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
   // 떴고, 그 숫자는 아무 기준도 가리키지 않았다.
   const stRef = useRef({
     rx: -0.2, ry: 0.5, spin: true, hover: null, lock: null, drag: null, pts: [],
-    base: 1, zoom: 1, px: 0, py: 0, needFit: true, touched: false,
+    base: 1, zoom: 1, px: 0, py: 0, needFit: true, touched: false, center: null,
   })
   // 카테고리 선택 — 고른 그룹만 색이 붙는다
   const [group, setGroup] = useState(null)
+  const railRef = useRef(null)
   const [, force] = useState(0)
 
   const key = useMemo(() => {
@@ -171,6 +178,23 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
 
       S.pts = g.nodes.map((n, i) => ({ i, n, ...proj(n.x, n.y, n.z) })).sort((a, b) => b.z - a.z)
 
+      // **목록에서 고른 좌표는 가운데에 둔다 — 그릴 때마다 다시 맞춘다.**
+      //
+      // 한 번만 맞추면 어긋난다. 좌표를 고르면 아래 뻗어나가기 패널의 내용이
+      // 바뀌고, 그 패널이 다시 흐르면서 **캔버스 높이가 곧바로 달라진다.**
+      // 실측에서 고른 노드가 가운데는커녕 캔버스 밖으로 나가 있었다.
+      // 크기가 어떻게 바뀌든 따라오게 한다. 사용자가 돌리거나 옮기면 푼다.
+      if (S.center != null) {
+        const c = S.pts.find((t) => t.i === S.center)
+        if (c) {
+          const dx = cx - c.X, dy = cy - c.Y
+          if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+            S.px += dx; S.py += dy
+            for (const t of S.pts) { t.X += dx; t.Y += dy }
+          }
+        }
+      }
+
       // **초점은 짚은 것 아니면 고정한 것이다.**
       //
       // 전에는 hover 뿐이라 마우스를 떼면 강조가 사라졌다 -- 이어진 노드가
@@ -201,7 +225,14 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       // 전에는 이웃이 "흐려지지만 않은" 상태였다 — 나머지가 0.12 로 빠지니
       // 상대적으로 도드라져 보였을 뿐, 이웃 자신은 아무 표시도 없었다.
       // 그래서 **어디까지가 1단계인지** 눈으로 세어야 했다.
-      for (const p of S.pts) {
+      // **초점과 이웃을 맨 나중에 그린다.**
+      //
+      // 전에는 z 순(뒤→앞)으로만 그렸다. 밀집한 덩어리에서는 고른 노드가 다른
+      // 노드 **뒤에 깔려 보이지 않았다** -- 실측에서 목록으로 찾아 가운데에
+      // 세워 놓고도 그 자리 픽셀이 이웃 노드 색이었다. 강조가 가려지면 강조가
+      // 아니다. 같은 등급 안에서는 z 순을 그대로 지킨다.
+      const rank = (t) => (H == null ? 0 : t.i === H ? 2 : g.nbr[H].has(t.i) ? 1 : 0)
+      for (const p of [...S.pts].sort((a, b) => rank(a) - rank(b) || b.z - a.z)) {
         const n = p.n
         const focus = H != null && p.i === H
         const nbr = H != null && !focus && g.nbr[H].has(p.i)
@@ -221,11 +252,16 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
         // 그대로다 -- 이건 상태가 아니라 **사용자가 지금 무엇을 고르고 있나**
         // 이고, 그것이 색 예산의 파랑(상호작용)이 하는 일이다.
         const inGroup = group != null && n.type === group
-        // 채우기 우선순위 — 고른 카테고리 > 초점·이웃 > 보통
-        ctx.fillStyle = inGroup ? accent : focus || nbr ? ink : ink2
+        // 채우기 우선순위 — **초점·이웃 > 고른 카테고리 > 보통.**
+        //
+        // 전에는 카테고리가 이겼다. 그런데 왼쪽 목록에서 고른 좌표는 **언제나
+        // 그 카테고리 안에 있다** -- 그래서 고른 순간 그것도 파랑, 주위 57개도
+        // 파랑이 되어 무엇을 골랐는지 알 수 없었다. 초점은 어두운 먹으로 두고
+        // 파랑 무리 위에 얹는다.
+        ctx.fillStyle = focus || nbr ? ink : inGroup ? accent : ink2
         if (group != null && !inGroup && !focus && !nbr) ctx.globalAlpha = dim ? 0.1 : depth * 0.4
         ctx.beginPath(); ctx.arc(p.X, p.Y, R, 0, 7); ctx.fill()
-        if (inGroup) {
+        if (inGroup && !focus && !nbr) {
           // 고른 것은 조금 더 크게 — 색을 못 보는 사람에게도 구별이 남는다
           ctx.globalAlpha = 1
           ctx.strokeStyle = accent
@@ -345,10 +381,29 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       const panning = e.shiftKey || e.button === 1 || e.button === 2
       if (e.button === 1) e.preventDefault()
       if (panning) S.touched = true
+      S.dragged = false
+      S.center = null   // 손으로 돌리거나 옮기면 따라다니기를 그만둔다
       S.drag = { x: e.clientX, y: e.clientY, rx: S.rx, ry: S.ry, px: S.px, py: S.py, pan: panning, moved: 0 }
       cv.style.cursor = panning ? 'grabbing' : 'grab'
     }
-    const up = () => { if (!S.drag) return; S.drag = null; cv.style.cursor = ''; spinOn(); now() }
+    // **끌었는지를 여기서 판정해 남긴다.**
+    //
+    // 브라우저는 mouseup 다음에 click 을 보낸다. 전에는 `up` 이 `S.drag` 를
+    // 지운 뒤 `click` 이 `S.drag.moved` 를 보려 했으므로 그 검사는 **한 번도
+    // 참이 된 적이 없다.** 회전을 끝낸 자리가 노드면 선택이 토글되고, 빈
+    // 곳이면 선택이 풀렸다 -- 돌려 보는 동안 선택이 계속 사라졌다.
+    const up = (e) => {
+      if (!S.drag) return
+      const dx = e.clientX - S.drag.x, dy = e.clientY - S.drag.y
+      // 두 가지로 본다. **직선 거리**는 손떨림에 관대하고(제자리로 돌아온
+      // 흔들림은 클릭이다), **누적 거리**는 크게 돌았다가 원점 근처에서 뗀
+      // 경우를 잡는다. 둘 중 하나면 끌기다.
+      S.dragged = Math.hypot(dx, dy) > SLOP || S.drag.moved > SLOP * 4
+      S.drag = null
+      cv.style.cursor = ''
+      spinOn()
+      now()
+    }
     const move = (e) => {
       const r = cv.getBoundingClientRect()
       if (S.drag) {
@@ -370,22 +425,31 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       cv.title = best == null ? '' : `${g.nodes[best].coord} · 작업 ${g.nodes[best].count}건 · 이웃 ${g.nbr[best].size}개`
     }
     const click = () => {
-      if (S.drag && S.drag.moved > 6) return
+      // 회전·이동으로 끝난 몸짓은 클릭이 아니다. 선택은 그대로 둔다.
+      if (S.dragged) { S.dragged = false; return }
       if (S.hover != null) {
         // 같은 노드를 다시 누르면 푼다 — 토글이 없으면 해제할 길이 없다
         S.lock = S.lock === S.hover ? null : S.hover
+        S.center = null   // 손으로 고른 것은 따라다니지 않는다. 이미 눈앞에 있다
         if (S.lock != null) onPick(g.nodes[S.hover].coord)
-        now()
+        lockChanged()
         return
       }
       // 빈 곳을 누르면 고정을 푼다
-      if (S.lock != null) { S.lock = null; now() }
+      if (S.lock != null) { S.lock = null; S.center = null; lockChanged() }
     }
+    // **고정이 바뀌면 React 에도 알린다.**
+    //
+    // `now()` 는 캔버스만 다시 그린다. 그런데 왼쪽 목록의 선택 표시는 React 가
+    // 그린다 -- 알리지 않으면 **그래프에서는 풀렸는데 목록에는 그대로 남는다.**
+    // 실측에서 빈 곳을 눌러 푼 뒤에도 목록이 계속 그 좌표를 가리키고 있었다.
+    const lockChanged = () => { now(); force((x) => x + 1) }
     // 줌 — 휠. 화면 좌표를 배율만 바꾸므로 원근이 흔들리지 않는다
     // 줌은 **커서를 기준으로** 한다. 화면 중앙 기준이면 가장자리를 확대할 때
     // 보려던 것이 밖으로 밀려나 계속 놓친다.
     const wheel = (e) => {
       S.touched = true
+      S.center = null
       e.preventDefault()
       const r = cv.getBoundingClientRect()
       const z0 = S.zoom
@@ -464,6 +528,16 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
     }
   }, [g, picked, group])
 
+  // **목록이 그래프를 따라간다.**
+  //
+  // 그래프에서 노드를 눌러도 그 좌표가 왼쪽 목록의 스크롤 밖에 있으면 아무
+  // 표시도 보이지 않는다 -- 두 쪽이 같은 것을 가리키는데 한쪽만 안 보이면
+  // 무엇을 골랐는지 확인할 수 없다.
+  useEffect(() => {
+    railRef.current?.querySelector('[aria-pressed="true"]')
+      ?.scrollIntoView({ block: 'nearest' })
+  })
+
   if (!g || !g.nodes.length) return <div className="gr__empty">좌표가 없습니다 — <code>_vocab.md</code> 를 확인하세요</div>
 
   const S = stRef.current
@@ -488,6 +562,30 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
     repaint()
   }
 
+  // 고른 카테고리의 좌표들. **이름순** — 좌표 정렬 규칙(카테고리순 + 카테고리
+  // 안 이름순)의 뒷단이다. 여기는 이미 한 카테고리 안이므로 이름순만 남는다.
+  const items = group == null ? [] : g.nodes
+    .map((n, i) => ({ i, v: n.v, count: n.count, type: n.type }))
+    .filter((n) => n.type === group)
+    .sort((a, b) => a.v.localeCompare(b.v, 'ko'))
+
+  // 목록에서 고른 좌표를 **그래프에서 찾아 준다.**
+  //
+  // 고정만 하면 화면 밖에 있을 때 아무 일도 안 일어난 것처럼 보인다. 그래서
+  // `S.center` 에 적어 두면 `paint()` 가 **그릴 때마다** 그 노드를 가운데로
+  // 끌어온다. 한 번만 맞추면 캔버스 크기가 곧바로 바뀌면서 어긋난다.
+  //
+  // 회전도 멈춘다. 찾아 놓고 흘러가 버리면 찾은 것이 아니다.
+  const pickNode = (i) => {
+    S.lock = i
+    S.hover = null
+    S.touched = true
+    S.spin = false
+    S.center = i
+    onPick?.(g.nodes[i].coord)
+    repaint()
+  }
+
   return (
     <div className="gr">
       <div className="gr__bar">
@@ -501,7 +599,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
           className="gr__btn"
           onClick={() => {
             S.rx = -0.2; S.ry = 0.5; S.px = 0; S.py = 0
-            S.lock = null; S.touched = false; S.needFit = true
+            S.lock = null; S.center = null; S.touched = false; S.needFit = true
             repaint()
           }}
           title="기본 배율로 되돌린다 (전체를 보려면 −) · 위치·고정 초기화"
@@ -515,30 +613,46 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       <div className="gr__legend">
         <span className="gr__hint">
           크기 = 작업 건수 · <b>노드를 누르면 이어진 것이 고정</b> ·
-          <b>왼쪽에서 카테고리를 고르면 그 좌표만 색</b> · 휠 확대 ·
-          끌어서 회전 · Shift+끌기 이동 · 바깥까지 보려면 <b>−</b>
+          빈 곳을 누르면 풀린다 · <b>왼쪽에서 카테고리 → 좌표를 고르면 찾아 준다</b> ·
+          휠 확대 · 끌어서 회전 · Shift+끌기 이동 · 바깥까지 보려면 <b>−</b>
         </span>
       </div>
-      {/* 왼쪽 카테고리 레일 — 고른 그룹만 색이 붙는다.
-          그래프 칸이 좁으므로 이름만 세로로 세운다. 숫자는 그 타입의 좌표 수다. */}
+      {/* 왼쪽 레일 — 두 단이다.
+          ① 카테고리 목록 · ② 고른 카테고리의 좌표 목록.
+          283개 중에서 하나를 눈으로 찾는 것은 불가능하다. 목록에서 고르면
+          그 노드를 고정하고 화면 가운데로 데려온다. */}
       <div className="gr__body">
-        <div className="gr__groups" role="group" aria-label="카테고리">
-          {groups.map(([t, c]) => (
-            <button
-              key={t}
-              className="gr__g"
-              aria-pressed={group === t}
-              title={`${t} ${c}개 — 눌러서 색으로 표시`}
-              onClick={() => setGroup(group === t ? null : t)}
-            >
-              <span className="gr__gname">{t}</span>
-              <span className="gr__gn">{c}</span>
-            </button>
-          ))}
-          {group && (
-            <button className="gr__g gr__g--clear" onClick={() => setGroup(null)}>
-              해제
-            </button>
+        <div ref={railRef} className={'gr__groups' + (group ? ' gr__groups--items' : '')} aria-label="카테고리">
+          {group == null ? (
+            groups.map(([t, c]) => (
+              <button
+                key={t}
+                className="gr__g"
+                title={`${t} ${c}개 — 눌러서 목록 보기`}
+                onClick={() => setGroup(t)}
+              >
+                <span className="gr__gname">{t}</span>
+                <span className="gr__gn">{c}</span>
+              </button>
+            ))
+          ) : (
+            <>
+              <button className="gr__back" onClick={() => setGroup(null)} title="카테고리 목록으로">
+                <span aria-hidden="true">←</span> {group}
+              </button>
+              {items.map(({ i, v, count }) => (
+                <button
+                  key={i}
+                  className="gr__i"
+                  aria-pressed={S.lock === i}
+                  title={`${g.nodes[i].coord} · 작업 ${count}건 — 눌러서 그래프에서 찾기`}
+                  onClick={() => pickNode(i)}
+                >
+                  <span className="gr__gname">{v}</span>
+                  {count > 0 && <span className="gr__gn">{count}</span>}
+                </button>
+              ))}
+            </>
           )}
         </div>
         <div className="gr__wrap"><canvas ref={cvRef} className="gr__cv" /></div>

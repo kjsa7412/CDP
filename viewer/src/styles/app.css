@@ -1365,6 +1365,48 @@
 .gr__gn { flex: none; font-variant-numeric: tabular-nums; opacity: 0.75; }
 .gr__g--clear { margin-top: 4px; justify-content: center; color: var(--text-2); }
 
+/* 좌표 목록 단 — 이름이 카테고리보다 길다(EXA021 · 사업계획서). 폭을 넓힌다 */
+.gr__groups--items { width: 132px; }
+.gr__back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  margin-bottom: 3px;
+  padding: 3px 4px;
+  font: 600 10.5px var(--font-mono);
+  color: var(--accent);
+  text-align: left;
+  background: var(--surface);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+.gr__back:hover { color: var(--text); }
+.gr__i {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 2px 4px;
+  font: 10.5px var(--font-mono);
+  color: var(--text-3);
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-badge);
+}
+.gr__i:hover { color: var(--text); border-color: var(--border); }
+/* 지금 고정된 좌표 — 그래프의 강조와 같은 것을 가리킨다 */
+.gr__i[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
 .gr__wrap { flex: 1; min-width: 0; min-height: 160px; }
 .gr__cv { display: block; width: 100%; height: 100%; cursor: grab; }
 .gr__cv:active { cursor: grabbing; }
