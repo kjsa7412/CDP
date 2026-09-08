@@ -50,7 +50,12 @@ export default function App() {
   // 가는 길이 항상 있어야 한다.
   const [checkOpen, setCheckOpen] = useState(false)
   // 좌우 비율 — 문서 : 찾는 곳. 창 폭에서 역산해 왼쪽 폭을 정한다.
+  // 좌우 배치.
+  //   null   손으로 끈 폭을 쓴다
+  //   n      문서 : 찾는 곳 = n:1  (창 폭에서 역산)
+  //   'find' **문서 영역 없음** — 찾는 곳이 전부
   const [ratio, setRatio] = useState(null)
+  const xpFold = !!state?.panes?.xpFold
   const historyRef = useRef({ stack: [], pos: -1 })
   const atSeqRef = useRef(0)
 
@@ -133,7 +138,7 @@ export default function App() {
 
   // 비율 버튼 — 창 폭에서 역산한다. 창이 바뀌면 비율을 유지한다.
   useEffect(() => {
-    if (!ratio) return
+    if (!ratio || ratio === 'find') return
     const apply = () => {
       const w = clamp(Math.round(document.documentElement.clientWidth / (ratio + 1)), 280, 900)
       document.documentElement.style.setProperty('--w-find', w + 'px')
@@ -410,6 +415,7 @@ export default function App() {
       data-mode={effectiveMode}
       data-density={state.density || 'normal'}
       data-nodoc={docId ? '0' : '1'}
+      data-split={ratio === 'find' ? 'find' : 'both'}
       data-force-status={repo.watchEnabled && !repo.watchAlive ? '1' : '0'}
     >
       <header className="topbar">
@@ -452,6 +458,15 @@ export default function App() {
               {n}:1
             </button>
           ))}
+          {/* 문서 영역을 아예 없앤다. 그래프·좌표를 넓게 볼 때 쓴다 —
+              283개짜리 그래프는 왼쪽 400px 에서 읽을 수 있는 그림이 아니다 */}
+          <button
+            aria-pressed={ratio === 'find'}
+            title="문서 영역 없음 — 찾는 곳이 전부"
+            onClick={() => setRatio(ratio === 'find' ? null : 'find')}
+          >
+            찾기만
+          </button>
         </div>
         <button
           className="iconbtn"
@@ -497,12 +512,26 @@ export default function App() {
               }
             />
           </div>
-          <div className="find__gut" role="separator" aria-label="위아래 비율" onMouseDown={startVDrag} />
-          <div className="find__bot">
-            <div className="find__label">뻗어나가기</div>
-            <div className="find__scroll">
-              <Explore root={root} onOpen={openDoc} />
-            </div>
+          {!xpFold && (
+            <div className="find__gut" role="separator" aria-label="위아래 비율" onMouseDown={startVDrag} />
+          )}
+          {/* 접으면 머리만 남는다. 그래프를 볼 때 아래 절반이 통째로
+              비어 있는 일이 잦다 — 그때 위가 두 배가 된다. */}
+          <div className="find__bot" data-fold={xpFold ? '1' : '0'}>
+            <button
+              className="find__label find__label--btn"
+              aria-expanded={!xpFold}
+              title={xpFold ? '펼치기' : '접기'}
+              onClick={() => patch({ panes: { xpFold: !xpFold } })}
+            >
+              <span className="find__caret" aria-hidden="true">{xpFold ? '▸' : '▾'}</span>
+              뻗어나가기
+            </button>
+            {!xpFold && (
+              <div className="find__scroll">
+                <Explore root={root} onOpen={openDoc} />
+              </div>
+            )}
           </div>
         </section>
 

@@ -82,21 +82,22 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
   })
   // 카테고리 선택 — 고른 그룹만 색이 붙는다
   const [group, setGroup] = useState(null)
+  // **이름을 켜고 끈다.**
+  //
+  // 283개에서는 라벨이 서로를 덮어 그래프가 글자 더미가 된다. 끄면 점만
+  // 남아 **덩어리와 안팎**이 보인다 — 그것이 이 그림의 첫 번째 정보다.
+  // 이름은 짚거나 고르면 그것만 뜬다.
+  const [labels, setLabels] = useState('auto')   // 'on' | 'off' | 'auto'
   const railRef = useRef(null)
   const [, force] = useState(0)
 
-  // **캔버스 비율.** 배치가 이것을 따른다 (layout3d 참고).
-  //
-  // 0.25 단위로 뭉뚱그린다 — 창을 1px 끌 때마다 O(n^2) 배치를 다시 풀면
-  // 283개에서 눈에 띄게 멈춘다. 비율이 실제로 달라졌을 때만 다시 푼다.
-  const [aspect, setAspect] = useState(1.75)
 
   const key = useMemo(() => {
     const cs = (tree?.types || []).flatMap((t) => t.coords.map((c) => `${c.coord}:${c.count}:${c.sec || ''}`))
-    return cs.join('|') + '#' + (docs || []).map((d) => (d.touches || []).join(',')).join(';') + '#' + aspect
-  }, [tree, docs, aspect])
+    return cs.join('|') + '#' + (docs || []).map((d) => (d.touches || []).join(',')).join(';')
+  }, [tree, docs])
 
-  const g = useMemo(() => build(tree, docs, aspect), [key])
+  const g = useMemo(() => build(tree, docs), [key])
 
   useEffect(() => {
     if (!g || !cvRef.current) return
@@ -184,6 +185,12 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
 
       S.pts = g.nodes.map((n, i) => ({ i, n, ...proj(n.x, n.y, n.z) })).sort((a, b) => b.z - a.z)
 
+      // **인덱스로 찾는다.** 간선 루프가 `S.pts.find()` 를 두 번씩 돌았다 --
+      // 간선 200 × 노드 283 = 5만 번의 선형 탐색이 프레임마다 있었다.
+      // 지금은 1.4ms 라 티가 안 나지만 좌표가 늘면 그대로 자란다.
+      const byI = new Array(g.nodes.length)
+      for (const t of S.pts) byI[t.i] = t
+
       // **목록에서 고른 좌표는 가운데에 둔다 — 그릴 때마다 다시 맞춘다.**
       //
       // 한 번만 맞추면 어긋난다. 좌표를 고르면 아래 뻗어나가기 패널의 내용이
@@ -191,7 +198,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       // 실측에서 고른 노드가 가운데는커녕 캔버스 밖으로 나가 있었다.
       // 크기가 어떻게 바뀌든 따라오게 한다. 사용자가 돌리거나 옮기면 푼다.
       if (S.center != null) {
-        const c = S.pts.find((t) => t.i === S.center)
+        const c = byI[S.center]
         if (c) {
           const dx = cx - c.X, dy = cy - c.Y
           if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
@@ -217,7 +224,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       // 간선 — 얇고 옅게. 깊이에 따라 더 옅어진다(부드러운 안개)
       ctx.lineWidth = 1
       for (const [i, j] of g.edges) {
-        const p = S.pts.find((t) => t.i === i), q = S.pts.find((t) => t.i === j)
+        const p = byI[i], q = byI[j]
         if (!p || !q) continue
         const lit = H != null && (i === H || j === H)
         ctx.strokeStyle = lit ? accent : line
@@ -291,6 +298,14 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
         }
       }
 
+      // **이름을 그릴까.**
+      //
+      // auto — 배율이 낮으면 끈다. 좁은 화면에 283개를 다 적으면 서로를 덮고,
+      // 덮인 글자는 없는 것보다 나쁘다(읽으려다 시간을 쓴다).
+      // 끈 상태에서도 **짚은 것과 고른 것, 그 1단계 이웃**은 그린다 —
+      // 이름을 보려고 켜는 것이 아니라 짚으면 나오게 한다.
+      const showAll = labels === 'on' || (labels === 'auto' && S.base * S.zoom >= 0.9)
+      if (showAll || H != null) {
       // 라벨 — **전부 보인다.**
       //
       // 전에는 `count >= 2` 인 것만 이름을 달았다. 작업 1건인 좌표가 절반이
@@ -313,7 +328,9 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       // **강조할 것이 자리를 먼저 고른다.** 깊이순으로만 놓으면 초점·이웃의
       // 이름이 뒤로 밀려 엉뚱한 데 붙는다 — 정작 읽어야 하는 이름이다.
       const pri = (t) => (H != null && (t.i === H || g.nbr[H].has(t.i)) ? 1 : 0)
+      // 끈 상태에서는 초점과 그 1단계 이웃만 이름을 갖는다
       for (const p of [...S.pts].sort((a, b) => pri(b) - pri(a) || b.sc - a.sc)) {
+        if (!showAll && !(H != null && (p.i === H || g.nbr[H].has(p.i)))) continue
         const n = p.n
         const R = (2.3 + Math.sqrt(n.count) * 1.5) * p.sc * Z
         const fs = Math.max(9, Math.round(10.5 * p.sc))
@@ -363,6 +380,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
         ctx.strokeText(n.v, bx, by)
         ctx.fillStyle = inGroup ? accent : focus || nbr ? ink : ink2
         ctx.fillText(n.v, bx, by)
+      }
       }
       ctx.globalAlpha = 1
       return true
@@ -504,15 +522,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
     // 박스가 바뀌므로, 캔버스를 관찰하면 자기가 만든 변화를 다시 받거나(루프)
     // 브라우저가 그것을 눌러 아예 안 오거나 한다 -- 실측에서 후자였다.
     // 부모는 이 콜백이 건드리지 않으니 안전하다.
-    const bucket = () => {
-      const r = cv.getBoundingClientRect()
-      if (r.width < 4 || r.height < 4) return
-      const a = Math.max(0.6, Math.min(3.2, r.width / r.height))
-      const b = Math.round(a * 4) / 4
-      setAspect((prev) => (prev === b ? prev : b))
-    }
     const sizeObs = new ResizeObserver(() => {
-      bucket()
       // **손댄 배율은 지키다.** 확대해 놓고 창을 넓혔는데 배율이 되돌아가면
       // 보던 자리를 잃는다. 아직 안 손댔으면 새 크기에 맞춘다.
       if (!S.touched) S.needFit = true
@@ -524,7 +534,6 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
 
     paintRef.current = now
     spinRef.current = spinOn
-    bucket()
     draw()
     return () => {
       paintRef.current = null
@@ -541,7 +550,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       cv.removeEventListener('contextmenu', ctxmenu)
       window.removeEventListener('mouseup', up)
     }
-  }, [g, picked, group])
+  }, [g, picked, group, labels])
 
   // **목록이 그래프를 따라간다.**
   //
@@ -624,10 +633,22 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
         <button className="gr__btn" onClick={() => { S.spin = !S.spin; spinRef.current?.(); repaint() }} aria-pressed={S.spin}>
           회전
         </button>
+        {/* 이름 — auto 는 배율이 낮으면 끈다. 283개에서 다 적으면 글자 더미가 된다 */}
+        <button
+          className="gr__btn"
+          aria-pressed={labels !== 'off'}
+          title={
+            labels === 'auto' ? '이름: 자동 (배율이 낮으면 끈다)' : labels === 'on' ? '이름: 항상' : '이름: 끔'
+          }
+          onClick={() => setLabels(labels === 'auto' ? 'on' : labels === 'on' ? 'off' : 'auto')}
+        >
+          이름 {labels === 'auto' ? '자동' : labels === 'on' ? '켬' : '끔'}
+        </button>
       </div>
       <div className="gr__legend">
         <span className="gr__hint">
-          크기 = 작업 건수 · <b>노드를 누르면 이어진 것이 고정</b> ·
+          크기 = 작업 건수 · <b>안쪽일수록 많이 이어진 좌표</b> ·
+          <b>노드를 누르면 이어진 것이 고정</b> ·
           빈 곳을 누르면 풀린다 · <b>왼쪽에서 카테고리 → 좌표를 고르면 찾아 준다</b> ·
           휠 확대 · 끌어서 회전 · Shift+끌기 이동 · 바깥까지 보려면 <b>−</b>
         </span>
@@ -676,7 +697,7 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
   )
 }
 
-function build(tree, docs, aspect) {
+function build(tree, docs) {
   if (!tree?.types) return null
   const nodes = []
   for (const t of tree.types) {
@@ -701,7 +722,7 @@ function build(tree, docs, aspect) {
   const nbr = nodes.map(() => new Set())
   for (const [i, j] of edges) { nbr[i].add(j); nbr[j].add(i) }
 
-  layout3d(nodes, edges, aspect)
+  layout3d(nodes, edges)
 
 
   const seen = new Set(); let comps = 0, iso = 0
@@ -719,46 +740,48 @@ function build(tree, docs, aspect) {
 // **순수 force 만으로는 값이 안 난다.** 실측 성분 분포가 23 · 7 · 5 · 2 · 그리고
 // 1이 18개다. 그대로 풀면 떠다니는 점 구름이 된다. 타입별로 구(球) 위에 자리를
 // 먼저 주고 그 위에서 force 가 푼다 — 고립 노드도 자기 타입 구역에 남는다.
-// `aspect` = 캔버스 가로/세로. 배치가 **그 비율을 따른다.**
+// **구다. 그리고 반지름이 뜻을 갖는다.**
 //
-// 전에는 타입 중심을 구 위에 놓았다. 그래서 노드 뭉치가 공 모양이 되고,
-// 공의 지름은 **캔버스의 짧은 변**에 갇힌다 — 가로로 긴 화면에서 좌우가
-// 통째로 비고, 좌표가 283개쯤 되면 가운데가 엉겨 이름을 읽을 수 없다.
+// 잠깐 렌즈(캔버스 비율을 따르는 타원)로 바꿨다가 되돌렸다. 비율을 따르려면
+// 캔버스가 바뀔 때마다 O(n^2) 배치를 다시 풀어야 하는데, 283개에서 그것이
+// 창을 끌 때마다 걸렸다. **모양을 얻고 반응을 잃었다.**
 //
-// 렌즈로 바꾼다. 타입 중심을 **xy 평면의 타원** 위에 놓고 z 는 얕게 준다.
+// 대신 **깊이(반지름)에 뜻을 준다.**
 //
-//   Rx = R * sqrt(aspect)     넓은 화면이면 좌우로 벌어진다
-//   Ry = R / sqrt(aspect)     그만큼 위아래를 줄인다  (면적은 보존된다)
-//   Rz = R * 0.34             깊이는 시차만 준다
+//   많이 이어진 좌표   안쪽    이 프로젝트의 중심이다
+//   적게 이어진 좌표   바깥    가장자리다
 //
-// 깊이를 아주 없애지는 않는다. 회전이 이 그래프의 읽기 수단이고, 완전한
-// 평면은 돌려도 아무것도 드러나지 않는다.
-function layout3d(nodes, edges, aspect = 1.6) {
+// 구는 원래 안쪽이 비어 보인다 -- 표면에만 점이 있으면 껍데기다. 연결도로
+// 반지름을 주면 그 빈 곳이 의미로 채워지고, 돌릴 때 **중심에 무엇이 있는지**가
+// 보인다. 그것이 이 그래프에서 가장 알고 싶은 것이다.
+function layout3d(nodes, edges) {
   const rand = rng(0x5eed)
   const types = [...new Set(nodes.map((n) => n.type))]
     .sort((a, b) => (TYPES.indexOf(a) + 99) % 99 - (TYPES.indexOf(b) + 99) % 99 || a.localeCompare(b))
-  const A = Math.max(0.6, Math.min(3.2, aspect))
+
+  // 연결도 -- 이 좌표를 함께 건드린 다른 좌표가 몇 개인가
+  const deg = nodes.map(() => 0)
+  for (const [a, b] of edges) { deg[a]++; deg[b]++ }
+  const maxDeg = Math.max(1, ...deg)
+
   const R = 150
-  const RX = R * Math.sqrt(A)
-  const RY = R / Math.sqrt(A)
-  const RZ = R * 0.34
   const C = new Map()
   types.forEach((t, i) => {
-    // 타원 위에 고르게. 황금각으로 돌려 이웃 타입이 붙지 않게 한다.
+    // 구 위에 고르게 — 황금각 나선
+    const y = 1 - (i / Math.max(1, types.length - 1)) * 2
+    const r = Math.sqrt(Math.max(0, 1 - y * y))
     const th = i * 2.399963
-    // 안쪽에도 놓아 가장자리만 붐비지 않게 — 타입이 많아지면 두 겹이 된다
-    const k = types.length > 6 ? 0.62 + 0.38 * ((i * 7) % 5) / 4 : 1
-    C.set(t, {
-      x: Math.cos(th) * RX * k,
-      y: Math.sin(th) * RY * k,
-      z: Math.cos(th * 1.7) * RZ,
-    })
+    C.set(t, { x: Math.cos(th) * r * R, y: y * (R * 0.85), z: Math.sin(th) * r * R })
   })
-  for (const n of nodes) {
-    const c = C.get(n.type)
-    n.x = c.x + (rand() - 0.5) * 60
-    n.y = c.y + (rand() - 0.5) * 60
-    n.z = c.z + (rand() - 0.5) * 60
+
+  // **연결도가 높을수록 원점 쪽으로.** 타입 중심을 0 쪽으로 끌어당긴 자리에
+  // 놓는다 -- 0.30(중심 근처) ~ 1.05(껍데기 바깥).
+  const pull = nodes.map((_, i) => 1.05 - 0.75 * Math.sqrt(deg[i] / maxDeg))
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i], c = C.get(n.type), pk = pull[i]
+    n.x = c.x * pk + (rand() - 0.5) * 55
+    n.y = c.y * pk + (rand() - 0.5) * 55
+    n.z = c.z * pk + (rand() - 0.5) * 55
   }
 
   // O(n^2) x TICKS. 55노드에서 수십 ms 다. 수백을 넘으면 틱을 줄인다.
@@ -784,15 +807,13 @@ function layout3d(nodes, edges, aspect = 1.6) {
       F[j][0] -= dx / d * f; F[j][1] -= dy / d * f; F[j][2] -= dz / d * f
     }
     for (let i = 0; i < N; i++) {
-      const n = nodes[i], c = C.get(n.type)
-      // **원점으로 당기는 힘을 축마다 다르게 준다.**
-      //
-      // 같은 세기로 당기면 렌즈가 다시 공으로 뭉친다 — 중심 배치만 타원으로
-      // 놓아 봐야 반발력이 등방이라 결국 둥글어진다. 짧은 축을 더 세게 당겨
-      // 모양을 유지한다.
-      F[i][0] += (c.x - n.x) * 0.02 - n.x * (0.004 / A)
-      F[i][1] += (c.y - n.y) * 0.02 - n.y * (0.004 * A)
-      F[i][2] += (c.z - n.z) * 0.02 - n.z * 0.012
+      const n = nodes[i], c = C.get(n.type), pk = pull[i]
+      // 목표는 **타입 중심을 연결도만큼 안으로 끌어당긴 자리**다. 그래야
+      // 풀고 나서도 안팎 구분이 남는다 -- 타입 중심 그대로를 목표로 삼으면
+      // 반발력이 다시 껍데기로 밀어낸다.
+      F[i][0] += (c.x * pk - n.x) * 0.02 - n.x * 0.004
+      F[i][1] += (c.y * pk - n.y) * 0.02 - n.y * 0.004
+      F[i][2] += (c.z * pk - n.z) * 0.02 - n.z * 0.004
       const m = Math.hypot(F[i][0], F[i][1], F[i][2]), cap = 8 * al + 0.3, k = m > cap ? cap / m : 1
       n.x += F[i][0] * k; n.y += F[i][1] * k; n.z += F[i][2] * k
     }

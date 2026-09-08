@@ -66,6 +66,29 @@
 }
 .find__scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 
+/* 접힘 — 머리만 남는다. 위가 나머지를 전부 가져간다. */
+.find__bot[data-fold='1'] { flex: none; }
+.find__bot[data-fold='1'] ~ * { }
+.app .find__top:has(~ .find__bot[data-fold='1']) { height: auto; flex: 1; }
+.find__label--btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+.find__label--btn:hover { color: var(--text); }
+.find__caret { font-size: 9px; opacity: 0.7; }
+
 /* 본문은 남은 폭 전부를 받는다. 읽기 폭 제한은 .docwrap 이 한다 */
 .pane--doc {
   flex: 1;
@@ -796,6 +819,14 @@
   margin: var(--sp-2) 0;
   background: var(--border);
 }
+
+/* 문서 영역 없음 — 찾는 곳이 전부.
+ *
+ * 그래프를 넓게 볼 때 쓴다. 좌표 283개짜리 그림은 왼쪽 400px 에서
+ * 읽을 수 있는 것이 아니다. 구분선도 같이 감춘다 -- 끌 대상이 없다. */
+.app[data-split='find'] .pane--doc { display: none; }
+.app[data-split='find'] > .panes > .gutter { display: none; }
+.app[data-split='find'] .pane--find { width: auto; flex: 1; }
 
 /* ── 반응형 — 목표는 모바일이 아니라 분할 화면.
  *    열이 둘뿐이라 분기도 둘이면 된다. 왼쪽은 고정, 본문이 줄어든다. ── */
