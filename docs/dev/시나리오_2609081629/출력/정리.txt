@@ -1,0 +1,8 @@
+# 정리
+Deleted branch test/세길-2609081629 (was 6025e81).
+$ git log --oneline -1
+824a519 v0.2.7 배포본 적용 — cdp-import · cdp-edit
+$ ctx check
+ctx check: 오류 없음 (경고 5건)
+work/ 25건 · 좌표 283개
+$ git status --porcelain

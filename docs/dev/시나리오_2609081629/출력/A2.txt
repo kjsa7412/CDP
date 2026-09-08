@@ -1,0 +1,20 @@
+# A2 파생 누락 — 머지
+
+## 옛 applied(A) 로 해소
+
+ctx check: 오류 1건. 커밋할 수 없습니다.
+
+[pre-commit] 커밋을 중단했습니다.
+             고친 뒤 다시 커밋하세요. --no-verify 로 넘기지 마세요.
+exit=0
+
+$ ctx check (옛 applied 상태)
+[오류] 관리 문서 파생 누락 — 지식공유문서를 남기면 파생 갱신은 필수입니다  1건
+   screen:EXD020  docs/화면설계서.md · applied 2026-0920-A-복명버튼 뒤 후속 1건 — `ctx apply screen:EXD020`
+[경고] INDEX.md 불일치  1건
+   집계 28건 / INDEX.md 27행 — ctx index 실행 필요
+
+## 새 applied(B) 로 해소
+[pre-commit] INDEX.md 를 갱신해 커밋에 포함했습니다.
+[pre-commit] INDEX-by-coord.md 를 갱신해 커밋에 포함했습니다.
+[a a5efb38] Merge branch 'b' into a

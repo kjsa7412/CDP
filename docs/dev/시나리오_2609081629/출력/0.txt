@@ -1,0 +1,16 @@
+# 0 준비
+$ git log --oneline -1
+824a519 v0.2.7 배포본 적용 — cdp-import · cdp-edit
+$ git config core.hooksPath
+.githooks
+$ tools\cdp.exe ctx version
+2026-09-08 07:38
+$ ls .claude/skills
+cdp-edit
+cdp-import
+cdp-load
+cdp-managed
+cdp-save
+cdp-work
+$ tools\cdp.exe ctx check
+ctx check: 오류 없음 (경고 5건)

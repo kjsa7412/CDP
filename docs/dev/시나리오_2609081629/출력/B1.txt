@@ -1,0 +1,61 @@
+# B1 회의록 편입 (cdp-import)
+
+## ③ 좌표 판정
+【좌표 판정 — 원문: 2026-08-14 연심회 준비회의록.md】
+  screen:EXA021   변경   외부 심의위원 그리드에 소속 컬럼 추가로 결정
+  code:PS130      신설   업무구분 코드그룹 신설로 결정 (미등재 → 등재한다)
+  screen:EXA022   언급   "한번 봐야 한다" · **이번 범위는 아니다** → 좌표 아님
+  table:ps_ext_emp_mst  배경   "현재 그대로 쓴다. 별도 변경 없음" → 좌표 아님
+  ―― 이슈로 ――
+  A10 결재 취소 시 GDI 자동 반영   결정 못 함 → issue:ISS-003 에 이미 있다. 붙인다
+
+$ ctx match
+EXA021          ->  screen:EXA021  (값 일치 · _vocab.md:106)
+EXA022          ->  screen:EXA022  (값 일치 · _vocab.md:108)
+업무구분        ->  (미등재)  _vocab.md 에 없습니다
+ps_ext_emp_mst  ->  table:ps_ext_emp_mst  (값 일치 · _vocab.md:83)
+
+## B2 — 과거 문서 편입
+$ ctx where screen:EXA021  (편입 전 상태)
+  반영 2026-0902-EXA021-외부심의위원 · 편입 문서는 2026-08-14 → 이전
+
+### applied 를 바꾸지 않았을 때
+ctx derive: 파생 남은 섹션 없음
+
+### applied 를 옛 문서로 바꿔 보면 (음성 시험)
+파생 남은 섹션 1곳
+
+  screen:EXA021                    작업 3건     화면설계서
+                                   실린 것 2026-0814-연심회준비-회의록
+                                     + 2026-09-02  2026-0902-EXA021-외부심의위원
+   → 되돌림
+
+## ⑥ 한 커밋
+[pre-commit] INDEX-by-coord.md 를 갱신해 커밋에 포함했습니다.
+[test/세길-2609081629 cc29061] 연심회 준비 회의록 편입
+ 7 files changed, 79 insertions(+), 2 deletions(-)
+ create mode 100644 "work/2026-0814-\354\227\260\354\213\254\355\232\214\354\244\200\353\271\204-\355\232\214\354\235\230\353\241\235.md"
+
+$ head -12 work/2026-0814-연심회준비-회의록.md
+---
+id: 2026-0814-연심회준비-회의록
+title: 연심회 준비 회의 — 외부 위원 소속 컬럼 · 업무구분 코드그룹 신설
+date: 2026-08-14
+author: 홍길동
+source: 2026-08-14 연심회 준비회의록.md
+touches:
+  - screen:EXA021
+  - code:PS130
+tags: [회의록, 심의]
+---
+
+
+$ ctx term 업무구분
+code:PS130  업무구분 (인사)
+  aliases   업무구분, 업무구분코드그룹
+  _vocab.md:476
+  관리 문서 docs/코드정의서.md  ## PS130
+  작업 기록 1건
+
+$ ctx check
+ctx check: 오류 없음 (경고 6건)

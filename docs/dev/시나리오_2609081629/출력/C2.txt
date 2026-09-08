@@ -1,0 +1,21 @@
+# C2 — 기계가 못 막는 자리
+
+기록 없이 관리 문서만 고치고 커밋한다.
+
+$ git diff --stat
+ "docs/\355\231\224\353\251\264\354\204\244\352\263\204\354\204\234.md" | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+$ ctx check
+ctx check: 오류 없음 (경고 5건)
+
+$ git commit
+ctx check: 오류 없음 (경고 5건)
+[test/세길-2609081629 652d90e] 확장자 heic 추가
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+exit=0
+
+→ **통과한다.** 파생 누락 검사는 작업 기록을 기준으로 도는데
+  기록이 없으면 기준이 없다. 2층이 못 잡는 자리다.
+  그래서 cdp-edit 이 있고, 이 시험의 목적은 '막히나' 가 아니라
+  'skill 이 이 요청을 잡아채나' 다.

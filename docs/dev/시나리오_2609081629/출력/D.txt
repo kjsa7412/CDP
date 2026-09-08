@@ -1,0 +1,19 @@
+# D — 막아야 하는 것들
+
+$ ctx check
+[오류] _vocab.md 미등재 좌표  1건
+   table:rp_trip_photo_list
+[오류] status: 미결·제안 — 지식공유문서가 아니라 아젠다입니다  1건
+   2026-0923-시험-미결  status: 미결 — docs/위험및이슈관리대장.md 로 옮기세요
+[오류] status 에 쓸 수 있는 값이 없습니다 — 지우세요  1건
+   2026-0923-시험-진행중  status: 진행중 — 지식공유문서는 완료된 것만 옵니다
+[오류] 등록부가 가리키는 섹션이 없음  1건
+   table:rp_trip_photo_list  docs/테이블정의서.md 에 `## rp_trip_photo_list` 섹션이 없음
+[경고] INDEX.md 불일치  1건
+   집계 36건 / INDEX.md 31행 — ctx index 실행 필요
+
+$ git commit
+
+[pre-commit] 커밋을 중단했습니다.
+             고친 뒤 다시 커밋하세요. --no-verify 로 넘기지 마세요.
+exit=0
