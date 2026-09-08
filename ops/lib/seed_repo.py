@@ -1496,7 +1496,10 @@ GITIGNORE = """
 #
 # 지금은 반입 시 파일 두 개를 옮긴다 -- bundle + cdp.exe (부록 C 점검표).
 # Node 가 없는 PC 가 확인되고 팀이 clone 하나를 택하면 아래 줄을 지운다.
+# 이름이 플랫폼마다 다르다 -- Windows `cdp.exe` · macOS/Linux 확장자 없는 `cdp`.
+# `*.exe` 만 막으면 맥에서 만든 실행 파일이 그대로 커밋된다.
 /tools/*.exe
+/tools/cdp
 
 # ctx 는 생성물이지만 **커밋한다** -- 148KB 이고, 이것이 없으면 폐쇄망에서
 # git 훅이 돌지 않는다. `node tools/build-ctx.mjs` 가 만든다.
@@ -1520,7 +1523,7 @@ README = """
 
 ## 5분 안에 시작하기
 
-**1. 앱을 띄운다** — `tools/cdp.exe` 더블클릭 *(없으면 `npx cdp`)*
+**1. 앱을 띄운다** — `tools/cdp.exe`(맥은 `tools/cdp`) 실행 *(없으면 `npx cdp`)*
 **2. 이 폴더 경로를 넣는다**
 **3. 화면 셋을 본다**
 
@@ -1568,7 +1571,8 @@ bin/ctx check                     커밋 가능한가 (오류면 exit 1)
 bin/ctx sync                      원격과의 차이 · 훅 설정 여부
 ```
 
-**Node 가 없어도 된다** — `bin/ctx` 가 알아서 `tools/cdp.exe` 로 넘긴다.
+**Node 가 없어도 된다** — `bin/ctx` 가 알아서 `tools/` 의 실행 파일로 넘긴다
+(Windows `cdp.exe` · macOS/Linux `cdp` 둘 다 찾는다).
 
 ## 지금 이 레포의 상태
 
