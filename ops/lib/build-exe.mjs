@@ -22,6 +22,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const BUILD = path.join(ROOT, 'out', 'exe')
 const OUT = path.join(BUILD, process.platform === 'win32' ? 'cdp.exe' : 'cdp')
 
+// Mach-O universal(fat) 매직 -- 0xcafebabe(32) · 0xcafebabf(64).
+// 첫 4바이트만 보면 갈린다.
+function isFatMachO(p) {
+  const b = Buffer.alloc(4)
+  const fd = fs.openSync(p, 'r')
+  try { fs.readSync(fd, b, 0, 4, 0) } finally { fs.closeSync(fd) }
+  const m = b.readUInt32BE(0)
+  return m === 0xcafebabe || m === 0xcafebabf
+}
+
 const log = (...a) => console.log('[build-exe]', ...a)
 
 function run(cmd, args, opts = {}) {
@@ -189,10 +199,22 @@ function abort(e) {
 }
 
 // 5) node 실행 파일 복사
+//
+// **macOS 의 node 는 대개 유니버설(fat) 바이너리다** -- x86_64 와 arm64
+// 슬라이스가 한 파일에 들어 있고, 그러면 SEA sentinel 이 **두 번** 나온다.
+// postject 는 fat 를 모르고 "Multiple occurences of sentinel" 로 죽는다.
+// 그래서 호스트 아키텍처 하나만 뽑아 쓴다. Windows(PE)에는 없는 개념이라
+// 그쪽은 그냥 복사한다.
 try {
-  fs.copyFileSync(process.execPath, OUT)
+  if (process.platform === 'darwin' && isFatMachO(process.execPath)) {
+    run('lipo', ['-thin', process.arch === 'arm64' ? 'arm64' : 'x86_64',
+                 process.execPath, '-output', OUT])
+    log(`node 복사 (lipo ${process.arch} 슬라이스) → ${path.relative(ROOT, OUT)}`)
+  } else {
+    fs.copyFileSync(process.execPath, OUT)
+    log(`node 복사 → ${path.relative(ROOT, OUT)}`)
+  }
 } catch (e) { abort(e) }
-log(`node 복사 → ${path.relative(ROOT, OUT)}`)
 
 if (process.platform === 'win32') {
   // 서명이 있으면 주입 전에 떼어낸다. 없으면 무시.
@@ -246,6 +268,17 @@ if (process.platform === 'win32') {
   } catch (e) { abort(e) }
 }
 
+// **macOS 는 주입 전후로 서명을 손대야 한다.**
+// Mach-O 는 서명이 파일 전체를 덮으므로 blob 을 끼우면 서명이 깨지고,
+// 깨진 서명이 붙은 실행 파일은 커널이 **죽인다**(SIGKILL, 메시지 없음).
+// 그래서 ① 서명을 떼고 ② 세그먼트 이름을 주고 ③ 임시 서명(-)을 다시 붙인다.
+// Windows 는 PE 라 이 셋이 다 필요 없다 -- 위 signtool 분기가 그 자리다.
+if (process.platform === 'darwin') {
+  try {
+    run('codesign', ['--remove-signature', OUT])
+  } catch {}
+}
+
 log('postject 주입 (수 분 걸린다)')
 try {
   run('npx', [
@@ -256,8 +289,19 @@ try {
     path.join(BUILD, 'sea-prep.blob'),
     '--sentinel-fuse',
     'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
+    ...(process.platform === 'darwin'
+      ? ['--macho-segment-name', 'NODE_SEA']
+      : []),
   ])
 } catch (e) { abort(e) }
+
+if (process.platform === 'darwin') {
+  // 임시 서명(ad-hoc). 배포 서명이 아니라 **실행 가능하게 하는 최소치**다.
+  try {
+    run('codesign', ['--sign', '-', OUT])
+  } catch (e) { abort(e) }
+  log('ad-hoc 서명 완료')
+}
 
 // **주입이 실제로 됐는지 확인한다.**
 // 여기까지 왔는데 blob 이 없으면 실행은 되고 `Cannot find module` 만 뱉는
@@ -319,4 +363,4 @@ const mb = (fs.statSync(OUT).size / 1024 / 1024).toFixed(1)
 log(`완료: ${path.relative(ROOT, OUT)} (${mb}MB)`)
 log('')
 log('  포터블 모드로 쓰려면 exe 옆에 빈 파일 cdp.portable 을 둔다(§6.1).')
-log('  실행:  cdp.exe --repo <지식 레포 경로>')
+log(`  실행:  ${path.basename(OUT)} --repo <지식 레포 경로>`)
