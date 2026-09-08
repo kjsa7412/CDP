@@ -1785,7 +1785,7 @@ def render_work(d):
         title = "'" + title.replace("'", "''") + "'"
     fm = ['---', 'id: %s' % d['id'], 'title: %s' % title,
           'date: %s' % d['date'], 'author: %s' % d['author']]
-    # `확정` 은 적지 않는다 -- 완료가 기본값이다. 뜻이 있는 값은 `진행중` 하나
+    # `status` 는 적지 않는다 -- 쓸 수 있는 값이 하나도 없다
     if d['status']:
         fm.append('status: %s' % d['status'])
     if d['touches']:
@@ -1812,8 +1812,6 @@ def fill_applied(text):
     """
     latest = {}
     for d in WORK:
-        if d['status'] == '진행중':
-            continue
         for c in d['touches']:
             v = c.split(':', 1)[1] if ':' in c else c
             if v not in latest or d['date'] > latest[v][0]:

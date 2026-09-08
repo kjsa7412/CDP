@@ -38,10 +38,14 @@ function normDate(v) {
 //
 // 지식공유문서는 **작업의 완료에서 발생하는 문서**다(정정_판정모델_v2 §2).
 // 그러니 완료가 기본이고, 기본을 적어 봐야 30건이 똑같은 말을 한다.
-// 뜻이 남은 값은 `진행중`(점유 · 작업환경 §12) 하나다.
+// **뜻이 남은 값은 하나도 없다.** `진행중` 도 없앴다 — 지식공유문서는 작업의
+// 완료에서 발생하고, 항상 그 시점에 완료된 것이 넘어온다. 끝나지 않은 일은
+// 문서가 아니라 아젠다이고 갈 곳은 이슈 대장이다.
+//
+// 그래서 여기서는 기본값만 지우고, 남는 값이 있으면 `check` 가 오류로 낸다.
 function normStatus(v) {
   const t = v ? String(v).trim() : ''
-  return !t || t === '확정' ? null : t
+  return !t || t === '확정' || t === '완료' ? null : t
 }
 
 function toArray(v) {
@@ -159,8 +163,9 @@ export function parseDoc(path, text) {
     ),
     headings,
     bodyChars: weight.chars,
-    // 진행중은 본문이 비어 있는 것이 정상이다 (작업환경 §12)
-    bodyThin: layer === 'work' && weight.thin && normStatus(fm.status) !== '진행중',
+    // 전에는 `진행중` 이면 본문이 비어도 정상으로 봤다. 그 상태가 없어졌으니
+    // 예외도 없다 — 완료된 작업의 기록이 비어 있으면 그냥 얇은 기록이다.
+    bodyThin: layer === 'work' && weight.thin,
     // 형식을 강요하지 않으므로 목차 레일은 항상 실제 제목으로 만든다
     sections: [],
     conforms: false,

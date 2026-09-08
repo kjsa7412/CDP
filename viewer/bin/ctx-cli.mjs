@@ -401,7 +401,6 @@ async function cmdBrief(r, opt) {
     const oldest = st.legacyPending[0]
     parts.push(`미결 ${st.legacyPending.length} — 이슈 대장으로 이관 (최장 ${oldest.days}일)`)
   }
-  if (st.running.length) parts.push(`진행중 ${st.running.length}`)
   if (st.indexStale) parts.push('INDEX 불일치')
 
   if (opt.json) {

@@ -97,9 +97,6 @@ export function repoStatus(r, { today = new Date() } = {}) {
       .filter((d) => d.status === '미결' || d.status === '제안')
       .map((d) => ({ id: d.id, title: d.title, author: d.author, date: d.date, days: days(d.date), touches: d.touches }))
       .sort((a, b) => (b.days ?? 0) - (a.days ?? 0)),
-    running: r.works
-      .filter((d) => d.status === '진행중')
-      .map((d) => ({ id: d.id, title: d.title, author: d.author, date: d.date, touches: d.touches })),
     thin: r.works.filter((d) => d.bodyThin).map((d) => ({ id: d.id, title: d.title, chars: d.bodyChars })),
     indexStale: r.indexInfo.exists ? r.indexInfo.rows !== r.works.length : null,
   }

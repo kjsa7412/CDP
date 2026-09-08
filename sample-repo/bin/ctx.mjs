@@ -3354,7 +3354,7 @@ function normDate(v) {
 }
 function normStatus(v) {
   const t = v ? String(v).trim() : "";
-  return !t || t === "\uD655\uC815" ? null : t;
+  return !t || t === "\uD655\uC815" || t === "\uC644\uB8CC" ? null : t;
 }
 function toArray(v) {
   if (v == null) return [];
@@ -3443,8 +3443,9 @@ function parseDoc(path5, text) {
     ),
     headings,
     bodyChars: weight.chars,
-    // 진행중은 본문이 비어 있는 것이 정상이다 (작업환경 §12)
-    bodyThin: layer === "work" && weight.thin && normStatus(fm.status) !== "\uC9C4\uD589\uC911",
+    // 전에는 `진행중` 이면 본문이 비어도 정상으로 봤다. 그 상태가 없어졌으니
+    // 예외도 없다 — 완료된 작업의 기록이 비어 있으면 그냥 얇은 기록이다.
+    bodyThin: layer === "work" && weight.thin,
     // 형식을 강요하지 않으므로 목차 레일은 항상 실제 제목으로 만든다
     sections: [],
     conforms: false,
@@ -3561,7 +3562,6 @@ function buildCoordIndex(works, opts = {}) {
   const byId = new Map(works.map((d) => [d.id, d]));
   const byCoord = /* @__PURE__ */ new Map();
   for (const d of works) {
-    if (d.status === "\uC9C4\uD589\uC911") continue;
     for (const c of d.touches) {
       if (!byCoord.has(c)) byCoord.set(c, []);
       byCoord.get(c).push(d);
@@ -3599,7 +3599,8 @@ function buildCoordIndex(works, opts = {}) {
         return { ...base, ref: String(ref), refUnknown: true, count: list.length, items: list.map(slim) };
       }
       const items = list.filter((o) => o.id !== refDoc.id && (o.date || "") > (refDoc.date || ""));
-      return { ...base, ref: refDoc.id, refDate: refDoc.date, count: items.length, items: items.map(slim) };
+      const peers = list.filter((o) => o.id !== refDoc.id && (o.date || "") === (refDoc.date || ""));
+      return { ...base, ref: refDoc.id, refDate: refDoc.date, count: items.length, items: items.map(slim), peers: peers.map(slim) };
     },
     latest(coord) {
       const list = byCoord.get(coord) || [];
@@ -3656,6 +3657,8 @@ function buildSectionStatus(coordIndex, managedIndex, allCoords) {
       total: l.total,
       count: l.count,
       items: l.items,
+      // 같은 날 기록 — 반영됐는지 기계가 알 수 없다. 경고로만 낸다
+      peers: l.peers || [],
       latest: coordIndex.latest(coord)
     });
   }
@@ -3773,7 +3776,6 @@ function repoStatus(r, { today = /* @__PURE__ */ new Date() } = {}) {
     // 것은 아젠다이고, 아젠다는 이슈관리·TODO 같은 스케줄 문서가 다룬다.
     // `미결` 과 `제안` 은 같은 것 — 둘 다 상태가 아니라 **이관 대상**이다.
     legacyPending: r.works.filter((d) => d.status === "\uBBF8\uACB0" || d.status === "\uC81C\uC548").map((d) => ({ id: d.id, title: d.title, author: d.author, date: d.date, days: days(d.date), touches: d.touches })).sort((a, b) => (b.days ?? 0) - (a.days ?? 0)),
-    running: r.works.filter((d) => d.status === "\uC9C4\uD589\uC911").map((d) => ({ id: d.id, title: d.title, author: d.author, date: d.date, touches: d.touches })),
     thin: r.works.filter((d) => d.bodyThin).map((d) => ({ id: d.id, title: d.title, chars: d.bodyChars })),
     indexStale: r.indexInfo.exists ? r.indexInfo.rows !== r.works.length : null
   };
@@ -3862,6 +3864,12 @@ function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, secti
     "status: \uBBF8\uACB0\xB7\uC81C\uC548 \u2014 \uC9C0\uC2DD\uACF5\uC720\uBB38\uC11C\uAC00 \uC544\uB2C8\uB77C \uC544\uC820\uB2E4\uC785\uB2C8\uB2E4",
     units.filter((d) => AGENDA.has(d.status)).map((d) => ({ id: d.id, path: d.path, detail: `status: ${d.status} \u2014 docs/\uC704\uD5D8\uBC0F\uC774\uC288\uAD00\uB9AC\uB300\uC7A5.md \uB85C \uC62E\uAE30\uC138\uC694` }))
   );
+  push(
+    "error",
+    "status-value",
+    "status \uC5D0 \uC4F8 \uC218 \uC788\uB294 \uAC12\uC774 \uC5C6\uC2B5\uB2C8\uB2E4 \u2014 \uC9C0\uC6B0\uC138\uC694",
+    units.filter((d) => d.status && !AGENDA.has(d.status)).map((d) => ({ id: d.id, path: d.path, detail: `status: ${d.status} \u2014 \uC9C0\uC2DD\uACF5\uC720\uBB38\uC11C\uB294 \uC644\uB8CC\uB41C \uAC83\uB9CC \uC635\uB2C8\uB2E4` }))
+  );
   if (indexInfo?.exists && indexInfo.rows !== units.length) {
     findings.push({
       sev: "warn",
@@ -3908,6 +3916,15 @@ function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, secti
       sections.filter((r) => r.state === "stale" || r.state === "unwritten").map((r) => ({
         coord: r.coord,
         detail: r.applied ? `${r.doc} \xB7 applied ${r.applied} \uB4A4 \uD6C4\uC18D ${r.count}\uAC74 \u2014 \`ctx apply ${r.coord}\`` : `${r.doc} \xB7 applied \uC5C6\uC74C \xB7 \uC791\uC5C5 ${r.total}\uAC74 \u2014 \`ctx apply ${r.coord}\``
+      }))
+    );
+    push(
+      "warn",
+      "derive-sameday",
+      "\uAC19\uC740 \uB0A0 \uAE30\uB85D\uC774 \uB354 \uC788\uC2B5\uB2C8\uB2E4 \u2014 \uBC18\uC601\uB410\uB294\uC9C0 \uB208\uC73C\uB85C \uD655\uC778\uD558\uC138\uC694",
+      sections.filter((r) => r.state === "ok" && (r.peers || []).length).map((r) => ({
+        coord: r.coord,
+        detail: `${r.doc} \xB7 applied ${r.applied} \uC640 \uAC19\uC740 \uB0A0 ${r.peers.length}\uAC74 \u2014 ${r.peers.map((p) => p.id).join(" \xB7 ")}`
       }))
     );
   }
@@ -4056,10 +4073,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-08 06:36";
+var BUILT = "2026-09-08 07:32";
 var BS2 = String.fromCharCode(92);
 var SEP = path4.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 06:36)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-08 07:32)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -4355,7 +4372,6 @@ async function cmdBrief(r, opt) {
     const oldest = st.legacyPending[0];
     parts.push(`\uBBF8\uACB0 ${st.legacyPending.length} \u2014 \uC774\uC288 \uB300\uC7A5\uC73C\uB85C \uC774\uAD00 (\uCD5C\uC7A5 ${oldest.days}\uC77C)`);
   }
-  if (st.running.length) parts.push(`\uC9C4\uD589\uC911 ${st.running.length}`);
   if (st.indexStale) parts.push("INDEX \uBD88\uC77C\uCE58");
   if (opt.json) {
     out(JSON.stringify(st, null, 2));

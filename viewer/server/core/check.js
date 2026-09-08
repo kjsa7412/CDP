@@ -13,16 +13,18 @@
 // touches 는 넣지 않는다 — **좌표 0개가 정상이기 때문이다** (수행 v1.0 §5.3).
 // "일정을 정했을 뿐 어떤 대상도 바꾸지 않았다" 는 작업이 실제로 있고, 그것을
 // 오류로 막으면 사람들이 억지로 좌표를 붙인다. 억지 좌표는 없는 좌표보다 나쁘다.
-// 아젠다 상태 — 지식공유문서에 있을 수 없는 값.
+// **`status` 에는 쓸 수 있는 값이 하나도 없다.**
 //
-// `미결` 과 `제안` 은 같은 것이다: **결정이 안 났다.** 지식공유문서는 작업의
-// **완료**에서 발생하므로 그 상태로는 여기 올 수 없다. 갈 곳은 이슈 대장이다.
+// 지식공유문서는 작업의 **완료**에서 발생하고, 항상 그 시점에 완료된 것이
+// 넘어온다. 그러므로 —
+//
+//   확정 · 완료   기본값이다. 파싱 경계에서 지운다 (frontmatter.normStatus)
+//   미결 · 제안   결정이 안 났다. 아젠다이고 갈 곳은 이슈 대장이다
+//   진행중        **그런 상태가 없다.** 끝나지 않은 일은 문서가 아니다
+//
+// 남는 값이 없으므로 규칙은 "값이 있으면 오류" 하나다. 다만 미결·제안은
+// 갈 곳을 알려 줘야 하므로 메시지를 따로 낸다.
 const AGENDA = new Set(['미결', '제안'])
-
-// `status` 는 필수에 넣지 않는다 — **`확정` 은 값이 아니다.**
-// 30건 중 28건이 `확정` 이면 그 칸은 아무것도 구별하지 않는다. 지식공유문서는
-// 작업의 완료에서 발생하는 문서이므로 완료가 기본값이고, 기본값은 적지 않는다.
-// 뜻이 있는 값은 `진행중`(점유) 하나뿐이고 그것은 적고 싶을 때만 적는다.
 const REQUIRED = ['id', 'title', 'date', 'author']
 
 export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus }) {
@@ -126,6 +128,16 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       .map((d) => ({ id: d.id, path: d.path, detail: `status: ${d.status} — docs/위험및이슈관리대장.md 로 옮기세요` }))
   )
 
+  // 그 밖의 값 — `진행중` 이 여기로 온다. 갈 곳이 따로 없으므로 그냥 지우라고 한다.
+  push(
+    'error',
+    'status-value',
+    'status 에 쓸 수 있는 값이 없습니다 — 지우세요',
+    units
+      .filter((d) => d.status && !AGENDA.has(d.status))
+      .map((d) => ({ id: d.id, path: d.path, detail: `status: ${d.status} — 지식공유문서는 완료된 것만 옵니다` }))
+  )
+
   // INDEX.md 불일치 — 프로토콜 §10.5 "어긋난 인덱스는 없는 것보다 나쁘다"
   if (indexInfo?.exists && indexInfo.rows !== units.length) {
     findings.push({
@@ -211,6 +223,29 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
           detail: r.applied
             ? `${r.doc} · applied ${r.applied} 뒤 후속 ${r.count}건 — \`ctx apply ${r.coord}\``
             : `${r.doc} · applied 없음 · 작업 ${r.total}건 — \`ctx apply ${r.coord}\``,
+        }))
+    )
+
+    // **같은 날 기록 — 경고다. 막지 않는다.**
+    //
+    // 날짜 입도가 하루라 하루 안의 순서를 모른다. 그래서 같은 날짜는 후속으로
+    // 세지 않는데(validity.later), 그 대가로 **하루에 같은 좌표를 두 번 건드린
+    // 두 번째가 아무에게도 안 보였다** — 실측에서 파생을 안 하고도 커밋이
+    // 통과했다. 하루에 같은 화면을 두 번 고치는 것은 드문 일이 아니다.
+    //
+    // 오류로 올리지 않는 이유는 **반영됐는지 기계가 알 수 없기 때문**이다.
+    // 섹션이 이미 둘 다 담고 있을 수 있고, `applied` 는 하나만 가리킨다.
+    // 오탐으로 커밋을 막으면 사람들이 이 목록 전체를 안 믿는다. 경고는
+    // 틀려도 부식되지 않고, 맞으면 눈에 띈다.
+    push(
+      'warn',
+      'derive-sameday',
+      '같은 날 기록이 더 있습니다 — 반영됐는지 눈으로 확인하세요',
+      sections
+        .filter((r) => r.state === 'ok' && (r.peers || []).length)
+        .map((r) => ({
+          coord: r.coord,
+          detail: `${r.doc} · applied ${r.applied} 와 같은 날 ${r.peers.length}건 — ${r.peers.map((p) => p.id).join(' · ')}`,
         }))
     )
   }

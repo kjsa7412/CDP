@@ -108,10 +108,12 @@ function tierClass(state) {
 // `확정` 은 여기 오지 않는다 — 읽는 경계에서 지운다(frontmatter.js).
 // 30건 중 28건이 같은 값이면 그 값은 아무것도 구별하지 않는다.
 //
-// 남는 값은 `진행중`(점유) 하나다.
+// **남는 값이 하나도 없다.** `진행중` 도 없앴다 — 지식공유문서는 작업의
+// 완료에서 발생하고, 항상 그 시점에 완료된 것이 넘어온다. 그러므로 여기
+// 도달하는 값은 전부 잘못된 것이고, 화면도 그렇게 말한다.
 export function StatusBadge({ status }) {
   if (status === '미결' || status === '제안') {
     return <span className="badge badge--danger">{status} — 이슈 대장으로 옮기세요</span>
   }
-  return <span className="badge badge--plain">{status}</span>
+  return <span className="badge badge--danger">{status} — 쓸 수 없는 값입니다</span>
 }

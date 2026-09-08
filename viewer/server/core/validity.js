@@ -29,10 +29,10 @@ export function buildCoordIndex(works, opts = {}) {
   const byId = new Map(works.map((d) => [d.id, d]))
   const byCoord = new Map()
 
+  // **모든 기록이 사실이다.** 전에는 `status: 진행중` 인 것을 건너뛰었는데,
+  // 진행중이라는 상태가 없어졌다 — 지식공유문서는 **작업의 완료에서 발생하고,
+  // 항상 그 시점에 완료된 것이 넘어온다.** 아직 안 끝난 일은 문서가 아니다.
   for (const d of works) {
-    // 진행중은 아직 사실이 아니다. 최신성 계산에 넣으면 남의 섹션에
-    // 파생을 요구하게 된다 — 끝나지도 않은 일로 남을 막을 수 없다.
-    if (d.status === '진행중') continue
     for (const c of d.touches) {
       if (!byCoord.has(c)) byCoord.set(c, [])
       byCoord.get(c).push(d)
@@ -78,7 +78,17 @@ export function buildCoordIndex(works, opts = {}) {
       }
 
       const items = list.filter((o) => o.id !== refDoc.id && (o.date || '') > (refDoc.date || ''))
-      return { ...base, ref: refDoc.id, refDate: refDoc.date, count: items.length, items: items.map(slim) }
+
+      // **같은 날짜는 후속이 아니다 — 그러나 조용히 넘기지도 않는다.**
+      //
+      // 하루 안의 순서를 모르므로 후속으로 단정하면 오탐이 난다(아래 later 주석).
+      // 그렇다고 없는 셈 치면 **하루에 같은 좌표를 두 번 건드린 두 번째가
+      // 아무에게도 안 보인다** — 실측에서 파생을 안 하고도 커밋이 통과했다.
+      //
+      // 그래서 따로 센다. `check` 가 이것을 **경고**로 낸다. 오탐이 무서운
+      // 이유는 오류라서 커밋을 막기 때문이고, 경고는 틀려도 부식되지 않는다.
+      const peers = list.filter((o) => o.id !== refDoc.id && (o.date || '') === (refDoc.date || ''))
+      return { ...base, ref: refDoc.id, refDate: refDoc.date, count: items.length, items: items.map(slim), peers: peers.map(slim) }
     },
 
     latest(coord) {
@@ -156,6 +166,8 @@ export function buildSectionStatus(coordIndex, managedIndex, allCoords) {
       total: l.total,
       count: l.count,
       items: l.items,
+      // 같은 날 기록 — 반영됐는지 기계가 알 수 없다. 경고로만 낸다
+      peers: l.peers || [],
       latest: coordIndex.latest(coord),
     })
   }
