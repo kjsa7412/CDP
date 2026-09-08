@@ -1,0 +1,35 @@
+# S2 — 파생 누락. 막혀야 한다
+
+## S2-a  같은 날짜(2026-09-08) 두 번째 기록
+   → **막히지 않았다.** 설계가 받아들인 사각지대 (validity.js:53)
+
+## S2-b  다음 날짜(2026-09-09) 기록
+$ tools\cdp.exe ctx derive
+파생 남은 섹션 1곳
+
+  screen:EXD020                    작업 4건     화면설계서
+                                   실린 것 2026-0908-출장복명-사진첨부
+                                     + 2026-09-09  2026-0909-사진첨부-확장자
+
+$ git add -A && git commit -m "허용 확장자"
+[오류] 관리 문서 파생 누락 — 지식공유문서를 남기면 파생 갱신은 필수입니다  1건
+   screen:EXD020  docs/화면설계서.md · applied 2026-0908-출장복명-사진첨부 뒤 후속 1건 — `ctx apply screen:EXD020`
+[경고] INDEX.md 불일치  1건
+   집계 28건 / INDEX.md 27행 — ctx index 실행 필요
+
+ctx check: 오류 1건. 커밋할 수 없습니다.
+
+[pre-commit] 커밋을 중단했습니다.
+             고친 뒤 다시 커밋하세요. --no-verify 로 넘기지 마세요.
+exit=1
+
+## S2 회복 (cdp-managed 상당)
+$ tools\cdp.exe ctx derive
+ctx derive: 파생 남은 섹션 없음
+
+$ git commit
+[pre-commit] INDEX-by-coord.md 를 갱신해 커밋에 포함했습니다.
+[test/지식공유문서-시나리오 95a9b97] 허용 확장자 · 용량
+ 4 files changed, 23 insertions(+), 4 deletions(-)
+ create mode 100644 "work/2026-0909-\354\202\254\354\247\204\354\262\250\353\266\200-\355\231\225\354\236\245\354\236\220.md"
+exit=0

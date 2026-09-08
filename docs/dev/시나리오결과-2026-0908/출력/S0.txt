@@ -1,0 +1,9 @@
+$ git switch -c test/지식공유문서-시나리오
+$ git log --oneline -1
+91b0b08 v0.2.5 배포본 적용
+$ git config core.hooksPath
+.githooks
+$ tools\cdp.exe ctx check
+ctx check: 이상 없음
+$ tools\cdp.exe ctx version
+2026-09-08 06:36

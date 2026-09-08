@@ -1,0 +1,31 @@
+# S3 — 미등재 좌표. 두 번 막혀야 한다
+
+## 1차 — 미등재
+[오류] _vocab.md 미등재 좌표  1건
+   table:rp_trip_photo_list
+[오류] 등록부가 가리키는 섹션이 없음  1건
+   table:rp_trip_photo_list  docs/테이블정의서.md 에 `## rp_trip_photo_list` 섹션이 없음
+[오류] 관리 문서 파생 누락 — 지식공유문서를 남기면 파생 갱신은 필수입니다  1건
+   screen:EXD020  docs/화면설계서.md · applied 2026-0909-사진첨부-확장자 뒤 후속 1건 — `ctx apply screen:EXD020`
+[경고] INDEX.md 불일치  1건
+   집계 29건 / INDEX.md 28행 — ctx index 실행 필요
+
+ctx check: 오류 3건. 커밋할 수 없습니다.
+
+[pre-commit] 커밋을 중단했습니다.
+             고친 뒤 다시 커밋하세요. --no-verify 로 넘기지 마세요.
+exit=1
+
+## 회복 뒤
+$ tools\cdp.exe ctx term rp_trip_photo_list
+table:rp_trip_photo_list  출장사진목록
+  _vocab.md:73
+  관리 문서 docs/테이블정의서.md  ## rp_trip_photo_list
+  작업 기록 1건
+
+$ git commit
+[pre-commit] INDEX-by-coord.md 를 갱신해 커밋에 포함했습니다.
+[test/지식공유문서-시나리오 daa075c] 출장사진 테이블 신설
+ 6 files changed, 42 insertions(+), 5 deletions(-)
+ create mode 100644 "work/2026-0910-\354\266\234\354\236\245\354\202\254\354\247\204-\355\205\214\354\235\264\353\270\224\354\213\240\354\204\244.md"
+exit=0

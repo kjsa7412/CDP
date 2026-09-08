@@ -1,0 +1,24 @@
+$ tools\cdp.exe ctx where screen:EXD020
+screen:EXD020
+  문서   docs/화면설계서.md
+  섹션   ## EXD020
+  상태   반영 2026-0908-출장복명-사진첨부
+  작업   2건
+    2026-09-08  2026-0908-출장복명-사진첨부
+    2026-08-21  2026-0821-출장복명-입력영역
+
+$ tools\cdp.exe ctx check
+[경고] INDEX.md 불일치  1건
+   집계 26건 / INDEX.md 25행 — ctx index 실행 필요
+ctx check: 오류 없음 (경고 1건)
+
+$ git add -A && git commit
+[경고] INDEX.md 불일치  1건
+   집계 26건 / INDEX.md 25행 — ctx index 실행 필요
+ctx check: 오류 없음 (경고 1건)
+[pre-commit] INDEX.md 를 갱신해 커밋에 포함했습니다.
+[pre-commit] INDEX-by-coord.md 를 갱신해 커밋에 포함했습니다.
+[test/지식공유문서-시나리오 1bc1eec] EXD020 사진 첨부 영역 · 입력 영역 상단
+ 4 files changed, 38 insertions(+), 3 deletions(-)
+ create mode 100644 "work/2026-0908-\354\266\234\354\236\245\353\263\265\353\252\205-\354\202\254\354\247\204\354\262\250\353\266\200.md"
+exit=0

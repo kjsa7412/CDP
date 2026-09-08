@@ -1,0 +1,44 @@
+# S7 — INDEX · 뷰어
+
+$ tools\cdp.exe ctx index
+ctx index: INDEX.md 31행 / INDEX-by-coord.md 좌표 284개
+
+$ tools\cdp.exe ctx check
+ctx check: 이상 없음
+
+$ git status --porcelain
+   (훅이 매 커밋에 INDEX 를 갱신해 넣으므로 여기서 할 일이 없다)
+
+$ tools\cdp.exe ctx where table:rp_trip_photo_list
+table:rp_trip_photo_list
+  문서   docs/테이블정의서.md
+  섹션   ## rp_trip_photo_list
+  상태   반영 2026-0911-출장사진-업로드구현
+  작업   1건
+    2026-09-10  2026-0910-출장사진-테이블신설
+
+## 발견 — applied 가 진행중 기록을 가리켜도 검사가 막지 않는다
+   S6 에서 진행중 기록으로 파생까지 한 것은 잘못이었다. 도구는 통과시켰다.
+
+$ tools\cdp.exe ctx where table:rp_trip_photo_list  (되돌린 뒤)
+table:rp_trip_photo_list
+  문서   docs/테이블정의서.md
+  섹션   ## rp_trip_photo_list
+  상태   반영 2026-0910-출장사진-테이블신설
+  작업   1건
+    2026-09-10  2026-0910-출장사진-테이블신설
+
+$ git commit
+ctx check: 이상 없음
+[test/지식공유문서-시나리오 d393558] 진행중 기록으로 파생한 것을 되돌림
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+## 뷰어 (실제 기동 · 브라우저에서 확인)
+
+  작업문서 탭     작업 기록 31 · 새 기록 6건이 작성일자순 맨 위 · 작성자 kjsa
+                  09-11 업로드 구현에 [진행중] 배지
+  좌표 탭         좌표 284 (283 -> 284) · rp_trip_photo_list 검색됨
+  그래프          table 38개 (37 -> 38) · rp_trip_photo_list 목록·라벨에 있다
+                  screen:EXD020 "작업 6건" (1건 -> 6건). 노드가 커졌다
+  뻗어나가기      screen:EXD020 -> 관리문서(화면설계서) · 작업문서 6건
+                  작업문서는 작성일자순
