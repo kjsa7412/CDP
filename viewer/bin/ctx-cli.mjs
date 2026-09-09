@@ -16,6 +16,7 @@ import path from 'node:path'
 import { planSetup, applySetup } from '../server/core/setup.js'
 import { loadRepo, repoStatus, unregisteredCoords } from '../server/core/repo.js'
 import { runBuiltinCheck } from '../server/core/check.js'
+import { buildIndex, fullText, tokenize } from '../server/core/search.js'
 import { reconcile, normKey } from '../server/core/vocab.js'
 import { resolveCoord } from '../server/core/managed.js'
 import { cmpDateDesc } from '../server/core/validity.js'
@@ -37,6 +38,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx index                 INDEX.md / INDEX-by-coord.md 재생성
   ctx match <이름...>       이름 -> 정본 좌표 (대조)
   ctx where <좌표>          그 좌표의 상태가 어느 문서 어느 섹션에 있나
+  ctx search <말...>        말 -> 좌표 후보 (match 가 미등재를 낼 때의 폴백)
   ctx derive [--json]       파생이 안 된 섹션 목록
   ctx term <이름>           어휘 조회 (정본 / alias / deprecated)
   ctx apply <좌표>          파생할 섹션에 붙일 변경 줄 초안
@@ -299,6 +301,127 @@ async function cmdWhere(r, opt) {
   out(`  작업   ${works.length}건`)
   for (const d of works.slice(0, 5)) out(`    ${d.date || ''}  ${d.id}`)
   if (works.length > 5) out(`    ... ${works.length - 5}건 더`)
+  return 0
+}
+
+// 말 -> 좌표 후보. **`ctx match` 가 1차 경로이고 이것은 폴백이다** (프로토콜 §9.5(2)).
+//
+// 왜 필요한가 — `match` 는 `_vocab.md` 의 이름·alias 만 본다. 그래서 **자연어
+// 도메인 용어가 alias 로 등재돼 있어야만 걸린다.** 등재가 얇으면 요청문의
+// 핵심 명사가 전부 `(미등재)` 로 떨어지고, 그러면 주입할 좌표가 없다 -- 답을
+// 가진 섹션이 레포에 멀쩡히 있는데도 빈손으로 돌아온다. 실측 사례:
+//
+//   "지출결의서" · "입출금계좌코드" · "거래처코드"  -> 전부 (미등재)
+//   답은 api:/adapter/a10/expense-slip 섹션에 있었다
+//   -- 좌표 이름이 API 경로여서 요구사항서의 어떤 단어와도 이어지지 않는다
+//
+// **본문을 싣지 않는다. 좌표 이름만 낸다.** cdp-work 의 ① 검토는 관리 문서와
+// 작업 기록을 읽는 것이 금지돼 있다(의견을 담은 본문을 요청 해석 전에 읽으면
+// 그 틀로 요청을 읽는다). 좌표 이름은 이름표라서 그 금지를 깨지 않는다.
+// 본문은 ② 주입에서 `cdp-load` 가 읽는다.
+//
+// 두 경로를 함께 쓴다 --
+//   ① 작업 기록 전문검색 -> 걸린 기록의 `touches` 를 후보로 집계
+//   ② 관리 문서 섹션 매칭 -> 섹션 본문에 말이 있으면 그 섹션의 좌표
+//
+// ②를 넣는 이유: 작업 기록이 없는 좌표도 섹션에는 내용이 있을 수 있다.
+// ①만 쓰면 그 좌표가 안 나온다.
+const NL = String.fromCharCode(10)
+
+// 말 하나가 이 텍스트에 있나. **전부 일치를 요구하지 않는다.**
+//
+// 한글은 2-gram 으로 쪼개는데(search.js) 띄어쓰기가 바이그램을 끊는다 --
+// 질의 "거래처코드"(거래·래처·처코·코드) 대 본문 "거래처 코드"(거래·래처·코드)
+// 는 `처코` 하나가 없어서 AND 로는 안 걸린다. 문서가 띄어 쓸지 붙여 쓸지를
+// 질의하는 사람이 맞춰야 한다면 그건 검색이 아니다.
+//
+// 그래서 **비율**로 본다. 3분의 2 이상이면 그 말이 있는 것으로 센다.
+function wordHit(word, toks) {
+  const all = [...new Set(tokenize(word))].filter((x) => x.length > 1)
+  if (!all.length) return false
+  if (toks.has(word.toLowerCase())) return true // 붙여 쓴 그대로 있으면 끝
+  // **원본 덩어리 토큰을 분모에서 뺀다.** tokenize 는 바이그램과 함께 낱말
+  // 자체도 낸다. 띄어쓰기가 다르면 그 낱말 토큰은 절대 안 맞으므로, 남겨 두면
+  // 분모만 키워 실제로 걸려야 하는 것을 떨어뜨린다 -- "거래처코드" 대
+  // "거래처 코드" 가 3/5=0.60 으로 문턱 아래에 깔렸다. 바이그램만 세면 3/4 이다.
+  const grams = all.filter((x) => x !== word.toLowerCase())
+  const t = grams.length ? grams : all
+  const n = t.filter((x) => toks.has(x)).length
+  return n / t.length >= 0.67
+}
+
+async function cmdSearch(r, opt) {
+  const words = opt.args
+  if (!words.length) {
+    err('ctx search: 찾을 말을 주세요.  예) ctx search 지출결의서 입출금계좌코드')
+    return 2
+  }
+
+  // 후보 집계. 좌표 -> 몇 개의 말이 걸렸나 · 어디서 걸렸나
+  const cand = new Map()
+  const get = (coord) => {
+    let c = cand.get(coord)
+    if (!c) cand.set(coord, (c = { coord, words: new Set(), work: new Set(), section: false }))
+    return c
+  }
+
+  // ① 작업 기록 전문검색 -- **말마다 따로 돌린다.**
+  //
+  // 질의 전체를 한 번에 AND 로 넣으면 요청문에만 있는 말 하나("디폴트" -- 문서는
+  // "기본값"이라 쓴다)가 나머지 전부를 죽인다. 말 단위로 돌려 각자 기여하게 한다.
+  const mini = buildIndex(r.docs, r.bodies)
+  for (const w of words) {
+    for (const hit of fullText(mini, w, 20)) {
+      const d = r.byPath.get(hit.path)
+      if (!d || d.layer !== 'work') continue
+      for (const coord of d.touches) {
+        const c = get(coord)
+        c.words.add(w)
+        if (c.work.size < 3) c.work.add(d.id)
+      }
+    }
+  }
+
+  // ② 관리 문서 섹션 -- 등록부가 좌표를 보내는 자리의 본문에 그 말이 있나.
+  //
+  // ①만 쓰면 작업 기록이 없는 좌표는 안 나온다. 섹션에 내용이 있는데도.
+  for (const coord of r.allCoords) {
+    const hit = r.managedIndex?.find(coord)
+    if (!hit || hit.docMissing || !hit.section) continue
+    const bodyText = r.bodies.get(hit.doc)
+    if (!bodyText) continue
+    const lines = bodyText.split(NL)
+    const text = (hit.section.whole ? lines : lines.slice(hit.section.line, hit.section.end)).join(NL)
+    const toks = new Set(tokenize(text))
+    for (const w of words) if (wordHit(w, toks)) { const c = get(coord); c.words.add(w); c.section = true }
+  }
+
+  // 걸린 말이 많은 순. 같으면 섹션에서 걸린 것을 위로 -- 그쪽이 현재 상태다
+  const rows = [...cand.values()]
+    .map((c) => ({ ...c, n: c.words.size }))
+    .sort((a, b) => b.n - a.n || (b.section - a.section) || a.coord.localeCompare(b.coord))
+
+  if (opt.json) {
+    out(JSON.stringify({
+      words,
+      candidates: rows.map((c) => ({ coord: c.coord, matched: [...c.words], section: c.section, works: [...c.work] })),
+    }, null, 2))
+    return 0
+  }
+  if (!rows.length) {
+    out(`ctx search: 좌표 후보 없음  (${words.join(' · ')})`)
+    return 0
+  }
+  out(`ctx search  -- 좌표 후보 ${rows.length}건. **본문은 싣지 않는다** (cdp-load 가 읽는다)`)
+  for (const c of rows.slice(0, 12)) {
+    const where = r.managedIndex?.find(c.coord)
+    const doc = where && !where.docMissing && where.section ? where.doc : '등록부에 없음 -- 작업 기록만'
+    out(`  ${c.coord}`)
+    out(`      걸린 말  ${[...c.words].join(' · ')}${c.section ? '   (섹션)' : ''}`)
+    out(`      ${doc}`)
+    if (c.work.size) out(`      ${[...c.work].join(' · ')}`)
+  }
+  if (rows.length > 12) out(`  ... ${rows.length - 12}건 더 (--json 으로 전체)`)
   return 0
 }
 
@@ -568,6 +691,7 @@ export async function main(argv = process.argv.slice(2)) {
 
   const table = {
     check: cmdCheck,
+    search: cmdSearch,
     index: cmdIndex,
     match: cmdMatch,
     where: cmdWhere,
