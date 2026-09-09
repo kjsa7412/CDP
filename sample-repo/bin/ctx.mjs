@@ -6102,15 +6102,15 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-09 06:57";
+var BUILT = "2026-09-09 08:07";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 06:57)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 08:07)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
   ctx match <\uC774\uB984...>       \uC774\uB984 -> \uC815\uBCF8 \uC88C\uD45C (\uB300\uC870)
-  ctx where <\uC88C\uD45C>          \uADF8 \uC88C\uD45C\uC758 \uC0C1\uD0DC\uAC00 \uC5B4\uB290 \uBB38\uC11C \uC5B4\uB290 \uC139\uC158\uC5D0 \uC788\uB098
+  ctx where <\uC88C\uD45C...>       \uADF8 \uC88C\uD45C\uC758 \uC0C1\uD0DC\uAC00 \uC5B4\uB290 \uBB38\uC11C \uC5B4\uB290 \uC139\uC158\uC5D0 \xB7 \uC5BC\uB9C8\uB098 \uB418\uB098
   ctx search <\uB9D0...>        \uB9D0 -> \uC88C\uD45C \uD6C4\uBCF4 (match \uAC00 \uBBF8\uB4F1\uC7AC\uB97C \uB0BC \uB54C\uC758 \uD3F4\uBC31)
   ctx derive [--json]       \uD30C\uC0DD\uC774 \uC548 \uB41C \uC139\uC158 \uBAA9\uB85D
   ctx term <\uC774\uB984>           \uC5B4\uD718 \uC870\uD68C (\uC815\uBCF8 / alias / deprecated)

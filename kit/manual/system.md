@@ -587,7 +587,8 @@ bin/ctx-cli.mjs   CLI. core 를 그대로 부른다
 ctx check [--json]        커밋 가능한가. 오류가 있으면 exit 1
 ctx index                 INDEX 재생성 (훅이 커밋마다 한다)
 ctx match <이름...>       이름 → 정본 좌표
-ctx where <좌표>          그 좌표가 어느 문서 어느 섹션인가
+ctx where <좌표...>       그 좌표가 어느 문서 어느 섹션인가 · 그 섹션이 얼마나 되나
+ctx search <말...>        말 → 좌표 후보. match 가 미등재를 낼 때의 폴백
 ctx derive                파생이 안 된 섹션 목록
 ctx term <이름>           어휘 조회
 ctx apply <좌표>          파생할 섹션에 붙일 변경 줄 초안
@@ -603,7 +604,7 @@ ctx version               번들 시각
 
 ```
 ① node 가 있으면       node bin/ctx.mjs
-② 없으면               tools/cdp.exe ctx
+② 없으면               tools/cdp ctx      (Windows 는 tools/cdp.exe)
 ③ 둘 다 없으면         exit 127
 ```
 

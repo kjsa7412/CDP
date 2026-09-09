@@ -115,7 +115,8 @@ git config core.hooksPath .githooks
 
 ```
 ctx setup: C:\gdi
-  .claude\skills\   cdp-load · cdp-managed · cdp-save · cdp-work
+  .claude\skills\   cdp-work · cdp-load · cdp-save · cdp-managed
+                    cdp-import · cdp-edit · cdp-push
   CLAUDE.md         지식 레포 = C:\cdp
 ```
 

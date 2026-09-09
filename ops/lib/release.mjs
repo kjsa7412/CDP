@@ -138,7 +138,7 @@ cdp.exe          앱 + ctx CLI 가 한 파일 (~68MB)
 repo-kit/        지식 레포를 새로 세울 때 넣는 것
   bin/           ctx 실행기 (Node 없어도 돈다)
   .githooks/     pre-commit — 유일한 결정론적 보증
-  .claude/skills 절차 (work · load · save · import · edit · managed)
+  .claude/skills 절차 (work · load · save · managed · import · edit · push)
   CLAUDE.md      레포 규약 — **이 지식 레포용**
   .claude/work-repo/CLAUDE.md
                  작업 레포용 서식. ctx setup 이 읽는다
