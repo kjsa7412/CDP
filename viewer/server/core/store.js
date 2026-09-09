@@ -645,6 +645,7 @@ export class Store {
       indexInfo: this.indexInfo,
       managedIndex: this.managedIndex,
       sections: this.sections,
+      bodies: this.bodies,
     })
   }
 

@@ -3943,7 +3943,7 @@ function unregisteredCoords(r) {
 // viewer/server/core/check.js
 var AGENDA = /* @__PURE__ */ new Set(["\uBBF8\uACB0", "\uC81C\uC548"]);
 var REQUIRED = ["id", "title", "date", "author"];
-function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus }) {
+function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus, bodies }) {
   const findings = [];
   const push = (sev, kind, label, items) => {
     if (items.length) findings.push({ sev, kind, label, items });
@@ -4038,6 +4038,23 @@ function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, secti
     "\uBCF8\uBB38\uC774 \uC587\uC74C \u2014 \uC65C\uAC00 \uC5C6\uC744 \uC218 \uC788\uB2E4 (\uAE38\uC774\uB85C \uC5B4\uB9BC\uD55C \uAC83\uC774\uB77C \uC624\uD0D0\uC774 \uC788\uB2E4)",
     units.filter((d) => d.bodyThin).map((d) => ({ id: d.id, path: d.path, chars: d.bodyChars }))
   );
+  if (bodies && vocab.coords.size) {
+    const bodyOnly = [];
+    for (const d of units) {
+      const text = bodies.get(d.path);
+      if (!text) continue;
+      const inTouches = new Set(d.touches);
+      const seen = /* @__PURE__ */ new Set();
+      for (const m of text.matchAll(/`([a-z][a-z0-9_-]*:[^`\s]+)`/gi)) {
+        const c = m[1];
+        if (seen.has(c) || inTouches.has(c)) continue;
+        if (!vocab.coords.has(c)) continue;
+        seen.add(c);
+        bodyOnly.push({ id: d.id, path: d.path, coord: c, detail: `${d.id} \uBCF8\uBB38\uC5D0 \uC788\uB294\uB370 touches \uC5D0 \uC5C6\uC74C` });
+      }
+    }
+    push("warn", "body-only-coord", "\uBCF8\uBB38\uC5D0\uB9CC \uC788\uB294 \uC88C\uD45C \u2014 \uBC14\uAFBC \uAC83\uC774\uBA74 touches \uC5D0 \uB123\uB294\uB2E4", bodyOnly);
+  }
   if (managedIndex) {
     const coords = [...new Set(units.flatMap((d) => d.touches))];
     const dangling = managedIndex.danglingFor(coords);
@@ -4222,10 +4239,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-09 01:46";
+var BUILT = "2026-09-09 02:35";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 01:46)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 02:35)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -4313,7 +4330,8 @@ async function cmdCheck(r, opt) {
     validity: r.validity,
     indexInfo: r.indexInfo,
     managedIndex: r.managedIndex,
-    sections: r.sections
+    sections: r.sections,
+    bodies: r.bodies
   });
   const errors = res.findings.filter((f) => f.sev === "error");
   const warns = res.findings.filter((f) => f.sev === "warn");

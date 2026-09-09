@@ -27,7 +27,7 @@
 const AGENDA = new Set(['미결', '제안'])
 const REQUIRED = ['id', 'title', 'date', 'author']
 
-export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus }) {
+export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus, bodies }) {
   const findings = []
   const push = (sev, kind, label, items) => {
     if (items.length) findings.push({ sev, kind, label, items })
@@ -164,6 +164,39 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
     '본문이 얇음 — 왜가 없을 수 있다 (길이로 어림한 것이라 오탐이 있다)',
     units.filter((d) => d.bodyThin).map((d) => ({ id: d.id, path: d.path, chars: d.bodyChars }))
   )
+
+  // 본문에는 있는데 `touches` 에 없는 좌표 — 판정 실수의 유일한 흔적.
+  //
+  // 다른 모든 검사(미등재 · 파생 누락 · dangling anchor)는 `touches` 를 훑는다.
+  // 그래서 **좌표를 빼는 실수는 자기가 켜야 할 검사를 통째로 끄고 지나간다** —
+  // 방향이 비대칭이다. 더 넣으면 파생 누락으로 걸리고, 빼면 아무것도 안 걸린다.
+  // 본문 산문이 그 좌표를 부르고 있다는 것이 남는 유일한 신호다.
+  //
+  // **경고다. 오류로 올리지 않는다.** 본문에서 다른 좌표를 참조만 해도 커밋이
+  // 막히면 사람이 본문에서 좌표 표기를 지우기 시작한다 — 검사를 피하려고
+  // 정보를 없애는 쪽으로 움직이고, 그러면 이 신호 자체가 사라진다.
+  //
+  // 백틱 안에 쓴 `type:값` 만 본다. 산문에 맨몸으로 쓴 것은 세지 않는다 —
+  // "http://…" 같은 것을 좌표로 읽으면 오탐이 신호를 덮는다.
+  if (bodies && vocab.coords.size) {
+    const bodyOnly = []
+    for (const d of units) {
+      const text = bodies.get(d.path)
+      if (!text) continue
+      const inTouches = new Set(d.touches)
+      const seen = new Set()
+      for (const m of text.matchAll(/`([a-z][a-z0-9_-]*:[^`\s]+)`/gi)) {
+        const c = m[1]
+        if (seen.has(c) || inTouches.has(c)) continue
+        if (!vocab.coords.has(c)) continue // 등재된 좌표만. 오탐을 줄인다
+        seen.add(c)
+        // coord 가 있으면 itemLine 이 id 를 안 찍는다. 어느 기록인지 없으면
+        // 경고를 받고도 파일을 못 찾는다.
+        bodyOnly.push({ id: d.id, path: d.path, coord: c, detail: `${d.id} 본문에 있는데 touches 에 없음` })
+      }
+    }
+    push('warn', 'body-only-coord', '본문에만 있는 좌표 — 바꾼 것이면 touches 에 넣는다', bodyOnly)
+  }
 
   // 등록부가 가리키는데 없는 것 — 앵커 없음. **커밋을 막는다.**
   //

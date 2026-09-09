@@ -155,6 +155,7 @@ async function cmdCheck(r, opt) {
     indexInfo: r.indexInfo,
     managedIndex: r.managedIndex,
     sections: r.sections,
+    bodies: r.bodies,
   })
   const errors = res.findings.filter((f) => f.sev === 'error')
   const warns = res.findings.filter((f) => f.sev === 'warn')
