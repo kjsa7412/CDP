@@ -112,6 +112,18 @@ log('ctx 번들 (exe 에 들어갈 같은 코드)')
   }
 }
 
+// **필요한 것이 다 있는지 먼저 본다.**
+//
+// 없으면 여기서 멈춘다 -- 한참 뒤 postject 자리에서 죽으면 그때는 이미
+// 66MB node 바이너리를 복사해 둔 뒤라 **반쪽 exe 가 남는다.** 그 파일은
+// 실행은 되는데 `Cannot find module 'ctx'` 를 뱉는다.
+const postjectCli = path.join(ROOT, 'node_modules', 'postject', 'dist', 'cli.js')
+if (!fs.existsSync(postjectCli)) {
+  console.error('[build-exe] postject 가 없다 — `npm ci` 를 먼저 돌리세요.')
+  console.error('            ' + postjectCli)
+  process.exit(1)
+}
+
 log('esbuild 번들')
 run('npx', [
   'esbuild',
@@ -279,11 +291,26 @@ if (process.platform === 'darwin') {
   } catch {}
 }
 
+// **`npx --yes postject` 를 쓰지 않는다.**
+//
+// 그러면 postject 가 선언되지 않은 의존이 된다 --
+//
+//   · `npm ci` 가 안 깐다. 태그로 되살려도 이것만 안 따라온다
+//   · `--yes` 는 그때 npm 이 주는 **최신**을 받는다. postject 가 바뀌면
+//     말없이 다른 도구로 exe 를 만든다. 재현이 깨지는데 티가 안 난다
+//   · 캐시가 비고 망이 끊긴 PC 에서는 이 줄에서 죽는다
+//
+// devDependencies 에 판을 박고 로컬 것을 부른다. bin 이 Node 스크립트라
+// (`dist/cli.js`) 플랫폼 분기가 필요 없다 -- esbuild 와 달리 네이티브
+// 바이너리가 아니다.
 log('postject 주입 (수 분 걸린다)')
 try {
-  run('npx', [
-    '--yes',
-    'postject',
+  // **`shell: false` 다.** run() 은 win32 에서 shell 을 켜는데, 그러면
+  // node.exe 경로에 공백이 있으면(기본 설치 자리가 그렇다) 거기서 잘려
+  // "'C:\Program' 은(는) 내부 또는 외부 명령이 아닙니다" 로 죽는다.
+  // `npx` 는 공백이 없어 안 걸리던 자리다.
+  run(process.execPath, [
+    postjectCli,
     OUT,
     'NODE_SEA_BLOB',
     path.join(BUILD, 'sea-prep.blob'),
@@ -292,7 +319,7 @@ try {
     ...(process.platform === 'darwin'
       ? ['--macho-segment-name', 'NODE_SEA']
       : []),
-  ])
+  ], { shell: false })
 } catch (e) { abort(e) }
 
 if (process.platform === 'darwin') {
