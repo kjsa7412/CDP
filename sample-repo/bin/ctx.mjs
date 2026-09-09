@@ -6102,10 +6102,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-09 05:23";
+var BUILT = "2026-09-09 05:48";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 05:23)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 05:48)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -6474,13 +6474,29 @@ async function cmdApply(r, opt) {
   out("");
   out(`<!-- applied: ${sec.applied || "null"} -> ${newest.id} -->`);
   out("");
-  out('\uC544\uB798 \uC904\uC744 \uADF8 \uC139\uC158\uC758 "\uBCC0\uACBD" \uBAA9\uB85D\uC5D0 \uBD99\uC774\uACE0, \uBCF8\uBB38\uC740 \uC9C1\uC811 \uACE0\uCE58\uC138\uC694.');
+  out("**\uC139\uC158\uC740 \uD640\uB85C \uC11C\uC57C \uD55C\uB2E4.** \uC774 \uC139\uC158\uB9CC \uC77D\uACE0 \uADF8 \uB300\uC0C1\uC758 \uD604\uC7AC \uC0C1\uD0DC\uB97C \uC54C \uC218");
+  out("\uC788\uC5B4\uC57C \uD55C\uB2E4. \uC791\uC5C5 \uAE30\uB85D \uB9C1\uD06C\uB97C \uD0C0\uACE0 \uAC00\uC57C \uC54C \uC218 \uC788\uC73C\uBA74 \uD30C\uC0DD\uC774 \uC548 \uB41C \uAC83\uC774\uB2E4");
+  out("-- \uC8FC\uC785\uC740 \uC139\uC158\uB9CC \uC2E3\uB294\uB2E4 (cdp-load).");
+  out("");
+  out("\uC544\uB798 \uBAA9\uCC28\uAC00 \uC774 \uC88C\uD45C\uC5D0 \uB300\uD574 \uC791\uC5C5 \uAE30\uB85D\uC774 \uB9D0\uD55C \uAC83\uC774\uB2E4. **\uD310\uB2E8\xB7\uD45C\xB7\uADDC\uCE59\xB7\uAC12\uC744");
+  out("\uC139\uC158 \uBCF8\uBB38\uC73C\uB85C \uC62E\uACA8\uB77C.** \uC694\uC57D\uD558\uC9C0 \uB9D0\uACE0, \uADF8 \uB300\uC0C1\uC758 \uC0C1\uD0DC\uB85C \uB2E4\uC2DC \uC368\uB77C.");
+  out("");
+  for (const i of items) {
+    out(`  ${i.date || ""}  ${i.id}   work/${i.id}.md`);
+    const doc = r.byId.get(i.id) || i;
+    const body = r.bodies.get(doc.path) || "";
+    const heads = outline(body.slice(doc.bodyOffset || 0));
+    if (!heads.length) out(`      \xB7 ${doc.title || "(\uC81C\uBAA9 \uC5C6\uC74C)"}   -- \uC18C\uC81C\uBAA9\uC774 \uC5C6\uB2E4. \uBCF8\uBB38\uC744 \uC9C1\uC811 \uC77D\uC5B4\uB77C`);
+    for (const h of heads.slice(0, 12)) out("      " + "  ".repeat(h.level - 2) + "\xB7 " + h.title);
+    if (heads.length > 12) out(`      ... ${heads.length - 12}\uAC1C \uB354`);
+  }
+  out("");
+  out('\uC62E\uAE34 \uB4A4 \uADF8 \uC139\uC158\uC758 "\uBCC0\uACBD" \uBAA9\uB85D\uC5D0 \uC544\uB798\uB97C \uBD99\uC778\uB2E4. **\uC774 \uC904\uC740 \uCD9C\uCC98 \uD45C\uC2DC\uC774\uC9C0');
+  out("\uB0B4\uC6A9\uC774 \uC544\uB2C8\uB2E4** -- \uC774 \uC904\uB9CC \uBD99\uC774\uACE0 \uB05D\uB0B4\uBA74 \uC139\uC158\uC740 \uC5EC\uC804\uD788 \uBE48 \uAC83\uC774\uB2E4.");
   out("");
   for (const i of items.slice().reverse()) {
     out(`**\uBCC0\uACBD** \xB7 ${i.date || ""} [\`${String(i.id).replace(/^\d{4}-\d{4}-/, "")}\`](../work/${i.id}.md)`);
   }
-  out("");
-  out(`\uC791\uC5C5 \uAE30\uB85D ${items.length}\uAC74: ` + items.map((i) => `work/${i.id}.md`).join(", "));
   return 0;
 }
 async function cmdBrief(r, opt) {

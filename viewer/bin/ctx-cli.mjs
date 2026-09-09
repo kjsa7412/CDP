@@ -17,6 +17,7 @@ import { planSetup, applySetup } from '../server/core/setup.js'
 import { loadRepo, repoStatus, unregisteredCoords } from '../server/core/repo.js'
 import { runBuiltinCheck } from '../server/core/check.js'
 import { buildIndex, fullText, tokenize } from '../server/core/search.js'
+import { outline } from '../server/core/frontmatter.js'
 import { reconcile, normKey } from '../server/core/vocab.js'
 import { resolveCoord } from '../server/core/managed.js'
 import { cmpDateDesc } from '../server/core/validity.js'
@@ -519,13 +520,42 @@ async function cmdApply(r, opt) {
   out('')
   out(`<!-- applied: ${sec.applied || 'null'} -> ${newest.id} -->`)
   out('')
-  out('아래 줄을 그 섹션의 "변경" 목록에 붙이고, 본문은 직접 고치세요.')
+  // **초안이 규칙보다 강하다.** 전에는 이 출력이 변경 줄부터 냈고 "본문은
+  // 직접 고치세요" 가 뒤에 한 줄 붙어 있었다. 그러면 붙여 넣기 좋은 것이
+  // 변경 줄뿐이라 **요약 한 줄 + 링크**로 끝내게 된다 -- 실측에서 applied 가
+  // 붙은 섹션 66개 중 38개가 그 형태였다. 사람이 아니라 초안이 그렇게 유도한다.
+  //
+  // 그래서 순서를 뒤집는다. 자립 요구를 먼저 말하고, **작업 기록의 목차를
+  // 보여주고**, 변경 줄은 맨 끝에 낸다. 목차가 있으면 "무엇을 옮겨야 하는지"가
+  // 보인다 -- 옮길 것의 목록 없이 "직접 고치세요" 는 지시가 아니라 소원이다.
+  out('**섹션은 홀로 서야 한다.** 이 섹션만 읽고 그 대상의 현재 상태를 알 수')
+  out('있어야 한다. 작업 기록 링크를 타고 가야 알 수 있으면 파생이 안 된 것이다')
+  out('-- 주입은 섹션만 싣는다 (cdp-load).')
+  out('')
+  out('아래 목차가 이 좌표에 대해 작업 기록이 말한 것이다. **판단·표·규칙·값을')
+  out('섹션 본문으로 옮겨라.** 요약하지 말고, 그 대상의 상태로 다시 써라.')
+  out('')
+  for (const i of items) {
+    out(`  ${i.date || ''}  ${i.id}   work/${i.id}.md`)
+    // **`sec.items` 는 경량 객체다** ({id, date}). `path`·`bodyOffset` 이
+    // 없으므로 본문을 못 찾고 목차가 통째로 "(제목 없음)" 이 됐다. id 로 문서를
+    // 되찾는다.
+    const doc = r.byId.get(i.id) || i
+    const body = r.bodies.get(doc.path) || ''
+    const heads = outline(body.slice(doc.bodyOffset || 0))
+    // `outline` 은 h2·h3 만 본다. 소제목 없이 h1 하나로 쓴 기록이 실제로 많아
+    // 그때 목록이 통째로 비면 이 안내가 헛돈다. 제목으로 폴백한다.
+    if (!heads.length) out(`      · ${doc.title || '(제목 없음)'}   -- 소제목이 없다. 본문을 직접 읽어라`)
+    for (const h of heads.slice(0, 12)) out('      ' + '  '.repeat(h.level - 2) + '· ' + h.title)
+    if (heads.length > 12) out(`      ... ${heads.length - 12}개 더`)
+  }
+  out('')
+  out('옮긴 뒤 그 섹션의 "변경" 목록에 아래를 붙인다. **이 줄은 출처 표시이지')
+  out('내용이 아니다** -- 이 줄만 붙이고 끝내면 섹션은 여전히 빈 것이다.')
   out('')
   for (const i of items.slice().reverse()) {
     out(`**변경** · ${i.date || ''} [\`${String(i.id).replace(/^\d{4}-\d{4}-/, '')}\`](../work/${i.id}.md)`)
   }
-  out('')
-  out(`작업 기록 ${items.length}건: ` + items.map((i) => `work/${i.id}.md`).join(', '))
   return 0
 }
 
