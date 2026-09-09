@@ -265,11 +265,62 @@ async function cmdMatch(r, opt) {
   return 0
 }
 
+// 좌표의 섹션이 문서 어디에 있고 **얼마나 되는지.**
+//
+// 주입은 문서가 아니라 **섹션 하나**다. 그런데 검토 출력이 좌표만 늘어놓으면
+// 읽는 사람은 그 좌표에 관한 것이 전부 들어온다고 읽는다 -- 실제로 헷갈렸다.
+// 그래서 자리(문서·앵커)와 크기(줄·글자)를 같이 낸다. 크기가 있으면 그것이
+// 문서 전체가 아니라 **한 조각**이라는 것이 눈에 보인다.
+function sectionAt(r, coord) {
+  const hit = r.managedIndex?.find(coord)
+  if (!hit || hit.docMissing || !hit.section) return null
+  const body = r.bodies.get(hit.doc) || ''
+  const lines = body.split(NL)
+  const seg = hit.section.whole ? lines : lines.slice(hit.section.line, hit.section.end)
+  return {
+    doc: hit.doc,
+    anchor: hit.whole ? '(문서 전체)' : '#'.repeat(hit.level) + ' ' + hit.value,
+    from: hit.section.whole ? 1 : hit.section.line + 1,
+    lines: seg.length,
+    chars: seg.reduce((a, l) => a + l.trim().length, 0),
+  }
+}
+
 async function cmdWhere(r, opt) {
   const coord = opt.args[0]
   if (!coord) {
     err('ctx where: 좌표를 주세요.  예) ctx where table:rp_plnd_mst')
     return 2
+  }
+
+  // 좌표 여럿이면 표로. 검토(cdp-work ①)가 한 번에 묻는 자리다 --
+  // 좌표마다 따로 부르면 호출이 N 번이고 사람이 그걸 다 붙여 읽어야 한다.
+  if (opt.args.length > 1) {
+    const rows = opt.args.map((c) => {
+      const sec = sectionAt(r, c)
+      const st = r.sections.find((x) => x.coord === c) || null
+      const works = r.coords.byCoord.get(c) || []
+      return { coord: c, sec, state: stateLabel(st, c), works: works.length }
+    })
+    if (opt.json) {
+      out(JSON.stringify(rows, null, 2))
+      return 0
+    }
+    for (const x of rows) {
+      out(`${x.coord}`)
+      if (x.sec) {
+        out(`  정본   ${x.sec.doc}   ${x.sec.anchor}`)
+        out(`  주입   그 섹션만 — ${x.sec.lines}줄 · 약 ${x.sec.chars}자 (${x.sec.doc}:${x.sec.from})${thin(x.sec)}`)
+      } else {
+        out('  정본   등록부에 없음 — 관리 문서가 없는 타입이다 (정상)')
+        out(`  주입   작업 기록 최신 3건까지 (총 ${x.works}건)`)
+      }
+      out(`  상태   ${x.state}`)
+      out(`  작업   ${x.works}건`)
+      out('')
+    }
+    out('viewer: 검색창(Ctrl+K)에 좌표를 붙여 넣으면 그 문서로 간다. 섹션은 오른쪽 목차에서 고른다')
+    return 0
   }
   const hit = resolveCoord(r.registry, coord)
   const sec = r.sections.find((x) => x.coord === coord) || null
@@ -288,17 +339,9 @@ async function cmdWhere(r, opt) {
   out(`${coord}`)
   out(`  문서   ${hit.doc}${hit.whole ? '  (문서 전체)' : ''}`)
   if (!hit.whole) out(`  섹션   ${'#'.repeat(hit.level)} ${hit.value}`)
-  if (sec) {
-    // **판정이 아니라 사실을 적는다.** 무엇이 실려 있나(applied), 파생이
-    // 남았으면 그것은 `ctx check` 가 오류로 말한다.
-    const label =
-      sec.applied ? `반영 ${sec.applied}`
-      : sec.state === 'anchor-missing' ? '섹션이 없음'
-      : sec.state === 'doc-missing' ? '문서가 없음'
-      : sec.state === 'unwritten' ? `파생 남음 — 작업 ${sec.total}건 (ctx apply ${coord})`
-      : '아직 실린 작업 없음'
-    out(`  상태   ${label}`)
-  }
+  if (sec) out(`  상태   ${stateLabel(sec, coord)}`)
+  const at = sectionAt(r, coord)
+  if (at) out(`  주입   그 섹션만 — ${at.lines}줄 · 약 ${at.chars}자 (${at.doc}:${at.from})${thin(at)}`)
   out(`  작업   ${works.length}건`)
   for (const d of works.slice(0, 5)) out(`    ${d.date || ''}  ${d.id}`)
   if (works.length > 5) out(`    ... ${works.length - 5}건 더`)
@@ -328,6 +371,24 @@ async function cmdWhere(r, opt) {
 // ②를 넣는 이유: 작업 기록이 없는 좌표도 섹션에는 내용이 있을 수 있다.
 // ①만 쓰면 그 좌표가 안 나온다.
 const NL = String.fromCharCode(10)
+
+// **판정이 아니라 사실을 적는다.** 무엇이 실려 있나(applied), 파생이 남았으면
+// 그것은 `ctx check` 가 오류로 말한다.
+// 비어 있음은 **재서** 말한다. 상태로 추측하면 내용이 있는 섹션까지 비었다고
+// 말한다 -- 코드그룹 섹션은 작업 기록이 0건이어도 코드 표가 들어 있다.
+function thin(sec) {
+  if (sec.chars < 40) return '   ** 사실상 비어 있다 — 주입해도 얻는 것이 없다'
+  return ''
+}
+
+function stateLabel(sec, coord) {
+  if (!sec) return '등록부에 없음'
+  if (sec.applied) return `반영 ${sec.applied}`
+  if (sec.state === 'anchor-missing') return '섹션이 없음 — 주입해도 빈손이다'
+  if (sec.state === 'doc-missing') return '문서가 없음 — 주입해도 빈손이다'
+  if (sec.state === 'unwritten') return `파생 남음 — 작업 ${sec.total}건 (ctx apply ${coord})`
+  return '아직 실린 작업 없음'
+}
 
 // 말 하나가 이 텍스트에 있나. **전부 일치를 요구하지 않는다.**
 //

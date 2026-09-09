@@ -6102,10 +6102,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-09 05:52";
+var BUILT = "2026-09-09 06:05";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 05:52)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 06:05)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -6289,11 +6289,52 @@ async function cmdMatch(r, opt) {
   }
   return 0;
 }
+function sectionAt(r, coord) {
+  const hit = r.managedIndex?.find(coord);
+  if (!hit || hit.docMissing || !hit.section) return null;
+  const body = r.bodies.get(hit.doc) || "";
+  const lines = body.split(NL);
+  const seg = hit.section.whole ? lines : lines.slice(hit.section.line, hit.section.end);
+  return {
+    doc: hit.doc,
+    anchor: hit.whole ? "(\uBB38\uC11C \uC804\uCCB4)" : "#".repeat(hit.level) + " " + hit.value,
+    from: hit.section.whole ? 1 : hit.section.line + 1,
+    lines: seg.length,
+    chars: seg.reduce((a, l) => a + l.trim().length, 0)
+  };
+}
 async function cmdWhere(r, opt) {
   const coord = opt.args[0];
   if (!coord) {
     err("ctx where: \uC88C\uD45C\uB97C \uC8FC\uC138\uC694.  \uC608) ctx where table:rp_plnd_mst");
     return 2;
+  }
+  if (opt.args.length > 1) {
+    const rows = opt.args.map((c) => {
+      const sec2 = sectionAt(r, c);
+      const st = r.sections.find((x) => x.coord === c) || null;
+      const works2 = r.coords.byCoord.get(c) || [];
+      return { coord: c, sec: sec2, state: stateLabel(st, c), works: works2.length };
+    });
+    if (opt.json) {
+      out(JSON.stringify(rows, null, 2));
+      return 0;
+    }
+    for (const x of rows) {
+      out(`${x.coord}`);
+      if (x.sec) {
+        out(`  \uC815\uBCF8   ${x.sec.doc}   ${x.sec.anchor}`);
+        out(`  \uC8FC\uC785   \uADF8 \uC139\uC158\uB9CC \u2014 ${x.sec.lines}\uC904 \xB7 \uC57D ${x.sec.chars}\uC790 (${x.sec.doc}:${x.sec.from})${thin(x.sec)}`);
+      } else {
+        out("  \uC815\uBCF8   \uB4F1\uB85D\uBD80\uC5D0 \uC5C6\uC74C \u2014 \uAD00\uB9AC \uBB38\uC11C\uAC00 \uC5C6\uB294 \uD0C0\uC785\uC774\uB2E4 (\uC815\uC0C1)");
+        out(`  \uC8FC\uC785   \uC791\uC5C5 \uAE30\uB85D \uCD5C\uC2E0 3\uAC74\uAE4C\uC9C0 (\uCD1D ${x.works}\uAC74)`);
+      }
+      out(`  \uC0C1\uD0DC   ${x.state}`);
+      out(`  \uC791\uC5C5   ${x.works}\uAC74`);
+      out("");
+    }
+    out("viewer: \uAC80\uC0C9\uCC3D(Ctrl+K)\uC5D0 \uC88C\uD45C\uB97C \uBD99\uC5EC \uB123\uC73C\uBA74 \uADF8 \uBB38\uC11C\uB85C \uAC04\uB2E4. \uC139\uC158\uC740 \uC624\uB978\uCABD \uBAA9\uCC28\uC5D0\uC11C \uACE0\uB978\uB2E4");
+    return 0;
   }
   const hit = resolveCoord(r.registry, coord);
   const sec = r.sections.find((x) => x.coord === coord) || null;
@@ -6311,16 +6352,27 @@ async function cmdWhere(r, opt) {
   out(`${coord}`);
   out(`  \uBB38\uC11C   ${hit.doc}${hit.whole ? "  (\uBB38\uC11C \uC804\uCCB4)" : ""}`);
   if (!hit.whole) out(`  \uC139\uC158   ${"#".repeat(hit.level)} ${hit.value}`);
-  if (sec) {
-    const label = sec.applied ? `\uBC18\uC601 ${sec.applied}` : sec.state === "anchor-missing" ? "\uC139\uC158\uC774 \uC5C6\uC74C" : sec.state === "doc-missing" ? "\uBB38\uC11C\uAC00 \uC5C6\uC74C" : sec.state === "unwritten" ? `\uD30C\uC0DD \uB0A8\uC74C \u2014 \uC791\uC5C5 ${sec.total}\uAC74 (ctx apply ${coord})` : "\uC544\uC9C1 \uC2E4\uB9B0 \uC791\uC5C5 \uC5C6\uC74C";
-    out(`  \uC0C1\uD0DC   ${label}`);
-  }
+  if (sec) out(`  \uC0C1\uD0DC   ${stateLabel(sec, coord)}`);
+  const at = sectionAt(r, coord);
+  if (at) out(`  \uC8FC\uC785   \uADF8 \uC139\uC158\uB9CC \u2014 ${at.lines}\uC904 \xB7 \uC57D ${at.chars}\uC790 (${at.doc}:${at.from})${thin(at)}`);
   out(`  \uC791\uC5C5   ${works.length}\uAC74`);
   for (const d of works.slice(0, 5)) out(`    ${d.date || ""}  ${d.id}`);
   if (works.length > 5) out(`    ... ${works.length - 5}\uAC74 \uB354`);
   return 0;
 }
 var NL = String.fromCharCode(10);
+function thin(sec) {
+  if (sec.chars < 40) return "   ** \uC0AC\uC2E4\uC0C1 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uC8FC\uC785\uD574\uB3C4 \uC5BB\uB294 \uAC83\uC774 \uC5C6\uB2E4";
+  return "";
+}
+function stateLabel(sec, coord) {
+  if (!sec) return "\uB4F1\uB85D\uBD80\uC5D0 \uC5C6\uC74C";
+  if (sec.applied) return `\uBC18\uC601 ${sec.applied}`;
+  if (sec.state === "anchor-missing") return "\uC139\uC158\uC774 \uC5C6\uC74C \u2014 \uC8FC\uC785\uD574\uB3C4 \uBE48\uC190\uC774\uB2E4";
+  if (sec.state === "doc-missing") return "\uBB38\uC11C\uAC00 \uC5C6\uC74C \u2014 \uC8FC\uC785\uD574\uB3C4 \uBE48\uC190\uC774\uB2E4";
+  if (sec.state === "unwritten") return `\uD30C\uC0DD \uB0A8\uC74C \u2014 \uC791\uC5C5 ${sec.total}\uAC74 (ctx apply ${coord})`;
+  return "\uC544\uC9C1 \uC2E4\uB9B0 \uC791\uC5C5 \uC5C6\uC74C";
+}
 function wordHit(word, toks) {
   const all = [...new Set(tokenize(word))].filter((x) => x.length > 1);
   if (!all.length) return false;
