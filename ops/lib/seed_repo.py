@@ -1125,20 +1125,36 @@ PS_TABLES = """
 """
 
 
+TABLE_DOC_HEAD = ['# 테이블 정의서', '',
+                  '연구관리(RP) 스키마. `GDI_DE_422_테이블정의서` 덤프에서 생성했고',
+                  '이후 변경은 작업 기록을 통해 이 문서에 반영된다.', '',
+                  '> 섹션마다 `applied` 주석이 있다. 그 작업 기록 이후에 같은 좌표를 건드린',
+                  '> 작업이 있으면 **파생이 남은 것이고, 그것은 오류다** -- `ctx check` 가',
+                  '> 커밋을 막는다. "밀림"이라는 상태는 없다.', '']
+
+# 덤프도 없고 **직전 문서도 없을 때**만 쓴다. 처음 시드하는 PC 의 정직한 상태다.
+TABLE_DOC_NO_DUMP = '\n'.join(TABLE_DOC_HEAD + [
+    'GDI 덤프를 찾지 못해 섹션을 생성하지 못했다.',
+    '`ops/lib/seed_repo.py` 의 GDI 경로를 확인하라.'])
+
+
 def build_table_doc():
-    """GDI_DE_422 덤프에서 테이블정의서 한 문서를 만든다 (섹션 = 테이블)."""
+    """GDI_DE_422 덤프에서 테이블정의서 한 문서를 만든다 (섹션 = 테이블).
+
+    **덤프가 없으면 `None` 을 돌려준다.** 전에는 여기서 한 줄짜리 stub 을
+    돌려줬는데, 덤프는 개인 PC 의 Desktop 에 있고 `docs/` 는 OWNED_DIRS 라
+    먼저 통째로 지워진다 -- 그래서 덤프 없는 PC 에서 시드를 한 번 돌리면
+    **커밋된 32섹션이 1섹션으로 줄었다.** 그리고 조용했다. `npm run release`
+    가 시드를 매번 부르므로 릴리스 한 번이면 벌어진다.
+
+    무엇을 대신 쓸지는 호출부가 정한다 -- 직전 문서가 있으면 그것을 지킨다.
+    """
     tpath = os.path.join(GDI, 'tb_table_schema_202603261054.csv')
     cpath = os.path.join(GDI, 'tb_column_schema_202603261054.csv')
-    head = ['# 테이블 정의서', '',
-            '연구관리(RP) 스키마. `GDI_DE_422_테이블정의서` 덤프에서 생성했고',
-            '이후 변경은 작업 기록을 통해 이 문서에 반영된다.', '',
-            '> 섹션마다 `applied` 주석이 있다. 그 작업 기록 이후에 같은 좌표를 건드린',
-            '> 작업이 있으면 **파생이 남은 것이고, 그것은 오류다** -- `ctx check` 가',
-            '> 커밋을 막는다. "밀림"이라는 상태는 없다.', '']
+    head = list(TABLE_DOC_HEAD)
 
     if not (os.path.exists(tpath) and os.path.exists(cpath)):
-        return '\n'.join(head + ['GDI 덤프를 찾지 못해 섹션을 생성하지 못했다.',
-                                 '`tools/seed_repo.py` 의 GDI 경로를 확인하라.'])
+        return None
 
     tables = list(csv.DictReader(io.open(tpath, encoding='utf-8-sig')))
     cols = list(csv.DictReader(io.open(cpath, encoding='utf-8-sig')))
@@ -1335,6 +1351,14 @@ def main():
                    'MANUAL-관리자.md',
                    '.gitignore', '.gitattributes')
     os.makedirs(OUT, exist_ok=True)
+
+    # **지우기 전에 읽는다.** `docs/` 는 곧 rmtree 되므로 그 뒤에는 되살릴
+    # 것이 없다. 덤프가 없는 PC 에서 이 문서를 지키는 유일한 길이다.
+    prev_table_doc = None
+    _prev = os.path.join(OUT, 'docs', '테이블정의서.md')
+    if os.path.isfile(_prev):
+        prev_table_doc = io.open(_prev, encoding='utf-8').read()
+
     for d in OWNED_DIRS:
         p_ = os.path.join(OUT, d)
         if os.path.isdir(p_):
@@ -1352,7 +1376,17 @@ def main():
     w('work/assets/2026-0821-면접심사의견-개편/psc043-layout.md', PSC043_LAYOUT)
     w('work/assets/2026-0902-EXA021-외부심의위원/ps002-spec.md', PS002_SPEC)
 
-    table_doc = build_table_doc() + PS_TABLES
+    # 덤프가 있으면 생성, 없으면 **직전 문서를 그대로 되쓴다.**
+    # `PS_TABLES` 는 생성했을 때만 붙인다 -- 직전 문서에는 이미 들어 있다.
+    _built = build_table_doc()
+    kept_table = False
+    if _built is not None:
+        table_doc = _built + PS_TABLES
+    elif prev_table_doc and '\n## ' in prev_table_doc:
+        table_doc = prev_table_doc
+        kept_table = True
+    else:
+        table_doc = TABLE_DOC_NO_DUMP
     w('docs/테이블정의서.md', table_doc)
     w('docs/코드정의서.md', CODE_DOC)
     w('docs/DB도메인용어정의서.md', TERM_DOC)
@@ -1434,11 +1468,20 @@ def main():
     #
     # 하나로 두면 사용자가 배포·어휘 운영 절을 넘기며 읽고, 관리자가 하루
     # 흐름 절에서 자기 것을 못 찾는다. **독자가 둘이면 문서도 둘이다.**
-    for src_name, dst_name in (('manual-user.md', 'MANUAL.md'),
-                               ('manual-admin.md', 'MANUAL-관리자.md')):
-        man_src = os.path.join(ROOT, 'repo-kit', src_name)
+    #
+    # **원본은 `kit/manual/` 이다.** 전에는 `repo-kit/manual-user.md` 를
+    # 봤는데 그 폴더는 `kit/` 으로 재편되면서 없어졌다. `os.path.exists` 로
+    # 감싸 둔 탓에 **없어진 줄 아무도 몰랐다** -- 시드는 조용히 넘어가고,
+    # OWNED_FILES 는 두 파일을 지우기까지 하므로 샘플에서 매뉴얼이 사라졌다.
+    # README 가 거는 링크 둘이 그때부터 죽어 있었다. 이제는 없으면 말한다.
+    for src_name, dst_name in (('user.md', 'MANUAL.md'),
+                               ('admin.md', 'MANUAL-관리자.md')):
+        man_src = os.path.join(ROOT, 'kit', 'manual', src_name)
         if os.path.exists(man_src):
             shutil.copyfile(man_src, os.path.join(OUT, dst_name))
+        else:
+            print('  [경고] 매뉴얼 원본 없음: %s → %s 를 못 넣었다 '
+                  '(README 링크가 죽는다)' % (man_src, dst_name))
 
     w('.gitattributes', GITATTRIBUTES)
     w('.gitignore', GITIGNORE)
@@ -1457,6 +1500,8 @@ def main():
         [f for f in os.listdir(os.path.join(OUT, 'docs')) if f.endswith('.md')]))
     print('  table sections : %d' % table_doc.count('\n## '))
     kept = [d for d in ('bin',) if os.path.exists(os.path.join(OUT, d))]
+    if kept_table:
+        kept.append('docs/테이블정의서.md (GDI 덤프 없음 — 직전 문서 유지)')
     print('  kept (not seed) : ' + (', '.join(kept) if kept else '(none)'))
 
 
