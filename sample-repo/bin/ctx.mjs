@@ -6102,10 +6102,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-09 06:06";
+var BUILT = "2026-09-09 06:24";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 06:06)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-09 06:24)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -6314,7 +6314,7 @@ async function cmdWhere(r, opt) {
       const sec2 = sectionAt(r, c);
       const st = r.sections.find((x) => x.coord === c) || null;
       const works2 = r.coords.byCoord.get(c) || [];
-      return { coord: c, sec: sec2, state: stateLabel(st, c), works: works2.length };
+      return { coord: c, sec: sec2, state: stateLabel(st, c), works: works2.length, ids: works2.slice(0, 3) };
     });
     if (opt.json) {
       out(JSON.stringify(rows, null, 2));
@@ -6331,6 +6331,8 @@ async function cmdWhere(r, opt) {
       }
       out(`  \uC0C1\uD0DC   ${x.state}`);
       out(`  \uC791\uC5C5   ${x.works}\uAC74`);
+      for (const d of x.ids) out(`    ${d.date || ""}  ${d.id}`);
+      if (x.works > x.ids.length) out(`    ... ${x.works - x.ids.length}\uAC74 \uB354 (ctx where ${x.coord})`);
       out("");
     }
     out("viewer: \uAC80\uC0C9\uCC3D(Ctrl+K)\uC5D0 \uC88C\uD45C\uB97C \uBD99\uC5EC \uB123\uC73C\uBA74 \uADF8 \uBB38\uC11C\uB85C \uAC04\uB2E4. \uC139\uC158\uC740 \uC624\uB978\uCABD \uBAA9\uCC28\uC5D0\uC11C \uACE0\uB978\uB2E4");

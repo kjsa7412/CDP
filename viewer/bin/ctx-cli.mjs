@@ -300,7 +300,7 @@ async function cmdWhere(r, opt) {
       const sec = sectionAt(r, c)
       const st = r.sections.find((x) => x.coord === c) || null
       const works = r.coords.byCoord.get(c) || []
-      return { coord: c, sec, state: stateLabel(st, c), works: works.length }
+      return { coord: c, sec, state: stateLabel(st, c), works: works.length, ids: works.slice(0, 3) }
     })
     if (opt.json) {
       out(JSON.stringify(rows, null, 2))
@@ -317,6 +317,12 @@ async function cmdWhere(r, opt) {
       }
       out(`  상태   ${x.state}`)
       out(`  작업   ${x.works}건`)
+      // **id 를 낸다.** 처음에 건수만 냈는데, 그러면 검토가 "이 요청을 이미
+      // 결정한 기록이 있다" 를 볼 길이 없다 -- 실제로 놓쳤다. CDP 의 id 는
+      // 날짜+주제라서 **id 만으로 주제가 읽힌다**(2026-0831-A10-결의서-기본값).
+      // 본문이 아니라 이름이므로 ①의 본문 읽기 금지를 깨지 않는다.
+      for (const d of x.ids) out(`    ${d.date || ''}  ${d.id}`)
+      if (x.works > x.ids.length) out(`    ... ${x.works - x.ids.length}건 더 (ctx where ${x.coord})`)
       out('')
     }
     out('viewer: 검색창(Ctrl+K)에 좌표를 붙여 넣으면 그 문서로 간다. 섹션은 오른쪽 목차에서 고른다')
