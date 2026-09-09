@@ -14,7 +14,7 @@
 
 ## 5분 안에 시작하기
 
-**1. 앱을 띄운다** — `tools/cdp.exe` 더블클릭 *(없으면 `npx cdp`)*
+**1. 앱을 띄운다** — `tools/cdp.exe`(맥은 `tools/cdp`) 실행 *(없으면 `npx cdp`)*
 **2. 이 폴더 경로를 넣는다**
 **3. 화면 셋을 본다**
 
@@ -62,7 +62,8 @@ bin/ctx check                     커밋 가능한가 (오류면 exit 1)
 bin/ctx sync                      원격과의 차이 · 훅 설정 여부
 ```
 
-**Node 가 없어도 된다** — `bin/ctx` 가 알아서 `tools/cdp.exe` 로 넘긴다.
+**Node 가 없어도 된다** — `bin/ctx` 가 알아서 `tools/` 의 실행 파일로 넘긴다
+(Windows `cdp.exe` · macOS/Linux `cdp` 둘 다 찾는다).
 
 ## 지금 이 레포의 상태
 

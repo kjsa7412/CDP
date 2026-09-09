@@ -16,11 +16,21 @@ if command -v node >/dev/null 2>&1 && [ -f "$here/ctx.mjs" ]; then
   exec node "$here/ctx.mjs" "$@"
 fi
 
-# 2) 없으면 exe 로. 레포 안 -> 상위 -> PATH 순으로 찾는다
-for exe in "$here/../tools/cdp.exe" "$here/../tools/ctx-view.exe" "$here/../../tools/cdp.exe"; do
+# 2) 없으면 실행 파일로. 레포 안 -> 상위 -> PATH 순으로 찾는다.
+#
+# **이름이 플랫폼마다 다르다.** Windows 는 `cdp.exe`, macOS·Linux 는 확장자
+# 없는 `cdp` 다. 이 파일은 sh 스크립트라 후자에서 도는데 `.exe` 만 찾고 있었다
+# -- Node 가 없는 맥에서는 폴백이 통째로 없는 셈이었고, 그때 나는 오류는
+# "node 도 cdp.exe 도 없다" 라 이름 때문인 줄 모른다.
+for exe in \
+  "$here/../tools/cdp" "$here/../tools/cdp.exe" \
+  "$here/../tools/ctx-view.exe" \
+  "$here/../../tools/cdp" "$here/../../tools/cdp.exe"; do
   if [ -x "$exe" ]; then exec "$exe" ctx "$@"; fi
 done
-if command -v cdp.exe >/dev/null 2>&1; then exec cdp.exe ctx "$@"; fi
+for name in cdp cdp.exe; do
+  if command -v "$name" >/dev/null 2>&1; then exec "$name" ctx "$@"; fi
+done
 
 # 실행기가 없다. **exit 127 로 낸다 -- 검사 실패(1)와 구분해야 한다.**
 #
@@ -30,6 +40,7 @@ if command -v cdp.exe >/dev/null 2>&1; then exec cdp.exe ctx "$@"; fi
 # 줄 안다 -- 실제로는 도구가 못 도는 것이다.
 #
 # 127 은 셸 관례로 "command not found" 다. 훅이 이 값을 보고 건너뛴다.
-echo "ctx: node 도 cdp.exe 도 없습니다." >&2
-echo "     tools/cdp.exe 를 두거나 PATH 에 넣으세요. (작업환경 설계서 3.1)" >&2
+echo "ctx: node 도 실행 파일도 없습니다." >&2
+echo "     tools/ 에 실행 파일(Windows: cdp.exe · macOS/Linux: cdp)을 두거나" >&2
+echo "     PATH 에 넣으세요. (작업환경 설계서 3.1)" >&2
 exit 127
