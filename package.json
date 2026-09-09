@@ -12,7 +12,7 @@
     "dev:server": "node viewer/server/index.js --repo ./sample-repo --dev http://localhost:5173 --no-open",
     "build": "vite build --config viewer/vite.config.js",
     "start": "node viewer/server/index.js --repo ./sample-repo",
-    "seed": "python ops/lib/seed_repo.py",
+    "seed": "node ops/lib/seed.mjs",
     "ctx": "node viewer/bin/ctx-cli.mjs",
     "build:ctx": "node ops/lib/build-ctx.mjs",
     "build:exe": "node ops/lib/build-exe.mjs",

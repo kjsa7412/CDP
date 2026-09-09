@@ -78,7 +78,12 @@ const need = (src, rel) => {
 }
 
 // 실행 파일 — 앱과 ctx 가 한 파일
-need('out/exe/cdp.exe', 'cdp.exe')
+// **실행 파일 이름은 플랫폼마다 다르다.** Windows 는 `cdp.exe`, macOS·Linux 는
+// 확장자 없는 `cdp` 다. 이름을 하나로 박아 두면 맥에서 만든 릴리스가
+// "빠진 것 1개"라고 자기를 의심한다 -- 실제로는 다 만들어 놓고서.
+// 만든 쪽 이름 그대로 담는다. 받는 사람은 자기 OS 것을 쓴다.
+const EXE = process.platform === 'win32' ? 'cdp.exe' : 'cdp'
+need(`out/exe/${EXE}`, EXE)
 
 // 지식 레포를 새로 세울 때 넣는 것
 need('kit/agent/skills', 'repo-kit/.claude/skills')

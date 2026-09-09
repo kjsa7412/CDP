@@ -27,10 +27,23 @@ fs.mkdirSync(path.dirname(outFile), { recursive: true })
 
 const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
 
+// **`bin/esbuild` 가 무엇인지는 플랫폼마다 다르다.**
+// Windows 에서는 node 가 읽는 JS 셔임이고, macOS·Linux 에서는 네이티브
+// 바이너리다. 후자를 `node` 에 넘기면 "Invalid or unexpected token" 으로
+// 죽는다 -- 개발 PC 가 Windows 라 이관 전까지 드러나지 않았다.
+// 첫 바이트로 가른다 -- Mach-O cf/ce fa ed fe · ELF 7f 45 4c 46 · PE 4d 5a
+const esbuildBin = path.join(root, 'node_modules', 'esbuild', 'bin', 'esbuild')
+const magic = fs.readFileSync(esbuildBin).subarray(0, 4)
+const isBinary =
+  [[0xcf, 0xfa, 0xed, 0xfe], [0xce, 0xfa, 0xed, 0xfe], [0x7f, 0x45, 0x4c, 0x46]].some((sig) =>
+    sig.every((b, i) => magic[i] === b)
+  ) || (magic[0] === 0x4d && magic[1] === 0x5a)
+const [cmd, head] = isBinary ? [esbuildBin, []] : [process.execPath, [esbuildBin]]
+
 const r = spawnSync(
-  process.execPath,
+  cmd,
   [
-    path.join(root, 'node_modules', 'esbuild', 'bin', 'esbuild'),
+    ...head,
     path.join(root, 'viewer', 'bin', 'ctx-cli.mjs'),
     '--bundle',
     '--platform=node',
