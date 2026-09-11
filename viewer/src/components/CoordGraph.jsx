@@ -67,7 +67,7 @@ const HAIRLINE = 1.5
 // 너무 넓으면 회전이 클릭으로 새어 선택이 멋대로 바뀐다. 6px 은 그 사이다.
 const SLOP = 6
 
-export default function CoordGraph({ tree, docs, onPick, picked }) {
+export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit }) {
   const cvRef = useRef(null)
   const paintRef = useRef(null)
   const spinRef = useRef(null)
@@ -88,16 +88,25 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
   // 남아 **덩어리와 안팎**이 보인다 — 그것이 이 그림의 첫 번째 정보다.
   // 이름은 짚거나 고르면 그것만 뜬다.
   const [labels, setLabels] = useState('auto')   // 'on' | 'off' | 'auto'
+  // **고립 노드를 기본으로 숨긴다.**
+  //
+  // 실측 — 노드 288 · 간선 232 · **고립 216.** 어휘(`_vocab.md`)는 DB 덤프에서
+  // 이름표를 대량으로 받아 오는데(`code:` 만 159개) 작업 기록은 그중 일부만
+  // 건드린다. 그래서 넷 중 셋이 아무 것과도 안 이어진 점으로 떠 있고,
+  // **그것들이 배율을 정해 정작 볼 덩어리를 가운데로 밀어 넣는다.**
+  //
+  // 이어진 72개만 그리면 같은 화면이 그래프가 된다. 나머지는 목록이 답할 일이다.
+  const [hideIso, setHideIso] = useState(true)
   const railRef = useRef(null)
   const [, force] = useState(0)
 
 
   const key = useMemo(() => {
     const cs = (tree?.types || []).flatMap((t) => t.coords.map((c) => `${c.coord}:${c.count}:${c.sec || ''}`))
-    return cs.join('|') + '#' + (docs || []).map((d) => (d.touches || []).join(',')).join(';')
-  }, [tree, docs])
+    return cs.join('|') + '#' + (docs || []).map((d) => (d.touches || []).join(',')).join(';') + '#' + hideIso
+  }, [tree, docs, hideIso])
 
-  const g = useMemo(() => build(tree, docs), [key])
+  const g = useMemo(() => build(tree, docs, hideIso), [key])
 
   useEffect(() => {
     if (!g || !cvRef.current) return
@@ -613,8 +622,27 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
   return (
     <div className="gr">
       <div className="gr__bar">
-        노드 {g.nodes.length} · 간선 {g.edges.length} · 덩어리 {g.comps}
-        {g.iso > 0 && ` · 고립 ${g.iso}`}
+        {onExit && (
+          <button className="gr__btn gr__btn--exit" onClick={onExit} title="문서 화면으로 (Esc)">
+            ← 문서
+          </button>
+        )}
+        <span className="gr__stat">
+          좌표 <b>{g.nodes.length}</b> · 이음 <b>{g.edges.length}</b> · 덩어리 <b>{g.comps}</b>
+          {!hideIso && g.iso > 0 && <> · 고립 <b>{g.iso}</b></>}
+        </span>
+        {/* 고립 — 이어진 곳이 없는 좌표. 어휘에는 있으나 어떤 작업도 다른
+            좌표와 **함께** 건드리지 않았다. 켜면 그림이 점 무더기가 된다 */}
+        {(g.hidden > 0 || !hideIso) && (
+          <button
+            className="gr__btn"
+            aria-pressed={!hideIso}
+            onClick={() => { stRef.current.needFit = true; stRef.current.touched = false; setHideIso((v) => !v) }}
+            title="이어진 곳이 없는 좌표 — 켜면 배율이 그쪽에 맞춰진다"
+          >
+            고립 {hideIso ? `+${g.hidden}` : '숨기기'}
+          </button>
+        )}
         <span className="fd__spacer" />
         <button className="gr__btn" onClick={() => zoomBy(1 / 1.3)} aria-label="축소">−</button>
         <span className="gr__zoom">{Math.round(S.zoom * 100)}%</span>
@@ -647,10 +675,8 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
       </div>
       <div className="gr__legend">
         <span className="gr__hint">
-          크기 = 작업 건수 · <b>안쪽일수록 많이 이어진 좌표</b> ·
-          <b>노드를 누르면 이어진 것이 고정</b> ·
-          빈 곳을 누르면 풀린다 · <b>왼쪽에서 카테고리 → 좌표를 고르면 찾아 준다</b> ·
-          휠 확대 · 끌어서 회전 · Shift+끌기 이동 · 바깥까지 보려면 <b>−</b>
+          크기 = 작업 건수 · 안쪽일수록 많이 이어진 좌표 ·
+          <b> 노드를 누르면 이어진 것만 남는다</b> · 휠 확대 · 끌어서 회전 · Shift+끌기 이동
         </span>
       </div>
       {/* 왼쪽 레일 — 두 단이다.
@@ -691,34 +717,70 @@ export default function CoordGraph({ tree, docs, onPick, picked }) {
             </>
           )}
         </div>
-        <div className="gr__wrap"><canvas ref={cvRef} className="gr__cv" /></div>
+        <div className="gr__wrap">
+          <canvas ref={cvRef} className="gr__cv" />
+
+          {/* 고른 좌표 — **여기가 그래프에서 나가는 문이다.**
+              누르는 것만으로 화면을 바꾸지 않는다. 그 클릭은 "이어진 것만
+              보여 달라"는 뜻이고, 떠날지는 읽고 나서 정한다. */}
+          {S.lock != null && g.nodes[S.lock] && (
+            <div className="gr__sel">
+              <span className="gr__selico" aria-hidden="true">◇</span>
+              <code className="gr__selname">{g.nodes[S.lock].coord}</code>
+              <span className="gr__selmeta">
+                작업 {g.nodes[S.lock].count}건 · 이웃 {g.nbr[S.lock].size}개
+              </span>
+              <span className="fd__spacer" />
+              <button
+                className="gr__btn gr__btn--go"
+                onClick={() => onGo?.(g.nodes[S.lock].coord)}
+                disabled={!onGo}
+              >
+                뻗어나가기 →
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-function build(tree, docs) {
+function build(tree, docs, hideIso = false) {
   if (!tree?.types) return null
-  const nodes = []
+  const all = []
   for (const t of tree.types) {
     for (const c of t.coords) {
-      nodes.push({
+      all.push({
         coord: c.coord, type: t.type, v: c.coord.slice(c.coord.indexOf(':') + 1),
         count: c.count || 0, x: 0, y: 0, z: 0,
       })
     }
   }
-  if (!nodes.length) return { nodes, edges: [], nbr: [], comps: 0, iso: 0 }
-  const idx = new Map(nodes.map((n, i) => [n.coord, i]))
+  if (!all.length) return { nodes: all, edges: [], nbr: [], comps: 0, iso: 0, hidden: 0 }
 
+  // 간선 후보를 먼저 센다 — **무엇을 그릴지 정한 뒤에 배치를 푼다.**
+  // 숨길 노드를 배치에 넣고 나중에 빼면 좌표가 그 노드들 자리에 맞춰 굳는다.
+  const have = new Set(all.map((n) => n.coord))
   const em = new Map()
+  const linked = new Set()
   for (const d of docs || []) {
-    const t = (d.touches || []).filter((c) => idx.has(c))
+    const t = (d.touches || []).filter((c) => have.has(c))
     for (let i = 0; i < t.length; i++) for (let j = i + 1; j < t.length; j++) {
       em.set([t[i], t[j]].sort().join('|'), 1)
+      linked.add(t[i])
+      linked.add(t[j])
     }
   }
-  const edges = [...em.keys()].map((k) => { const [a, b] = k.split('|'); return [idx.get(a), idx.get(b)] })
+
+  const nodes = hideIso ? all.filter((n) => linked.has(n.coord)) : all
+  const hidden = all.length - nodes.length
+  if (!nodes.length) return { nodes, edges: [], nbr: [], comps: 0, iso: 0, hidden }
+  const idx = new Map(nodes.map((n, i) => [n.coord, i]))
+
+  const edges = [...em.keys()]
+    .map((k) => { const [a, b] = k.split('|'); return [idx.get(a), idx.get(b)] })
+    .filter(([a, b]) => a != null && b != null)
   const nbr = nodes.map(() => new Set())
   for (const [i, j] of edges) { nbr[i].add(j); nbr[j].add(i) }
 
@@ -732,7 +794,7 @@ function build(tree, docs) {
     while (stack.length) { const x = stack.pop(); size++; for (const y of nbr[x]) if (!seen.has(y)) { seen.add(y); stack.push(y) } }
     if (size === 1) iso++
   }
-  return { nodes, edges, nbr, comps, iso }
+  return { nodes, edges, nbr, comps, iso, hidden }
 }
 
 // 3D 힘 배치 — 한 번 풀고 멈춘다.

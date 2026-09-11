@@ -82,28 +82,6 @@
 }
 .vblock__jump:hover { text-decoration: underline; }
 
-/* 3단(좌표별 최신성 표)은 **관계 패널로 나갔다**(12단계).
-   `.vblock__settled` `.vblock__coordrow` `.vblock__more` `.secmark` 규칙을
-   같이 지웠다 — 없는 것을 가리키는 CSS 는 없는 것보다 나쁘다.
-   지금 규칙은 `.rel*` 에 있다. */
-
-/* 정정된 문서를 읽는 동안 상단에 고정되는 얇은 바 —
- * 잘못된 정보를 읽고 있다는 사실은 계속 보여야 한다(§17.6) */
-.stickywarn {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  height: 24px;
-  padding: 0 var(--sp-3);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--danger);
-  background: var(--danger-bg);
-  border-bottom: 1px solid var(--danger);
-}
 
 /* ── 4섹션 레일 — §19.1. 본문 구조를 미리 안다는 이점 ────────────────── */
 .rail {
@@ -148,14 +126,7 @@
 .rail__item[data-key='why'] {
   font-size: 12.5px;
 }
-.rail__mine {
-  padding: 0 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: #fff;
-  background: var(--accent);
-  border-radius: 8px;
-}
+
 
 .whywarn {
   display: flex;
@@ -564,24 +535,7 @@
   font-weight: 600;
 }
 
-/* 좌표 타임라인 — 최신성을 숫자가 아니라 형태로(§18) */
-.tl__head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-2);
-}
-.tl__head select {
-  font: inherit;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--text-2);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-badge);
-  padding: 2px 4px;
-  max-width: 100%;
-}
+
 .tl {
   position: relative;
   padding-left: var(--sp-6);
@@ -595,64 +549,16 @@
   width: 1px;
   background: var(--border);
 }
-.tl__row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
-  padding: 5px 0;
-  position: relative;
-  width: 100%;
-  text-align: left;
-}
-.tl__row:hover {
-  background: var(--surface-2);
-}
-.tl__dot {
-  position: absolute;
-  left: calc(var(--sp-6) * -1 + 4px);
-  top: 11px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--border-strong);
-}
-.tl__row.is-current .tl__dot {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-bg);
-}
-.tl__row.is-current {
-  font-weight: 600;
-}
-.tl__row.is-superseded .tl__title,
-.tl__row.is-superseded .tl__date {
-  color: var(--text-3);
-}
-.tl__date {
-  flex: none;
-  font-size: 11.5px;
-  color: var(--text-3);
-}
-.tl__title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* supersedes 관계를 잇는 커넥터 */
-.tl__link {
-  position: absolute;
-  left: calc(var(--sp-6) * -1 + 7px);
-  width: 8px;
-  border-left: 1px solid var(--danger);
-  border-bottom: 1px solid var(--danger);
-  border-bottom-left-radius: 4px;
-}
-.tl__note {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-3);
-}
+
+
+
+
+
+
+
+
+
+
 
 /* ── 검증 뷰 — §24.1 ────────────────────────────────────────────────── */
 .checkhead {
@@ -728,15 +634,22 @@
   body {
     overflow: visible;
   }
+  /* 종이에는 **문서만** 간다. 찾는 곳·크롬·떠 있는 것은 전부 뺀다.
+     전에는 없어진 `.pane--sidebar` · `.pane--list` 를 숨기고 있었고,
+     그 자리를 이어받은 `.pane--find` 는 그대로 인쇄됐다 — 종이 왼쪽에
+     목록이 같이 찍혔다는 뜻이다. */
   .topbar,
   .statusbar,
-  .pane--sidebar,
-  .pane--list,
+  .pane--find,
   .gutter,
   .rail,
   .overlay,
+  .scrim,
+  .menu,
   .popover,
+  .toast,
   .readmark,
+  .docsec--copy,
   .codeblock__copy {
     display: none !important;
   }

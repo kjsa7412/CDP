@@ -253,8 +253,10 @@ export default function DocView({
               본문 열에는 문서로서의 정보만 남는다 — 유효성 두 단 · 목차 ·
               본문 · 첨부 · 복사. */}
 
-          {/* 복사 — 프로토콜 §12.3 의 주입 형식과 같다(§28.1) */}
-          <section className="docsec">
+          {/* 복사 — 프로토콜 §12.3 의 주입 형식과 같다(§28.1).
+              종이에는 안 간다(`--copy`) — 누를 수 없는 버튼 줄이다. 첨부는
+              간다: 그 문서가 무엇을 달고 있었는지는 종이에서도 사실이다. */}
+          <section className="docsec docsec--copy">
             <div className="docsec__title">복사 {copied && <span className="count">· {copied} 복사됨</span>}</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12 }}>
               {doc.isUnit && <button style={{ color: 'var(--accent)' }} onClick={() => copy('요약', summaryText(doc))}>요약 (⇧C)</button>}

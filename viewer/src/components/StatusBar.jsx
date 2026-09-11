@@ -4,6 +4,16 @@
 // 유일한 근거다. "감시 중"은 감시가 살아 있다는 증거이고, 끊기면 그때만
 // 수동 스캔 버튼이 나타난다.
 //
+// **정상이면 조용하다.** 전에는 문서·좌표·검증·원격·감시·스캔시각까지 열 조각을
+// 늘 말했다. 이 앱의 색 규칙은 "정상은 조용하고 이상만 소리를 낸다"인데
+// (tokens.css) 상태바만 그 밖에 있었다. 지금 남는 것은 —
+//
+//   늘      문서·좌표 수(무채색) · 감시 · 마지막 스캔
+//   있을 때  미등재 · 받을 것 · 보낼 것 · 훅 없음
+//
+// **검증 건수는 상단바로 올라갔다.** 아침에 제일 먼저 보는 값을 11.5px 글씨로
+// 화면 맨 아래 두면 매일 찾아 읽어야 한다. 여기서 한 번 더 세지 않는다.
+//
 // 낡음을 추정하지 않는다 — fetch 없이 "낡았을 수 있습니다"를 띄우는 것은
 // 근거 없는 경고이고, §13-① 의 나이/유효성 혼동과 같은 오류다.
 
@@ -11,7 +21,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 import { clockTime } from '../lib/format.js'
 
-export default function StatusBar({ repo, scanning, onRescanned, onCheck = () => {} }) {
+export default function StatusBar({ repo, scanning, onRescanned, onCheck = () => {}, onSay }) {
   const [busy, setBusy] = useState(false)
   const [git, setGit] = useState(null)
   const [gitBusy, setGitBusy] = useState(null)
@@ -49,6 +59,8 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
 
   if (!repo) return <div className="statusbar" />
 
+  const say = (m) => (onSay ? onSay(m) : alert(m))
+
   const gitAct = async (kind) => {
     setGitBusy(kind)
     try {
@@ -57,9 +69,9 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
       else setGit(await api.git(false))
       if (kind === 'pull' && r.ok && r.skipped !== 'up-to-date') onRescanned?.()
       // ff 가 안 되면 앱이 해결하지 않는다. 그대로 알리고 사람에게 넘긴다
-      if (!r.ok) alert(r.message || `${kind} 실패`)
+      if (!r.ok) say(r.message || `${kind} 실패`)
     } catch (e) {
-      alert(e?.message || String(e))
+      say(e?.message || String(e))
     } finally {
       setGitBusy(null)
     }
@@ -75,60 +87,32 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
     }
   }
 
-  const c = repo.checkCounts || { error: 0, warn: 0, info: 0 }
-
   return (
     <div className="statusbar">
-      <span>
+      <span className="statusbar__quiet">
         문서 <b className="num">{repo.docs}</b>
-      </span>
-      <span className="statusbar__sep">·</span>
-      <span>
+        <span className="statusbar__sep">·</span>
         좌표 <b className="num">{repo.coords}</b>
       </span>
 
+      {/* 미등재 — 어휘에 없는 좌표를 쓴 작업이 있다. 커밋에서 막힌다 */}
       {repo.unregistered > 0 && (
-        <>
-          <span className="statusbar__sep">·</span>
-          <button className="is-warn" onClick={onCheck}>
-            ⚠ 미등재 {repo.unregistered}
-          </button>
-        </>
-      )}
-
-      <span className="statusbar__sep">·</span>
-      {c.error > 0 ? (
-        <button className="is-error" onClick={onCheck}>
-          ⛔ 검증 {c.error}
-        </button>
-      ) : c.warn > 0 ? (
         <button className="is-warn" onClick={onCheck}>
-          ⚠ 검증 {c.warn}
-        </button>
-      ) : (
-        // **통과했다는 것도 눌러서 확인할 수 있어야 한다.**
-        //
-        // "정상이면 표시가 사라진다"를 여기까지 밀면, 오류가 0일 때 검사
-        // 결과로 가는 길이 통째로 없어진다 -- 검사가 돌았는지조차 알 수 없다.
-        // 조용하게 두되 길은 남긴다.
-        <button style={{ color: 'var(--text-3)' }} onClick={onCheck}>
-          ✓ 검사
+          ⚠ 미등재 {repo.unregistered}
         </button>
       )}
 
-      {/* `미결` · `제안` 은 상태가 아니라 이관 대상이다 (정정_판정모델_v2 §2).
-          `검증` 오류에 이미 포함되므로 여기 따로 세지 않는다. */}
-
-      {/* git — 유일한 수신 채널이다(§1). 안 보내면 남에게는 없는 것과 같다 */}
+      {/* git — 유일한 수신 채널이다(§1). 안 보내면 남에게는 없는 것과 같다.
+          **여기는 할 일이 있을 때만 말한다** — `원격 동기` 를 늘 띄우던 자리는
+          아무 행동도 없는 자리였다. */}
       {git?.repo && (
         <>
-          <span className="statusbar__sep">·</span>
-          {git.behind > 0 ? (
+          {git.behind > 0 && (
             <button className="is-warn" onClick={() => gitAct('pull')} disabled={gitBusy}>
               {gitBusy === 'pull' ? '받는 중…' : `⬇ 원격 ${git.behind}건 받기`}
             </button>
-          ) : null}
-          {git.ahead > 0 ? (
+          )}
+          {git.ahead > 0 && (
             <button
               className={git.unpushed ? 'is-warn' : ''}
               onClick={() => gitAct('push')}
@@ -137,11 +121,6 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
             >
               {gitBusy === 'push' ? '보내는 중…' : `⬆ 미전송 ${git.ahead}건 보내기`}
             </button>
-          ) : null}
-          {git.behind === 0 && git.ahead === 0 && (
-            <span style={{ color: 'var(--text-3)' }} title={git.upstream || 'upstream 없음'}>
-              {git.upstream ? '원격 동기' : 'upstream 없음'}
-            </span>
           )}
           {/* 훅 미설치는 조용한 실패다 — 커밋은 통과하고 검사는 안 돈다 */}
           {!git.hooksPath && (
@@ -149,23 +128,41 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
               ⚠ 훅 없음
             </button>
           )}
+          {!git.upstream && (
+            <span className="statusbar__quiet" title="보낼 곳이 없다 — git push -u 로 한 번 정한다">
+              upstream 없음
+            </span>
+          )}
         </>
       )}
 
       <span className="topbar__spacer" style={{ flex: 1 }} />
+
+      {/* 트레이에서 '탭 닫아도 계속 실행' 을 켰으면 화면에도 보여야 한다.
+          안 보이면 켠 사실을 잊고 "왜 안 꺼지지" 가 된다(§5.2 ⑥) */}
+      {repo.keepAlive && (
+        <span className="statusbar__quiet" title="트레이 메뉴에서 껐다 켤 수 있습니다">
+          탭 닫아도 계속 실행
+          <span className="statusbar__sep">·</span>
+        </span>
+      )}
 
       {/* 감시 생존 여부는 추측이 아니라 표시로 확인돼야 한다 */}
       {scanning ? (
         <span>스캔 중…</span>
       ) : !repo.watchEnabled ? (
         <>
-          <span style={{ color: 'var(--text-3)' }}>감시 꺼짐</span>
+          <span className="statusbar__quiet">감시 꺼짐</span>
           <button onClick={rescan} disabled={busy}>
             {busy ? '스캔 중…' : '다시 스캔'}
           </button>
         </>
       ) : repo.watchAlive ? (
-        <span style={{ color: 'var(--text-3)' }}>감시 중</span>
+        <span className="statusbar__quiet">
+          감시 중
+          <span className="statusbar__sep">·</span>
+          <span className="num">{clockTime(repo.scannedAt)}</span>
+        </span>
       ) : (
         <>
           <span className="is-warn">⚠ 감시 끊김</span>
@@ -174,20 +171,6 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
           </button>
         </>
       )}
-
-      {/* 트레이에서 '탭 닫아도 계속 실행' 을 켰으면 화면에도 보여야 한다.
-          안 보이면 켠 사실을 잊고 "왜 안 꺼지지" 가 된다(§5.2 ⑥) */}
-      {repo.keepAlive && (
-        <>
-          <span className="statusbar__sep">·</span>
-          <span title="트레이 메뉴에서 껐다 켤 수 있습니다">탭 닫아도 계속 실행</span>
-        </>
-      )}
-
-      <span className="statusbar__sep">·</span>
-      <span style={{ color: 'var(--text-3)' }}>
-        마지막 스캔 <span className="num">{clockTime(repo.scannedAt)}</span>
-      </span>
     </div>
   )
 }

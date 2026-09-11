@@ -1,13 +1,21 @@
-// 셸 — **찾는 곳 | 문서** 2분할 (정정_판정모델_v2 §6).
+// 셸 — **왼쪽은 한 번에 하나, 오른쪽은 문서.**
 //
-// 왼쪽은 문서를 고르는 곳이고 오른쪽은 문서다. 왼쪽은 다시 위아래로 나뉜다:
+// 전에는 왼쪽을 위아래로 갈라 위에 시작점(탭 4개), 아래에 뻗어나가기를 두었다.
+// 둘 다 상시로 떠 있어서 **둘 다 좁았다** — 400px 안에서 탭 넷이 세로로 쪼개지고,
+// 226px 짜리 뻗어나가기 열은 한 개 반만 들어갔다. 그래서 상단에 `1:1 2:1 3:1
+// 찾기만` 네 개가 필요했다. **비율 버튼이 있다는 것 자체가 레이아웃이 안 맞는다는
+// 증거였다.**
 //
-//   위    문서 · 좌표 · 그래프    **시작점**을 고른다
-//   아래  뻗어나가기             고른 것에서 한 레벨씩 다음 노드로
+// 지금은 왼쪽이 한 번에 하나만 한다.
 //
-// 뷰 세 개(대상 · 작업 · 현황)와 사이드바·목록·관계 패널을 전부 걷어냈다.
-// 뷰는 "찾는 방법"의 다른 이름이었고, 그것은 위 영역의 탭이면 된다.
-// 관계는 별도 패널이 아니라 **뻗어나가기 그 자체**다.
+//   목록        관리문서 · 작업문서 · 좌표에서 **시작점**을 고른다
+//   뻗어나가기   고른 것에서 한 레벨씩 다음 노드로
+//
+// 둘이 같은 자리를 쓰므로 각각이 **세로 전체**를 받는다. 폭도 따로 기억한다 —
+// 목록은 좁아도 되고 뻗어나가기는 열이 여럿이라 넓어야 한다.
+//
+// 그래프는 왼쪽에서 나갔다. 좌표 288개짜리 그림은 패널이 아니라 **화면**이
+// 필요하다. 상단 `그래프` 로 들어가면 창 전체를 쓰고 `Esc` 로 돌아온다.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, subscribe, startHeartbeat, ApiError } from './lib/api.js'
@@ -20,6 +28,12 @@ import StatusBar from './components/StatusBar.jsx'
 import SetupView from './components/SetupView.jsx'
 import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
+import CoordGraph from './components/CoordGraph.jsx'
+
+// 왼쪽 폭 — 하는 일에 따라 다르다. 목록은 제목 한 줄이면 되고, 뻗어나가기는
+// 열이 둘 이상 들어가야 "가로로 뻗는다"가 성립한다.
+const W_LIST = 340
+const W_XP = 560
 
 export default function App() {
   const [state, setState] = useState(null)
@@ -31,13 +45,18 @@ export default function App() {
   // **레포마다 있을 수도 없을 수도 있다.** 없는 것을 버튼으로 내밀지 않는다.
   const [others, setOthers] = useState([])
   const [syncing, setSyncing] = useState(null)
-  // 뻗어나가기의 뿌리. 위 영역에서 고른 것 하나. { kind, key }
+  // 뻗어나가기의 뿌리. 목록에서 고른 것 하나. { kind, key, label }
   const [root, setRoot] = useState(null)
   const [docId, setDocId] = useState(null)
   // 문서 안에서 갈 자리 — { value, seq }. 섹션(좌표) 줄을 눌러 왔을 때만 있다.
   const [docAt, setDocAt] = useState(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 도움말은 설정이 아니다. 단축키와 매뉴얼은 **읽는 것**이고, 레포 경로와
+  // 에이전트 설치는 **바꾸는 것**이다. 한 창에 두면 매일 찾는 쪽이 매번
+  // 평생 한 번 하는 것을 지나야 한다.
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [changedPaths, setChangedPaths] = useState(new Set())
   const [toast, setToast] = useState(null)
   const [scanning, setScanning] = useState(false)
@@ -45,17 +64,12 @@ export default function App() {
   const [needSetup, setNeedSetup] = useState(false)
   // 검사 결과는 뷰가 아니라 **오버레이**다.
   //
-  // 현황 뷰를 걷어내면서 이 길이 끊겼다 -- 판정을 error 로 올려놓고 정작
-  // 목록을 볼 데가 없었다. 오류는 커밋을 막으므로 **무엇이 막았는지**로
-  // 가는 길이 항상 있어야 한다.
+  // 오류는 커밋을 막으므로 **무엇이 막았는지**로 가는 길이 항상 있어야 한다.
   const [checkOpen, setCheckOpen] = useState(false)
-  // 좌우 비율 — 문서 : 찾는 곳. 창 폭에서 역산해 왼쪽 폭을 정한다.
-  // 좌우 배치.
-  //   null   손으로 끈 폭을 쓴다
-  //   n      문서 : 찾는 곳 = n:1  (창 폭에서 역산)
-  //   'find' **문서 영역 없음** — 찾는 곳이 전부
-  const [ratio, setRatio] = useState(null)
-  const xpFold = !!state?.panes?.xpFold
+  // 화면 전체 모드 — 'doc'(왼쪽|문서) · 'graph'(창 전체)
+  const [topMode, setTopMode] = useState('doc')
+  // 왼쪽이 지금 하는 일 — 'list'(고른다) · 'explore'(뻗는다). **둘이 같이 있지 않다.**
+  const [leftMode, setLeftMode] = useState('list')
   const historyRef = useRef({ stack: [], pos: -1 })
   const atSeqRef = useRef(0)
 
@@ -74,19 +88,31 @@ export default function App() {
     setState(s)
     setManagedList(m || [])
     setOthers(d.others || [])
-    return { r, d, v, s }
+    return { r, d, v, s, m: m || [] }
   }, [])
 
   useEffect(() => {
     reload()
-      .then(({ r, d, s }) => {
+      .then(({ r, d, s, m }) => {
         if (!s.repoPath || r.docs === 0) {
           if (!s.repoPath) setNeedSetup(true)
         }
         // 첫 화면 — 마지막에 읽던 문서를 그대로 연다. 시작점도 거기서 잡는다.
-        if (s.lastDoc && d.docs.some((x) => x.id === s.lastDoc)) {
+        //
+        // **관리 문서도 찾는다.** 전에는 `d.docs`(작업 기록)에서만 찾아서,
+        // 어제 마지막으로 본 것이 테이블정의서였으면 복원이 조용히 실패했다 --
+        // 빈 화면으로 열리고 뻗어나가기도 꺼진 채였다.
+        //
+        // **왼쪽은 목록으로 연다.** 어제 뻗던 자리를 복원하면, 오늘 처음 보는
+        // 화면이 어디서 왔는지 모를 열 몇 개가 된다.
+        const work = s.lastDoc && d.docs.find((x) => x.id === s.lastDoc)
+        const man = s.lastDoc && (m || []).find((x) => x.path === s.lastDoc)
+        if (work) {
           setDocId(s.lastDoc)
-          setRoot({ kind: 'work', key: s.lastDoc, open: s.lastDoc })
+          setRoot({ kind: 'work', key: s.lastDoc, label: work.title, open: s.lastDoc })
+        } else if (man) {
+          setDocId(s.lastDoc)
+          setRoot({ kind: 'managed', key: man.path, label: man.name, open: man.path })
         }
         api.saveState({ lastVisit: new Date().toISOString() })
       })
@@ -132,22 +158,17 @@ export default function App() {
       '--doc-measure',
       reading.measure === 'window' ? '100%' : `${reading.measure}px`
     )
-    el.style.setProperty('--w-find', `${state?.panes?.find ?? 400}px`)
-    el.style.setProperty('--h-find-top', `${state?.panes?.findTop ?? 46}%`)
-  }, [reading.fontSize, reading.measure, state?.panes?.find, state?.panes?.findTop])
+  }, [reading.fontSize, reading.measure])
 
-  // 비율 버튼 — 창 폭에서 역산한다. 창이 바뀌면 비율을 유지한다.
+  // 왼쪽 폭 — **하는 일마다 따로 기억한다.**
+  //
+  // 하나의 폭으로 두면 뻗어나가기에 맞춰 넓힌 폭이 목록에도 그대로 남아,
+  // 제목 한 줄짜리 목록이 화면 절반을 차지한다. 반대로 목록에 맞춰 좁히면
+  // 뻗어나가기가 다시 한 열 반이 된다.
   useEffect(() => {
-    if (!ratio || ratio === 'find') return
-    const apply = () => {
-      const w = clamp(Math.round(document.documentElement.clientWidth / (ratio + 1)), 280, 900)
-      document.documentElement.style.setProperty('--w-find', w + 'px')
-    }
-    apply()
-    const ro = new ResizeObserver(apply)
-    ro.observe(document.documentElement)
-    return () => ro.disconnect()
-  }, [ratio])
+    const w = leftMode === 'explore' ? (state?.panes?.explore ?? W_XP) : (state?.panes?.list ?? W_LIST)
+    document.documentElement.style.setProperty('--w-find', `${w}px`)
+  }, [leftMode, state?.panes?.list, state?.panes?.explore])
 
   // 테마 — OS 따라가기 기본(§16.4)
   useEffect(() => {
@@ -171,6 +192,11 @@ export default function App() {
     })
   }, [])
 
+  const say = useCallback((msg, ms = 2600) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), ms)
+  }, [])
+
   // 매뉴얼이 레포에 있나. 파일명으로 찾는다 -- 시드가 그 이름으로 넣는다.
   const manualDoc = useMemo(() => {
     const hit = (others || []).find((d) => MANUAL_MAIN.test(d.path))
@@ -179,45 +205,38 @@ export default function App() {
 
   // 문서 동기화 — **한 번에 fetch + (뒤처졌으면) pull + 재스캔.**
   //
-  // 전에는 상태바에서 `⬇ 원격 N건 받기` 를 눌러야 했고, 그 버튼은 **fetch 가
-  // 이미 돌아 뒤처짐을 알아낸 뒤에만** 나타났다. 그래서 "지금 최신인가"를
-  // 확인하려면 5분 주기 fetch 를 기다려야 했다.
-  //
   // ff 만 한다. merge·rebase 는 사람이 터미널에서 한다 — 섹션 두 갱신을
   // 기계가 섞으면 그 결과가 정본 자리에 앉는다.
   const syncNow = useCallback(async () => {
     setSyncing('fetch')
     try {
       const g = await api.git(true)
-      if (!g?.repo) return setToast('git 레포가 아닙니다')
+      if (!g?.repo) return say('git 레포가 아닙니다')
       if (g.behind > 0) {
         setSyncing('pull')
         const r = await api.gitPull()
         if (!r?.ok) {
           // ff 가 안 되면 **그대로 알린다.** 앱이 정리하지 않는다.
-          setToast(r?.message || 'ff 불가 — 터미널에서 git pull --rebase')
-          return
+          return say(r?.message || 'ff 불가 — 터미널에서 git pull --rebase', 6000)
         }
         await reload()
-        setToast(`원격 ${g.behind}건 받았습니다`)
-        return
+        return say(`원격 ${g.behind}건 받았습니다`)
       }
       await reload()
-      setToast(g.ahead > 0 ? `이미 최신 · 미전송 ${g.ahead}건` : '이미 최신입니다')
+      say(g.ahead > 0 ? `이미 최신 · 미전송 ${g.ahead}건` : '이미 최신입니다')
     } catch (e) {
-      setToast(e?.message || '동기화 실패')
+      say(e?.message || '동기화 실패')
     } finally {
       setSyncing(null)
     }
-  }, [reload])
+  }, [reload, say])
 
   const openDoc = useCallback(
     (id, at = null) => {
       if (!id) return
       setDocId(id)
       // 문서 안에서 갈 자리 — 뻗어나가기에서 섹션(좌표)을 눌러 온 경우.
-      // 같은 줄을 다시 눌러도 다시 가야 하므로 seq 를 붙인다. 값이 같으면
-      // 상태가 안 바뀌어 아무 일도 일어나지 않는다.
+      // 같은 줄을 다시 눌러도 다시 가야 하므로 seq 를 붙인다.
       setDocAt(at ? { value: at, seq: ++atSeqRef.current } : null)
       const h = historyRef.current
       h.stack = h.stack.slice(0, h.pos + 1)
@@ -235,34 +254,36 @@ export default function App() {
     [patch, docs]
   )
 
-  // 시작점을 고른다 — 왼쪽 아래가 여기서부터 뻗어나간다.
+  // 시작점을 고른다 — 뻗어나가기가 여기서부터 뻗는다.
   //
-  // 열 수 있는 노드(작업 기록 · 관리 문서)면 오른쪽도 같이 바꾼다. 좌표는
-  // 문서가 아니므로 오른쪽을 건드리지 않는다 -- 아래에서 섹션을 한 번 더
-  // 고르면 그 관리 문서가 열린다.
+  // **문서를 고르면 목록에 남고, 좌표를 고르면 뻗어나가기로 넘어간다.**
+  //
+  // 둘을 같게 두면 하나가 망가진다. 목록을 훑으며 여러 건을 차례로 읽는 것은
+  // 실제로 자주 하는 일인데, 문서 하나 눌렀다고 목록이 사라지면 다음 것을
+  // 보러 매번 되돌아와야 한다. 반대로 좌표는 **오른쪽에 열 것이 없다** —
+  // 좌표를 고르는 유일한 이유가 뻗어나가기이므로 거기 두면 한 번 더 누르게 된다.
   const pickRoot = useCallback((node) => {
     setRoot(node)
     if (node?.open) openDoc(node.open)
+    else setLeftMode('explore')
   }, [openDoc])
 
-  // 위/아래 비율 — 끌어서 조절한다
-  const startVDrag = useCallback((e) => {
-    e.preventDefault()
-    const pane = e.currentTarget.parentElement
-    const box = pane.getBoundingClientRect()
-    const mv = (ev) => {
-      const pct = clamp(((ev.clientY - box.top) / box.height) * 100, 20, 80)
-      document.documentElement.style.setProperty('--h-find-top', pct + '%')
-      pane._pct = pct
-    }
-    const up = () => {
-      window.removeEventListener('mousemove', mv)
-      window.removeEventListener('mouseup', up)
-      if (pane._pct) patch({ panes: { findTop: Math.round(pane._pct) } })
-    }
-    window.addEventListener('mousemove', mv)
-    window.addEventListener('mouseup', up)
-  }, [patch])
+  // 그래프에서 노드를 누르는 것은 **고르는 것이지 떠나는 것이 아니다.**
+  //
+  // 누르는 순간 화면을 나가면 그래프를 볼 수가 없다 — 그 클릭은 "이어진 것만
+  // 남겨 달라"는 뜻이고, 그것이 이 그림을 읽는 방법이다. 여기서는 시작점만
+  // 잡아 두고, 떠나는 것은 아래 바의 `뻗어나가기 →` 가 한다.
+  const markFromGraph = useCallback((coord) => {
+    setRoot({ kind: 'coord', key: coord, label: coord })
+  }, [])
+
+  // 그래프에서 나가 뻗어나가기로 — 그래프는 "무엇이 무엇과 붙어 있나"까지만
+  // 답한다. 그 다음은 뻗어나가기다.
+  const goFromGraph = useCallback((coord) => {
+    setRoot({ kind: 'coord', key: coord, label: coord })
+    setLeftMode('explore')
+    setTopMode('doc')
+  }, [])
 
   const saveScroll = useCallback(
     (id, ratio) => patch({ scroll: { [id]: { ratio, at: Date.now() } } }),
@@ -292,7 +313,7 @@ export default function App() {
       }
       if (mod && e.key === '.') {
         e.preventDefault()
-        // 읽기 모드 — 하나로 전환, 상태는 기억된다(§27.5)
+        // 읽기 모드 — 왼쪽을 통째로 접는다. 상태는 기억된다(§27.5)
         return patch({ reading: { mode: reading.mode === 'focus' ? 'browse' : 'focus' } })
       }
       if (mod && (e.key === '=' || e.key === '+')) {
@@ -307,8 +328,6 @@ export default function App() {
         e.preventDefault()
         return patch({ reading: { fontSize: 15 } })
       }
-      // 뷰 전환 단축키가 없어졌다 — 뷰가 없다. 왼쪽 위 탭이 그 자리다.
-      if (mod && e.altKey === false && e.key === 'ArrowLeft') return
       if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault()
         const h = historyRef.current
@@ -330,8 +349,23 @@ export default function App() {
 
       if (inField || mod) return
 
-      if (e.key === 'Escape' && checkOpen) return setCheckOpen(false)
-      if (e.key === '?') return setSettingsOpen((s) => !s)
+      // **Esc 는 위에서부터 하나씩 벗긴다.** 겹쳐 뜬 것을 한 번에 다 닫으면
+      // 실수로 누른 사람이 하던 자리를 통째로 잃는다.
+      if (e.key === 'Escape') {
+        if (checkOpen) return setCheckOpen(false)
+        if (helpOpen) return setHelpOpen(false)
+        if (menuOpen) return setMenuOpen(false)
+        if (settingsOpen) return setSettingsOpen(false)
+        if (topMode === 'graph') return setTopMode('doc')
+        return
+      }
+      // 왼쪽이 하는 일을 바꾼다 — 탭 키는 브라우저 것이므로 쓰지 않는다
+      if (e.key === '\\') {
+        e.preventDefault()
+        return setLeftMode((m) => (m === 'list' ? (root ? 'explore' : 'list') : 'list'))
+      }
+      // `?` 는 관례상 도움말이다. 전에는 설정이 열렸다.
+      if (e.key === '?') return setHelpOpen((s) => !s)
       if (e.key === 'j' || e.key === 'k') {
         e.preventDefault()
         const list = docs
@@ -349,14 +383,9 @@ export default function App() {
         const d = docs.find((x) => x.id === docId)
         if (d) {
           api.doc(docId).then((full) => navigator.clipboard?.writeText(summaryText(full)))
-          setToast('요약 복사됨')
-          setTimeout(() => setToast(null), 1500)
+          say('요약 복사됨', 1500)
         }
         return
-      }
-      if (/^[1-4]$/.test(e.key)) {
-        const keys = ['what', 'why', 'who', 'next']
-        document.getElementById(`sec-${keys[Number(e.key) - 1]}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -401,174 +430,266 @@ export default function App() {
     return <div className="empty" style={{ paddingTop: '20vh' }}>불러오는 중…</div>
   }
 
-  // 읽기 모드는 "읽을 것이 있을 때"만 적용한다. 문서를 안 골랐는데 패널을
+  // 읽기 모드는 "읽을 것이 있을 때"만 적용한다. 문서를 안 골랐는데 왼쪽을
   // 접으면 고를 방법이 사라진다 — 설정은 기억하되 화면에는 반영하지 않는다.
-  // 검증 뷰도 마찬가지로 읽기 모드를 쓰지 않는다(목록이 아니라 결과가 본문이다).
-  const effectiveMode = reading.mode === 'focus' && docId ? 'focus' : 'browse'
+  const effectiveMode = reading.mode === 'focus' && docId && topMode === 'doc' ? 'focus' : 'browse'
+  const c = repo.checkCounts || { error: 0, warn: 0, info: 0 }
+  const repoName = repo.root.split(/[\\/]/).pop()
 
-  // data-hide-list: 검증 뷰는 목록이 필요 없다 — 본문 폭을 내주는 것이 낫다.
   // data-force-status: 감시가 끊기면 읽기 모드에서도 상태바를 되살린다 —
   //   화면이 낡았을 수 있는데 조용한 화면으로 읽고 있으면 안 된다(§23.3 · §27.5).
   return (
     <div
       className="app"
       data-mode={effectiveMode}
+      data-top={topMode}
       data-density={state.density || 'normal'}
       data-nodoc={docId ? '0' : '1'}
-      data-split={ratio === 'find' ? 'find' : 'both'}
       data-force-status={repo.watchEnabled && !repo.watchAlive ? '1' : '0'}
     >
       <header className="topbar">
-        <span className="topbar__name">{repo.root.split(/[\\/]/).pop()}</span>
+        <span className="topbar__name">{repoName}</span>
         {repo.hostWarning && <span className="hostwarn">⚠ loopback 아님</span>}
+
+        {/* 화면 전체 모드 둘. **그래프는 패널이 아니라 화면이다** —
+            좌표 288개짜리 그림을 400px 안에서 읽을 수 있는 사람은 없다. */}
+        <div className="seg seg--mode" role="group" aria-label="화면">
+          <button aria-pressed={topMode === 'doc'} onClick={() => setTopMode('doc')}>문서</button>
+          <button aria-pressed={topMode === 'graph'} onClick={() => setTopMode('graph')}>그래프</button>
+        </div>
+
+        {/* 왼쪽을 접어 둔 상태 — **펴는 길이 화면에 있어야 한다.**
+            단축키(⌘.)와 메뉴만 두면, 접어 놓고 여는 법을 잊은 사람은
+            목록으로 돌아갈 수 없다. */}
+        {effectiveMode === 'focus' && (
+          <button className="pill pill--ghost" onClick={() => patch({ reading: { mode: 'browse' } })} title="왼쪽 펴기 (⌘.)">
+            ▶ 목록
+          </button>
+        )}
+
         <span className="topbar__spacer" />
-        {toast && <span style={{ color: 'var(--text-2)', fontSize: 11.5 }}>{toast}</span>}
         <button className="topbar__search" onClick={() => setPaletteOpen(true)}>
           <span>검색 · 이동</span>
           <span className="topbar__spacer" />
           <span className="kbd">⌘K</span>
         </button>
-        {/* 문서 동기화 — 받아오는 것이 유일한 수신 채널이다(§1).
-            보내기는 여기 두지 않는다. **push 는 사람이 상태바에서 누른다** —
-            커밋은 되돌릴 수 있지만 push 는 남의 눈에 들어간다. */}
-        <button
-          className="iconbtn"
-          onClick={syncNow}
-          disabled={!!syncing}
-          title="문서 동기화 — 원격에서 받아온다 (ff 만)"
-        >
-          {syncing ? '⟳' : '⭮'}
-        </button>
-        {/* 매뉴얼 — **레포에 있을 때만.** 폐쇄망에서는 물어볼 사람이 없어서
-            레포가 매뉴얼을 자기 안에 들고 있다. 없는 레포도 있다. */}
-        {manualDoc && (
-          <button className="iconbtn" onClick={() => openDoc(manualDoc)} title="사용 매뉴얼">
-            📖
+        <span className="topbar__spacer" />
+
+        {/* 검증 — **아침에 제일 먼저 보는 값이다.** 상태바 11.5px 글씨에
+            두면 매일 찾아 읽어야 한다. 0건이면 조용하다. */}
+        {c.error > 0 ? (
+          <button className="pill pill--error" onClick={() => setCheckOpen(true)} title="검사 결과 — 커밋이 거부된다">
+            ⛔ 검증 {c.error}
+          </button>
+        ) : c.warn > 0 ? (
+          <button className="pill pill--warn" onClick={() => setCheckOpen(true)} title="검사 결과">
+            ⚠ 검증 {c.warn}
+          </button>
+        ) : (
+          <button className="pill" onClick={() => setCheckOpen(true)} title="검사 결과 — 통과했을 때도 볼 수 있다">
+            ✓ 검사
           </button>
         )}
-        {/* 좌우 비율 — 문서 : 찾는 곳. 끌지 않고 한 번에 맞춘다 */}
-        <div className="seg seg--ratio" role="group" aria-label="문서 : 찾는 곳 비율">
-          {[1, 2, 3].map((n) => (
-            <button
-              key={n}
-              aria-pressed={ratio === n}
-              title={`문서 : 찾는 곳 = ${n}:1`}
-              onClick={() => setRatio(n)}
-            >
-              {n}:1
-            </button>
-          ))}
-          {/* 문서 영역을 아예 없앤다. 그래프·좌표를 넓게 볼 때 쓴다 —
-              283개짜리 그래프는 왼쪽 400px 에서 읽을 수 있는 그림이 아니다 */}
-          <button
-            aria-pressed={ratio === 'find'}
-            title="문서 영역 없음 — 찾는 곳이 전부"
-            onClick={() => setRatio(ratio === 'find' ? null : 'find')}
-          >
-            찾기만
-          </button>
-        </div>
+
         <button
           className="iconbtn"
-          aria-pressed={reading.mode === 'focus'}
-          onClick={() => patch({ reading: { mode: reading.mode === 'focus' ? 'browse' : 'focus' } })}
-          title="읽기 모드 (⌘.)"
+          aria-expanded={menuOpen}
+          onClick={() => { setMenuOpen((m) => !m); setSettingsOpen(false) }}
+          title="더보기"
         >
-          ▭
-        </button>
-        <button className="iconbtn" onClick={() => setSettingsOpen((s) => !s)} title="설정 (?)">
-          ⚙
+          ⋯
         </button>
       </header>
+
+      {/* 더보기 — 하루에 몇 번 안 누르는 것들. 상단바에 늘 펴 둘 이유가 없다.
+          전에는 동기화·매뉴얼·읽기모드·비율 4개·설정이 전부 상단바에 있었다. */}
+      {menuOpen && (
+        <>
+          <div className="scrim" onMouseDown={() => setMenuOpen(false)} />
+          <div className="menu" role="menu">
+            <button className="menu__row" onClick={() => { setMenuOpen(false); syncNow() }} disabled={!!syncing}>
+              <span className="menu__ico">{syncing ? '⟳' : '⭮'}</span>
+              문서 동기화
+              <span className="menu__hint">원격에서 받아온다 (ff 만)</span>
+            </button>
+            <button className="menu__row" onClick={() => { setMenuOpen(false); setHelpOpen(true) }}>
+              <span className="menu__ico">📖</span>
+              도움말 — 단축키 · 매뉴얼
+              <span className="menu__hint kbd">?</span>
+            </button>
+            <button
+              className="menu__row"
+              onClick={() => { setMenuOpen(false); patch({ reading: { mode: reading.mode === 'focus' ? 'browse' : 'focus' } }) }}
+            >
+              <span className="menu__ico">▭</span>
+              {reading.mode === 'focus' ? '왼쪽 펴기' : '읽기 모드 — 왼쪽 접기'}
+              <span className="menu__hint kbd">⌘.</span>
+            </button>
+            <div className="menu__hr" />
+            <div className="menu__cap">글자 크기</div>
+            <div className="menu__seg">
+              <div className="seg">
+                {[13, 14, 15, 16, 18].map((s) => (
+                  <button key={s} aria-pressed={reading.fontSize === s} onClick={() => patch({ reading: { fontSize: s } })}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="menu__cap">본문 폭</div>
+            <div className="menu__seg">
+              <div className="seg">
+                {[[620, '좁게'], [760, '보통'], [900, '넓게'], ['window', '창 폭']].map(([v, l]) => (
+                  <button key={v} aria-pressed={reading.measure === v} onClick={() => patch({ reading: { measure: v } })}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="menu__cap">테마</div>
+            <div className="menu__seg">
+              <div className="seg">
+                {['system', 'light', 'dark'].map((t) => (
+                  <button key={t} aria-pressed={(state.theme || 'system') === t} onClick={() => patch({ theme: t })}>
+                    {{ system: '자동', light: '밝게', dark: '어둡게' }[t]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="menu__hr" />
+            <button className="menu__row" onClick={() => { setMenuOpen(false); setSettingsOpen(true) }}>
+              <span className="menu__ico">⚙</span>
+              설정 — 레포 · 에이전트 설치
+            </button>
+          </div>
+        </>
+      )}
 
       {settingsOpen && (
         <Settings
           state={state}
           repo={repo}
           patch={patch}
-          reading={reading}
-          docs={others}
-          onOpen={(id) => { setSettingsOpen(false); openDoc(id) }}
           onClose={() => setSettingsOpen(false)}
         />
       )}
 
-      {/* **찾는 곳 | 문서** 2분할 (정정_판정모델_v2 §6).
-          왼쪽 위에서 시작점을 고르고, 왼쪽 아래에서 뻗어나간다.
-          오른쪽은 문서로서의 정보만 낸다. */}
-      <div className="panes">
-        <section className="pane pane--find" aria-label="찾는 곳">
-          <div className="find__top">
-            <Finder
-              docs={docs}
-              managed={managedList}
-              tree={tree}
-              root={root}
-              onPick={pickRoot}
-              readMap={readMap}
-              myCoords={myCoords}
-              onToggleMine={(c) =>
-                patch({ myCoords: myCoords.includes(c) ? myCoords.filter((x) => x !== c) : [...myCoords, c] })
-              }
-            />
-          </div>
-          {!xpFold && (
-            <div className="find__gut" role="separator" aria-label="위아래 비율" onMouseDown={startVDrag} />
-          )}
-          {/* 접으면 머리만 남는다. 그래프를 볼 때 아래 절반이 통째로
-              비어 있는 일이 잦다 — 그때 위가 두 배가 된다. */}
-          <div className="find__bot" data-fold={xpFold ? '1' : '0'}>
-            <button
-              className="find__label find__label--btn"
-              aria-expanded={!xpFold}
-              title={xpFold ? '펼치기' : '접기'}
-              onClick={() => patch({ panes: { xpFold: !xpFold } })}
-            >
-              <span className="find__caret" aria-hidden="true">{xpFold ? '▸' : '▾'}</span>
-              뻗어나가기
-            </button>
-            {!xpFold && (
-              <div className="find__scroll">
-                <Explore root={root} onOpen={openDoc} />
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* 손으로 끌면 비율을 놓는다 — 안 그러면 창 크기가 바뀔 때
-            비율 계산이 되살아나 끌어 놓은 폭을 덮는다 */}
-        <Gutter
-          varName="--w-find"
-          min={280}
-          max={900}
-          onCommit={(w) => { setRatio(null); patch({ panes: { find: w } }) }}
+      {helpOpen && (
+        <Help
+          docs={others}
+          onOpen={(id) => { setHelpOpen(false); openDoc(id) }}
+          onClose={() => setHelpOpen(false)}
         />
+      )}
 
-        <main className="pane pane--doc">
-          {docId ? (
-            <DocView
-              docId={docId}
-              at={docAt}
-              coordIndex={coordIndex}
-              myCoords={myCoords}
-              reading={reading}
-              changedPaths={changedPaths}
-              savedRatio={state.scroll?.[docId]?.ratio}
-              onOpen={openDoc}
-              onCoord={(c) => pickRoot({ kind: 'coord', key: c })}
-              onScrollSave={saveScroll}
-            />
-          ) : (
-            <Landing repo={repo} docs={docs} onOpen={openDoc} />
-          )}
-        </main>
-      </div>
+      {topMode === 'graph' ? (
+        /* 그래프 — 창 전체. 왼쪽 패널도 문서도 없다.
+           좌표를 고르면 문서 모드로 돌아가며 뻗어나가기가 열린다. */
+        <div className="pane pane--graph">
+          <CoordGraph
+            tree={tree}
+            docs={docs}
+            onPick={markFromGraph}
+            onGo={goFromGraph}
+            picked={root?.kind === 'coord' ? root.key : null}
+            onExit={() => setTopMode('doc')}
+          />
+        </div>
+      ) : (
+        <div className="panes">
+          <section className="pane pane--find" aria-label="찾는 곳">
+            {/* 왼쪽이 지금 하는 일. **한 번에 하나다.** */}
+            <div className="lrail" role="tablist" aria-label="왼쪽 영역">
+              <button
+                className="lrail__tab"
+                role="tab"
+                aria-selected={leftMode === 'list'}
+                onClick={() => setLeftMode('list')}
+              >
+                목록
+              </button>
+              <button
+                className="lrail__tab"
+                role="tab"
+                aria-selected={leftMode === 'explore'}
+                disabled={!root}
+                onClick={() => root && setLeftMode('explore')}
+                title={root ? root.key : '목록에서 하나를 고르면 여기서 뻗어나갑니다'}
+              >
+                뻗어나가기
+                {root && <span className="lrail__root">{ICON[root.kind]} {shortRoot(root)}</span>}
+              </button>
+              <span className="topbar__spacer" />
+              <button
+                className="lrail__fold"
+                onClick={() => patch({ reading: { mode: 'focus' } })}
+                title="왼쪽 접기 (⌘.)"
+                aria-label="왼쪽 접기"
+              >
+                ◀
+              </button>
+            </div>
 
-      <StatusBar repo={repo} scanning={scanning} onRescanned={reload} onCheck={() => setCheckOpen(true)} />
+            {leftMode === 'list' ? (
+              <Finder
+                docs={docs}
+                managed={managedList}
+                tree={tree}
+                root={root}
+                onPick={pickRoot}
+                readMap={readMap}
+                myCoords={myCoords}
+                onToggleMine={(c) =>
+                  patch({ myCoords: myCoords.includes(c) ? myCoords.filter((x) => x !== c) : [...myCoords, c] })
+                }
+              />
+            ) : (
+              <Explore root={root} onOpen={openDoc} onBack={() => setLeftMode('list')} />
+            )}
+          </section>
+
+          <Gutter
+            varName="--w-find"
+            min={280}
+            max={980}
+            onCommit={(w) => patch({ panes: leftMode === 'explore' ? { explore: w } : { list: w } })}
+          />
+
+          <main className="pane pane--doc">
+            {docId ? (
+              <DocView
+                docId={docId}
+                at={docAt}
+                coordIndex={coordIndex}
+                myCoords={myCoords}
+                reading={reading}
+                changedPaths={changedPaths}
+                savedRatio={state.scroll?.[docId]?.ratio}
+                onOpen={openDoc}
+                onCoord={(c) => pickRoot({ kind: 'coord', key: c, label: c })}
+                onScrollSave={saveScroll}
+              />
+            ) : (
+              <Landing repo={repo} docs={docs} onOpen={openDoc} />
+            )}
+          </main>
+        </div>
+      )}
+
+      <StatusBar
+        repo={repo}
+        scanning={scanning}
+        onRescanned={reload}
+        onCheck={() => setCheckOpen(true)}
+        onSay={(m) => say(m, 6000)}
+      />
+
+      {/* 알림 — 화면 아래에 잠깐 뜬다. 전에는 상단바 안이라 폭을 두고 다퉜다 */}
+      {toast && <div className="toast" role="status">{toast}</div>}
 
       {checkOpen && (
-        <div className="overlay" role="dialog" aria-label="검사 결과">
-          <div className="overlay__box">
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setCheckOpen(false)}>
+          <div className="overlay__box" role="dialog" aria-label="검사 결과">
             <div className="overlay__head">
               검사 결과
               <span className="topbar__spacer" />
@@ -585,7 +706,7 @@ export default function App() {
         <Palette
           onClose={() => setPaletteOpen(false)}
           onOpen={openDoc}
-          onCoord={(c) => pickRoot({ kind: 'coord', key: c })}
+          onCoord={(c) => pickRoot({ kind: 'coord', key: c, label: c })}
           onAliasMiss={onAliasMiss}
         />
       )}
@@ -593,8 +714,19 @@ export default function App() {
   )
 }
 
+const ICON = { work: '◆', coord: '◇', managed: '▦' }
 
-// 문서를 안 골랐을 때 — 좌표 요약 카드(§26.2)
+// 레일에 뿌리를 적는다.
+//
+// 좌표는 `table:` 접두어를 뗀다 — 알아야 하는 것은 뒤의 이름이다. 문서 제목은
+// **앞을 남긴다.** 작업 기록 제목은 `계획서 이력 3종 모델 — 스냅샷·…` 처럼
+// 앞머리가 주제이고 뒤는 부연이다.
+function shortRoot(root) {
+  const s = root.kind === 'coord' ? root.key.slice(root.key.indexOf(':') + 1) : String(root.label || root.key)
+  return s.length > 24 ? s.slice(0, 23) + '…' : s
+}
+
+// 문서를 안 골랐을 때 — 레포가 지금 무엇을 담고 있는지(§26.2)
 function Landing({ repo, docs, onOpen }) {
   const settled = docs.filter((d) => d.settledCoords > 0)
   return (
@@ -602,12 +734,12 @@ function Landing({ repo, docs, onOpen }) {
       <div className="docwrap">
         <h1 style={{ fontSize: 20, margin: '32px 0 4px' }}>{repo.root.split(/[\\/]/).pop()}</h1>
         <p style={{ color: 'var(--text-2)' }}>
-          문서 {docs.length}건
+          문서 {docs.length}건 · 좌표 {repo.coords}개
           {settled.length > 0 && ` · 후속이 있는 문서 ${settled.length}건`}
         </p>
         <p style={{ color: 'var(--text-3)', marginTop: 24 }}>
-          왼쪽 위에서 <b>시작점</b>을 고르면 아래에서 뻗어나갑니다.{' '}
-          <span className="kbd">⌘K</span> 로 자연어 검색, <span className="kbd">⌘.</span> 로 읽기 모드.
+          왼쪽 <b>목록</b>에서 하나를 고르면 <b>뻗어나가기</b>가 켜집니다.{' '}
+          <span className="kbd">⌘K</span> 로 자연어 검색, <span className="kbd">\</span> 로 왼쪽 전환.
         </p>
         {docs.slice(0, 5).map((d) => (
           <div className="nextread" key={d.id}>
@@ -620,8 +752,82 @@ function Landing({ repo, docs, onOpen }) {
   )
 }
 
-// 설정 — 읽는 사람이 정한다(§27.7)
-// MANUAL.md · MANUAL-관리자.md — 시드가 넣는 이름.
+// 도움말 — **읽는 것**만 있다. 단축키와 매뉴얼.
+//
+// 전에는 설정 팝오버 맨 아래 380px 폭에 단축키가 눌려 있었고, 매뉴얼은 그
+// 위 `문서` 절에 있었다. 둘 다 레포 경로·에이전트 설치와 같은 스크롤을
+// 지나야 닿는 자리였다.
+function Help({ docs = [], onOpen, onClose }) {
+  const manuals = (docs || [])
+    .filter((d) => MANUAL_RE.test(d.path))
+    .sort((a, b) => (MANUAL_MAIN.test(b.path) ? 1 : 0) - (MANUAL_MAIN.test(a.path) ? 1 : 0))
+
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="overlay__box overlay__box--help" role="dialog" aria-label="도움말">
+        <div className="overlay__head">
+          도움말
+          <span className="topbar__spacer" />
+          <button className="iconbtn" onClick={onClose} aria-label="닫기">✕</button>
+        </div>
+        <div className="overlay__body help">
+          <div className="help__cap">화면</div>
+          <p className="help__note">
+            <b>왼쪽은 한 번에 하나만 한다</b> — 고르는 중이면 <b>목록</b>,
+            따라가는 중이면 <b>뻗어나가기</b>. 둘이 같은 자리를 쓰므로 각각이
+            세로 전체를 받는다. 좌표를 고르면 자동으로 뻗어나가기로 넘어간다 —
+            좌표는 오른쪽에 열 것이 없다.
+          </p>
+
+          <div className="help__cap">단축키</div>
+          <dl className="help__keys">
+            {[
+              [['⌘K'], '검색 · 이동 — 자연어를 정본 좌표로 대조한다'],
+              [['\\'], '왼쪽 전환 — 목록 ↔ 뻗어나가기'],
+              [['⌘.'], '읽기 모드 — 왼쪽을 접는다'],
+              [['⌘+', '⌘-', '⌘0'], '본문 글자 크기'],
+              [['j', 'k'], '작업문서 목록 위아래'],
+              [['x'], '읽음 표시 토글'],
+              [['⇧C'], '요약 복사 — AI 세션에 붙여넣는 형식 그대로'],
+              [['⌥←', '⌥→'], '방문 이력'],
+              [['?'], '이 창'],
+              [['esc'], '닫기 — 겹쳐 있으면 위에서부터 하나씩'],
+            ].map(([keys, what]) => (
+              <div className="help__row" key={what}>
+                <dt>{keys.map((k) => <span className="kbd" key={k}>{k}</span>)}</dt>
+                <dd>{what}</dd>
+              </div>
+            ))}
+          </dl>
+
+          {manuals.length > 0 && (
+            <>
+              <div className="help__cap">매뉴얼</div>
+              {manuals.map((d) => (
+                <button key={d.path} className="help__doc" onClick={() => onOpen?.(d.path)}>
+                  📖 {manualLabel(d.path)}
+                </button>
+              ))}
+              <p className="help__note">
+                설계서는 레포의 <code>design/</code> 에 있다 — <b>왜 이렇게 만들었는지</b>가
+                거기 있다.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// 설정 — **바꾸는 것**만 남았다. 레포 경로 · 원격 · 에이전트 설치.
+//
+// 전에는 테마·글자 크기·본문 폭·매뉴얼·단축키까지 일곱 주제가 여기 있었다.
+// 매일 만지는 것(글자 크기)과 평생 한 번 하는 것(에이전트 설치)이 같은
+// 스크롤 안에 있으면, 자주 쓰는 쪽이 매번 긴 목록을 지나야 한다.
+// 읽기 설정은 `⋯` 메뉴로, 단축키와 매뉴얼은 도움말(`?`)로 나갔다.
+//
+// MANUAL.md · MANUAL-관리자.md · MANUAL-시스템.md — 시드가 넣는 이름.
 const MANUAL_RE = new RegExp('^MANUAL(-.+)?[.]md$', 'i')
 const MANUAL_MAIN = new RegExp('^MANUAL[.]md$', 'i')
 const PSEP = String.fromCharCode(92)
@@ -631,9 +837,21 @@ const OPLBL = { create: '새로  ', update: '갱신  ', append: '블록  ', remo
 const shortOf = (a) =>
   a.kind === 'skill' ? `.claude/skills/${a.name}` : a.kind === 'claude' ? 'CLAUDE.md' : '.claude/cdp.json'
 
-function Settings({ state, repo, patch, reading, docs = [], onOpen, onClose }) {
+// 매뉴얼 이름 — **파일명이 이미 갖고 있는 구분을 버리지 않는다.**
+//
+// 전에는 `MANUAL.md` 가 아니면 전부 "관리자용"이었다. 레포에 관리자용과
+// 시스템용이 같이 있으면 **같은 이름 두 줄**이 뜬다 — 어느 것이 어느 것인지
+// 파일을 열어봐야 알았다.
+function manualLabel(path) {
+  const m = String(path).match(/^MANUAL(?:-(.+))?\.md$/i)
+  if (!m) return path
+  return m[1] ? `사용 매뉴얼 — ${m[1]}용` : '사용 매뉴얼 — 일반 사용자용'
+}
+
+function Settings({ state, repo, patch, onClose }) {
   // **경로를 바꾸면 앱이 다른 레포를 본다.** 그래서 마우스가 벗어나도 닫지
-  // 않는다 -- 입력 중에 닫히면 타이핑한 것이 사라진다.
+  // 않는다 -- 입력 중에 닫히면 타이핑한 것이 사라진다. 닫는 길은 머리의 ✕ ·
+  // Esc · 바깥 클릭 셋이다.
   const [path, setPath] = useState(state.repoPath || '')
   const [probe, setProbe] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -709,217 +927,135 @@ function Settings({ state, repo, patch, reading, docs = [], onOpen, onClose }) {
     }
   }
 
-  // **일반 사용자용을 먼저.** 파일명순으로 두면 `MANUAL-관리자.md` 가
-  // 앞서는데, 이 목록을 여는 사람 대부분은 관리자가 아니다.
-  const manuals = (docs || [])
-    .filter((d) => MANUAL_RE.test(d.path))
-    .sort((a, b) => (MANUAL_MAIN.test(b.path) ? 1 : 0) - (MANUAL_MAIN.test(a.path) ? 1 : 0))
-
   return (
-    <div className="popover popover--wide">
-      <div className="field">
-        <span>테마</span>
-        <div className="seg">
-          {['system', 'light', 'dark'].map((t) => (
-            <button key={t} aria-pressed={(state.theme || 'system') === t} onClick={() => patch({ theme: t })}>
-              {{ system: '자동', light: '밝게', dark: '어둡게' }[t]}
-            </button>
-          ))}
+    <>
+      <div className="scrim" onMouseDown={onClose} />
+      <div className="popover popover--wide" role="dialog" aria-label="설정">
+        <div className="popover__head">
+          설정
+          <span className="topbar__spacer" />
+          <button className="iconbtn" onClick={onClose} aria-label="닫기">✕</button>
         </div>
-      </div>
 
-      <div className="hr" />
-      <div className="popover__cap">지식 레포</div>
+        <div className="popover__body">
+          <div className="popover__cap">지식 레포</div>
 
-      {/* 경로 — 전에는 **최초 지정 화면에만** 있었다. 한 번 지정하면 그 뒤로
-          바꿀 데가 없어서, 다른 레포를 보려면 설정을 지우거나 `--repo` 로
-          다시 띄워야 했다. */}
-      <div className="field field--stack">
-        <span>로컬 경로</span>
-        <input
-          className="popover__in"
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && apply()}
-          placeholder={'C:' + PSEP + 'work' + PSEP + 'knowledge-repo'}
-          spellCheck={false}
-        />
-        {dirty && (
-          <div className="popover__note">
-            {!probe ? (
-              '확인 중…'
-            ) : probe.ok ? (
-              <>
-                <b>지식 레포 맞습니다.</b>{' '}
-                <button className="linkbtn" onClick={apply} disabled={busy}>
-                  {busy ? '바꾸는 중…' : '이 경로로 바꾸기'}
-                </button>
-              </>
-            ) : (
-              probe.reason || '_vocab.md 가 없습니다 — 지식 레포가 아닙니다'
+          <div className="field field--stack">
+            <span>로컬 경로</span>
+            <input
+              className="popover__in"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && apply()}
+              placeholder={'C:' + PSEP + 'work' + PSEP + 'knowledge-repo'}
+              spellCheck={false}
+            />
+            {dirty && (
+              <div className="popover__note">
+                {!probe ? (
+                  '확인 중…'
+                ) : probe.ok ? (
+                  <>
+                    <b>지식 레포 맞습니다.</b>{' '}
+                    <button className="linkbtn" onClick={apply} disabled={busy}>
+                      {busy ? '바꾸는 중…' : '이 경로로 바꾸기'}
+                    </button>
+                  </>
+                ) : (
+                  probe.reason || '_vocab.md 가 없습니다 — 지식 레포가 아닙니다'
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      <div className="hr" />
-      <div className="popover__cap">작업 레포 — 에이전트 설치</div>
-
-      {/* **앱이 레포 밖에 파일을 쓰는 유일한 자리다.**
-          그래서 먼저 무엇을 쓸지 보여 주고, 사람이 누르면 쓴다.
-          대상이 git 레포가 아니면 서버가 거부한다. */}
-      <div className="popover__note">
-        코드가 있는 레포에 규약과 skill 을 넣는다. <b>하네스는 프로젝트 루트의
-        <code> .claude/skills/</code> 만 읽으므로</b>, 넣지 않으면 그 레포에서
-        절차가 통째로 없다.
-      </div>
-
-      {(state.workRepos || []).map((w) => (
-        <div className="field" key={w}>
-          <span className="popover__mono" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{w}</span>
-          <button className="linkbtn" disabled={!!inst} onClick={() => doPlan(w)}>
-            {inst === w ? '설치 중…' : '에이전트 설치'}
-          </button>
-          <button className="linkbtn" onClick={() => patch({ workRepos: (state.workRepos || []).filter((x) => x !== w) })}>
-            빼기
-          </button>
-        </div>
-      ))}
-
-      <div className="field field--stack">
-        <span>레포 추가</span>
-        <input
-          className="popover__in"
-          value={wr}
-          onChange={(e) => setWr(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && addWr()}
-          placeholder={'C:' + PSEP + 'gdi'}
-          spellCheck={false}
-        />
-        {wr.trim() && (
-          <div className="popover__note">
-            <button className="linkbtn" onClick={addWr}>목록에 넣기</button>
+          <div className="field">
+            <span>원격</span>
+            <span className="popover__mono">
+              {gitInfo === null ? '…' : gitInfo.upstream || gitInfo.remote || (gitInfo.repo ? 'upstream 없음' : 'git 레포 아님')}
+            </span>
           </div>
-        )}
-      </div>
+          {/* **자격 증명을 이 앱이 다루지 않는다.** 인증은 git 이 OS 자격 증명
+              관리자로 처리한다 -- 앱이 아이디·토큰을 들고 있으면 그것을 저장할
+              자리가 하나 더 생기고, 그 자리가 가장 약한 곳이 된다. */}
+          <div className="popover__note">
+            <b>git 로그인은 여기서 하지 않는다.</b> 인증은 git 이 OS 자격 증명
+            관리자로 처리한다.
+            <div className="popover__mono" style={{ marginTop: 4 }}>
+              git config --global credential.helper manager
+            </div>
+            한 번 설정하고 아무 <code>git push</code> 를 하면 OS 창이 뜬다. 그 뒤로는
+            앱의 받기·보내기가 그대로 된다.
+          </div>
 
-      {plan && (
-        <div className="popover__note">
-          {plan.error ? (
-            <b>{plan.error}</b>
-          ) : (
-            <>
-              <b>{plan.path}</b> 에 이렇게 씁니다 —
-              <div className="popover__mono" style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>
-                {plan.actions.filter((a) => a.op !== 'same').map((a) => `${OPLBL[a.op]}  ${shortOf(a)}`).join(String.fromCharCode(10)) || '(바뀔 것 없음)'}
-              </div>
-              {plan.warnings.map((w, i) => (
-                <div key={i} style={{ color: 'var(--warn, var(--text-2))' }}>⚠ {w}</div>
-              ))}
-              <button className="linkbtn" disabled={!!inst} onClick={() => doApply(plan.path)}>
-                {inst ? '쓰는 중…' : '이대로 설치'}
-              </button>{' '}
-              <button className="linkbtn" onClick={() => setPlan(null)}>취소</button>
-            </>
-          )}
-        </div>
-      )}
-
-      <div className="field">
-        <span>원격</span>
-        <span className="popover__mono">
-          {gitInfo === null ? '…' : gitInfo.upstream || gitInfo.remote || (gitInfo.repo ? 'upstream 없음' : 'git 레포 아님')}
-        </span>
-      </div>
-      {/* **자격 증명을 이 앱이 다루지 않는다.** 인증은 git 이 OS 자격 증명
-          관리자로 처리한다 -- 앱이 아이디·토큰을 들고 있으면 그것을 저장할
-          자리가 하나 더 생기고, 그 자리가 가장 약한 곳이 된다. */}
-      <div className="popover__note">
-        <b>git 로그인은 여기서 하지 않는다.</b> 인증은 git 이 OS 자격 증명
-        관리자로 처리한다.
-        <div className="popover__mono" style={{ marginTop: 4 }}>
-          git config --global credential.helper manager
-        </div>
-        한 번 설정하고 아무 <code>git push</code> 를 하면 OS 창이 뜬다. 그 뒤로는
-        앱의 받기·보내기가 그대로 된다.
-      </div>
-
-      {manuals.length > 0 && (
-        <>
           <div className="hr" />
-          <div className="popover__cap">문서</div>
-          {manuals.map((d) => (
-            <button key={d.path} className="popover__row" onClick={() => onOpen?.(d.path)}>
-              📖 {MANUAL_MAIN.test(d.path) ? '사용 매뉴얼 — 일반 사용자용' : '사용 매뉴얼 — 관리자용'}
-            </button>
-          ))}
+          <div className="popover__cap">작업 레포 — 에이전트 설치</div>
+
+          {/* **앱이 레포 밖에 파일을 쓰는 유일한 자리다.**
+              그래서 먼저 무엇을 쓸지 보여 주고, 사람이 누르면 쓴다. */}
           <div className="popover__note">
-            설계서는 레포의 <code>design/</code> 에 있다 — <b>왜 이렇게 만들었는지</b>가
-            거기 있다.
+            코드가 있는 레포에 규약과 skill 을 넣는다. <b>하네스는 프로젝트 루트의
+            <code> .claude/skills/</code> 만 읽으므로</b>, 넣지 않으면 그 레포에서
+            절차가 통째로 없다.
           </div>
-        </>
-      )}
 
-      <div className="hr" />
-      <div className="popover__cap">읽기</div>
-
-      <div className="field">
-        <span>글자 크기</span>
-        <div className="seg">
-          {[13, 14, 15, 16, 18].map((s) => (
-            <button key={s} aria-pressed={reading.fontSize === s} onClick={() => patch({ reading: { fontSize: s } })}>
-              {s}
-            </button>
+          {(state.workRepos || []).map((w) => (
+            <div className="field" key={w}>
+              <span className="popover__mono" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{w}</span>
+              <button className="linkbtn" disabled={!!inst} onClick={() => doPlan(w)}>
+                {inst === w ? '설치 중…' : '에이전트 설치'}
+              </button>
+              <button className="linkbtn" onClick={() => patch({ workRepos: (state.workRepos || []).filter((x) => x !== w) })}>
+                빼기
+              </button>
+            </div>
           ))}
-        </div>
-      </div>
 
-      <div className="field">
-        <span>본문 폭</span>
-        <div className="seg">
-          {[
-            [620, '좁게'],
-            [760, '보통'],
-            [900, '넓게'],
-            ['window', '창 폭'],
-          ].map(([v, l]) => (
-            <button key={v} aria-pressed={reading.measure === v} onClick={() => patch({ reading: { measure: v } })}>
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
+          <div className="field field--stack">
+            <span>레포 추가</span>
+            <input
+              className="popover__in"
+              value={wr}
+              onChange={(e) => setWr(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addWr()}
+              placeholder={'C:' + PSEP + 'gdi'}
+              spellCheck={false}
+            />
+            {wr.trim() && (
+              <div className="popover__note">
+                <button className="linkbtn" onClick={addWr}>목록에 넣기</button>
+              </div>
+            )}
+          </div>
 
-      <div className="field">
-        <span>본문 좌표 링크</span>
-        <div className="seg">
-          <button aria-pressed={reading.coordLinks !== false} onClick={() => patch({ reading: { coordLinks: true } })}>
-            켜기
-          </button>
-          <button aria-pressed={reading.coordLinks === false} onClick={() => patch({ reading: { coordLinks: false } })}>
-            끄기
-          </button>
-        </div>
-      </div>
+          {plan && (
+            <div className="popover__note">
+              {plan.error ? (
+                <b>{plan.error}</b>
+              ) : (
+                <>
+                  <b>{plan.path}</b> 에 이렇게 씁니다 —
+                  <div className="popover__mono" style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>
+                    {plan.actions.filter((a) => a.op !== 'same').map((a) => `${OPLBL[a.op]}  ${shortOf(a)}`).join(String.fromCharCode(10)) || '(바뀔 것 없음)'}
+                  </div>
+                  {plan.warnings.map((w, i) => (
+                    <div key={i} style={{ color: 'var(--warn, var(--text-2))' }}>⚠ {w}</div>
+                  ))}
+                  <button className="linkbtn" disabled={!!inst} onClick={() => doApply(plan.path)}>
+                    {inst ? '쓰는 중…' : '이대로 설치'}
+                  </button>{' '}
+                  <button className="linkbtn" onClick={() => setPlan(null)}>취소</button>
+                </>
+              )}
+            </div>
+          )}
 
-      <div className="hr" />
-      <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.7 }}>
-        {/* **없는 키를 안내하지 않는다.** 전에는 `⌘1-5`(뷰)와 `1-4`(본문
-            4섹션)가 적혀 있었는데 둘 다 없어진 기능이다. 안내가 틀리면
-            사람은 자기가 잘못 눌렀다고 생각한다. */}
-        <div>
-          <span className="kbd">⌘K</span> 검색 · <span className="kbd">⌘.</span> 읽기 모드 ·{' '}
-          <span className="kbd">⌘±</span> 글자 크기
-        </div>
-        <div>
-          <span className="kbd">j/k</span> 목록 · <span className="kbd">x</span> 읽음 ·{' '}
-          <span className="kbd">⇧C</span> 요약 복사 · <span className="kbd">⌥←→</span> 이력
-        </div>
-        <div style={{ marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 10.5, wordBreak: 'break-all' }}>
-          {state.repoPath}
+          <div className="hr" />
+          {/* 지금 보고 있는 레포가 어디인지 — 경로를 바꾸는 칸 바로 아래가 아니라
+              맨 끝에 조용히 둔다. 확인하는 값이지 고치는 값이 아니다 */}
+          <div className="popover__mono" style={{ textAlign: 'left' }}>{state.repoPath}</div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -974,11 +1110,6 @@ const nextSize = (cur, dir) => {
   const sizes = [13, 14, 15, 16, 18]
   const i = sizes.indexOf(cur)
   return sizes[clamp((i < 0 ? 2 : i) + dir, 0, sizes.length - 1)]
-}
-
-// eslint-disable-next-line no-unused-vars
-function countInbox(repo, state) {
-  return 0 // 문서 목록을 받은 뒤에 계산한다. 초기 판정은 보수적으로.
 }
 
 function deepMerge(a, b) {
