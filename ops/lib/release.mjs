@@ -102,9 +102,9 @@ need('agent/manual/system.md', 'repo-kit/MANUAL-시스템.md')
 // 설치 시나리오는 **배포본 루트**다. 지식 레포가 아직 없을 때 읽는 문서라
 // repo-kit 안에 두면 부은 뒤에야 보인다 -- 순서가 거꾸로다.
 need('agent/install.md', '설치.md')
-need('out/ctx/ctx.mjs', 'repo-kit/bin/ctx.mjs')
-need('out/ctx/ctx', 'repo-kit/bin/ctx')
-need('out/ctx/ctx.cmd', 'repo-kit/bin/ctx.cmd')
+need('ops/out/ctx/ctx.mjs', 'repo-kit/bin/ctx.mjs')
+need('ops/out/ctx/ctx', 'repo-kit/bin/ctx')
+need('ops/out/ctx/ctx.cmd', 'repo-kit/bin/ctx.cmd')
 
 // 도구를 고칠 사람 몫 — **지식 레포 안으로는 안 들어간다**(§design)
 need('docs/design', 'docs')
