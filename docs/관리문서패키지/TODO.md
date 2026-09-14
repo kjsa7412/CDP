@@ -107,7 +107,8 @@ D7  패키지를 무엇으로 고르는가   E
 
 - [x] **D7 결정** — **부어 넣는다**(`xcopy` 두 줄). `ctx` 명령도 앱 화면도 만들지 않는다
 - [x] **D5 결정** — 서식 없는 22종은 **골격만**. 필수 3종은 발주처 양식이다
-- [x] 폴더 구조 — `packages/<이름>/` · `docs/` · `_managed.md` · `_vocab.md` · `origin/`
+- [x] 폴더 구조 — `agent/packages/<이름>/` · `docs/` · `_managed.md` · `_vocab.md`
+- [x] 만든 기록은 패키지 밖 `docs/attic/<이름>-패키지/` 로
 - [x] **골격을 실제로 만들었다** — [`agent/packages/dpms/`](../../agent/packages/dpms/README.md) 문서 46개
 - [x] **부어서 검증했다** — 빈 레포에 `ctx check: 이상 없음`, 작업 기록 넣으면 오류 4건
 - [x] viewer/fixture 강등 경로 — 2단계까지. 3단계(out/ 로 내리기)는 Python 의존 때문에 보류

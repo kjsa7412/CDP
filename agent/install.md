@@ -71,7 +71,7 @@ git tag -a v0.2.5 -m "..."
 폐쇄망이면 파일 두 개다.
 
 ```
-① ops/release/v0.2.5/ 폴더째        (또는 cdp.exe + repo-kit/ 만)
+① ops/release/v0.2.5/ 폴더째        (또는 knowledge-repo-<이름>/ 만 — exe 가 그 안에 있다)
 ② git bundle create knowledge.bundle --all      ← 지식 레포가 이미 있다면
 ```
 
@@ -211,9 +211,9 @@ cd C:\cdp && bin\ctx check      → 이상 없음
 지식 레포를 다시 세우지 않는다. **덮어쓰는 것은 도구뿐이다.**
 
 ```
-copy <새 배포본>\repo-kit\bin\*        C:\cdp\bin\
-copy <새 배포본>\cdp.exe                  C:\cdp\tools\
-copy <새 배포본>\repo-kit\MANUAL*.md     C:\cdp\
+copy <새 배포본>\knowledge-repo-dpms\bin\*         C:\cdp\bin\
+copy <새 배포본>\knowledge-repo-dpms\tools\*       C:\cdp\tools\
+copy <새 배포본>\knowledge-repo-dpms\MANUAL*.md    C:\cdp\
 C:\cdp\tools\cdp.exe ctx setup C:\gdi   ← skill 도 같이 갱신된다
 ```
 

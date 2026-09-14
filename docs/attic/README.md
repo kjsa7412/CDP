@@ -7,6 +7,7 @@
 build_gdi_repo.py     GDI 실제 수행 문서에서 지식 레포를 역으로 만든 스크립트
 import_ops_issues.py  운영이슈 CSV → 위험및이슈관리대장 섹션
 data/                 그 입력 (GDI_TR_221 운영이슈 관리대장)
+dpms-패키지/          DPMS 산출물 → agent/packages/dpms 를 어떻게 만들었나
 ```
 
 `build_gdi_repo.py` 는 **사용자 바탕화면 경로를 하드코딩**하고 있다. 다른

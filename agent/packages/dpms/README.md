@@ -1,7 +1,11 @@
 # dpms — 공공 SI 전체 산출물 세트
 
 **산출물 47종 · 문서 46개.** 분석 · 설계 · 구현 · 시험 · 이행에 사업관리까지
-붙은 한 벌이다. 원천과 만든 방법은 [`origin/`](origin/README.md).
+붙은 한 벌이다.
+
+> **원천과 만든 방법은 이 폴더에 없다.** CDP 소스 레포의
+> `docs/attic/dpms-패키지/` 에 있다 — 변환기는 원본 xlsx 가 없으면 돌지
+> 않으므로 받는 사람에게 가지 않는다.
 
 ## 이 패키지는 **서식**이다
 
@@ -14,8 +18,9 @@
 ## 붓는다
 
 ```
-xcopy /E /I <배포본>\repo-kit\* .
-xcopy /E /I <배포본>\packages\dpms\* .
+xcopy /E /I <배포본>\knowledge-repo-dpms C:\cdp
+cd /d C:\cdp
+git init && git config core.hooksPath .githooks
 ```
 
 부으면 `_vocab.md` 가 생기고 **그 순간 그 폴더가 지식 레포**가 된다.

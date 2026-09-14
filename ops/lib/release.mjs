@@ -133,10 +133,6 @@ for (const name of packages) {
   // 이 패키지가 정하는 층 — docs/ 골격 · 등록부 · 어휘
   need(`agent/packages/${name}`, R)
 
-  // **`origin/` 은 빼낸다.** 그 패키지를 *어떻게 만들었나* 의 기록이라
-  // 만드는 쪽의 것이다 -- 설계서를 뺀 것과 같은 이유다. 원본은 소스 레포의
-  // `agent/packages/<이름>/origin/` 에 남는다.
-  fs.rmSync(path.join(OUT, R, 'origin'), { recursive: true, force: true })
 
   // 작업 기록이 들어갈 자리.
   //

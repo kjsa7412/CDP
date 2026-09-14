@@ -1,4 +1,7 @@
-# 이 패키지가 어디서 나왔나
+# dpms 패키지가 어디서 나왔나
+
+`agent/packages/dpms` 를 만든 기록이다. **배포본에 들어가지 않는다** —
+받는 사람에게 `convert_table.py` 는 원본 xlsx 가 없어 돌릴 수도 없다.
 
 ## 원천
 
@@ -40,7 +43,7 @@ C:\project\DPMS\
 `convert_table.py` 는 테이블정의서 하나를 변환한다. 나머지는 아직 없다.
 
 ```
-python origin/convert_table.py <출력경로>
+python docs/attic/dpms-패키지/convert_table.py <출력경로>
 ```
 
 `GDI` 시트가 **54행 고정 블록 × 77** 이라는 구조에 의존한다. 다른 프로젝트의
@@ -56,4 +59,4 @@ python origin/convert_table.py <출력경로>
 | **변경 이력 영역** | **0** — 자리는 있고 값이 없다 |
 | **기타 특이 사항** | **0** |
 
-자세한 것은 [`docs/관리문서패키지/05_실측.md`](../../../../docs/관리문서패키지/05_실측.md).
+자세한 것은 [`docs/관리문서패키지/05_실측.md`](../../관리문서패키지/05_실측.md).

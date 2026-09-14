@@ -6,20 +6,21 @@ agent/packages/    프로젝트마다 고른다               docs/ · _managed.
 ```
 
 둘 다 "받는 사람에게 가는가" 를 통과한다. **고르는가**에서 갈린다 — 그래서
-배포본에서도 `repo-kit/` 과 `packages/` 로 나뉘어 나간다.
+배포본에서는 **합쳐져** `knowledge-repo-<이름>/` 하나로 나간다.
 
-## 고르는 법 — 부어 넣는다
+## 고르는 법 — 폴더를 복사한다
 
 ```
-xcopy /E /I <배포본>\repo-kit\* .
-xcopy /E /I <배포본>\packages\<고른 것>\* .
+xcopy /E /I <배포본>\knowledge-repo-<고른 것> C:\cdp
+cd /d C:\cdp
+git init && git config core.hooksPath .githooks
 ```
 
-**두 줄이다.** `ctx init --package` 같은 명령을 만들지 않는다 — 설치가 이미
-`xcopy` 이고, 방식이 둘이면 어느 것이 맞는지 묻게 된다.
+**세 줄이다.** `ctx init --package` 같은 명령을 만들지 않는다 — 설치가 이미
+복사이고, 방식이 둘이면 어느 것이 맞는지 묻게 된다.
 
-부으면 `_vocab.md` 가 생기고, **그 순간 그 폴더가 지식 레포**가 된다
-(`ctx` 는 `_vocab.md` 로 지식 레포를 알아본다).
+복사한 순간 그 폴더가 지식 레포다 — `ctx` 는 `_vocab.md` 로 알아보고,
+그 파일이 폴더 안에 이미 있다. `tools/cdp.exe` 도 함께 온다.
 
 ## 무엇이 들어 있나 — 서식이지 내용이 아니다
 

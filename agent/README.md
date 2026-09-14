@@ -24,23 +24,27 @@ install.md              설치 시나리오 — 네 자리
 ## 배포본에서 어디로 가나
 
 ```
-manual/system.md   →  repo-kit/MANUAL-시스템.md      지식 레포 안
-manual/user.md     →  repo-kit/MANUAL.md
-manual/admin.md    →  repo-kit/MANUAL-관리자.md
-skills/            →  repo-kit/.claude/skills
-CLAUDE-지식레포.md            →  repo-kit/CLAUDE.md
-CLAUDE-프로젝트레포.md        →  repo-kit/.claude/work-repo/CLAUDE.md   (서식)
-packages/          →  **배포본 루트** packages/   (골라서 붓는다)
-hooks/pre-commit   →  repo-kit/.githooks/pre-commit
+**패키지마다 완성된 폴더 하나**로 나간다 — `knowledge-repo-<이름>/`.
+
+manual/system.md   →  MANUAL-시스템.md
+manual/user.md     →  MANUAL.md
+manual/admin.md    →  MANUAL-관리자.md
+skills/            →  .claude/skills
+CLAUDE-지식레포.md            →  CLAUDE.md
+CLAUDE-프로젝트레포.md        →  .claude/work-repo/CLAUDE.md   (서식)
+hooks/pre-commit   →  .githooks/pre-commit
+gitattributes      →  .gitattributes   **없으면 훅이 조용히 죽는다**
+gitignore          →  .gitignore
+packages/<이름>/   →  그 폴더에 **합쳐진다** (docs/ · _managed.md · _vocab.md)
 install.md         →  **배포본 루트** 설치.md
 ```
 
-`install.md` 와 `packages/` 만 루트로 간다. **지식 레포가 아직 없을 때 읽고
-고르는 것**이라 `repo-kit/` 안에 두면 부은 뒤에야 보인다 — 순서가 거꾸로다.
+`install.md` 만 배포본 루트로 간다. **지식 레포가 아직 없을 때 읽는 문서**라
+폴더 안에 두면 복사한 뒤에야 보인다 — 순서가 거꾸로다.
 
-> **`packages/` 가 `repo-kit/` 에 안 들어가는 이유가 그것이다.** `repo-kit` 은
-> 통째로 붓는 것이고 패키지는 **그중 하나를 고르는** 것이다. 둘을 같은 자리에
-> 두면 고를 것이 없어진다.
+> **`origin/` 은 여기 없다.** 패키지를 *어떻게 만들었나* 의 기록은 받는 사람에게
+> 가지 않으므로 `docs/attic/<이름>-패키지/` 에 있다. 이 폴더의 판정 기준이
+> 그것이다 — 받는 사람에게 가는가.
 
 ## `CLAUDE.md` 가 왜 둘인가
 
