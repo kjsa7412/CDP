@@ -457,7 +457,7 @@ Node SEA. **런타임과 화면 자산이 전부 안에 들어 있다.** 폐쇄�
 | 화면 | **React 18.3** + **react-dom** | 상태관리·라우팅 라이브러리 **없다** |
 | 번들 | **Vite 6** + `@vitejs/plugin-react` | `ops/out/web/` 으로 |
 | 스타일 | **CSS 4파일** | `tokens · app · doc · font`. 프레임워크 없다 |
-| 마크다운 | **markdown-it 14** + `markdown-it-anchor` | 렌더는 **전부 클라이언트**가 소유한다 |
+| 마크다운 | **markdown-it 14** | 렌더는 **전부 클라이언트**가 소유한다. 제목 앵커는 `heading_open` 규칙과 자체 `slugify` 로 만든다 — 플러그인을 쓰지 않는다 |
 | 살균 | **DOMPurify 3** | 렌더 결과를 그대로 넣지 않는다 |
 | 코드 강조 | **highlight.js 11** | **동적 import** — 코드블록이 보이는 순간에만 |
 | 검색 | **MiniSearch 7** | 서버쪽 색인 |
