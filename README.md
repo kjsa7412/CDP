@@ -41,7 +41,7 @@ npm run release          # → ops/release/v0.4.0/
 ```
 
 `ops\release.cmd` 를 더블클릭해도 된다. **그 폴더를 통째로 옮기면 CDP 를 쓸 수
-있다** — exe · repo-kit · packages · 설계서가 다 들어 있다.
+있다** — exe 와 **완성된 지식 레포 폴더**가 들어 있다. 설계서는 안 들어간다.
 
 `viewer/fixture/` 로 뜬다 — **개발용 fixture 다. 배포본에는 안 들어간다.** 다른 레포를 보려면:
 

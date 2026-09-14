@@ -708,8 +708,10 @@ agent/                **받는 사람에게 가는 것의 원본**
   hooks/pre-commit
   manual/               system · user · admin
   packages/             프로젝트마다 고르는 문서 골격 · 등록부 · 어휘
+  gitattributes         지식 레포용 줄바꿈 규칙 (배포본에서 `.gitattributes`)
+  gitignore             지식 레포용
   install.md
-ops/release/v<버전>/  배포본
+ops/release/v<버전>/  배포본 — 지식레포-<이름>/ 이 완성된 채로
 <지식 레포>/          배포본의 사본
 <작업 레포>/          ctx setup 이 넣은 사본
 ```

@@ -151,11 +151,12 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 
 ### ⑤ 훅을 넣는다
 
-배포본의 `repo-kit/` 을 통째로 부어 넣으면 훅·스킬·규약·매뉴얼·`bin/ctx` 가
+배포본의 `지식레포-<이름>/` 을 통째로 복사하면 훅·스킬·규약·매뉴얼·`bin/ctx` 와
+문서 골격·등록부·어휘가
 한 번에 들어온다.
 
 ```
-xcopy /E /I <배포본>\repo-kit\* .
+xcopy /E /I <배포본>\지식레포-dpms C:\cdp
 git config core.hooksPath .githooks
 ```
 
@@ -410,7 +411,7 @@ npm run release          # 화면 → ctx → exe → ops/release/v<버전>/
 ```
 
 **결과는 `ops/release/v<버전>/` 하나다.** 그 폴더를 통째로 옮기면 CDP 를 쓸 수
-있다 — exe · `repo-kit/` · `agent/packages/` · 설계서가 다 들어 있다. `release.cmd` 를
+있다 — exe 와 완성된 지식 레포 폴더가 들어 있다. `release.cmd` 를
 더블클릭해도 되고, 버전을 지정하려면 `npm run release -- 0.3.0`.
 
 또는 단계별로:

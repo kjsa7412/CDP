@@ -1483,8 +1483,15 @@ def main():
             print('  [경고] 매뉴얼 원본 없음: %s → %s 를 못 넣었다 '
                   '(README 링크가 죽는다)' % (man_src, dst_name))
 
-    w('.gitattributes', GITATTRIBUTES)
-    w('.gitignore', GITIGNORE)
+    # **원본은 `agent/` 다.** 전에는 이 파일 안에 문자열로 박혀 있었다 --
+    # CLAUDE.md 가 그렇게 두 곳에 있다가 갈라진 전례가 있다(설계서 §2.8).
+    # 배포본도 같은 파일을 담으므로 시드와 배포가 어긋날 수 없다.
+    for name in ('gitattributes', 'gitignore'):
+        src = os.path.join(ROOT, 'agent', name)
+        if os.path.exists(src):
+            w('.' + name, io.open(src, encoding='utf-8').read())
+        else:
+            print('  [seed] 경고: agent/%s 가 없습니다 -- 훅이 CRLF 로 깨질 수 있습니다' % name)
     w('README.md', README)
 
     print('seeded: %s' % OUT)
@@ -1505,51 +1512,7 @@ def main():
     print('  kept (not seed) : ' + (', '.join(kept) if kept else '(none)'))
 
 
-GITATTRIBUTES = """
-# **줄바꿈을 LF 로 고정한다.**
-#
-# `.githooks/pre-commit` 과 `bin/ctx` 는 sh 스크립트다. CRLF 로 체크아웃되면
-# shebang 줄 끝에 캐리지리턴이 붙어 훅이 실행되지 않는다 -- 그리고 그것은
-# **조용히 실패한다.** 커밋은 통과하고 검사는 안 돈다.
-#
-# 이 파일이 없으면 core.autocrlf=true 인 PC 에서만 깨지므로, 폐쇄망에 옮긴
-# 뒤에야 발견된다. 그때는 물어볼 사람이 없다.
-* text=auto eol=lf
 
-*.exe binary
-*.png binary
-*.jpg binary
-*.pdf binary
-*.xlsx binary
-*.hwp binary
-"""
-
-GITIGNORE = """
-# 제출물 -- 정본은 docs/*.md 다 (수행 v1.0 부록 E.1).
-# 엑셀·한글·PDF 는 필요할 때 md 에서 만들고, 형상관리하지 않는다.
-/submit/
-*.xlsx
-*.hwp
-*.hwpx
-*.pptx
-
-# 실행 파일 68MB. **기본은 커밋하지 않는다.**
-#
-# 커밋하면 이관이 clone 하나로 끝난다(작업환경 v1.1 3.1). 그런데 git 이력에
-# 한 번 들어간 68MB 는 되돌릴 수 없고, exe 를 갱신할 때마다 그만큼 늘어난다.
-# 되돌릴 수 없는 쪽을 기본값으로 두지 않는다.
-#
-# 지금은 반입 시 파일 두 개를 옮긴다 -- bundle + cdp.exe (부록 C 점검표).
-# Node 가 없는 PC 가 확인되고 팀이 clone 하나를 택하면 아래 줄을 지운다.
-# 이름이 플랫폼마다 다르다 -- Windows `cdp.exe` · macOS/Linux 확장자 없는 `cdp`.
-# `*.exe` 만 막으면 맥에서 만든 실행 파일이 그대로 커밋된다.
-/tools/*.exe
-/tools/cdp
-
-# ctx 는 생성물이지만 **커밋한다** -- 148KB 이고, 이것이 없으면 폐쇄망에서
-# git 훅이 돌지 않는다. `node tools/build-ctx.mjs` 가 만든다.
-!/bin/ctx.mjs
-"""
 
 README = """
 # 지식 레포

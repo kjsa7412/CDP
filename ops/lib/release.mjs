@@ -83,35 +83,60 @@ const need = (src, rel) => {
 const EXE = process.platform === 'win32' ? 'cdp.exe' : 'cdp'
 need(`ops/out/exe/${EXE}`, EXE)
 
-// 지식 레포를 새로 세울 때 넣는 것
-need('agent/skills', 'repo-kit/.claude/skills')
-// **CLAUDE.md 는 두 종류다.** repo-kit 은 지식 레포에 통째로 복사되므로
-// 그 자리의 `CLAUDE.md` 는 지식 레포판이어야 한다. 프로젝트 레포판은
-// 다른 레포로 사람이 옮기는 것이라 이름을 남긴 채 나란히 둔다.
-need('agent/CLAUDE-지식레포.md', 'repo-kit/CLAUDE.md')
-// 작업 레포용 규약은 **서식**이라 지식 레포 루트에 두지 않는다. 루트에 두면
-// 규약이 두 개로 보이고, 어느 쪽이 이 레포의 것인지 알 수 없다.
-// `ctx setup <작업 레포>` 가 여기서 읽어 경로를 박아 넣는다.
-need('agent/CLAUDE-프로젝트레포.md', 'repo-kit/.claude/work-repo/CLAUDE.md')
-need('agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
-need('agent/hooks/pre-commit', 'repo-kit/.githooks/pre-commit')
-need('agent/manual/user.md', 'repo-kit/MANUAL.md')
-need('agent/manual/admin.md', 'repo-kit/MANUAL-관리자.md')
-// **정본.** CDP 가 지금 무엇인지. 설계서는 여기까지 온 기록이고 이것이 답이다.
-need('agent/manual/system.md', 'repo-kit/MANUAL-시스템.md')
+// ── 지식 레포를 **완성된 채로** 낸다 ──────────────────────────────────────
+//
+// 전에는 `repo-kit/` 과 `packages/` 를 따로 주고 받는 사람이 둘을 차례로
+// 부었다. **그 이름은 우리 개념이지 받는 사람의 것이 아니다** -- 무엇이
+// repo-kit 이고 무엇이 package 인지 알아야 붓는 순서를 맞출 수 있었다.
+//
+// 패키지마다 폴더 하나를 완성해 낸다. **복사하면 그게 지식 레포다.**
 // 설치 시나리오는 **배포본 루트**다. 지식 레포가 아직 없을 때 읽는 문서라
-// repo-kit 안에 두면 부은 뒤에야 보인다 -- 순서가 거꾸로다.
+// 폴더 안에 두면 복사한 뒤에야 보인다 -- 순서가 거꾸로다.
 need('agent/install.md', '설치.md')
-need('ops/out/ctx/ctx.mjs', 'repo-kit/bin/ctx.mjs')
-need('ops/out/ctx/ctx', 'repo-kit/bin/ctx')
-need('ops/out/ctx/ctx.cmd', 'repo-kit/bin/ctx.cmd')
 
-// 도구를 고칠 사람 몫 — **지식 레포 안으로는 안 들어간다**(§design)
-need('docs/design', 'docs')
+const PKG_ROOT = path.join(ROOT, 'agent', 'packages')
+const packages = fs.existsSync(PKG_ROOT)
+  ? fs.readdirSync(PKG_ROOT, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+  : []
+if (!packages.length) missing.push('agent/packages/<패키지>')
 
-// 프로젝트마다 **고르는** 것 — docs/ 골격 · _managed.md · _vocab.md.
-// repo-kit 이 모든 프로젝트에 같은 것을 주는 반면 이쪽은 골라서 붓는다.
-need('agent/packages', 'packages')
+for (const name of packages) {
+  const R = `지식레포-${name}`
+
+  // 모든 패키지가 같은 것을 받는 층 — 도구 · 규약 · 매뉴얼 · 훅
+  need('agent/skills', `${R}/.claude/skills`)
+  // **CLAUDE.md 는 두 종류다.** 이 자리의 것은 지식 레포판이어야 한다.
+  need('agent/CLAUDE-지식레포.md', `${R}/CLAUDE.md`)
+  // 작업 레포용 규약은 **서식**이라 루트에 두지 않는다. 루트에 두면 규약이
+  // 두 개로 보이고 어느 쪽이 이 레포의 것인지 알 수 없다.
+  // `ctx setup <작업 레포>` 가 여기서 읽어 경로를 박아 넣는다.
+  need('agent/CLAUDE-프로젝트레포.md', `${R}/.claude/work-repo/CLAUDE.md`)
+  need('agent/TEMPLATE-work.md', `${R}/TEMPLATE-work.md`)
+  need('agent/hooks/pre-commit', `${R}/.githooks/pre-commit`)
+  need('agent/manual/user.md', `${R}/MANUAL.md`)
+  need('agent/manual/admin.md', `${R}/MANUAL-관리자.md`)
+  // **정본.** CDP 가 지금 무엇인지.
+  need('agent/manual/system.md', `${R}/MANUAL-시스템.md`)
+  need('ops/out/ctx/ctx.mjs', `${R}/bin/ctx.mjs`)
+  need('ops/out/ctx/ctx', `${R}/bin/ctx`)
+  need('ops/out/ctx/ctx.cmd', `${R}/bin/ctx.cmd`)
+  // **훅이 조용히 죽는 자리.** 이것이 없으면 core.autocrlf=true 인 PC 가
+  // clone 할 때 pre-commit 이 CRLF 로 와서 셔뱅 뒤에 캐리지리턴이 붙는다.
+  // 전에는 배포본에 아예 안 들어갔다 -- 설치 문서는 준다고 적어 두고서.
+  need('agent/gitattributes', `${R}/.gitattributes`)
+  need('agent/gitignore', `${R}/.gitignore`)
+
+  // 이 패키지가 정하는 층 — docs/ 골격 · 등록부 · 어휘 · 원천 기록
+  need(`agent/packages/${name}`, R)
+
+  // 작업 기록이 들어갈 자리.
+  //
+  // **`.gitkeep` 이 있어야 한다.** 빈 디렉터리는 git 이 추적하지 않으므로,
+  // 표시가 없으면 관리자 PC 에만 있고 **clone 한 팀원에게는 없다** -- 배포본과
+  // 팀의 레포가 달라진다. `.md` 가 아닌 이름이라 작업 기록으로도 안 읽힌다.
+  fs.mkdirSync(path.join(OUT, R, 'work'), { recursive: true })
+  fs.writeFileSync(path.join(OUT, R, 'work', '.gitkeep'), '')
+}
 
 // ── 3) 설치 안내 ────────────────────────────────────────────────────────
 const stamp = (() => {
@@ -133,44 +158,43 @@ fs.writeFileSync(
 **이 폴더를 통째로 옮기면 CDP 를 쓸 수 있다.**
 
 \`\`\`
-cdp.exe          앱 + ctx CLI 가 한 파일 (~68MB)
-repo-kit/        지식 레포를 새로 세울 때 넣는 것
-  bin/           ctx 실행기 (Node 없어도 돈다)
-  .githooks/     pre-commit — 유일한 결정론적 보증
-  .claude/skills 절차 (work · load · save · managed · import · edit · push)
-  CLAUDE.md      레포 규약 — **이 지식 레포용**
-  .claude/work-repo/CLAUDE.md
-                 작업 레포용 서식. ctx setup 이 읽는다
-  TEMPLATE-work.md
-  MANUAL-시스템.md      **정본 — CDP 가 무엇인지**
-  MANUAL.md            하루 쓰는 법
-  MANUAL-관리자.md      설치 · 배포 · 어휘 운영
-packages/        **프로젝트마다 골라서 붓는 것** — 문서 골격 · 등록부 · 어휘
-docs/            설계서 — 도구를 고칠 사람용
-설치.md          **설치 시나리오 — 여기부터 읽는다**
+cdp.exe            앱 + ctx CLI 가 한 파일 (~68MB)
+지식레포-<이름>/    **복사하면 그게 지식 레포다.** 패키지마다 하나씩 있다
+  docs/            관리 문서 골격 — 이 패키지가 정한다
+  _vocab.md        좌표 어휘 · _managed.md  등록부
+  bin/             ctx 실행기 (Node 없어도 돈다)
+  .githooks/       pre-commit — 유일한 결정론적 보증
+  .claude/skills   절차 (work · load · save · managed · import · edit · push)
+  .gitattributes   **줄바꿈 고정.** 없으면 훅이 조용히 죽는다
+  CLAUDE.md        레포 규약 · MANUAL 셋 · TEMPLATE-work.md
+  README.md        이 문서 세트가 무엇인가 · 첫날 무엇을 하나
+설치.md            **설치 시나리오 — 여기부터 읽는다**
 \`\`\`
+
+설계서는 들어 있지 않다. **CDP 를 고칠 사람의 것**이고 서비스와 무관하다 —
+필요하면 소스 레포의 \`docs/design/\` 에 있다.
 
 설치는 \`설치.md\` 를 따른다 — 네 자리(개발 PC · 지식 레포 · 작업
 레포 · 팀원 PC)에서 벌어지고, 한 자리만 보면 반드시 빠뜨린다.
 
-## 새 지식 레포 세우기
+## 새 지식 레포 세우기 — 폴더를 복사한다
 
 \`\`\`
-mkdir knowledge-repo && cd knowledge-repo
-git init
-xcopy /E /I ..\\repo-kit\\* .
-xcopy /E /I ..\\packages\\<고른 것>\\* .
+xcopy /E /I 지식레포-dpms C:\\cdp
+cd /d C:\\cdp
 mkdir tools && copy ..\\cdp.exe tools\\
-git config core.hooksPath .githooks
+git init && git config core.hooksPath .githooks
 \`\`\`
 
-\`tools\\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
+**부을 것이 하나다.** 전에는 \`repo-kit\` 과 \`packages\` 를 차례로 부었는데,
+그 이름은 만든 쪽 개념이지 받는 쪽의 것이 아니었다.
+
+\`tools\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
 \`bin/ctx\` 가 이 exe 로 넘어간다 — 없으면 훅이 검사를 건너뛴다.
 
-**둘째 줄이 패키지다.** 부으면 \`_vocab.md\` · \`_managed.md\` · \`docs/\` 가
-함께 들어오고 **그 순간 그 폴더가 지식 레포가 된다.** 무엇을 고를지는
-\`packages/README.md\`. 패키지 없이 세우려면 그 셋을 손으로 만든다 —
-\`MANUAL-관리자.md\` 2장.
+복사 직후 \`bin\ctx check\` 가 **이상 없음**이면 시작할 수 있다. 안 쓰는
+문서를 지울 때는 \`_managed.md\` 에서 그 패턴도 함께 지운다 — 자세한 것은
+그 폴더의 \`README.md\`.
 
 **\`_vocab.md\` 가 먼저다.** \`ctx setup\` 은 그 파일로 지식 레포를 알아본다 —
 없으면 "지식 레포를 찾을 수 없습니다" 로 멈춘다(exit 2).
