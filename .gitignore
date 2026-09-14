@@ -1,15 +1,15 @@
 node_modules/
 
-# 산출물 — 전부 out/ 아래 한 자리에 모은다.
-#   out/web  화면(vite) · out/ctx  ctx 번들 · out/exe  cdp.exe
+# 산출물 — 만드는 쪽(ops) 아래 한 자리에 모은다. 루트에 폴더가 생기지 않는다.
+#   ops/out/web  화면(vite) · ops/out/ctx  ctx 번들 · ops/out/exe  cdp.exe
 # 전에는 dist/ 와 build/ 가 따로 있어 어디를 봐야 하는지 매번 헷갈렸다.
-out/
+ops/out/
 
 # 릴리스 산출물 -- 버전별로 쌓인다. 배포는 폴더째 옮긴다
-release/
+ops/release/
 
 # 샘플 레포의 bin/ 은 빌드 산출물의 편의 사본이다.
-# 정본은 out/ctx/ 이고, 여기 있는 것은 npm start 로 띄운 fixture 에서
+# 정본은 ops/out/ctx/ 이고, 여기 있는 것은 npm start 로 띄운 fixture 에서
 # ctx 가 바로 돌게 하려고 둔 것뿐이다.
 #
 # **그런데 셋 다 추적 중이다.** 규칙이 사실과 반대로 적혀 있었다 --
@@ -18,14 +18,18 @@ release/
 #
 # 계속 추적한다. clone 만 하면 샘플이 바로 도는 편이 낫고, ctx 는 148KB 다.
 # 디렉터리째 막으면 git 이 안으로 안 들어가므로 `/*` 로 열고 셋을 되살린다.
-sample-repo/bin/*
-!sample-repo/bin/ctx
-!sample-repo/bin/ctx.cmd
-!sample-repo/bin/ctx.mjs
+viewer/fixture/bin/*
+!viewer/fixture/bin/ctx
+!viewer/fixture/bin/ctx.cmd
+!viewer/fixture/bin/ctx.mjs
 
-# 샘플 레포의 클로드 세팅은 kit/agent/ 에서 생성되는 사본이다.
-# 원본을 고치는 곳은 kit/agent/skills · kit/agent/CLAUDE-지식레포.md 다.
-sample-repo/.claude/
+# fixture 의 클로드 세팅은 agent/ 에서 생성되는 사본이다.
+# 원본을 고치는 곳은 agent/skills · agent/CLAUDE-지식레포.md 다.
+#
+# **bin/ 과 반대로 결정한다.** bin/ 은 추적한다(clone 만 하면 샘플이 바로
+# 돌게). 여기는 추적하지 않는다 -- 사본을 추적하면 **원본이 둘로 보이고**,
+# 실제로 그렇게 갈린 적이 있다(설계서 §2.8). fixture 는 seed 가 만든다.
+viewer/fixture/.claude/
 
 # 로컬 개발 편의 설정 — 절대경로(C:/cdp)가 박혀 있어 사람마다 다르다.
 .claude/launch.json

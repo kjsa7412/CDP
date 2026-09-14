@@ -5,7 +5,7 @@ if not exist node_modules (
   echo [ops] node_modules 가 없습니다. 설치부터 합니다.
   call npm install || goto :fail
 )
-if not exist "out\web\index.html" (
+if not exist "ops\out\web\index.html" (
   echo [ops] 화면이 아직 없습니다. 빌드부터 합니다.
   call npm run build || goto :fail
 )

@@ -9,7 +9,7 @@
 //
 // 기본 출력은 `out/ctx/ctx.mjs`.
 //
-// **전에는 `sample-repo/bin/ctx.mjs` 였다.** 빌드 산출물이 git 추적 대상인
+// **전에는 `viewer/fixture/bin/ctx.mjs` 였다.** 빌드 산출물이 git 추적 대상인
 // fixture 안에 살아서 빌드할 때마다 diff 가 떴고, exe 빌드가 fixture 에
 // 의존했다. 산출물은 산출물 자리에 둔다.
 
@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 // **`..` 가 두 번이다.** 이 파일은 `ops/lib/` 에 있으므로 한 번으로는
 // `ops/` 를 가리킨다 -- 그러면 `ops/package.json` 을 찾다가 죽는다.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-const outFile = path.resolve(process.argv[2] || path.join(root, 'out', 'ctx', 'ctx.mjs'))
+const outFile = path.resolve(process.argv[2] || path.join(root, 'ops', 'out', 'ctx', 'ctx.mjs'))
 
 fs.mkdirSync(path.dirname(outFile), { recursive: true })
 
@@ -132,7 +132,7 @@ console.log('[build-ctx] 실행 확인 OK')
 // 바로 돌아야 한다. **정본은 `out/ctx/` 이고 이것은 편의 사본이다**(추적 안 함).
 {
   const outDir = path.dirname(outFile)
-  const dst = path.join(root, 'sample-repo', 'bin')
+  const dst = path.join(root, 'viewer', 'fixture', 'bin')
   fs.mkdirSync(dst, { recursive: true })
   for (const name of ['ctx.mjs', 'ctx', 'ctx.cmd']) {
     const src = path.join(outDir, name)
@@ -144,5 +144,5 @@ console.log('[build-ctx] 실행 확인 OK')
       } catch {}
     }
   }
-  console.log('[build-ctx] sample-repo/bin 갱신 (편의 사본)')
+  console.log('[build-ctx] viewer/fixture/bin 갱신 (편의 사본)')
 }

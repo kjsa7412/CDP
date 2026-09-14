@@ -1,4 +1,4 @@
-// 원클릭 릴리스 — 화면 → ctx 번들 → exe → 샘플 → **버전 폴더로 묶기**.
+// 원클릭 릴리스 — 화면 → ctx 번들 → exe → **버전 폴더로 묶기**.
 //
 //     npm run release            package.json 의 version 으로
 //     npm run release -- 0.3.0   버전을 지정해서
@@ -7,7 +7,7 @@
 // 있다** — 그것이 이 스크립트가 존재하는 이유다.
 //
 // 전에는 `npm run release` 가 `build && build:exe && seed` 를 이어 붙인
-// 문자열이었다. 산출물이 `build/`·`dist/`·`sample-repo/bin/` 에 흩어져 있어서
+// 문자열이었다. 산출물이 `build/`·`dist/`·`fixture/bin/` 에 흩어져 있어서
 // **무엇을 나눠줘야 하는지 사람이 기억해야 했다.** 기억에 의존하면 빠뜨린다.
 
 import { execFileSync } from 'node:child_process'
@@ -22,7 +22,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
 
 const arg = process.argv.slice(2).find((a) => !a.startsWith('-'))
 const VERSION = (arg || pkg.version).replace(/^v/, '')
-const OUT = path.join(ROOT, 'release', 'v' + VERSION)
+const OUT = path.join(ROOT, 'ops', 'release', 'v' + VERSION)
 
 const log = (...a) => console.log('[release]', ...a)
 const run = (cmd, args) =>
@@ -31,9 +31,9 @@ const run = (cmd, args) =>
 function copyDir(src, dst) {
   fs.mkdirSync(dst, { recursive: true })
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
-    // **실행 파일을 두 번 담지 않는다.** 샘플 레포에 옛 cdp.exe 사본이 남아
-    // 있어 릴리스가 68MB → 136MB 가 된 적이 있다. 받는 쪽은 어느 것이
-    // 이번 판인지 알 수 없다.
+    // **실행 파일을 두 번 담지 않는다.** 전에 샘플 레포에 옛 cdp.exe 사본이
+    // 남아 릴리스가 68MB → 136MB 가 된 적이 있다. 샘플은 이제 안 담지만
+    // 다른 폴더에서 같은 일이 나지 않게 가드는 남긴다.
     if (e.isFile() && /[.]exe$/i.test(e.name)) continue
     const s = path.join(src, e.name)
     const d = path.join(dst, e.name)
@@ -60,8 +60,6 @@ log('② ctx 번들')
 run('npm', ['run', 'build:ctx'])
 log('③ 단일 실행 파일 (수 분)')
 run('npm', ['run', 'build:exe'])
-log('④ 샘플 레포')
-run('npm', ['run', 'seed'])
 
 // ── 2) 버전 폴더로 묶는다 ───────────────────────────────────────────────
 //
@@ -70,7 +68,7 @@ run('npm', ['run', 'seed'])
 if (fs.existsSync(OUT)) fs.rmSync(OUT, { recursive: true, force: true })
 fs.mkdirSync(OUT, { recursive: true })
 
-log('⑤ release/v' + VERSION + ' 구성')
+log('④ release/v' + VERSION + ' 구성')
 
 const missing = []
 const need = (src, rel) => {
@@ -83,27 +81,27 @@ const need = (src, rel) => {
 // "빠진 것 1개"라고 자기를 의심한다 -- 실제로는 다 만들어 놓고서.
 // 만든 쪽 이름 그대로 담는다. 받는 사람은 자기 OS 것을 쓴다.
 const EXE = process.platform === 'win32' ? 'cdp.exe' : 'cdp'
-need(`out/exe/${EXE}`, EXE)
+need(`ops/out/exe/${EXE}`, EXE)
 
 // 지식 레포를 새로 세울 때 넣는 것
-need('kit/agent/skills', 'repo-kit/.claude/skills')
+need('agent/skills', 'repo-kit/.claude/skills')
 // **CLAUDE.md 는 두 종류다.** repo-kit 은 지식 레포에 통째로 복사되므로
 // 그 자리의 `CLAUDE.md` 는 지식 레포판이어야 한다. 프로젝트 레포판은
 // 다른 레포로 사람이 옮기는 것이라 이름을 남긴 채 나란히 둔다.
-need('kit/agent/CLAUDE-지식레포.md', 'repo-kit/CLAUDE.md')
+need('agent/CLAUDE-지식레포.md', 'repo-kit/CLAUDE.md')
 // 작업 레포용 규약은 **서식**이라 지식 레포 루트에 두지 않는다. 루트에 두면
 // 규약이 두 개로 보이고, 어느 쪽이 이 레포의 것인지 알 수 없다.
 // `ctx setup <작업 레포>` 가 여기서 읽어 경로를 박아 넣는다.
-need('kit/agent/CLAUDE-프로젝트레포.md', 'repo-kit/.claude/work-repo/CLAUDE.md')
-need('kit/agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
-need('kit/hooks/pre-commit', 'repo-kit/.githooks/pre-commit')
-need('kit/manual/user.md', 'repo-kit/MANUAL.md')
-need('kit/manual/admin.md', 'repo-kit/MANUAL-관리자.md')
+need('agent/CLAUDE-프로젝트레포.md', 'repo-kit/.claude/work-repo/CLAUDE.md')
+need('agent/TEMPLATE-work.md', 'repo-kit/TEMPLATE-work.md')
+need('agent/hooks/pre-commit', 'repo-kit/.githooks/pre-commit')
+need('agent/manual/user.md', 'repo-kit/MANUAL.md')
+need('agent/manual/admin.md', 'repo-kit/MANUAL-관리자.md')
 // **정본.** CDP 가 지금 무엇인지. 설계서는 여기까지 온 기록이고 이것이 답이다.
-need('kit/manual/system.md', 'repo-kit/MANUAL-시스템.md')
+need('agent/manual/system.md', 'repo-kit/MANUAL-시스템.md')
 // 설치 시나리오는 **배포본 루트**다. 지식 레포가 아직 없을 때 읽는 문서라
 // repo-kit 안에 두면 부은 뒤에야 보인다 -- 순서가 거꾸로다.
-need('kit/install.md', '설치.md')
+need('agent/install.md', '설치.md')
 need('out/ctx/ctx.mjs', 'repo-kit/bin/ctx.mjs')
 need('out/ctx/ctx', 'repo-kit/bin/ctx')
 need('out/ctx/ctx.cmd', 'repo-kit/bin/ctx.cmd')
@@ -111,13 +109,14 @@ need('out/ctx/ctx.cmd', 'repo-kit/bin/ctx.cmd')
 // 도구를 고칠 사람 몫 — **지식 레포 안으로는 안 들어간다**(§design)
 need('docs/design', 'docs')
 
-// 바로 열어 볼 수 있는 샘플
-need('sample-repo', 'sample-repo')
+// 프로젝트마다 **고르는** 것 — docs/ 골격 · _managed.md · _vocab.md.
+// repo-kit 이 모든 프로젝트에 같은 것을 주는 반면 이쪽은 골라서 붓는다.
+need('agent/packages', 'packages')
 
 // ── 3) 설치 안내 ────────────────────────────────────────────────────────
 const stamp = (() => {
   try {
-    const t = fs.readFileSync(path.join(ROOT, 'out', 'ctx', 'ctx.mjs'), 'utf8')
+    const t = fs.readFileSync(path.join(ROOT, 'ops', 'out', 'ctx', 'ctx.mjs'), 'utf8')
     const m = t.match(/BUILT\s*=\s*['"]([^'"]+)['"]/)
     return m && !m[1].startsWith('__') ? m[1] : '?'
   } catch {
@@ -146,7 +145,7 @@ repo-kit/        지식 레포를 새로 세울 때 넣는 것
   MANUAL-시스템.md      **정본 — CDP 가 무엇인지**
   MANUAL.md            하루 쓰는 법
   MANUAL-관리자.md      설치 · 배포 · 어휘 운영
-sample-repo/     바로 열어 볼 수 있는 샘플 지식 레포
+packages/        **프로젝트마다 골라서 붓는 것** — 문서 골격 · 등록부 · 어휘
 docs/            설계서 — 도구를 고칠 사람용
 설치.md          **설치 시나리오 — 여기부터 읽는다**
 \`\`\`
@@ -154,18 +153,13 @@ docs/            설계서 — 도구를 고칠 사람용
 설치는 \`설치.md\` 를 따른다 — 네 자리(개발 PC · 지식 레포 · 작업
 레포 · 팀원 PC)에서 벌어지고, 한 자리만 보면 반드시 빠뜨린다.
 
-## 바로 써 보기
-
-\`\`\`
-cdp.exe --repo sample-repo
-\`\`\`
-
 ## 새 지식 레포 세우기
 
 \`\`\`
 mkdir knowledge-repo && cd knowledge-repo
 git init
 xcopy /E /I ..\\repo-kit\\* .
+xcopy /E /I ..\\packages\\<고른 것>\\* .
 mkdir tools && copy ..\\cdp.exe tools\\
 git config core.hooksPath .githooks
 \`\`\`
@@ -173,8 +167,10 @@ git config core.hooksPath .githooks
 \`tools\\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
 \`bin/ctx\` 가 이 exe 로 넘어간다 — 없으면 훅이 검사를 건너뛴다.
 
-그다음 \`_vocab.md\` 와 \`_managed.md\` 를 만든다 — **그 둘이 있는 폴더가
-지식 레포다.** 자세한 것은 \`MANUAL-관리자.md\` 2장.
+**둘째 줄이 패키지다.** 부으면 \`_vocab.md\` · \`_managed.md\` · \`docs/\` 가
+함께 들어오고 **그 순간 그 폴더가 지식 레포가 된다.** 무엇을 고를지는
+\`packages/README.md\`. 패키지 없이 세우려면 그 셋을 손으로 만든다 —
+\`MANUAL-관리자.md\` 2장.
 
 **\`_vocab.md\` 가 먼저다.** \`ctx setup\` 은 그 파일로 지식 레포를 알아본다 —
 없으면 "지식 레포를 찾을 수 없습니다" 로 멈춘다(exit 2).
@@ -265,7 +261,7 @@ const tags = (() => {
 
 const semver = (v) => v.replace(/^v/, '').split('.').map(Number)
 const older = fs
-  .readdirSync(path.join(ROOT, 'release'), { withFileTypes: true })
+  .readdirSync(path.join(ROOT, 'ops', 'release'), { withFileTypes: true })
   .filter((e) => e.isDirectory() && /^v\d/.test(e.name))
   .sort((a, b) => {
     const [x, y] = [semver(b.name), semver(a.name)]

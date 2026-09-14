@@ -1,5 +1,5 @@
 @echo off
-REM 배포본 만들기 -- release\v<버전>\ 하나로 묶는다.
+REM 배포본 만들기 -- ops\release\v<버전>\ 하나로 묶는다.
 cd /d "%~dp0.."
 if not exist node_modules (
   echo [ops] node_modules 가 없습니다. 설치부터 합니다.
@@ -7,7 +7,7 @@ if not exist node_modules (
 )
 call npm run release -- %1 || goto :fail
 echo.
-echo [ops] 끝났습니다. release 폴더를 확인하세요.
+echo [ops] 끝났습니다. ops\release 폴더를 확인하세요.
 pause
 goto :eof
 :fail

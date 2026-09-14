@@ -5,8 +5,8 @@
 | 문서 | |
 |---|---|
 | **시스템 설계** | [`docs/design/CDP_시스템설계서_v1.0.md`](docs/design/CDP_시스템설계서_v1.0.md) — 프로토콜 + 프로그램. **고칠 사람이 먼저 읽는다** |
-| 사용 (하루) | [`kit/manual/user.md`](kit/manual/user.md) → 레포에 `MANUAL.md` 로 들어간다 |
-| 사용 (설치·운영) | [`kit/manual/admin.md`](kit/manual/admin.md) → 레포에 `MANUAL-관리자.md` |
+| 사용 (하루) | [`agent/manual/user.md`](agent/manual/user.md) → 레포에 `MANUAL.md` 로 들어간다 |
+| 사용 (설치·운영) | [`agent/manual/admin.md`](agent/manual/admin.md) → 레포에 `MANUAL-관리자.md` |
 | 전제 문서 | [`docs/design/`](docs/design) — 프로토콜 · 작업환경 · 수행 설계서 |
 | 작업 메모 | `docs/dev/` — 개발 중 검토·정정 기록. **보존 대상이 아니다** |
 
@@ -41,9 +41,9 @@ npm run release          # → release/v0.2.0/
 ```
 
 `ops\release.cmd` 를 더블클릭해도 된다. **그 폴더를 통째로 옮기면 CDP 를 쓸 수
-있다** — exe · repo-kit · 샘플 · 설계서가 다 들어 있다.
+있다** — exe · repo-kit · packages · 설계서가 다 들어 있다.
 
-동봉된 샘플 레포(`sample-repo/`)로 뜬다. 다른 레포를 보려면:
+`viewer/fixture/` 로 뜬다 — **개발용 fixture 다. 배포본에는 안 들어간다.** 다른 레포를 보려면:
 
 ```bash
 node viewer/server/index.js --repo "C:\work\knowledge-repo"
@@ -76,10 +76,10 @@ node viewer/server/index.js --repo <경로> --dev http://localhost:5173 --no-ope
 
 | | |
 |---|---|
-| **`npm run release`** | **원클릭.** 화면 → ctx → exe → 샘플 → `release/v<버전>/` |
+| **`npm run release`** | **원클릭.** 화면 → ctx → exe → `release/v<버전>/` |
 | `npm run dev` · `dev:server` | 화면 / 서버 개발 |
-| `npm start` | 서버 (빌드된 화면 · sample-repo) |
-| `npm run seed` | `sample-repo/` 재생성 |
+| `npm start` | 서버 (빌드된 화면 · viewer/fixture) |
+| `npm run seed` | `viewer/fixture/` 재생성 |
 | `npm run ctx -- check` | 소스로 CLI 실행 |
 | `npm run build:ctx` | `out/ctx/ctx.mjs` 번들. **`CDP_REPO` 가 있으면 그 레포도 갱신** |
 | `npm run build:exe` | 단일 실행 파일 |
@@ -245,20 +245,31 @@ exe 로 실행하면 트레이 아이콘이 뜬다. 우클릭 메뉴 — 열기 
 | PowerShell 이 막히면 | 트레이 없이 그대로 동작한다. 앱이 죽지 않는다 |
 | 탭 닫아도 계속 실행 | 유휴 종료(90초)를 끈다. **켜져 있으면 상태바에도 표시된다** — 안 보이면 켠 것을 잊는다 |
 
-## 샘플 레포
+## 샘플 레포 — **뷰어 개발용 fixture 다**
 
-`sample-repo/` 는 동작 확인용이다. GDI(경북연구원 연구관리 시스템) 실제 작업
-자료에서 가져왔고 `npm run seed` 로 재생성한다.
+`viewer/fixture/` 는 **뷰어를 개발할 때 읽을 지식 레포**다. 그 하나의 용도다.
 
-**커밋 가능한 정상 레포를 만든다.** 전에는 밀림·미작성을 일부러 심어 시연했는데,
-그것이 오류가 된 뒤로는 **clone 직후 커밋이 막히는 샘플**이 됐다 — 폐쇄망
-반입 검증(clone 해서 커밋이 되는가)이 무의미해진다.
+| | |
+|---|---|
+| 쓰는 곳 | `npm start` · `npm run dev:server` · `ops\check.cmd` |
+| **배포본** | **안 들어간다.** 받는 사람에게 가지 않는다 |
+| **데이터 보관** | **아니다.** GDI 자료의 사본으로 의존하지 않는다 |
+
+`npm run seed` 로 재생성한다. **릴리스는 seed 를 부르지 않는다** — 부르던
+시절에 덤프 없는 PC 에서 릴리스 한 번이 테이블정의서 32섹션을 1섹션으로
+줄인 적이 있다(`caa835a`).
+
+**커밋 가능한 정상 레포를 만든다.** 전에는 밀림·미작성을 일부러 심어
+시연했는데, 그것이 오류가 된 뒤로는 **clone 직후 커밋이 막히는 샘플**이
+됐다 — 폐쇄망 반입 검증(clone 해서 커밋이 되는가)이 무의미해진다.
 
 대신 **판정이 갈리는 것**은 남겼다 — 좌표별로 판정이 다른 문서, 좌표 0개,
 등록부 없는 타입(`domain:`), 점유, 오기재 정정, 작업 기록이 없는 섹션.
-목록은 `sample-repo/README.md`.
+목록은 `viewer/fixture/README.md`.
 
 ## 구조
+
+**상위 폴더는 넷이다.**
 
 ```
 viewer/                  뷰어 프로그램
@@ -267,39 +278,52 @@ viewer/                  뷰어 프로그램
   server/adapter/        HTTP + SSE · 트레이 · 토큰/Origin/경로 봉인
   src/                   화면. 마크다운 렌더는 전부 클라이언트가 소유한다
   bin/                   ctx CLI (소스) — 번들되어 레포 안으로 들어간다
+  fixture/               **뷰어 개발용 지식 레포.** 배포본에 안 들어간다
   index.html  vite.config.js
 
-kit/                     **받는 사람에게 가는 것의 원본**
-  agent/                 클로드코드 세팅
-    skills/              work · load · save · import · edit · managed
-    CLAUDE-지식레포.md    지식 레포에 들어갈 규약
-    CLAUDE-프로젝트레포.md  작업 레포에 **블록으로** 들어갈 규약
-    TEMPLATE-work.md
+agent/                   **받는 사람에게 가는 것의 원본**
+  skills/                work · load · save · import · edit · managed · push
+  CLAUDE-지식레포.md      지식 레포에 들어갈 규약
+  CLAUDE-프로젝트레포.md   작업 레포에 **블록으로** 들어갈 규약
+  TEMPLATE-work.md
   hooks/pre-commit       유일한 결정론적 보증 층
   manual/                system(정본) · user · admin
+  packages/              프로젝트마다 골라서 붓는 문서 골격 · 등록부 · 어휘
   install.md             설치 시나리오 — 배포본 루트로 간다
 
 ops/                     **명령** — 사람이 실행하는 것
   setup · dev · start · check · seed · release  (.cmd)
   lib/                   그 명령이 부르는 구현. 직접 실행하지 않는다
+  out/                   중간 산출물 — web · ctx · exe   (추적 안 함)
+  release/v<버전>/        배포본                          (추적 안 함)
 
-attic/                   **한 번 돌고 끝난 것** — GDI 재구성과 그 입력
-
-docs/design/             설계서 — 보존 · CDP 개선 작업의 문서 더미
-docs/dev/                개발 메모 · TODO · 시나리오
-sample-repo/             샘플 지식 레포 (npm start 가 쓴다)
-
-out/                     중간 산출물 — web · ctx · exe   (추적 안 함)
-release/v<버전>/          배포본                          (추적 안 함)
+docs/                    **우리만 보는 것**
+  design/                설계서 — 보존 · CDP 개선 작업의 문서 더미
+  dev/                   개발 메모 · TODO · 시나리오 · 검토 기록
+  attic/                 **한 번 돌고 끝난 것** — GDI 재구성과 그 입력
 ```
+
+**산출물이 `ops/` 아래에 있는 이유** — 만드는 쪽이 거기다. 루트에 두면
+`out/` 과 `release/` 가 상위 폴더 행세를 하는데, 둘 다 추적되지 않는
+부산물이다.
 
 **루트에 남는 것은 도구가 요구하는 자리뿐이다** — `package.json` ·
 `package-lock.json` 은 npm 이, `.gitattributes` · `.gitignore` 는 git 이
-루트에서만 읽는다. `node_modules/` 도 npm 이 정한다.
+루트에서만 읽는다.
 
-**`agent/` 가 있는 이유** — 전에는 스킬 4개가 `sample-repo/.claude/skills/`
-안에만 있었다. fixture 안의 사본이 사실상 원본이라, 고치려면 fixture 를 고치고
-다른 레포에는 **손으로 복사**해야 했다. 레포가 셋이면 세 번이다.
+**`node_modules/` 는 못 옮긴다.** npm 은 `package.json` 옆에 만들고 node 는
+파일 위치에서 **위로 올라가며** 찾는다. `viewer/` 와 `ops/lib/` 가 둘 다 외부
+의존을 쓰므로(`js-yaml`·`chokidar` / `rcedit`) 어느 한쪽으로 내리면 다른 쪽이
+못 찾는다. 워크스페이스로 묶어도 루트로 끌어올려진다. **하나뿐인 예외로 둔다.**
+
+**`agent/` 가 원본인 이유** — 전에는 스킬 4개가 fixture 의
+`.claude/skills/` 안에만 있었다. fixture 안의 사본이 사실상 원본이라, 고치려면
+fixture 를 고치고 다른 레포에는 **손으로 복사**해야 했다. 레포가 셋이면 세
+번이고, **실제로 세 번 갈렸다.**
+
+그래서 fixture 의 `.claude/` 는 **추적하지 않는다** — `seed` 가 `agent/` 에서
+만든다. `bin/` 은 반대로 추적한다(clone 만 하면 샘플이 바로 돌게). `.gitignore`
+에 두 결정이 나란히 적혀 있다.
 
 `core/` 는 HTTP 를 모른다. 보안 심사가 localhost 리스너를 막으면 `adapter/` 만
 IPC 로 갈아끼우고 화면 코드는 그대로 쓴다.

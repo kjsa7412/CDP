@@ -610,19 +610,22 @@ node 바이너리 복사
 
 ```
 viewer/     뷰어 프로그램      server · src · bin · index.html · vite.config
-kit/        **받는 사람에게 가는 것의 원본**
-  agent/      CLAUDE.md 2종 · skills · TEMPLATE-work.md
+  fixture/    **뷰어 개발용 지식 레포.** 배포본에 안 들어간다 (재생성 가능)
+agent/      **받는 사람에게 가는 것의 원본**
+  skills/     절차 7종
+  CLAUDE-*.md · TEMPLATE-work.md
   hooks/      pre-commit
   manual/     system(정본) · user · admin
+  packages/   프로젝트마다 고르는 것 — 문서 골격 · 등록부 · 어휘
   install.md  설치 시나리오 — 배포본 루트로 간다
 ops/        **명령** — 사람이 실행하는 `.cmd` 여섯
-  lib/      그 명령이 부르는 구현. 직접 실행하지 않는다
-attic/      **한 번 돌고 끝난 것** — GDI 재구성 스크립트와 그 입력
-docs/design 보존되는 설계서 · CDP 개선 작업의 문서 더미
-docs/dev    개발 메모 · TODO · 시나리오
-sample-repo 샘플 지식 레포 (재생성 가능)
-out/        중간 산출물  web · ctx · exe   (추적 안 함)
-release/    버전별 배포본                 (추적 안 함)
+  lib/        그 명령이 부르는 구현. 직접 실행하지 않는다
+  out/        중간 산출물  web · ctx · exe   (추적 안 함)
+  release/    버전별 배포본                 (추적 안 함)
+docs/       **우리만 보는 것**
+  design/     보존되는 설계서 · CDP 개선 작업의 문서 더미
+  dev/        개발 메모 · TODO · 시나리오 · 검토 기록
+  attic/      **한 번 돌고 끝난 것** — GDI 재구성 스크립트와 그 입력
 ```
 
 > **정정 (2026-09-08)** — 전에는 `agent/` 와 `repo-kit/` 이 따로 있었다.
@@ -634,9 +637,27 @@ release/    버전별 배포본                 (추적 안 함)
 > 일회성 스크립트는 `attic/` 으로 뺐다 — `ops`(운영 명령) 밑에 있을 것이
 > 아니었다.
 
+> **정정 (2026-09-14)** — 상위 폴더를 **넷으로** 줄였다.
+> `kit/` → `agent/`(한 겹 얕아졌다) · `packages/` → `agent/packages/` ·
+> `attic/` → `docs/attic/` · `sample-repo/` → `viewer/fixture/` ·
+> `out/`·`release/` → `ops/` 아래.
+>
+> **이름을 바꾼 것이지 쪼갠 것이 아니다.** 위의 2026-09-08 정정이 경계한
+> 것은 *받는 사람에게 가는 것을 두 폴더로 나누는 일*이었고, 그것은 그대로
+> 하나다 — `agent/` 가 skills · hooks · manual · packages · install 을 전부
+> 들고 있다. 판정 기준도 그대로 **"받는 사람에게 가는가"** 다.
+>
+> **산출물을 `ops/` 아래로 내린 이유** — 만드는 쪽이 거기다. 루트에 두면
+> 추적도 안 되는 부산물이 상위 폴더 행세를 한다.
+
 **루트에는 도구가 요구하는 것만 남는다** — `package.json`·`package-lock.json`
 은 npm 이, `.gitattributes`·`.gitignore` 는 git 이 루트에서만 읽는다.
-`node_modules/` 도 npm 이 정한다. 그 밖에 루트에 두는 것은 `README.md` 하나다.
+그 밖에 루트에 두는 것은 `README.md` 하나다.
+
+**`node_modules/` 만 예외다.** npm 은 `package.json` 옆에 만들고 node 는 파일
+위치에서 위로 올라가며 찾는다. `viewer/` 와 `ops/lib/` 가 둘 다 외부 의존을
+쓰므로(`js-yaml`·`chokidar` / `rcedit`) 어느 한쪽으로 내리면 다른 쪽이 못
+찾는다. 워크스페이스로 묶어도 루트로 끌어올려진다.
 
 **`ops/` 와 `ops/lib/` 를 가른 이유** — 전에는 `tools/` 에
 `build-exe.mjs`(스크립트가 부른다)와 `release.cmd`(사람이 더블클릭한다)가
@@ -668,10 +689,16 @@ release/    버전별 배포본                 (추적 안 함)
 release/v0.2.0/
   cdp.exe          앱 + ctx
   repo-kit/        레포를 세울 때 넣는 것 (bin · .githooks · .claude · 매뉴얼)  ← 배포본 안의 이름
-  sample-repo/     바로 열어 볼 수 있는 샘플
+  packages/        프로젝트마다 골라서 붓는 것 (문서 골격 · 등록부 · 어휘)
   docs/            설계서 — 도구를 고칠 사람용
   README.md        설치 안내
 ```
+
+> **정정 (2026-09-14)** — 샘플 레포는 배포본에서 뺐다. **뷰어 개발용
+> fixture 한 가지 용도**로 정리했고, 받는 사람에게 가지 않는다. 그래서
+> `release` 가 `seed` 를 부르지도 않는다 — 부르던 시절에 덤프 없는 PC 에서
+> 릴리스 한 번이 테이블정의서를 32섹션에서 1섹션으로 줄였다(`caa835a`).
+> 대신 `packages/` 가 들어간다.
 
 **그 폴더를 통째로 옮기면 CDP 를 쓸 수 있다.** 전에는 산출물이
 `build/`·`dist/`·`sample-repo/bin/` 에 흩어져 있어 **무엇을 나눠줘야 하는지
@@ -729,9 +756,9 @@ release/v0.2.0/
 
 ```
 npm run dev              vite (화면만)
-npm run dev:server       서버 + sample-repo
+npm run dev:server       서버 + viewer/fixture
 npm start                서버 (빌드된 화면)
-npm run seed             sample-repo 재생성
+npm run seed             viewer/fixture 재생성
 npm run ctx -- check     소스로 CLI 실행
 npm run build:ctx        bin/ctx.mjs 번들 (CDP_REPO 도 갱신)
 npm run build:exe        exe

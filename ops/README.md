@@ -10,10 +10,10 @@
 ops/
   setup.cmd      최초 1회 — 의존성 설치
   dev.cmd        개발 서버 (화면 + API)
-  start.cmd      앱 실행 (빌드된 화면 · sample-repo)
+  start.cmd      앱 실행 (빌드된 화면 · viewer/fixture)
   check.cmd      지식 레포 검사
-  seed.cmd       sample-repo 재생성
-  release.cmd    **배포본 만들기** → release/v<버전>/
+  seed.cmd       viewer/fixture 재생성
+  release.cmd    **배포본 만들기** → ops/release/v<버전>/
   lib/           위 명령이 부르는 구현 (직접 실행하지 않는다)
 ```
 
@@ -32,13 +32,16 @@ ops\start.cmd C:\cdp       그 레포로 앱 실행
 ## 산출물은 어디로
 
 ```
-out/web/    화면 (vite)
+out/web/    화면 (vite)          ← 여기, 즉 ops/out/
 out/ctx/    ctx 번들
 out/exe/    cdp.exe
 release/v<버전>/   배포본 — **이 폴더를 통째로 옮기면 CDP 를 쓸 수 있다**
 ```
 
 셋 다 추적하지 않는다. `out/` 은 중간 산출물이고 `release/` 는 결과다.
+
+**둘 다 `ops/` 아래에 있다.** 만드는 쪽이 여기다 — 루트에 두면 추적도 안
+되는 부산물이 상위 폴더 행세를 한다.
 
 ## 버전은 몇 개나 들고 있나
 

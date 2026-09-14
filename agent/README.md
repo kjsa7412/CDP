@@ -1,6 +1,6 @@
-# kit — 받는 사람에게 가는 것
+# agent — 받는 사람에게 가는 것
 
-**여기가 원본이다.** 지식 레포·작업 레포·sample-repo 안의 같은 파일은 전부
+**여기가 원본이다.** 지식 레포·작업 레포·`viewer/fixture` 안의 같은 파일은 전부
 사본이고, `ops\release.cmd` 와 `ops\seed.cmd` 가 여기서 복사해 만든다.
 사본을 고치면 다음 빌드에 덮인다.
 
@@ -8,16 +8,16 @@
 것은 `docs/` 에 있다.
 
 ```
-agent/                  클로드코드 세팅
-  skills/                 절차 — work · load · save · import · edit · managed
-  CLAUDE-지식레포.md       지식 레포의 CLAUDE.md 로
-  CLAUDE-프로젝트레포.md    작업 레포의 CLAUDE.md **블록**으로
-  TEMPLATE-work.md        작업 기록 서식
+skills/                 절차 — work · load · save · import · edit · managed · push
+CLAUDE-지식레포.md       지식 레포의 CLAUDE.md 로
+CLAUDE-프로젝트레포.md    작업 레포의 CLAUDE.md **블록**으로
+TEMPLATE-work.md        작업 기록 서식
 hooks/pre-commit        유일한 결정론적 보증 층
 manual/
   system.md               **정본** — CDP 가 지금 무엇인지
   user.md                 하루 쓰는 법
   admin.md                설치 · 어휘 운영 · 배포 · 장애
+packages/               프로젝트마다 골라서 붓는 문서 골격 · 등록부 · 어휘
 install.md              설치 시나리오 — 네 자리
 ```
 
@@ -27,15 +27,20 @@ install.md              설치 시나리오 — 네 자리
 manual/system.md   →  repo-kit/MANUAL-시스템.md      지식 레포 안
 manual/user.md     →  repo-kit/MANUAL.md
 manual/admin.md    →  repo-kit/MANUAL-관리자.md
-agent/skills       →  repo-kit/.claude/skills
-agent/CLAUDE-지식레포.md      →  repo-kit/CLAUDE.md
-agent/CLAUDE-프로젝트레포.md  →  repo-kit/.claude/work-repo/CLAUDE.md   (서식)
+skills/            →  repo-kit/.claude/skills
+CLAUDE-지식레포.md            →  repo-kit/CLAUDE.md
+CLAUDE-프로젝트레포.md        →  repo-kit/.claude/work-repo/CLAUDE.md   (서식)
+packages/          →  **배포본 루트** packages/   (골라서 붓는다)
 hooks/pre-commit   →  repo-kit/.githooks/pre-commit
 install.md         →  **배포본 루트** 설치.md
 ```
 
-`install.md` 만 루트로 간다. **지식 레포가 아직 없을 때 읽는 문서**라
-`repo-kit/` 안에 두면 부은 뒤에야 보인다 — 순서가 거꾸로다.
+`install.md` 와 `packages/` 만 루트로 간다. **지식 레포가 아직 없을 때 읽고
+고르는 것**이라 `repo-kit/` 안에 두면 부은 뒤에야 보인다 — 순서가 거꾸로다.
+
+> **`packages/` 가 `repo-kit/` 에 안 들어가는 이유가 그것이다.** `repo-kit` 은
+> 통째로 붓는 것이고 패키지는 **그중 하나를 고르는** 것이다. 둘을 같은 자리에
+> 두면 고를 것이 없어진다.
 
 ## `CLAUDE.md` 가 왜 둘인가
 

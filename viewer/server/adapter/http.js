@@ -11,7 +11,7 @@ import { exec } from 'node:child_process'
 import { SESSION_TOKEN, makeGuard, checkToken, resolveInside, isExecutable } from './security.js'
 import { hereDir } from '../runtime.js'
 
-const CLIENT_DIR = path.resolve(hereDir(import.meta.url), '../../../out/web')
+const CLIENT_DIR = path.resolve(hereDir(import.meta.url), '../../../ops/out/web')
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -343,7 +343,7 @@ async function serveStatic({ req, res, url, send, devProxy }) {
   let rel = decodeURIComponent(url.pathname)
   if (rel === '/' || !path.extname(rel)) rel = '/index.html'
 
-  // 단일 실행 파일(SEA)로 빌드하면 out/web 이 파일로 존재하지 않는다.
+  // 단일 실행 파일(SEA)로 빌드하면 ops/out/web 이 파일로 존재하지 않는다.
   // tools/build-exe.mjs 가 화면을 전역에 인라인해 둔다(§5.1 A안).
   const inlined = globalThis.__CTXVIEW_ASSETS__
   if (inlined) {

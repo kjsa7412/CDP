@@ -44,7 +44,7 @@ import shutil
 import sys
 
 # **`..` 가 두 번이다** -- 이 파일은 `ops/lib/` 에 있다
-OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..', 'sample-repo')
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..', 'viewer', 'fixture')
 OUT = os.path.abspath(OUT)
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -1433,10 +1433,10 @@ def main():
 
     # 클로드코드 세팅 -- **원본은 `agent/`.**
     #
-    # 전에는 스킬 4개가 `sample-repo/.claude/skills/` 에만 있었다. fixture 안의
+    # 전에는 스킬 4개가 `viewer/fixture/.claude/skills/` 에만 있었다. fixture 안의
     # 사본이 사실상 원본이라, 고칠 때 fixture 를 고치고 다른 레포에는 손으로
     # 복사해야 했다. 레포가 셋이면 세 번이다.
-    agent = os.path.join(ROOT, 'kit', 'agent')
+    agent = os.path.join(ROOT, 'agent')
     sk_src = os.path.join(agent, 'skills')
     if os.path.isdir(sk_src):
         sk_dst = os.path.join(OUT, '.claude', 'skills')
@@ -1444,7 +1444,7 @@ def main():
             shutil.rmtree(sk_dst)
         shutil.copytree(sk_src, sk_dst)
     # **CLAUDE.md 는 두 종류다.** 지식 레포에 들어가는 것과, 그 옆의
-    # 프로젝트 레포에 들어가는 것. 전에는 둘을 구분하지 않고 `kit/agent/CLAUDE.md`
+    # 프로젝트 레포에 들어가는 것. 전에는 둘을 구분하지 않고 `agent/CLAUDE.md`
     # 하나만 두어서, 지식 레포 자리에 프로젝트용이 복사되고 있었다.
     for nm, dst in (('CLAUDE-지식레포.md', 'CLAUDE.md'),
                     ('TEMPLATE-work.md', 'TEMPLATE-work.md'),
@@ -1456,8 +1456,8 @@ def main():
             os.makedirs(os.path.dirname(d), exist_ok=True)
             shutil.copyfile(src, d)
 
-    # git 훅 -- 유일한 결정론적 보증 층. 원본은 `kit/hooks/pre-commit`.
-    hook_src = os.path.join(ROOT, 'kit', 'hooks', 'pre-commit')
+    # git 훅 -- 유일한 결정론적 보증 층. 원본은 `agent/hooks/pre-commit`.
+    hook_src = os.path.join(ROOT, 'agent', 'hooks', 'pre-commit')
     if os.path.exists(hook_src):
         dst = os.path.join(OUT, '.githooks', 'pre-commit')
         os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -1469,14 +1469,14 @@ def main():
     # 하나로 두면 사용자가 배포·어휘 운영 절을 넘기며 읽고, 관리자가 하루
     # 흐름 절에서 자기 것을 못 찾는다. **독자가 둘이면 문서도 둘이다.**
     #
-    # **원본은 `kit/manual/` 이다.** 전에는 `repo-kit/manual-user.md` 를
-    # 봤는데 그 폴더는 `kit/` 으로 재편되면서 없어졌다. `os.path.exists` 로
+    # **원본은 `agent/manual/` 이다.** 전에는 `repo-kit/manual-user.md` 를
+    # 봤는데 그 폴더는 `agent/` 로 재편되면서 없어졌다. `os.path.exists` 로
     # 감싸 둔 탓에 **없어진 줄 아무도 몰랐다** -- 시드는 조용히 넘어가고,
     # OWNED_FILES 는 두 파일을 지우기까지 하므로 샘플에서 매뉴얼이 사라졌다.
     # README 가 거는 링크 둘이 그때부터 죽어 있었다. 이제는 없으면 말한다.
     for src_name, dst_name in (('user.md', 'MANUAL.md'),
                                ('admin.md', 'MANUAL-관리자.md')):
-        man_src = os.path.join(ROOT, 'kit', 'manual', src_name)
+        man_src = os.path.join(ROOT, 'agent', 'manual', src_name)
         if os.path.exists(man_src):
             shutil.copyfile(man_src, os.path.join(OUT, dst_name))
         else:

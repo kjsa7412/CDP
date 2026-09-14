@@ -455,7 +455,7 @@ Node SEA. **런타임과 화면 자산이 전부 안에 들어 있다.** 폐쇄�
 |---|---|---|
 | 런타임 | **Node 20** | SEA 로 exe 에 그대로 들어간다 |
 | 화면 | **React 18.3** + **react-dom** | 상태관리·라우팅 라이브러리 **없다** |
-| 번들 | **Vite 6** + `@vitejs/plugin-react` | `out/web/` 으로 |
+| 번들 | **Vite 6** + `@vitejs/plugin-react` | `ops/out/web/` 으로 |
 | 스타일 | **CSS 4파일** | `tokens · app · doc · font`. 프레임워크 없다 |
 | 마크다운 | **markdown-it 14** + `markdown-it-anchor` | 렌더는 **전부 클라이언트**가 소유한다 |
 | 살균 | **DOMPurify 3** | 렌더 결과를 그대로 넣지 않는다 |
@@ -701,12 +701,15 @@ Node·exe 가 없는 PC 에서 **아무도 커밋을 못 하게 됐다.** 그리
 ## 8.2 정본이 어디인가
 
 ```
-kit/                  **받는 사람에게 가는 것의 원본**
-  agent/                CLAUDE.md 2종 · skill · TEMPLATE
+agent/                **받는 사람에게 가는 것의 원본**
+  skills/               절차
+  CLAUDE-*.md           규약 2종
+  TEMPLATE-work.md
   hooks/pre-commit
   manual/               system · user · admin
+  packages/             프로젝트마다 고르는 문서 골격 · 등록부 · 어휘
   install.md
-release/v<버전>/      배포본
+ops/release/v<버전>/  배포본
 <지식 레포>/          배포본의 사본
 <작업 레포>/          ctx setup 이 넣은 사본
 ```

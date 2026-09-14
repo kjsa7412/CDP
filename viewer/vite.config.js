@@ -19,9 +19,9 @@ export default defineConfig({
     },
   },
   build: {
-    // **산출물은 전부 `out/` 아래 한 자리에 모은다.** 전에는 `dist/`(화면)와
+    // **산출물은 전부 `ops/out/` 아래 한 자리에 모은다.** 전에는 `dist/`(화면)와
     // `build/`(exe)가 따로 있어서 어디를 봐야 하는지 매번 헷갈렸다.
-    outDir: '../out/web',
+    outDir: '../ops/out/web',
     emptyOutDir: true,
     // highlight.js 는 markdown.js 의 동적 import 로만 들어온다.
     // manualChunks 로 이름을 붙이면 Vite 가 modulepreload 를 걸어버려

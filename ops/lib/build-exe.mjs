@@ -19,7 +19,7 @@ import { buildIco } from './make-icon.mjs'
 // **`..` 가 두 번이다.** 이 파일은 `ops/lib/` 에 있으므로 한 번으로는
 // `ops/` 를 가리킨다 -- 그러면 `ops/package.json` 을 찾다가 죽는다.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-const BUILD = path.join(ROOT, 'out', 'exe')
+const BUILD = path.join(ROOT, 'ops', 'out', 'exe')
 const OUT = path.join(BUILD, process.platform === 'win32' ? 'cdp.exe' : 'cdp')
 
 // Mach-O universal(fat) 매직 -- 0xcafebabe(32) · 0xcafebabf(64).
@@ -50,7 +50,7 @@ function abortLocked(e) {
 }
 
 // 1) 화면 빌드
-if (!fs.existsSync(path.join(ROOT, 'out', 'web', 'index.html'))) {
+if (!fs.existsSync(path.join(ROOT, 'ops', 'out', 'web', 'index.html'))) {
   log('dist 가 없다. vite build 실행')
   run('npm', ['run', 'build'])
 }
@@ -67,7 +67,7 @@ fs.mkdirSync(BUILD, { recursive: true })
 // 2) dist/ 를 코드에 인라인한다.
 //    SEA 는 에셋을 따로 넣을 수 있지만(sea-config assets), 파일 수만큼 키를
 //    관리해야 한다. 화면 파일이 10여 개뿐이라 base64 로 말아 넣는 편이 단순하다.
-const distDir = path.join(ROOT, 'out', 'web')
+const distDir = path.join(ROOT, 'ops', 'out', 'web')
 const assets = {}
 ;(function walk(dir, rel = '') {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -145,7 +145,7 @@ run('npx', [
 //
 // `bin/ctx.mjs` 와 **같은 값**을 심는다. 그래야 둘을 대조할 수 있다.
 {
-  const ctxBundle = path.join(ROOT, 'out', 'ctx', 'ctx.mjs')
+  const ctxBundle = path.join(ROOT, 'ops', 'out', 'ctx', 'ctx.mjs')
   let stamp = null
   if (fs.existsSync(ctxBundle)) {
     const m = fs.readFileSync(ctxBundle, 'utf8').match(/BUILT\s*=\s*['"]([^'"]+)['"]/)
