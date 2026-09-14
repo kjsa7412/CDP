@@ -83,48 +83,111 @@
 .vblock__jump:hover { text-decoration: underline; }
 
 
-/* ── 4섹션 레일 — §19.1. 본문 구조를 미리 안다는 이점 ────────────────── */
-.rail {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+/* ── 목차 — 본문 **오른쪽에 세로로** ──────────────────────────────────
+ *
+ * 가로 레일이던 것을 세웠다. 화면설계서는 섹션이 57개인데 가로로는 14개만
+ * 적고 `+43` 으로 끊겼고 — 끊긴 43개로 가려면 결국 본문을 스크롤해야 했다.
+ * 그러면 목차가 하는 일이 없다.
+ *
+ * 세로면 다 들어가고, 넘치면 **레일만** 스크롤된다. 본문은 `--doc-measure`
+ * 로 맞춰 둔 제 폭을 그대로 쓴다. */
+.docmain {
   display: flex;
-  align-items: stretch;
-  gap: 2px;
-  padding: var(--sp-2) 0;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(6px);
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
 }
-.rail__item {
+
+.toc {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+.toc[data-open='1'] { width: 216px; }
+/* 접으면 띠만 남는다. **0 으로 만들지 않는다** — 펴는 버튼이 사라지면
+ * 접은 사람이 목차를 잃는다 */
+.toc[data-open='0'] { width: 30px; }
+
+.toc__toggle {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px var(--sp-2);
-  font-size: 12px;
+  gap: 6px;
+  flex: none;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.toc__toggle:hover { color: var(--text); background: var(--surface-2); }
+/* 접힌 띠 — **전체가 버튼이다.**
+ * 이 30px 가 "여기 목차가 있다"는 유일한 신호인데, 위쪽 한 칸만 눌리면
+ * 나머지 띠는 눌러 보고 아무 일도 안 일어나는 자리가 된다. */
+.toc[data-open='0'] .toc__toggle {
+  flex: 1;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 9px 0;
+  font-size: 13px;
   color: var(--text-2);
-  border-radius: var(--r-badge);
-  white-space: nowrap;
+  border-bottom: 0;
 }
-.rail__item:hover {
-  background: var(--surface-3);
-  color: var(--text);
+.toc__cap { display: flex; align-items: baseline; gap: 5px; }
+.toc__n { font: 10px var(--font-mono); opacity: 0.8; font-variant-numeric: tabular-nums; }
+.toc__ico { font-size: 9px; opacity: 0.8; }
+
+.toc__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px 0 14px;
 }
-.rail__item[data-current='true'] {
+.toc__item {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  width: 100%;
+  padding: 3px 10px 3px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  /* **두 줄까지 준다.** 관리 문서 제목은 `AC-010 — 정산종류` 라 한 줄이면
+     되는데, 작업 기록은 `적재 전까지는 공란이다 — 그리고 적재 경로가 아직
+     없다` 처럼 문장이다. 한 줄로 자르면 목차가 무엇을 가리키는지 사라진다.
+     세 줄부터는 잘라 낸다 — 목록의 층이 안 읽힌다. */
+  overflow: hidden;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.toc__item:hover { color: var(--text); background: var(--surface-2); }
+/* 깊이는 들여쓰기로 — 자유 형식이라 h2·h3 가 섞인다 */
+.toc__item[data-level='3'] { padding-left: 24px; font-size: 11.5px; color: var(--text-3); }
+.toc__item[data-level='4'] { padding-left: 34px; font-size: 11.5px; color: var(--text-3); }
+.toc__item[data-current='true'] {
   color: var(--text);
   font-weight: 600;
-  box-shadow: inset 0 -2px 0 var(--accent);
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
 }
-/* 섹션이 없으면 없다는 사실을 보여준다(§13-③) */
-.rail__item[data-missing='true'] {
-  color: var(--text-3);
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-}
-/* "왜"는 문서의 수명을 결정한다(프로토콜 §8.4) */
-.rail__item[data-key='why'] {
-  font-size: 12.5px;
+
+/* 좁아지면 목차가 먼저 양보한다. **본문이 주인이다** */
+@media (max-width: 1280px) {
+  .toc[data-open='1'] { width: 184px; }
 }
 
 
@@ -642,7 +705,7 @@
   .statusbar,
   .pane--find,
   .gutter,
-  .rail,
+  .toc,
   .overlay,
   .scrim,
   .menu,
@@ -656,6 +719,7 @@
   .app,
   .panes,
   .pane,
+  .docmain,
   .docpane {
     display: block;
     height: auto;

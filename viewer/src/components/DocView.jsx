@@ -22,6 +22,8 @@ export default function DocView({
   onCoord,
   onScrollSave,
   savedRatio,
+  tocOpen = true,
+  onToggleToc,
 }) {
   const [doc, setDoc] = useState(null)
   const [error, setError] = useState(null)
@@ -107,10 +109,11 @@ export default function DocView({
     if (!pane || !el) return
     // **컨테이너를 직접 옮긴다.** `scrollIntoView({behavior:'smooth'})` 를 통째로
     // 무시하는 환경이 있고(임베디드 웹뷰 — 실측), 그러면 조용히 아무 일도
-    // 일어나지 않는다. 그리고 목차 레일이 sticky 이므로 top 에 딱 붙이면 제목이
-    // 레일 뒤에 가린다 — 레일 높이만큼 띄운다.
-    const rail = pane.querySelector('.rail')
-    const gap = (rail?.getBoundingClientRect().height || 0) + 8
+    // 일어나지 않는다.
+    //
+    // 목차가 본문 위 sticky 레일이던 시절에는 그 높이만큼 띄워야 제목이 안
+    // 가렸다. 지금은 옆으로 나갔으므로 숨 쉴 자리만 남긴다.
+    const gap = 12
     const top = el.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - gap
     pane.scrollTop = Math.max(0, top)
     el.classList.add('doc__at')
@@ -186,7 +189,7 @@ export default function DocView({
   // `supersedes` 는 판정이 아니라 참조다. 정정한/정정당한 문서는 왼쪽 아래에서
   // 다음 노드로 나온다 -- 무효 표시가 아니라 갈 수 있는 곳으로.
   return (
-    <>
+    <div className="docmain">
       <div className="docpane" ref={scrollRef}>
         {restored && (
           <div className="readmark">
@@ -231,7 +234,8 @@ export default function DocView({
             <div className="whywarn">이 앱이 모르는 프론트매터 필드: {doc.unknownFields.join(', ')}</div>
           )}
 
-          <SectionRail doc={doc} scrollRef={scrollRef} toc={rendered.toc} />
+          {/* 목차는 여기 없다 — **본문 옆 세로 레일로 나갔다.** 가로로 얹으면
+              57개 섹션 중 14개만 적고 끊게 되고, 그 폭만큼 본문이 밀린다. */}
 
           {/* 본문이 얇으면 — 형식을 강요하지 않으므로 길이로 어림한다.
               오탐이 있으므로 단정하지 않는다 (수행 v1.0 §13) */}
@@ -271,7 +275,16 @@ export default function DocView({
           </section>
         </div>
       </div>
-    </>
+
+      {/* 목차 — 본문 오른쪽. 스크롤되는 것은 본문이고 이것은 제자리에 선다 */}
+      <SectionRail
+        doc={doc}
+        scrollRef={scrollRef}
+        toc={rendered.toc}
+        open={tocOpen}
+        onToggle={onToggleToc}
+      />
+    </div>
   )
 }
 

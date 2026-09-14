@@ -668,6 +668,10 @@ export default function App() {
                 onOpen={openDoc}
                 onCoord={(c) => pickRoot({ kind: 'coord', key: c, label: c })}
                 onScrollSave={saveScroll}
+                /* 목차 접힘 — **기억한다.** 문서를 바꿀 때마다 다시 접게
+                   만들면 접는 기능이 없는 것과 같다 */
+                tocOpen={state.panes?.toc !== false}
+                onToggleToc={() => patch({ panes: { toc: state.panes?.toc === false } })}
               />
             ) : (
               <Landing repo={repo} docs={docs} onOpen={openDoc} />
