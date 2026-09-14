@@ -3445,6 +3445,15 @@ function normValue(s) {
 }
 function buildManagedIndex(registry, managedDocs) {
   const byPath = new Map(managedDocs.map((d) => [d.path, d]));
+  const sections = /* @__PURE__ */ new Map();
+  for (const d of managedDocs) {
+    let m = sections.get(d.path);
+    if (!m) sections.set(d.path, m = /* @__PURE__ */ new Map());
+    for (const s of d.managedSections || []) {
+      const k = s.level + normValue(s.value);
+      if (!m.has(k)) m.set(k, s);
+    }
+  }
   return {
     registry,
     docs: managedDocs,
@@ -3465,7 +3474,8 @@ function buildManagedIndex(registry, managedDocs) {
           section: { level: 0, title: doc.title, value: hit.value, line: 0, end: 0, applied: null, hasAppliedComment: false, empty: false, whole: true }
         };
       }
-      const section = (doc.managedSections || []).find((s) => s.level === hit.level && normValue(s.value) === normValue(hit.value)) || null;
+      const m = sections.get(hit.doc);
+      const section = m && m.get(hit.level + normValue(hit.value)) || null;
       return { ...hit, docMissing: false, section };
     },
     // 등록부가 가리키는데 실제로 없는 것 — 앵커 없음. 커밋을 거부할 대상이다.
@@ -6102,10 +6112,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-14 06:40";
+var BUILT = "2026-09-14 06:51";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-14 06:40)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-14 06:51)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
