@@ -6,8 +6,14 @@
 # "bad interpreter" 로 죽거나, 더 나쁘게는 조용히 오작동한다.
 # 실제로 이 프로젝트에서 한 번 당했다.
 viewer/bin/ctx      text eol=lf
-repo-kit/pre-commit text eol=lf
 *.sh                text eol=lf
+
+# **경로가 아니라 이름으로 건다.** 전에는 `repo-kit/pre-commit` 이라고
+# 적어 뒀는데 그 폴더는 2026-09-08 재편 때 없어졌다. 규칙은 남고 대상은
+# 사라져 **훅이 무방비로 있었다** -- core.autocrlf=true 인 PC 가 clone 하면
+# CRLF 로 받고, 셔뱅 뒤  때문에 커밋은 통과하는데 검사만 사라진다.
+# 이름으로 걸면 다음에 또 옮겨도 따라온다.
+**/pre-commit       text eol=lf
 
 # .cmd 는 cmd.exe 가 읽는다. CRLF 로 고정한다.
 # (내용은 CP949 다 — OEM 코드페이지 949 로 읽히기 때문이다.
