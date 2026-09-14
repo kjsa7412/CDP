@@ -6112,10 +6112,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-14 07:42";
+var BUILT = "2026-09-14 07:44";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-14 07:42)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-14 07:44)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
