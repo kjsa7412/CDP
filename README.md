@@ -37,7 +37,7 @@ npm start
 **배포본을 만들려면 한 줄이다.**
 
 ```bash
-npm run release          # → release/v0.2.0/
+npm run release          # → ops/release/v0.4.0/
 ```
 
 `ops\release.cmd` 를 더블클릭해도 된다. **그 폴더를 통째로 옮기면 CDP 를 쓸 수
@@ -76,12 +76,12 @@ node viewer/server/index.js --repo <경로> --dev http://localhost:5173 --no-ope
 
 | | |
 |---|---|
-| **`npm run release`** | **원클릭.** 화면 → ctx → exe → `release/v<버전>/` |
+| **`npm run release`** | **원클릭.** 화면 → ctx → exe → `ops/release/v<버전>/` |
 | `npm run dev` · `dev:server` | 화면 / 서버 개발 |
 | `npm start` | 서버 (빌드된 화면 · viewer/fixture) |
 | `npm run seed` | `viewer/fixture/` 재생성 |
 | `npm run ctx -- check` | 소스로 CLI 실행 |
-| `npm run build:ctx` | `out/ctx/ctx.mjs` 번들. **`CDP_REPO` 가 있으면 그 레포도 갱신** |
+| `npm run build:ctx` | `ops/out/ctx/ctx.mjs` 번들. **`CDP_REPO` 가 있으면 그 레포도 갱신** |
 | `npm run build:exe` | 단일 실행 파일 |
 | `npm run test:tray` | 트레이 자체 시험 (클릭 없이) |
 
@@ -176,8 +176,10 @@ ctx match     이름 → 정본 좌표 (대조)
 ctx term      어휘 조회
 ctx index     INDEX.md · INDEX-by-coord.md 재생성
 ctx brief     두 줄 요약
+ctx search    말 → 좌표 후보 (match 가 미등재를 낼 때의 폴백)
 ctx sync      원격과의 차이 · 훅 설정 여부
 ctx version   이 번들이 언제 만들어졌나
+ctx setup     작업 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기)
 ```
 
 지식 레포는 `bin/ctx` 를 **자기 안에** 들고 있다(폐쇄망 자족). `node` 가 있으면
@@ -193,7 +195,7 @@ ctx version   이 번들이 언제 만들어졌나
 npm run build:exe
 ```
 
-`build/cdp.exe` (~68MB). **더블클릭 한 번으로 실행된다** — 콘솔 창이 뜨지 않고,
+`ops/out/exe/cdp.exe` (~68MB). **더블클릭 한 번으로 실행된다** — 콘솔 창이 뜨지 않고,
 아이콘이 붙어 있고, 트레이에 올라온다. `ctx` 도 이 안에 있다.
 
 Node SEA 로 만든다 — 공식 기능이라 서드파티 패커 의존이 없고, **네이티브 모듈을

@@ -123,10 +123,13 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 > 등록부에 없는 좌표는 **결함이 아니다.** 앱은 *"관리 문서가 없다"* 라고
 > 말하지 않고 *"원천 — 지식공유문서 N건"* 이라고 말한다.
 
-### ④ 관리 문서 16종
+### ④ 관리 문서 — 몇 종인지는 **패키지가 정한다**
 
-프로젝트 표준 산출물에 맞춘 기본 세트다. **좌표를 갖는 것과 안 갖는 것이
-섞여 있다.**
+부었으면 이미 들어와 있다. `agent/packages/dpms` 는 46개고, 다른 패키지는
+다르다. 숫자를 외울 것이 아니라 **좌표를 갖는 것과 안 갖는 것이 섞여 있다**
+는 것을 알면 된다.
+
+아래는 패키지 없이 세울 때의 **CDP 기본 세트 16종**이다.
 
 | 좌표를 갖는다 (등록부 O) | 좌표가 없다 (등록부 X) |
 |---|---|
@@ -394,7 +397,7 @@ ctx search <말...>    말 → 좌표 후보 (대조가 미등재를 낼 때)
 
 | | 무엇 | 크기 |
 |---|---|---|
-| **① exe** | `release/v<버전>/cdp.exe` — 앱 + `ctx` 가 한 파일 | ~68MB |
+| **① exe** | `ops/release/v<버전>/cdp.exe` — 앱 + `ctx` 가 한 파일 | ~68MB |
 | **② 레포 번들** | `git bundle` 또는 clone | 수 MB |
 | ③ `bin/ctx.mjs` | 레포 안에 이미 들어 있다 (자족) | ~156KB |
 
@@ -403,10 +406,10 @@ ctx search <말...>    말 → 좌표 후보 (대조가 미등재를 낼 때)
 ### exe 만들기
 
 ```
-npm run release          # 화면 → ctx → exe → release/v<버전>/
+npm run release          # 화면 → ctx → exe → ops/release/v<버전>/
 ```
 
-**결과는 `release/v<버전>/` 하나다.** 그 폴더를 통째로 옮기면 CDP 를 쓸 수
+**결과는 `ops/release/v<버전>/` 하나다.** 그 폴더를 통째로 옮기면 CDP 를 쓸 수
 있다 — exe · `repo-kit/` · `agent/packages/` · 설계서가 다 들어 있다. `release.cmd` 를
 더블클릭해도 되고, 버전을 지정하려면 `npm run release -- 0.3.0`.
 
@@ -430,7 +433,7 @@ npm run build:exe        # dist + ctx 를 exe 에 인라인
 taskkill /F /IM cdp.exe
 ```
 
-떠 있는 `cdp.exe` 가 `build/` 를 잡고 있거나, 갓 복사한 68MB 파일을 백신이
+떠 있는 `cdp.exe` 가 `ops/out/exe/` 를 잡고 있거나, 갓 복사한 68MB 파일을 백신이
 스캔하는 중이다. 빌드가 재시도하다가 안 되면 위 안내를 찍고 멈춘다.
 
 ### **번들을 같이 갱신해야 한다** — 가장 자주 나는 사고

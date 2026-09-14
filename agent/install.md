@@ -42,7 +42,7 @@ ops\release.cmd 0.2.5
 ```
 
 화면 → `ctx` 번들 → exe → 묶기까지 한 번에 돈다. 결과는
-`release/v0.2.5/` 하나다.
+`ops/release/v0.2.5/` 하나다.
 
 ```
 cdp.exe          앱 + ctx 가 한 파일 (68MB)
@@ -70,7 +70,7 @@ git tag -a v0.2.5 -m "..."
 폐쇄망이면 파일 두 개다.
 
 ```
-① release/v0.2.5/ 폴더째        (또는 cdp.exe + repo-kit/ 만)
+① ops/release/v0.2.5/ 폴더째        (또는 cdp.exe + repo-kit/ 만)
 ② git bundle create knowledge.bundle --all      ← 지식 레포가 이미 있다면
 ```
 
@@ -220,7 +220,7 @@ C:\cdp\tools\cdp.exe ctx setup C:\gdi   ← skill 도 같이 갱신된다
 
 | | | |
 |---|---|---|
-| ☐ | ① | `release/v<버전>/` 생성 · **태그를 달았다** |
+| ☐ | ① | `ops/release/v<버전>/` 생성 · **태그를 달았다** |
 | ☐ | ③ | `core.hooksPath` = `.githooks` |
 | ☐ | ③ | `.gitattributes` 에 `eol=lf` |
 | ☐ | ③ | `_vocab.md` · `_managed.md` · `docs/` |
