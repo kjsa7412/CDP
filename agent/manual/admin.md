@@ -151,21 +151,21 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 
 ### ⑤ 훅을 넣는다
 
-배포본의 `지식레포-<이름>/` 을 통째로 복사하면 훅·스킬·규약·매뉴얼·`bin/ctx` 와
-문서 골격·등록부·어휘가
-한 번에 들어온다.
+배포본의 `knowledge-repo-<이름>/` 을 통째로 복사하면 훅·스킬·규약·매뉴얼·
+`bin/ctx`·`tools/cdp.exe` 와 문서 골격·등록부·어휘가 **한 번에** 들어온다.
 
 ```
-xcopy /E /I <배포본>\지식레포-dpms C:\cdp
-git config core.hooksPath .githooks
+xcopy /E /I <배포본>\knowledge-repo-dpms C:\cdp
+cd /d C:\cdp
+git init && git config core.hooksPath .githooks
 ```
 
-### ⑥ exe 를 레포 안에 둔다
+**훅은 clone 을 따라오지 않는다.** 마지막 줄을 팀원도 각자 한 번 돌려야 한다
+(⑤ 팀원 PC).
 
-```
-mkdir tools
-copy <배포본>\cdp.exe tools\
-```
+### ⑥ exe 는 이미 레포 안에 있다
+
+`tools/cdp.exe` 가 폴더와 함께 들어온다. 전에는 여기서 손으로 옮겼다.
 
 두 가지가 여기에 달려 있다.
 

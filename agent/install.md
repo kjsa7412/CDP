@@ -45,8 +45,8 @@ ops\release.cmd 0.2.5
 `ops/release/v0.2.5/` 하나다.
 
 ```
-cdp.exe            앱 + ctx 가 한 파일 (68MB)
-지식레포-<이름>/    **복사하면 그게 지식 레포다.** 패키지마다 하나씩
+knowledge-repo-<이름>/   **복사하면 그게 지식 레포다.** 패키지마다 하나씩
+                        exe 도 그 안 `tools/` 에 들어 있다
 설치.md            이 문서
 README.md          요약 (번들 시각이 박힌다)
 ```
@@ -84,13 +84,13 @@ CDN·인터넷을 타는 것이 하나도 없다. 화면의 폰트까지 base64 
 **폴더 하나를 복사한다.**
 
 ```
-xcopy /E /I <배포본>\지식레포-dpms C:\cdp
+xcopy /E /I <배포본>\knowledge-repo-dpms C:\cdp
 cd /d C:\cdp
-mkdir tools && copy <배포본>\cdp.exe tools\
 git init && git config core.hooksPath .githooks
 ```
 
-전에는 `repo-kit\` 과 `packages\<고른 것>\` 을 차례로 부었다. **그 이름은
+**세 줄이 전부다.** 전에는 `repo-kit\` 과 `packages\<고른 것>\` 을 차례로 붓고
+exe 를 따로 옮겨야 했다. **그 이름은
 만든 쪽 개념이지 받는 쪽의 것이 아니다** — 무엇이 무엇인지 알아야 순서를
 맞출 수 있었다. 지금은 배포본에 완성된 채로 들어 있다.
 
@@ -101,6 +101,7 @@ git init && git config core.hooksPath .githooks
 | `docs/` — 관리 문서 골격 | 등록부가 가리키는 섹션이 없다 |
 | `.gitattributes` — 줄바꿈 고정 | **훅이 조용히 죽는다** |
 | `bin/` · `.githooks/` · `.claude/skills` | 검사도 절차도 없다 |
+| `tools/cdp.exe` — 앱 + ctx | Node 없는 PC 에서 훅이 검사를 건너뛴다 |
 
 마지막에서 둘째가 무섭다. CRLF 로 체크아웃되면 `pre-commit` 의 셔뱅 뒤에
 캐리지리턴이 붙어 실행되지 않는다. **커밋은 통과하고 검사만 사라진다.**

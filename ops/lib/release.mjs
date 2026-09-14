@@ -81,7 +81,6 @@ const need = (src, rel) => {
 // "빠진 것 1개"라고 자기를 의심한다 -- 실제로는 다 만들어 놓고서.
 // 만든 쪽 이름 그대로 담는다. 받는 사람은 자기 OS 것을 쓴다.
 const EXE = process.platform === 'win32' ? 'cdp.exe' : 'cdp'
-need(`ops/out/exe/${EXE}`, EXE)
 
 // ── 지식 레포를 **완성된 채로** 낸다 ──────────────────────────────────────
 //
@@ -101,7 +100,7 @@ const packages = fs.existsSync(PKG_ROOT)
 if (!packages.length) missing.push('agent/packages/<패키지>')
 
 for (const name of packages) {
-  const R = `지식레포-${name}`
+  const R = `knowledge-repo-${name}`
 
   // 모든 패키지가 같은 것을 받는 층 — 도구 · 규약 · 매뉴얼 · 훅
   need('agent/skills', `${R}/.claude/skills`)
@@ -126,8 +125,18 @@ for (const name of packages) {
   need('agent/gitattributes', `${R}/.gitattributes`)
   need('agent/gitignore', `${R}/.gitignore`)
 
-  // 이 패키지가 정하는 층 — docs/ 골격 · 등록부 · 어휘 · 원천 기록
+  // **실행 파일도 폴더 안에 둔다.** 밖에 두면 받는 사람이 `mkdir tools` 하고
+  // 옮기는 두 줄을 더 해야 한다 -- "복사하면 쓸 수 있다" 가 아니게 된다.
+  // 레포의 `.gitignore` 가 `/tools/*.exe` 를 막으므로 커밋되지는 않는다.
+  need(`ops/out/exe/${EXE}`, `${R}/tools/${EXE}`)
+
+  // 이 패키지가 정하는 층 — docs/ 골격 · 등록부 · 어휘
   need(`agent/packages/${name}`, R)
+
+  // **`origin/` 은 빼낸다.** 그 패키지를 *어떻게 만들었나* 의 기록이라
+  // 만드는 쪽의 것이다 -- 설계서를 뺀 것과 같은 이유다. 원본은 소스 레포의
+  // `agent/packages/<이름>/origin/` 에 남는다.
+  fs.rmSync(path.join(OUT, R, 'origin'), { recursive: true, force: true })
 
   // 작업 기록이 들어갈 자리.
   //
@@ -158,21 +167,21 @@ fs.writeFileSync(
 **이 폴더를 통째로 옮기면 CDP 를 쓸 수 있다.**
 
 \`\`\`
-cdp.exe            앱 + ctx CLI 가 한 파일 (~68MB)
-지식레포-<이름>/    **복사하면 그게 지식 레포다.** 패키지마다 하나씩 있다
-  docs/            관리 문서 골격 — 이 패키지가 정한다
-  _vocab.md        좌표 어휘 · _managed.md  등록부
-  bin/             ctx 실행기 (Node 없어도 돈다)
-  .githooks/       pre-commit — 유일한 결정론적 보증
-  .claude/skills   절차 (work · load · save · managed · import · edit · push)
-  .gitattributes   **줄바꿈 고정.** 없으면 훅이 조용히 죽는다
-  CLAUDE.md        레포 규약 · MANUAL 셋 · TEMPLATE-work.md
-  README.md        이 문서 세트가 무엇인가 · 첫날 무엇을 하나
-설치.md            **설치 시나리오 — 여기부터 읽는다**
+knowledge-repo-<이름>/   **복사하면 그게 지식 레포다.** 패키지마다 하나씩
+  docs/                관리 문서 골격 — 이 패키지가 정한다
+  _vocab.md            좌표 어휘 · _managed.md  등록부
+  bin/                 ctx 실행기 (Node 없어도 돈다)
+  tools/cdp.exe        앱 + ctx 가 한 파일 (~68MB). 더블클릭하면 이 레포가 열린다
+  .githooks/           pre-commit — 유일한 결정론적 보증
+  .claude/skills       절차 (work · load · save · managed · import · edit · push)
+  .gitattributes       **줄바꿈 고정.** 없으면 훅이 조용히 죽는다
+  CLAUDE.md            레포 규약 · MANUAL 셋 · TEMPLATE-work.md
+  README.md            이 문서 세트가 무엇인가 · 첫날 무엇을 하나
+설치.md                **설치 시나리오 — 여기부터 읽는다**
 \`\`\`
 
-설계서는 들어 있지 않다. **CDP 를 고칠 사람의 것**이고 서비스와 무관하다 —
-필요하면 소스 레포의 \`docs/design/\` 에 있다.
+**설계서도 변환기도 안 들어 있다.** 앞은 CDP 를 고칠 사람의 것이고 뒤는
+패키지를 만든 사람의 것이다 — 둘 다 소스 레포에 있다.
 
 설치는 \`설치.md\` 를 따른다 — 네 자리(개발 PC · 지식 레포 · 작업
 레포 · 팀원 PC)에서 벌어지고, 한 자리만 보면 반드시 빠뜨린다.
@@ -180,19 +189,19 @@ cdp.exe            앱 + ctx CLI 가 한 파일 (~68MB)
 ## 새 지식 레포 세우기 — 폴더를 복사한다
 
 \`\`\`
-xcopy /E /I 지식레포-dpms C:\\cdp
+xcopy /E /I knowledge-repo-dpms C:\\cdp
 cd /d C:\\cdp
-mkdir tools && copy ..\\cdp.exe tools\\
 git init && git config core.hooksPath .githooks
 \`\`\`
 
-**부을 것이 하나다.** 전에는 \`repo-kit\` 과 \`packages\` 를 차례로 부었는데,
-그 이름은 만든 쪽 개념이지 받는 쪽의 것이 아니었다.
+**세 줄이 전부다.** 전에는 \`repo-kit\` 과 \`packages\` 를 차례로 붓고 exe 를
+따로 옮겨야 했다 — 그 이름은 만든 쪽 개념이지 받는 쪽의 것이 아니었다.
 
-\`tools\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
-\`bin/ctx\` 가 이 exe 로 넘어간다 — 없으면 훅이 검사를 건너뛴다.
+\`tools\\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
+\`bin/ctx\` 가 이 exe 로 넘어간다 — 없으면 훅이 검사를 건너뛴다. 레포의
+\`.gitignore\` 가 \`/tools/*.exe\` 를 막으므로 68MB 가 커밋되지는 않는다.
 
-복사 직후 \`bin\ctx check\` 가 **이상 없음**이면 시작할 수 있다. 안 쓰는
+복사 직후 \`bin\\ctx check\` 가 **이상 없음**이면 시작할 수 있다. 안 쓰는
 문서를 지울 때는 \`_managed.md\` 에서 그 패턴도 함께 지운다 — 자세한 것은
 그 폴더의 \`README.md\`.
 
