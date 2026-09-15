@@ -13,6 +13,7 @@
 // 작업의 완료에서 발생하는 문서다. 날짜는 그 작업을 적은 날 — 작성일이다.
 
 import { relLabel, isBadDate } from '../lib/format.js'
+import Icon from './Icon.jsx'
 
 export default function ValidityBlock({ doc, onOpen, onRelation }) {
   const v = doc.validity
@@ -30,7 +31,7 @@ export default function ValidityBlock({ doc, onOpen, onRelation }) {
     return (
       <div className="vblock">
         <div className="vblock__tier vblock__validity is-valid">
-          <span>{settled.length === 0 ? '최신성 계산 대상 좌표 없음' : '✓ 모든 좌표에서 최신'}</span>
+          <span>{settled.length === 0 ? '최신성 계산 대상 좌표 없음' : <><Icon name="check" size={13} /> 모든 좌표에서 최신</>}</span>
           {excluded.length > 0 && (
             <span title={`${excluded.map((e) => e.coord).join(', ')} — 입도가 굵어 후속이 항상 많다(§17.4)`}>
               <span className="sep"> · </span>
@@ -52,10 +53,10 @@ export default function ValidityBlock({ doc, onOpen, onRelation }) {
             판정이 아니라 참조이고, 참조는 왼쪽 아래가 다룬다
             (정정_판정모델_v2 §3). 남는 것은 **깨진 참조**뿐이다. */}
 
-        {v.state === 'cycle' && <span>⛔ supersedes 순환 참조 — 체인이 자기 자신으로 돌아온다</span>}
+        {v.state === 'cycle' && <span><Icon name="block" size={13} /> supersedes 순환 참조 — 체인이 자기 자신으로 돌아온다</span>}
 
         {v.brokenTargets?.length > 0 && (
-          <span className="badge badge--danger">⛔ supersedes 대상 없음: {v.brokenTargets.join(', ')}</span>
+          <span className="badge badge--danger"><Icon name="block" size={12} /> supersedes 대상 없음: {v.brokenTargets.join(', ')}</span>
         )}
 
         {/* 좌표 요약 — 세부는 관계 패널에 있다. 여기서 그리로 보낸다. */}
@@ -63,7 +64,7 @@ export default function ValidityBlock({ doc, onOpen, onRelation }) {
           <>
             {v.state !== 'valid' && <span className="sep">·</span>}
             <button className="vblock__jump" onClick={() => onRelation?.(hot[0].coord)}>
-              후속 작업이 있는 좌표 {hot.length}곳 ▸
+              후속 작업이 있는 좌표 {hot.length}곳 <Icon name="chevronRight" size={12} />
             </button>
           </>
         )}
@@ -80,7 +81,7 @@ function TimeTier({ doc }) {
   return (
     <div className="vblock__tier vblock__time">
       {isBadDate(doc.date) ? (
-        <span className="badge badge--danger">⛔ date 형식 오류: {String(doc.date || '없음')}</span>
+        <span className="badge badge--danger"><Icon name="block" size={12} /> date 형식 오류: {String(doc.date || '없음')}</span>
       ) : (
         <span>
           작성 <b className="num">{doc.date || '미지정'}</b> <span className="sep">·</span> {relLabel(doc.date)}

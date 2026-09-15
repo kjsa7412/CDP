@@ -20,6 +20,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 import { clockTime } from '../lib/format.js'
+import Icon from './Icon.jsx'
 
 export default function StatusBar({ repo, scanning, onRescanned, onCheck = () => {}, onSay }) {
   const [busy, setBusy] = useState(false)
@@ -98,7 +99,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
       {/* 미등재 — 어휘에 없는 좌표를 쓴 작업이 있다. 커밋에서 막힌다 */}
       {repo.unregistered > 0 && (
         <button className="is-warn" onClick={onCheck}>
-          ⚠ 미등재 {repo.unregistered}
+          <Icon name="warn" size={12} /> 미등재 {repo.unregistered}
         </button>
       )}
 
@@ -125,7 +126,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
           {/* 훅 미설치는 조용한 실패다 — 커밋은 통과하고 검사는 안 돈다 */}
           {!git.hooksPath && (
             <button className="is-warn" onClick={onCheck} title="git config core.hooksPath .githooks">
-              ⚠ 훅 없음
+              <Icon name="warn" size={12} /> 훅 없음
             </button>
           )}
           {!git.upstream && (
@@ -165,7 +166,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
         </span>
       ) : (
         <>
-          <span className="is-warn">⚠ 감시 끊김</span>
+          <span className="is-warn"><Icon name="warn" size={12} /> 감시 끊김</span>
           <button onClick={rescan} disabled={busy}>
             {busy ? '스캔 중…' : '다시 스캔'}
           </button>

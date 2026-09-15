@@ -9,11 +9,12 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
+import Icon from './Icon.jsx'
 
 const SEV = {
-  error: { icon: '⛔', label: '커밋이 거부될 것' },
-  warn: { icon: '⚠', label: '확인 필요' },
-  info: { icon: '○', label: '안내' },
+  error: { icon: 'block', label: '커밋이 거부될 것' },
+  warn: { icon: 'warn', label: '확인 필요' },
+  info: { icon: 'info', label: '안내' },
 }
 
 export default function CheckView({ onOpen }) {
@@ -60,7 +61,7 @@ export default function CheckView({ onOpen }) {
         <div className="checkhead">
           <span>출처:</span>
           <code>server/core/check.js</code>
-          <span className="src">✓ ctx check 와 같은 코드</span>
+          <span className="src"><Icon name="check" size={12} /> ctx check 와 같은 코드</span>
           <span style={{ color: 'var(--text-2)' }}>
             — 커밋을 막는 것은 git 훅의 <code>bin/ctx check</code> 다. 그 레포의
             번들이 낡았으면 결과가 다를 수 있다 (<code>ctx version</code>)
@@ -74,12 +75,12 @@ export default function CheckView({ onOpen }) {
         {/* 0건일 때도 숫자를 그대로 표시한다. 빈 화면을 만들지 않는다(§13-②) */}
         <div className="checkzero">
           <span style={{ color: counts.error ? 'var(--danger)' : undefined, fontWeight: counts.error ? 600 : 400 }}>
-            ⛔ {counts.error}
+            <Icon name="block" size={13} /> {counts.error}
           </span>
           <span style={{ color: counts.warn ? 'var(--warn)' : undefined, fontWeight: counts.warn ? 600 : 400 }}>
-            ⚠ {counts.warn}
+            <Icon name="warn" size={13} /> {counts.warn}
           </span>
-          <span>○ {counts.info}</span>
+          <span><Icon name="info" size={13} /> {counts.info}</span>
           {copied && <span style={{ color: 'var(--accent)' }}>· {copied} 복사됨</span>}
         </div>
 
@@ -89,7 +90,7 @@ export default function CheckView({ onOpen }) {
             .map((f) => (
               <section className={`finding sev-${sev}`} key={f.kind}>
                 <div className="finding__head">
-                  <span>{SEV[sev].icon}</span>
+                  <Icon name={SEV[sev].icon} size={14} />
                   <span>{f.label}</span>
                   {/* 뷰어만 하는 검사에는 꼬리표를 붙인다 — 어느 것이 훅에서
                       걸릴지 사용자가 구분해야 한다(§12) */}
@@ -111,7 +112,7 @@ export default function CheckView({ onOpen }) {
                     {/* 고치는 방법을 같이 준다 */}
                     {it.suggest && (
                       <span className="finding__suggest">
-                        → {typeof it.suggest === 'string' ? it.suggest : `${it.suggest.coord} (${it.suggest.why})`}
+                        <Icon name="arrowRight" size={12} /> {typeof it.suggest === 'string' ? it.suggest : `${it.suggest.coord} (${it.suggest.why})`}
                         <button
                           style={{ color: 'var(--accent)', marginLeft: 6, textDecoration: 'underline' }}
                           onClick={() =>

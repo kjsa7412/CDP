@@ -10,6 +10,7 @@ import { renderMarkdown, enhance, sectionSlug } from '../lib/markdown.js'
 import { summaryText } from '../lib/format.js'
 import ValidityBlock from './ValidityBlock.jsx'
 import SectionRail from './SectionRail.jsx'
+import Icon from './Icon.jsx'
 
 export default function DocView({
   docId,
@@ -224,11 +225,11 @@ export default function DocView({
           )}
 
           {!doc.hasFrontmatter && doc.layer === 'work' && (
-            <div className="whywarn">⚠ 프론트매터가 없습니다 — 검색·좌표 매칭에 걸리지 않습니다</div>
+            <div className="whywarn"><Icon name="warn" size={13} /> 프론트매터가 없습니다 — 검색·좌표 매칭에 걸리지 않습니다</div>
           )}
-          {doc.errors?.length > 0 && <div className="whywarn">⛔ {doc.errors.join(' / ')}</div>}
+          {doc.errors?.length > 0 && <div className="whywarn"><Icon name="block" size={13} /> {doc.errors.join(' / ')}</div>}
           {doc.id !== doc.fileId && doc.isUnit && (
-            <div className="whywarn">⚠ id 와 파일명이 다릅니다 — 파일명은 {doc.fileId}</div>
+            <div className="whywarn"><Icon name="warn" size={13} /> id 와 파일명이 다릅니다 — 파일명은 {doc.fileId}</div>
           )}
           {doc.unknownFields?.length > 0 && (
             <div className="whywarn">이 앱이 모르는 프론트매터 필드: {doc.unknownFields.join(', ')}</div>
@@ -329,7 +330,7 @@ function Attachment({ path, base, onOpen }) {
 
   return (
     <div className="attach">
-      <span>{isImg ? '🖼' : '📄'}</span>
+      <Icon name={isImg ? 'image' : 'file'} size={14} />
       <span className="attach__name">{path.split('/').pop()}</span>
       <code style={{ fontSize: 11, color: 'var(--text-3)' }}>{path}</code>
       {state === 'missing' && <span className="attach__missing">경로를 찾을 수 없음</span>}
@@ -342,7 +343,7 @@ function Attachment({ path, base, onOpen }) {
             </button>
           )}
           <a href={api.fileUrl(rel)} target="_blank" rel="noreferrer">
-            원문 ↗
+            원문 <Icon name="external" size={12} />
           </a>
         </span>
       )}

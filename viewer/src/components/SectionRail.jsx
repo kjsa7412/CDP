@@ -13,6 +13,7 @@
 // 본문을 넓게 볼 때.
 
 import { useEffect, useRef, useState } from 'react'
+import Icon from './Icon.jsx'
 
 export default function SectionRail({ doc, scrollRef, toc = [], open = true, onToggle }) {
   const [current, setCurrent] = useState(null)
@@ -54,7 +55,7 @@ export default function SectionRail({ doc, scrollRef, toc = [], open = true, onT
         aria-expanded={open}
         title={open ? '목차 접기' : `목차 펴기 — 섹션 ${toc.length}개`}
       >
-        <span className="toc__ico" aria-hidden="true">{open ? '▸' : '☰'}</span>
+        <Icon name={open ? 'chevronRight' : 'section'} size={14} className="toc__ico" />
         {open && <span className="toc__cap">목차<span className="toc__n">{toc.length}</span></span>}
       </button>
 

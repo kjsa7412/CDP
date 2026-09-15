@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import { shortDate } from '../lib/format.js'
+import Icon from './Icon.jsx'
 
 export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
   const [q, setQ] = useState('')
@@ -107,7 +108,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
               <div className="palette__label">대조</div>
               <div className="recon">
                 <span className="recon__from">"{res.reconciled.matched}"</span>
-                <span style={{ color: 'var(--text-3)' }}>→</span>
+                <Icon name="arrowRight" size={13} style={{ color: 'var(--text-3)' }} />
                 <span className="recon__to">{res.reconciled.coord}</span>
                 <span className="recon__why">
                   {kindLabel(res.reconciled.kind)}
@@ -127,7 +128,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
               <div className="palette__label">대조 실패</div>
               <div className="recon is-miss">
                 <span className="recon__from">"{q.trim()}"</span>
-                <span style={{ color: 'var(--text-3)' }}>→</span>
+                <Icon name="arrowRight" size={13} style={{ color: 'var(--text-3)' }} />
                 <span className="recon__to">정본 좌표를 찾지 못함</span>
                 <span className="recon__why">전문 검색으로 폴백했습니다</span>
               </div>
@@ -160,7 +161,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
                 <Hit key={d.id} d={d} active={i === active} onClick={() => openAndClose(d.id)} />
               ))}
               <button className="palette__hit" style={{ color: 'var(--accent)' }} onClick={() => { onCoord(res.coord); onClose() }}>
-                이 좌표에서 뻗어나가기 →
+                이 좌표에서 뻗어나가기 <Icon name="arrowRight" size={13} />
               </button>
             </div>
           )}
@@ -217,12 +218,12 @@ function Hit({ d, active, onClick }) {
     <button className="palette__hit" data-active={active} onClick={onClick}>
       <span className="row__date num">{shortDate(d.date)}</span>
       <span className="row__title">{d.title}</span>
-      {d.validity.state === 'superseded' && <span className="badge badge--danger">⛔ 정정됨</span>}
+      {d.validity.state === 'superseded' && <span className="badge badge--danger"><Icon name="block" size={12} /> 정정됨</span>}
       {/* `미결` 은 이관 대상이다 (정정_판정모델_v2 §2) — 상태가 아니라 오류다 */}
       {(d.status === '미결' || d.status === '제안') && (
         <span className="badge badge--danger">{d.status} — 이관 필요</span>
       )}
-      {d.settledCoords > 0 && <span className="badge badge--warn">⚠{d.settledCoords}</span>}
+      {d.settledCoords > 0 && <span className="badge badge--warn"><Icon name="warn" size={12} />{d.settledCoords}</span>}
     </button>
   )
 }

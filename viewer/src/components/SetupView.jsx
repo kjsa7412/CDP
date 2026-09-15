@@ -9,12 +9,13 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
+import Icon from './Icon.jsx'
 
 const MARK = {
-  ok: { icon: '✓', color: 'var(--text-2)' },
-  warn: { icon: '⚠', color: 'var(--warn)' },
-  none: { icon: '○', color: 'var(--text-3)' },
-  x: { icon: '⛔', color: 'var(--danger)' },
+  ok: { icon: 'check', color: 'var(--text-2)' },
+  warn: { icon: 'warn', color: 'var(--warn)' },
+  none: { icon: 'info', color: 'var(--text-3)' },
+  x: { icon: 'block', color: 'var(--danger)' },
 }
 
 export default function SetupView({ initialPath, onDone }) {
@@ -104,7 +105,7 @@ export default function SetupView({ initialPath, onDone }) {
                 key={r.name}
                 style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '3px 0', fontSize: 12.5 }}
               >
-                <span style={{ color: m.color, width: 14 }}>{m.icon}</span>
+                <Icon name={m.icon} size={14} style={{ color: m.color }} />
                 <code style={{ width: 130, color: 'var(--text)' }}>{r.name}</code>
                 <span style={{ color: r.mark === 'warn' ? 'var(--warn)' : 'var(--text-2)' }}>{r.note}</span>
               </div>
@@ -113,10 +114,10 @@ export default function SetupView({ initialPath, onDone }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
-          {error && <span style={{ fontSize: 12, color: 'var(--danger)', flex: 1 }}>⛔ {error}</span>}
+          {error && <span style={{ fontSize: 12, color: 'var(--danger)', flex: 1 }}><Icon name="block" size={13} /> {error}</span>}
           <span style={{ fontSize: 11.5, color: 'var(--text-3)', flex: error ? 0 : 1 }}>
-            ✓ 규약대로 있음 · ⚠ 있지만 문제 있음 · ○ 없음(선택 항목).{' '}
-            {probe?.ok && '⚠ 나 ○ 가 있어도 열 수 있습니다.'}
+            규약대로 있음 · 있지만 문제 있음 · 없음(선택 항목) 세 가지로 표시합니다.{' '}
+            {probe?.ok && '문제가 있어도 열 수 있습니다.'}
           </span>
           <button
             onClick={open}

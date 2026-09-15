@@ -9,26 +9,55 @@
  * --success 토큰은 정의하지 않는다. 정의해두면 언젠가 누가 "유효"에 쓴다(§13-①).
  * "유효"는 정상 상태이고, 정상 상태에 색을 주면 화면의 90%가 초록이 되어 색이
  * 의미를 잃는다. 그리고 적·초록 쌍은 색약 사용자에게 최악의 조합이다.
- * 정상은 조용하고 이상만 소리를 낸다. */
+ * 정상은 조용하고 이상만 소리를 낸다.
+ *
+ * ── 중성색은 **차갑다.** ────────────────────────────────────────────
+ * 전에는 따뜻한 회색(#fbfbfa)이었다. 파랑 액센트와 섞이면 둘 다 탁해진다.
+ * 크롬(상단바·왼쪽·상태바)은 푸른 기가 도는 중성, **본문 종이만 순백**이다 —
+ * 읽는 면과 조작하는 면이 재질로 갈린다.
+ *
+ * ── 높이(elevation)를 쓴다. ────────────────────────────────────────
+ * 전에는 전부 1px 테두리 하나로 평평했고, 그림자는 `rgba(0,0,0,.18)` 한 겹이라
+ * 딱딱했다. 그림자는 두 겹이다 — 접촉(1px)과 투사(넓게). 색도 검정이 아니라
+ * 잉크색을 옅게 쓴다. */
 
 :root {
-  --bg: #fbfbfa;
+  /* ── 면 ── */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-2: #f4f4f2;
-  --surface-3: #ececea;
-  --border: #e4e4e0;
-  --border-strong: #cfcfc9;
-  --text: #1a1a19;
-  --text-2: #5c5c58;
-  --text-3: #8a8a84;
-  --accent: #2f6fdb;
-  --accent-bg: #eaf1fd;
-  --danger: #c0392b;
+  --surface-2: #f1f3f7;
+  --surface-3: #e6eaf0;
+  --border: #e2e6ed;
+  --border-strong: #c9d1dd;
+  /* 떠 있는 면 — 세그먼트의 움직이는 칸, 고른 단계.
+   * **밝은 테마에서는 흰색이지만 어두운 테마에서는 더 밝은 회색이다.**
+   * 어두운 화면에서 흰색 자리에 --surface 를 쓰면 배경(--surface-2)보다
+   * 어두워서 뜨는 대신 **파인다** — 고른 것이 눌린 것처럼 보였다. */
+  --raised: #ffffff;
+
+  /* ── 글자 ── */
+  --text: #11151c;
+  --text-2: #515a68;
+  --text-3: #858e9d;
+
+  /* ── 색 예산 넷 ── */
+  --accent: #3358e6;
+  --accent-bg: #e9eeff;
+  --accent-line: #c3d0fb;
+  --danger: #cb3a2c;
   --danger-bg: #fdeceb;
-  --warn: #8a5d00;
-  --warn-bg: #fdf6e3;
+  --warn: #8c5c00;
+  --warn-bg: #fcf3e0;
   --pending: #6247c4;
-  --pending-bg: #f0edfd;
+  --pending-bg: #efedfd;
+
+  /* ── 높이 ── */
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.07);
+  --shadow-2: 0 2px 6px -1px rgba(15, 23, 42, 0.08), 0 14px 32px -8px rgba(15, 23, 42, 0.18);
+  --shadow-3: 0 4px 10px -2px rgba(15, 23, 42, 0.1), 0 24px 56px -12px rgba(15, 23, 42, 0.26);
+  /* 세그먼트의 움직이는 칸 — 종이 한 장이 떠 있는 느낌 */
+  --shadow-thumb: 0 1px 2px rgba(15, 23, 42, 0.09), 0 1px 1px rgba(15, 23, 42, 0.05);
+  --scrim: rgba(15, 23, 42, 0.32);
 
   --sp-1: 4px;
   --sp-2: 8px;
@@ -38,11 +67,24 @@
   --sp-8: 32px;
   --sp-12: 48px;
 
-  --r-card: 8px;
-  --r-badge: 4px;
+  /* 모서리는 **한 단씩** 커진다. 전에는 4px 과 8px 둘뿐이라 탭만 5px 로
+   * 어긋나 있었다. */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+  /* 예전 이름 — 쓰는 자리가 많아 그대로 둔다 */
+  --r-badge: var(--r-sm);
+  --r-card: var(--r-lg);
 
-  --topbar-h: 44px;
-  --statusbar-h: 24px;
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  --t-fast: 110ms cubic-bezier(0.2, 0.6, 0.3, 1);
+  --t-base: 180ms cubic-bezier(0.2, 0.6, 0.3, 1);
+
+  --topbar-h: 48px;
+  --statusbar-h: 26px;
 
   /* §27.7 — 읽는 사람이 정한다. JS 가 이 둘을 덮어쓴다 */
   --doc-size: 15px;
@@ -59,23 +101,31 @@
 
 :root[data-theme='dark'],
 :root[data-theme='auto-dark'] {
-  --bg: #17181a;
-  --surface: #1e2023;
-  --surface-2: #25282c;
-  --surface-3: #2c3034;
-  --border: #2e3033;
-  --border-strong: #3d4046;
-  --text: #e8e8e6;
-  --text-2: #a8a8a3;
-  --text-3: #77776f;
-  --accent: #6fa4f5;
-  --accent-bg: #1c2b45;
-  --danger: #e8756a;
-  --danger-bg: #3a201d;
+  --bg: #0e1116;
+  --surface: #161a21;
+  --surface-2: #1a1f27;
+  --surface-3: #242b35;
+  --border: #262d38;
+  --border-strong: #3a4352;
+  --raised: #2b333f;
+  --text: #e7eaef;
+  --text-2: #a2abba;
+  --text-3: #6e7887;
+  --accent: #7d9bff;
+  --accent-bg: #1a2440;
+  --accent-line: #2f3f6b;
+  --danger: #ef8175;
+  --danger-bg: #3a1f1c;
   --warn: #e0b355;
-  --warn-bg: #33290f;
+  --warn-bg: #332810;
   --pending: #a894f5;
   --pending-bg: #241c44;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 2px 6px -1px rgba(0, 0, 0, 0.5), 0 14px 32px -8px rgba(0, 0, 0, 0.6);
+  --shadow-3: 0 4px 10px -2px rgba(0, 0, 0, 0.55), 0 24px 56px -12px rgba(0, 0, 0, 0.7);
+  --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --scrim: rgba(3, 6, 12, 0.6);
 }
 
 * {
@@ -93,7 +143,9 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 13px/1.5 var(--font-sans);
+  letter-spacing: -0.003em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow: hidden;
 }
 
@@ -106,6 +158,7 @@ time,
 
 button {
   font: inherit;
+  letter-spacing: inherit;
   color: inherit;
   background: none;
   border: 0;
@@ -121,11 +174,20 @@ a:hover {
   text-decoration: underline;
 }
 
-/* 포커스 링을 지우지 않는다(§29.1) */
+/* 아이콘 — 인라인 SVG(Icon.jsx). 글자와 같은 줄에 서므로 baseline 이 아니라
+ * 광학 중심에 맞춘다. flex 줄에서는 이 값이 무시되고 align-items 가 받는다. */
+.ico {
+  flex: none;
+  display: inline-block;
+  vertical-align: -0.18em;
+}
+
+/* 포커스 링을 지우지 않는다(§29.1).
+ * 딱딱한 2px 실선 대신 **번지는 고리**다 — 요소 모양을 가리지 않는다. */
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-  border-radius: 2px;
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--r-sm);
 }
 
 ::selection {

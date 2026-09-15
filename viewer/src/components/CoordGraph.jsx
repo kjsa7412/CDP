@@ -20,6 +20,7 @@
 // 여기서 고른 좌표는 **시작점**이다. 그 뒤는 왼쪽 아래가 뻗어나간다.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Icon from './Icon.jsx'
 
 const TYPES = ['table', 'screen', 'api', 'module', 'code', 'term', 'batch', 'domain',
   'req', 'proc', 'func', 'prog', 'arch', 'issue', 'test', 'scenario']
@@ -652,7 +653,7 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
       <div className="gr__bar">
         {onExit && (
           <button className="gr__btn gr__btn--exit" onClick={onExit} title="문서 화면으로 (Esc)">
-            ← 문서
+            <Icon name="chevronLeft" size={13} /> 문서
           </button>
         )}
         <span className="gr__stat">
@@ -728,7 +729,7 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
           ) : (
             <>
               <button className="gr__back" onClick={() => setGroup(null)} title="카테고리 목록으로">
-                <span aria-hidden="true">←</span> {group}
+                <Icon name="chevronLeft" size={12} /> {group}
               </button>
               {items.map(({ i, v, count }) => (
                 <button
@@ -753,7 +754,7 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
               보여 달라"는 뜻이고, 떠날지는 읽고 나서 정한다. */}
           {S.lock != null && g.nodes[S.lock] && (
             <div className="gr__sel">
-              <span className="gr__selico" aria-hidden="true">◇</span>
+              <Icon name="coord" size={15} className="gr__selico" />
               <code className="gr__selname">{g.nodes[S.lock].coord}</code>
               <span className="gr__selmeta">
                 작업 {g.nodes[S.lock].count}건 · 이웃 {g.nbr[S.lock].size}개
@@ -764,7 +765,7 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
                 onClick={() => onGo?.(g.nodes[S.lock].coord)}
                 disabled={!onGo}
               >
-                뻗어나가기 →
+                뻗어나가기 <Icon name="arrowRight" size={13} />
               </button>
             </div>
           )}

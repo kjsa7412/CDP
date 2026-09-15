@@ -109,7 +109,7 @@
 .toc[data-open='1'] { width: 216px; }
 /* 접으면 띠만 남는다. **0 으로 만들지 않는다** — 펴는 버튼이 사라지면
  * 접은 사람이 목차를 잃는다 */
-.toc[data-open='0'] { width: 30px; }
+.toc[data-open='0'] { width: 32px; }
 
 .toc__toggle {
   display: flex;
@@ -120,7 +120,6 @@
   padding: 8px 10px;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.05em;
   color: var(--text-3);
   text-align: left;
   background: none;
@@ -136,8 +135,7 @@
   flex: 1;
   align-items: flex-start;
   justify-content: center;
-  padding: 9px 0;
-  font-size: 13px;
+  padding: 11px 0;
   color: var(--text-2);
   border-bottom: 0;
 }
@@ -234,8 +232,8 @@
   color: var(--text-2);
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 99px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-2);
 }
 .readmark button {
   color: var(--accent);
@@ -328,7 +326,7 @@
   line-height: 1;
   color: var(--text-2);
   border: 1px solid var(--border-strong);
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   vertical-align: -2px;
 }
 .doc li.task--done .taskbox {
@@ -354,7 +352,7 @@
   font: 0.86em var(--font-mono);
   padding: 1px 4px;
   background: var(--surface-3);
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   word-break: break-all;
 }
 .doc strong code {
@@ -509,7 +507,7 @@
   font-family: var(--font-mono);
   font-size: 0.9em;
   padding: 0 2px;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   background: var(--surface-2);
   color: inherit;
   cursor: pointer;
@@ -541,9 +539,7 @@
   margin-bottom: var(--sp-3);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
   color: var(--text-3);
-  text-transform: uppercase;
 }
 .docsec__title .count {
   text-transform: none;

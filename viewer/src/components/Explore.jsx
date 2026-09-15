@@ -33,8 +33,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
+import Icon from './Icon.jsx'
 
-const ICON = { work: '◆', coord: '◇', managed: '▦' }
+const ICON = { work: 'work', coord: 'coord', managed: 'managed', section: 'section' }
 
 export default function Explore({ root, onOpen, onBack }) {
   // trail[i] = { node, groups } — i 열의 뿌리와 그 다음 레벨
@@ -76,8 +77,8 @@ export default function Explore({ root, onOpen, onBack }) {
   if (!root) {
     return (
       <div className="xp__empty">
-        <p>목록에서 하나를 고르면 여기서 뻗어나갑니다.</p>
-        <button className="linkbtn" onClick={onBack}>목록으로 →</button>
+        <p>찾기에서 하나를 고르면 여기서 뻗어나갑니다.</p>
+        <button className="linkbtn" onClick={onBack}>찾기로 <Icon name="arrowRight" size={13} /></button>
       </div>
     )
   }
@@ -89,7 +90,7 @@ export default function Explore({ root, onOpen, onBack }) {
         return (
           <section className="xp__col" key={i}>
             <header className="xp__head" title={lv.node.key}>
-              <span className="xp__ico">{ICON[lv.node.kind]}</span>
+              <Icon name={ICON[lv.node.kind] || 'coord'} size={14} className="xp__ico" />
               <span className="xp__hname">{lv.node.label}</span>
               {/* 열 번호 — 몇 단계 왔는지. 가로 스크롤로 앞 열이 밀려 나가도
                   지금 깊이는 남는다 */}
@@ -112,7 +113,7 @@ export default function Explore({ root, onOpen, onBack }) {
                           onClick={() => pick(i, it)}
                           title={it.sub ? `${it.key}\n${it.sub}` : it.key}
                         >
-                          <span className="xp__ico">{ICON[it.kind]}</span>
+                          <Icon name={ICON[it.kind] || 'section'} size={14} className="xp__ico" />
                           <span className="xp__body">
                             <span className="xp__name">{it.label}</span>
                             {/* 부가 한 줄 — 좌표의 한글 이름 · 작업의 작성일 ·

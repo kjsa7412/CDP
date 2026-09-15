@@ -29,6 +29,7 @@ import SetupView from './components/SetupView.jsx'
 import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
+import Icon from './components/Icon.jsx'
 
 // 왼쪽 폭 — 하는 일에 따라 다르다. 목록은 제목 한 줄이면 되고, 뻗어나가기는
 // 열이 둘 이상 들어가야 "가로로 뻗는다"가 성립한다.
@@ -70,6 +71,12 @@ export default function App() {
   const [topMode, setTopMode] = useState('doc')
   // 왼쪽이 지금 하는 일 — 'list'(고른다) · 'explore'(뻗는다). **둘이 같이 있지 않다.**
   const [leftMode, setLeftMode] = useState('list')
+  // L2 대상 — 'managed' · 'work' · 'coord'.
+  //
+  // **Finder 안에 있던 것을 여기로 올렸다.** 패널 머리의 스텝 1이 "지금
+  // 무엇 중에서 찾고 있나"를 부제로 적으려면 머리와 목록이 같은 값을 봐야
+  // 한다. 아래에 있으면 머리는 그것을 모른다.
+  const [scope, setScope] = useState('managed')
   const historyRef = useRef({ stack: [], pos: -1 })
   const atSeqRef = useRef(0)
 
@@ -403,6 +410,13 @@ export default function App() {
 
   const coordIndex = useMemo(() => buildCoordIndex(tree), [tree])
 
+  // 스텝 1의 부제 — 지금 무엇 중에서 찾고 있나
+  const scopeCount = useMemo(() => {
+    if (scope === 'managed') return managedList.length
+    if (scope === 'work') return docs.length
+    return (tree?.types || []).reduce((a, t) => a + t.coords.length, 0)
+  }, [scope, managedList.length, docs.length, tree])
+
   // ── 렌더 ──────────────────────────────────────────────────────────────
   if (fatal) {
     return (
@@ -430,9 +444,12 @@ export default function App() {
     return <div className="empty" style={{ paddingTop: '20vh' }}>불러오는 중…</div>
   }
 
-  // 읽기 모드는 "읽을 것이 있을 때"만 적용한다. 문서를 안 골랐는데 왼쪽을
-  // 접으면 고를 방법이 사라진다 — 설정은 기억하되 화면에는 반영하지 않는다.
-  const effectiveMode = reading.mode === 'focus' && docId && topMode === 'doc' ? 'focus' : 'browse'
+  // 읽기 모드 — 왼쪽이 **띠로 줄어든다.** 사라지지 않는다.
+  //
+  // 전에는 통째로 `display:none` 이라, 문서를 안 골랐으면 고를 방법 자체가
+  // 없어져서 `docId` 가 있을 때만 접히게 막아 두었다. 지금은 30px 띠가 늘
+  // 남고 그 띠 전체가 펴는 버튼이므로 그 예외가 필요 없다.
+  const effectiveMode = reading.mode === 'focus' && topMode === 'doc' ? 'focus' : 'browse'
   const c = repo.checkCounts || { error: 0, warn: 0, info: 0 }
   const repoName = repo.root.split(/[\\/]/).pop()
 
@@ -448,27 +465,31 @@ export default function App() {
       data-force-status={repo.watchEnabled && !repo.watchAlive ? '1' : '0'}
     >
       <header className="topbar">
-        <span className="topbar__name">{repoName}</span>
-        {repo.hostWarning && <span className="hostwarn">⚠ loopback 아님</span>}
+        <span className="topbar__name">
+          <span className="topbar__mark" aria-hidden="true">{repoName.slice(0, 1)}</span>
+          {repoName}
+        </span>
+        {repo.hostWarning && (
+          <span className="hostwarn"><Icon name="warn" size={13} /> loopback 아님</span>
+        )}
 
         {/* 화면 전체 모드 둘. **그래프는 패널이 아니라 화면이다** —
             좌표 288개짜리 그림을 400px 안에서 읽을 수 있는 사람은 없다. */}
         <div className="seg seg--mode" role="group" aria-label="화면">
-          <button aria-pressed={topMode === 'doc'} onClick={() => setTopMode('doc')}>문서</button>
-          <button aria-pressed={topMode === 'graph'} onClick={() => setTopMode('graph')}>그래프</button>
+          <button aria-pressed={topMode === 'doc'} onClick={() => setTopMode('doc')}>
+            <Icon name="doc" size={14} /> 문서
+          </button>
+          <button aria-pressed={topMode === 'graph'} onClick={() => setTopMode('graph')}>
+            <Icon name="graph" size={14} /> 그래프
+          </button>
         </div>
 
-        {/* 왼쪽을 접어 둔 상태 — **펴는 길이 화면에 있어야 한다.**
-            단축키(⌘.)와 메뉴만 두면, 접어 놓고 여는 법을 잊은 사람은
-            목록으로 돌아갈 수 없다. */}
-        {effectiveMode === 'focus' && (
-          <button className="pill pill--ghost" onClick={() => patch({ reading: { mode: 'browse' } })} title="왼쪽 펴기 (⌘.)">
-            ▶ 목록
-          </button>
-        )}
+        {/* 접었을 때 펴는 버튼이 여기 나지 않는다 — **버튼이 영역을 옮기면
+            안 된다.** 접는 것도 펴는 것도 왼쪽 자리에서 한다(§27.5). */}
 
         <span className="topbar__spacer" />
         <button className="topbar__search" onClick={() => setPaletteOpen(true)}>
+          <Icon name="search" size={14} />
           <span>검색 · 이동</span>
           <span className="topbar__spacer" />
           <span className="kbd">⌘K</span>
@@ -479,15 +500,15 @@ export default function App() {
             두면 매일 찾아 읽어야 한다. 0건이면 조용하다. */}
         {c.error > 0 ? (
           <button className="pill pill--error" onClick={() => setCheckOpen(true)} title="검사 결과 — 커밋이 거부된다">
-            ⛔ 검증 {c.error}
+            <Icon name="block" size={13} /> 검증 {c.error}
           </button>
         ) : c.warn > 0 ? (
           <button className="pill pill--warn" onClick={() => setCheckOpen(true)} title="검사 결과">
-            ⚠ 검증 {c.warn}
+            <Icon name="warn" size={13} /> 검증 {c.warn}
           </button>
         ) : (
           <button className="pill" onClick={() => setCheckOpen(true)} title="검사 결과 — 통과했을 때도 볼 수 있다">
-            ✓ 검사
+            <Icon name="check" size={13} /> 검사
           </button>
         )}
 
@@ -497,7 +518,7 @@ export default function App() {
           onClick={() => { setMenuOpen((m) => !m); setSettingsOpen(false) }}
           title="더보기"
         >
-          ⋯
+          <Icon name="more" size={16} />
         </button>
       </header>
 
@@ -508,12 +529,12 @@ export default function App() {
           <div className="scrim" onMouseDown={() => setMenuOpen(false)} />
           <div className="menu" role="menu">
             <button className="menu__row" onClick={() => { setMenuOpen(false); syncNow() }} disabled={!!syncing}>
-              <span className="menu__ico">{syncing ? '⟳' : '⭮'}</span>
+              <span className="menu__ico"><Icon name="sync" size={15} /></span>
               문서 동기화
               <span className="menu__hint">원격에서 받아온다 (ff 만)</span>
             </button>
             <button className="menu__row" onClick={() => { setMenuOpen(false); setHelpOpen(true) }}>
-              <span className="menu__ico">📖</span>
+              <span className="menu__ico"><Icon name="book" size={15} /></span>
               도움말 — 단축키 · 매뉴얼
               <span className="menu__hint kbd">?</span>
             </button>
@@ -521,7 +542,7 @@ export default function App() {
               className="menu__row"
               onClick={() => { setMenuOpen(false); patch({ reading: { mode: reading.mode === 'focus' ? 'browse' : 'focus' } }) }}
             >
-              <span className="menu__ico">▭</span>
+              <span className="menu__ico"><Icon name="panel" size={15} /></span>
               {reading.mode === 'focus' ? '왼쪽 펴기' : '읽기 모드 — 왼쪽 접기'}
               <span className="menu__hint kbd">⌘.</span>
             </button>
@@ -558,7 +579,7 @@ export default function App() {
             </div>
             <div className="menu__hr" />
             <button className="menu__row" onClick={() => { setMenuOpen(false); setSettingsOpen(true) }}>
-              <span className="menu__ico">⚙</span>
+              <span className="menu__ico"><Icon name="sliders" size={15} /></span>
               설정 — 레포 · 에이전트 설치
             </button>
           </div>
@@ -598,35 +619,76 @@ export default function App() {
       ) : (
         <div className="panes">
           <section className="pane pane--find" aria-label="찾는 곳">
-            {/* 왼쪽이 지금 하는 일. **한 번에 하나다.** */}
-            <div className="lrail" role="tablist" aria-label="왼쪽 영역">
+            {/* 접힘 — **띠만 남는다.** 목차(SectionRail)와 같은 규칙이다.
+                0 으로 만들면 펴는 버튼이 상단바로 도망가고, 그러면 같은 일을
+                하는 버튼 둘이 서로 다른 영역에 산다. 띠 전체가 버튼이다 —
+                32px 가 "여기 목록이 있다"는 유일한 신호인데 위쪽 한 칸만
+                눌리면 나머지는 눌러 보고 아무 일도 안 나는 자리가 된다. */}
+            {effectiveMode === 'focus' && (
               <button
-                className="lrail__tab"
+                className="lbar"
+                onClick={() => patch({ reading: { mode: 'browse' } })}
+                aria-expanded="false"
+                aria-label="왼쪽 펴기"
+                title="왼쪽 펴기 (⌘.)"
+              >
+                <Icon name="panelExpand" size={15} />
+                <span className="lbar__cap">{leftMode === 'explore' ? '뻗어나가기' : '찾기'}</span>
+              </button>
+            )}
+
+            {/* ── L1 단계 — 찾기 → 뻗어나가기 ──────────────────────────
+                **탭이 아니라 스텝이다.** 둘은 대등한 선택지가 아니라 순서다 —
+                찾기에서 고른 것이 뻗어나가기의 뿌리가 된다.
+
+                그래서 뿌리가 **탭 안에서 나왔다.** 전에는 고정 레이블과 가변
+                상태가 한 버튼에 들어 있어 탭 폭이 문서 제목 길이를 따라
+                흔들렸다(실측: 찾기 41.6px 對 뻗어나가기 167.8px). 지금은
+                단계마다 부제 한 줄이 있고, 거기에 그 단계가 지금 물고 있는
+                것을 적는다. */}
+            <div className="lhead" role="tablist" aria-label="왼쪽 영역">
+              <button
+                className="step"
                 role="tab"
                 aria-selected={leftMode === 'list'}
                 onClick={() => setLeftMode('list')}
               >
-                목록
+                <Icon name="search" size={15} />
+                <span className="step__txt">
+                  <span className="step__t">찾기</span>
+                  <span className="step__s">{SCOPE_LABEL[scope]} {scopeCount}{scope === 'coord' ? '개' : '건'}</span>
+                </span>
               </button>
+
+              <span className="lhead__arrow" aria-hidden="true">
+                <Icon name="chevronRight" size={13} />
+              </span>
+
               <button
-                className="lrail__tab"
+                className="step"
                 role="tab"
                 aria-selected={leftMode === 'explore'}
                 disabled={!root}
                 onClick={() => root && setLeftMode('explore')}
-                title={root ? root.key : '목록에서 하나를 고르면 여기서 뻗어나갑니다'}
+                title={root ? root.key : '찾기에서 하나를 고르면 여기서 뻗어나갑니다'}
               >
-                뻗어나가기
-                {root && <span className="lrail__root">{ICON[root.kind]} {shortRoot(root)}</span>}
+                <Icon name="explore" size={15} />
+                <span className="step__txt">
+                  <span className="step__t">뻗어나가기</span>
+                  <span className="step__s" data-mono={root?.kind === 'coord' ? '1' : '0'}>
+                    {root ? shortRoot(root) : '뿌리 없음'}
+                  </span>
+                </span>
               </button>
-              <span className="topbar__spacer" />
+
+              {/* 접기는 **층이 아니다.** 단계의 모양을 쓰지 않는다 */}
               <button
-                className="lrail__fold"
+                className="lhead__fold"
                 onClick={() => patch({ reading: { mode: 'focus' } })}
                 title="왼쪽 접기 (⌘.)"
                 aria-label="왼쪽 접기"
               >
-                ◀
+                <Icon name="panelCollapse" size={15} />
               </button>
             </div>
 
@@ -636,6 +698,9 @@ export default function App() {
                 managed={managedList}
                 tree={tree}
                 root={root}
+                scope={scope}
+                onScope={setScope}
+                onGraph={() => setTopMode('graph')}
                 onPick={pickRoot}
                 readMap={readMap}
                 myCoords={myCoords}
@@ -697,7 +762,7 @@ export default function App() {
             <div className="overlay__head">
               검사 결과
               <span className="topbar__spacer" />
-              <button className="iconbtn" onClick={() => setCheckOpen(false)} aria-label="닫기">✕</button>
+              <button className="iconbtn" onClick={() => setCheckOpen(false)} aria-label="닫기"><Icon name="close" size={15} /></button>
             </div>
             <div className="overlay__body">
               <CheckView onOpen={(id) => { setCheckOpen(false); openDoc(id) }} />
@@ -718,7 +783,8 @@ export default function App() {
   )
 }
 
-const ICON = { work: '◆', coord: '◇', managed: '▦' }
+// L2 대상의 이름 — 스텝 부제와 칩이 같은 말을 쓴다
+const SCOPE_LABEL = { managed: '관리문서', work: '작업문서', coord: '좌표' }
 
 // 레일에 뿌리를 적는다.
 //
@@ -772,7 +838,7 @@ function Help({ docs = [], onOpen, onClose }) {
         <div className="overlay__head">
           도움말
           <span className="topbar__spacer" />
-          <button className="iconbtn" onClick={onClose} aria-label="닫기">✕</button>
+          <button className="iconbtn" onClick={onClose} aria-label="닫기"><Icon name="close" size={15} /></button>
         </div>
         <div className="overlay__body help">
           <div className="help__cap">화면</div>
@@ -809,7 +875,7 @@ function Help({ docs = [], onOpen, onClose }) {
               <div className="help__cap">매뉴얼</div>
               {manuals.map((d) => (
                 <button key={d.path} className="help__doc" onClick={() => onOpen?.(d.path)}>
-                  📖 {manualLabel(d.path)}
+                  <Icon name="book" size={14} /> {manualLabel(d.path)}
                 </button>
               ))}
               <p className="help__note">
@@ -938,7 +1004,7 @@ function Settings({ state, repo, patch, onClose }) {
         <div className="popover__head">
           설정
           <span className="topbar__spacer" />
-          <button className="iconbtn" onClick={onClose} aria-label="닫기">✕</button>
+          <button className="iconbtn" onClick={onClose} aria-label="닫기"><Icon name="close" size={15} /></button>
         </div>
 
         <div className="popover__body">
@@ -1042,7 +1108,7 @@ function Settings({ state, repo, patch, onClose }) {
                     {plan.actions.filter((a) => a.op !== 'same').map((a) => `${OPLBL[a.op]}  ${shortOf(a)}`).join(String.fromCharCode(10)) || '(바뀔 것 없음)'}
                   </div>
                   {plan.warnings.map((w, i) => (
-                    <div key={i} style={{ color: 'var(--warn, var(--text-2))' }}>⚠ {w}</div>
+                    <div key={i} style={{ color: 'var(--warn, var(--text-2))' }}><Icon name="warn" size={13} /> {w}</div>
                   ))}
                   <button className="linkbtn" disabled={!!inst} onClick={() => doApply(plan.path)}>
                     {inst ? '쓰는 중…' : '이대로 설치'}

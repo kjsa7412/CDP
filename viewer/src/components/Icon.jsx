@@ -1,0 +1,211 @@
+// 아이콘 — **인라인 SVG 한 벌.**
+//
+// 전에는 전부 특수문자였다(`◀ ▶ ◆ ◇ ▦ ⛔ ⚠ ⋯ ⚙ 📖`). 세 가지가 문제였다 —
+//
+//   ① **글꼴마다 다르게 그려진다.** `⛔` 는 Windows 에서 컬러 이모지로,
+//      `▦` 는 한중일 호환 글리프로 떨어져 굵기도 크기도 제각각이었다.
+//      한 줄 안에서 글자 높이가 들쭉날쭉한 원인이 이것이다
+//   ② **크기·색을 못 정한다.** 글리프라 `font-size` 로만 조절되고, 광학
+//      중심이 글꼴이 정한 자리에 있어 레이블과 세로 정렬이 안 맞았다
+//   ③ 이모지는 **의미가 고정되지 않는다.** `⛔` 는 OS 에 따라 빨간 금지
+//      표지로도, 검은 팔각형으로도 그려진다
+//
+// **아이콘 라이브러리를 CDN 에서 불러오지 않는다.** 폐쇄망에서 조용히
+// 실패한다 — `font.css` 가 구글 폰트를 파일째 심는 것과 같은 이유다.
+// 24px 격자 · 1.75 굵기 · currentColor. 크기는 쓰는 쪽이 정한다.
+
+const P = {
+  // ── 이동 ──────────────────────────────────────────────────────────
+  chevronLeft: <path d="M15 5 8 12l7 7" />,
+  chevronRight: <path d="M9 5l7 7-7 7" />,
+  chevronDown: <path d="M6 9.5l6 6 6-6" />,
+  arrowRight: (
+    <>
+      <path d="M4 12h15" />
+      <path d="M13 6l6 6-6 6" />
+    </>
+  ),
+  external: (
+    <>
+      <path d="M14 4h6v6" />
+      <path d="M20 4 11 13" />
+      <path d="M19 14v5a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V7.5A1.5 1.5 0 0 1 6 6h5" />
+    </>
+  ),
+
+  // ── 객체 — 왼쪽 목록의 세 대상 ───────────────────────────────────
+  // 관리문서: 제본된 정본. 작업문서: 사건 한 건. 좌표: 조준점.
+  managed: (
+    <>
+      <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v18H7.5A2.5 2.5 0 0 1 5 18.5z" />
+      <path d="M9 3v18" />
+    </>
+  ),
+  work: (
+    <>
+      <path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13.5h6" />
+      <path d="M9 17h4" />
+    </>
+  ),
+  coord: (
+    <>
+      <circle cx="12" cy="12" r="7.5" />
+      <path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" />
+    </>
+  ),
+  section: (
+    <>
+      <path d="M4 6h16" />
+      <path d="M8 12h12" />
+      <path d="M8 18h8" />
+    </>
+  ),
+
+  // ── 화면 ─────────────────────────────────────────────────────────
+  doc: (
+    <>
+      <path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z" />
+      <path d="M14 3v5h5" />
+    </>
+  ),
+  graph: (
+    <>
+      <circle cx="12" cy="5" r="2.6" />
+      <circle cx="5" cy="18.5" r="2.6" />
+      <circle cx="19" cy="18.5" r="2.6" />
+      <path d="M10.6 7.3 6.4 16.2" />
+      <path d="M13.4 7.3l4.2 8.9" />
+      <path d="M7.6 18.5h8.8" />
+    </>
+  ),
+  explore: (
+    <>
+      <path d="M4 5.5h5.5" />
+      <path d="M4 12h5.5" />
+      <path d="M4 18.5h5.5" />
+      <path d="M14.5 12H20" />
+      <path d="M17 8.5 20.5 12 17 15.5" />
+    </>
+  ),
+
+  // ── 조작 ─────────────────────────────────────────────────────────
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.4 15.4 21 21" />
+    </>
+  ),
+  close: <path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" />,
+  check: <path d="M20 6.5 9.5 17 4 11.5" />,
+  more: (
+    <g fill="currentColor" stroke="none">
+      <circle cx="5.2" cy="12" r="1.7" />
+      <circle cx="12" cy="12" r="1.7" />
+      <circle cx="18.8" cy="12" r="1.7" />
+    </g>
+  ),
+  sliders: (
+    <>
+      <path d="M4 7h8M17 7h3M4 17h3M12 17h8" />
+      <circle cx="14.5" cy="7" r="2.4" />
+      <circle cx="9.5" cy="17" r="2.4" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M12 6.8C10.4 5.2 8.2 4.6 3.5 4.6v13c4.7 0 6.9.6 8.5 2 1.6-1.4 3.8-2 8.5-2v-13c-4.7 0-6.9.6-8.5 2z" />
+      <path d="M12 6.8v12.8" />
+    </>
+  ),
+  sync: (
+    <>
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1" />
+      <path d="M20.5 4.5V11h-6.5" />
+    </>
+  ),
+  panel: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M9.5 4.5v15" />
+    </>
+  ),
+  panelCollapse: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M13.5 4.5v15" />
+      <path d="M9.5 9.5 7 12l2.5 2.5" />
+    </>
+  ),
+  panelExpand: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M9.5 4.5v15" />
+      <path d="M13.5 9.5 16 12l-2.5 2.5" />
+    </>
+  ),
+
+  // ── 상태 — 색 예산 넷에 맞춘다(tokens.css) ───────────────────────
+  warn: (
+    <>
+      <path d="M12 3.8 21.2 19.6a1.4 1.4 0 0 1-1.2 2.1H4a1.4 1.4 0 0 1-1.2-2.1z" />
+      <path d="M12 9.8v4.4" />
+      <path d="M12 17.6h.01" />
+    </>
+  ),
+  block: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M6 18 18 6" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11.2v5" />
+      <path d="M12 8h.01" />
+    </>
+  ),
+
+  // ── 첨부 ─────────────────────────────────────────────────────────
+  image: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <circle cx="9" cy="10" r="1.8" />
+      <path d="M20.5 15.5 16 11l-8.5 8.5" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z" />
+      <path d="M14 3v5h5" />
+    </>
+  ),
+}
+
+export default function Icon({ name, size = 16, stroke = 1.75, className, style }) {
+  const d = P[name]
+  if (!d) return null
+  return (
+    <svg
+      className={className ? `ico ${className}` : 'ico'}
+      style={style}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={stroke}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {d}
+    </svg>
+  )
+}
+
+// 객체 세 종류의 아이콘 이름 — 화면 어디서나 같은 그림이어야 한다.
+export const KIND_ICON = { work: 'work', coord: 'coord', managed: 'managed', section: 'section' }
