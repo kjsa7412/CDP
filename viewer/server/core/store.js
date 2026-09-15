@@ -149,19 +149,32 @@ export class Store {
     // 테이블정의서 3섹션). 가는 곳이 문서 하나이므로 줄도 하나로 접고,
     // 몇 섹션인지는 숫자로 말한다.
     //
-    // `at` — 문서를 열 때 **그 섹션 자리로** 간다. 섹션이 하나로 정해질 때만
-    // 준다. 여럿이면 어디로 갈지는 이 줄이 답할 수 없다 — 문서 첫머리다.
-    const docItem = (rows) => ({
-      kind: 'managed',
-      key: rows[0].doc,
-      label: docName(rows[0]),
-      sub: rows.map(anchor).join(' · '),
-      // 섹션 순서 — 정렬 키. 이 문서에서 가장 앞선 섹션의 줄 번호
-      line: Math.min(...rows.map((x) => x.line ?? Infinity)),
-      n: rows.length,
-      open: rows[0].doc,
-      at: rows.length === 1 ? anchor(rows[0]) : null,
-    })
+    // `at` — 문서를 열 때 **그 섹션 자리로** 간다. 여럿이면 **가장 앞선
+    // 섹션**으로 간다.
+    //
+    // 전에는 여럿이면 문서 첫머리에 두었다 — 어느 섹션인지 이 줄이 하나로
+    // 답할 수 없다는 이유였다. 그러나 첫머리는 다른 답이 아니라 **답을 버린
+    // 것**이다. 파생된 섹션이 둘이든 셋이든 그중 어느 것도 문서 첫머리에는
+    // 없고, 10개 섹션을 눈으로 훑는 일은 그대로 남는다. 가장 앞선 것으로
+    // 보내면 적어도 파생된 자리에서 시작하고, 나머지는 거기서 아래로 순서대로
+    // 나온다 — `sub` 가 이름으로 미리 말해 둔 그 순서 그대로다.
+    const docItem = (unordered) => {
+      // **문서에 나오는 순서로 세운다.** `this.sections` 는 상태 급한 순이라,
+      // 그대로 두면 `sub` 가 목차 순서가 아니고 `at` 이 가리키는 곳이 거기
+      // 적힌 첫 이름과 어긋나는 일이 생긴다.
+      const rows = [...unordered].sort((a, b) => (a.line ?? Infinity) - (b.line ?? Infinity))
+      return {
+        kind: 'managed',
+        key: rows[0].doc,
+        label: docName(rows[0]),
+        sub: rows.map(anchor).join(' · '),
+        // 섹션 순서 — 정렬 키. 이 문서에서 가장 앞선 섹션의 줄 번호
+        line: rows[0].line ?? Infinity,
+        n: rows.length,
+        open: rows[0].doc,
+        at: anchor(rows[0]),
+      }
+    }
     const byDoc = (rows) => {
       const m = new Map()
       for (const r of rows) {
