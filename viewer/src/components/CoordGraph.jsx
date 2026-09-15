@@ -146,7 +146,10 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
       const raw = (x, y, z) => {
         const x1 = x * cy2 - z * sy, z1 = x * sy + z * cy2
         const y1 = y * cx2 - z1 * sx, z2 = y * sx + z1 * cx2
-        const sc = F / (F + z2 + 250)
+        // **분모가 0 에 닿으면 안 된다.** `z2` 는 배치 반지름만큼 음수가 될 수
+        // 있고, 그것이 `F + 250` 에 가까워지면 배율이 발산하다 부호가 뒤집힌다.
+        // 좌표가 늘수록 배치가 커지므로 언젠가 닿는다 -- 절반에서 막는다.
+        const sc = F / Math.max(F * 0.5, F + z2 + 250)
         return { x: x1 * sc, y: y1 * sc, z: z2, sc }
       }
 
@@ -826,7 +829,19 @@ function layout3d(nodes, edges) {
   for (const [a, b] of edges) { deg[a]++; deg[b]++ }
   const maxDeg = Math.max(1, ...deg)
 
-  const R = 150
+  // **간격은 화면이 아니라 여기서 정해진다.** 맞춤이 전체를 프레임에 넣으므로
+  // 배치를 통째로 키워 봐야 배율이 그만큼 줄어 화면은 똑같다 -- 노드 반지름도
+  // `Z` 를 타고 같이 줄어든다. 벌어지게 하려면 **전체 크기 대비 이웃 간격**을
+  // 키워야 하고, 그것을 정하는 것이 아래 넷(`R` · `L` · 반발 세기 · 스프링 세기)이다.
+  //
+  // 실측 -- 좌표 83 · 간선 282 (`C:\cdp`). 최근접 거리를 화면 반경으로 나눈 값.
+  //
+  //   이전  150 ·  52 · 3000 · 0.055    하위10% 0.034  중앙값 0.082  겹친 쌍 7.6
+  //   지금  190 · 170 · 12000 · 0.03    하위10% 0.042  중앙값 0.095  겹친 쌍 1.5
+  //
+  // **겹친 쌍이 다섯 중 하나로 준다.** 중앙값보다 이쪽이 중요하다 -- 붙어 버린
+  // 몇 쌍이 "빽빽하다"는 인상을 만들고, 그 쌍은 라벨도 서로를 덮는다.
+  const R = 190
   const C = new Map()
   types.forEach((t, i) => {
     // 구 위에 고르게 — 황금각 나선
@@ -849,7 +864,9 @@ function layout3d(nodes, edges) {
   // O(n^2) x TICKS. 55노드에서 수십 ms 다. 수백을 넘으면 틱을 줄인다.
   const N = nodes.length
   const TICKS = N <= 120 ? 260 : N <= 400 ? 140 : 80
-  const L = 52
+  // `L` 은 이어진 두 좌표가 쉬는 거리다. 52 는 타입 구역 반지름(190)의 1/4 라
+  // 간선이 덩어리를 끝까지 조였다 -- 3D 에서는 벌어져 있어도 **투영하면 겹쳤다.**
+  const L = 170
   const F = nodes.map(() => [0, 0, 0])
   for (let s = 0; s < TICKS; s++) {
     const al = 1 - s / TICKS
@@ -858,13 +875,17 @@ function layout3d(nodes, edges) {
       let dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y, dz = nodes[i].z - nodes[j].z
       let d2 = dx * dx + dy * dy + dz * dz
       if (d2 < 1) { dx = rand(); dy = rand(); dz = rand(); d2 = 1 }
-      const f = Math.min(70, 3000 / d2), d = Math.sqrt(d2)
+      // 반발 12000 -- 3000 에서 올렸다. 상한 70 은 그대로다(가까운 쌍이 튕겨
+      // 나가는 것을 막는 안전장치이지 세기가 아니다).
+      const f = Math.min(70, 12000 / d2), d = Math.sqrt(d2)
       F[i][0] += dx / d * f; F[i][1] += dy / d * f; F[i][2] += dz / d * f
       F[j][0] -= dx / d * f; F[j][1] -= dy / d * f; F[j][2] -= dz / d * f
     }
     for (const [i, j] of edges) {
       const dx = nodes[j].x - nodes[i].x, dy = nodes[j].y - nodes[i].y, dz = nodes[j].z - nodes[i].z
-      const d = Math.max(1, Math.hypot(dx, dy, dz)), f = (d - L) * 0.055
+      // 스프링을 0.055 에서 0.03 으로 늦춘다. 세게 두면 L 을 늘려도 간선이
+      // 다시 당겨 붙인다 -- 늘린 것은 쉬는 거리이지 당기는 힘이 아니다.
+      const d = Math.max(1, Math.hypot(dx, dy, dz)), f = (d - L) * 0.03
       F[i][0] += dx / d * f; F[i][1] += dy / d * f; F[i][2] += dz / d * f
       F[j][0] -= dx / d * f; F[j][1] -= dy / d * f; F[j][2] -= dz / d * f
     }
