@@ -234,13 +234,28 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
       const accent = css('--accent') || '#2f6fdb'
 
       // 간선 — 얇고 옅게. 깊이에 따라 더 옅어진다(부드러운 안개)
+      //
+      // **옅기가 간선 수를 따라야 한다.** 한 줄의 진하기는 고정인데 줄 수는
+      // 레포마다 열 배씩 차이가 난다 -- 옅은 줄도 이천 개가 겹치면 회색 판이
+      // 되고, 그 위에서는 노드를 아무리 벌려도 안 벌어져 보인다.
+      //
+      // 실측 -- 같은 화면에서 선이 덮는 잉크
+      //
+      //   좌표  83 · 이음  282     1.9%     안개
+      //   좌표 301 · 이음 2554    15.8%     판
+      //
+      // 이음 400 을 기준으로 제곱근만큼 줄인다. 400 이하면 1 이라 지금까지와
+      // 같고, 2554 면 0.40 이 되어 6% 로 내려온다. **비례로 줄이지 않는 이유**는
+      // 그러면 밀집 레포에서 선이 아예 안 보이기 때문이다 -- 많다는 사실 자체가
+      // 정보이므로 짙기는 남기고 판이 되는 것만 막는다.
+      const fade = Math.min(1, Math.sqrt(400 / Math.max(1, g.edges.length)))
       ctx.lineWidth = 1
       for (const [i, j] of g.edges) {
         const p = byI[i], q = byI[j]
         if (!p || !q) continue
         const lit = H != null && (i === H || j === H)
         ctx.strokeStyle = lit ? accent : line
-        ctx.globalAlpha = lit ? 0.7 : H != null ? 0.07 : 0.32 * Math.min(1, (p.sc + q.sc) / 2 + 0.3)
+        ctx.globalAlpha = lit ? 0.7 : (H != null ? 0.07 : 0.32 * Math.min(1, (p.sc + q.sc) / 2 + 0.3)) * fade
         ctx.beginPath(); ctx.moveTo(p.X, p.Y); ctx.lineTo(q.X, q.Y); ctx.stroke()
       }
       ctx.globalAlpha = 1
@@ -316,7 +331,13 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
       // 덮인 글자는 없는 것보다 나쁘다(읽으려다 시간을 쓴다).
       // 끈 상태에서도 **짚은 것과 고른 것, 그 1단계 이웃**은 그린다 —
       // 이름을 보려고 켜는 것이 아니라 짚으면 나오게 한다.
-      const showAll = labels === 'on' || (labels === 'auto' && S.base * S.zoom >= 0.9)
+      // `auto` 는 배율만 봤다. 그런데 이름이 서로를 덮는 것은 배율이 아니라
+      // **개수**가 정한다 -- 좌표 301 개에서는 맞춤 배율이 얼마든 글자 더미다.
+      // 실제로 그 레포 사용자는 `이름 끔` 을 손으로 눌러 놓고 쓰고 있었다.
+      // auto 가 자동으로 해야 할 일을 사람이 하고 있었던 것이다.
+      // `켬` 은 그대로 다 그린다 -- 끄는 것은 auto 의 판단이지 금지가 아니다.
+      const showAll = labels === 'on'
+        || (labels === 'auto' && S.base * S.zoom >= 0.9 && g.nodes.length <= 150)
       if (showAll || H != null) {
       // 라벨 — **전부 보인다.**
       //
@@ -861,44 +882,88 @@ function layout3d(nodes, edges) {
     n.z = c.z * pk + (rand() - 0.5) * 55
   }
 
-  // O(n^2) x TICKS. 55노드에서 수십 ms 다. 수백을 넘으면 틱을 줄인다.
+  // O(n^2) x TICKS.
+  //
+  // **평평한 배열로 돈다.** 전에는 `nodes[i].x` 와 `F[i][0]` 을 직접 읽고 썼다.
+  // 좌표 55개에서는 수십 ms 라 티가 안 났는데, 301개 · 이음 2554 인 레포에서
+  // **1.6초**가 됐다 -- 그래프 탭이 그만큼 멎는다. 반복 횟수(6백만)가 아니라
+  // 객체 속성 접근과 중첩 배열이 그 시간의 대부분이었다.
+  //
+  // 값은 한 비트도 안 바뀐다. `Float64Array` 는 JS 의 수와 같은 배정밀도이고
+  // 연산 순서를 그대로 뒀다 -- **배치가 결정론적이라는 전제가 이 함수의 값어치**라
+  // 여기서 결과가 달라지면 안 된다.
   const N = nodes.length
   const TICKS = N <= 120 ? 260 : N <= 400 ? 140 : 80
   // `L` 은 이어진 두 좌표가 쉬는 거리다. 52 는 타입 구역 반지름(190)의 1/4 라
   // 간선이 덩어리를 끝까지 조였다 -- 3D 에서는 벌어져 있어도 **투영하면 겹쳤다.**
   const L = 170
-  const F = nodes.map(() => [0, 0, 0])
+  const px = new Float64Array(N), py = new Float64Array(N), pz = new Float64Array(N)
+  const fx = new Float64Array(N), fy = new Float64Array(N), fz = new Float64Array(N)
+  // 타입 중심을 연결도만큼 끌어당긴 자리 — 틱마다 다시 계산하던 것을 미리 둔다
+  const tx = new Float64Array(N), ty = new Float64Array(N), tz = new Float64Array(N)
+  for (let i = 0; i < N; i++) {
+    const n = nodes[i], c = C.get(n.type), pk = pull[i]
+    px[i] = n.x; py[i] = n.y; pz[i] = n.z
+    tx[i] = c.x * pk; ty[i] = c.y * pk; tz[i] = c.z * pk
+  }
+  // 간선도 평평하게. 스프링을 나눌 연결도(제곱근)도 미리 재 둔다
+  const E = edges.length
+  const ea = new Int32Array(E), eb = new Int32Array(E), ek = new Float64Array(E)
+  for (let e = 0; e < E; e++) {
+    const [i, j] = edges[e]
+    ea[e] = i; eb[e] = j
+    // **연결도로 나눈다.** 안 나누면 간선이 많은 좌표일수록 세게 끌린다 --
+    // 60개와 이어진 좌표는 2개와 이어진 좌표보다 30배를 받고, 그 힘이 반발을
+    // 이겨 가운데로 말려 들어간다. 실측에서 좌표 301 · 이음 2554 일 때 원이
+    // 겹친 노드가 55개였다(나누면 40개).
+    //
+    // 이어진 수가 많다는 것은 **더 넓게 자리를 잡아야 한다**는 뜻이지 더 세게
+    // 당겨야 한다는 뜻이 아니다.
+    ek[e] = Math.sqrt(Math.max(1, (deg[i] + deg[j]) / 2))
+  }
   for (let s = 0; s < TICKS; s++) {
     const al = 1 - s / TICKS
-    for (const f of F) { f[0] = 0; f[1] = 0; f[2] = 0 }
-    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
-      let dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y, dz = nodes[i].z - nodes[j].z
-      let d2 = dx * dx + dy * dy + dz * dz
-      if (d2 < 1) { dx = rand(); dy = rand(); dz = rand(); d2 = 1 }
-      // 반발 12000 -- 3000 에서 올렸다. 상한 70 은 그대로다(가까운 쌍이 튕겨
-      // 나가는 것을 막는 안전장치이지 세기가 아니다).
-      const f = Math.min(70, 12000 / d2), d = Math.sqrt(d2)
-      F[i][0] += dx / d * f; F[i][1] += dy / d * f; F[i][2] += dz / d * f
-      F[j][0] -= dx / d * f; F[j][1] -= dy / d * f; F[j][2] -= dz / d * f
+    fx.fill(0); fy.fill(0); fz.fill(0)
+    for (let i = 0; i < N; i++) {
+      const xi = px[i], yi = py[i], zi = pz[i]
+      for (let j = i + 1; j < N; j++) {
+        let dx = xi - px[j], dy = yi - py[j], dz = zi - pz[j]
+        let d2 = dx * dx + dy * dy + dz * dz
+        if (d2 < 1) { dx = rand(); dy = rand(); dz = rand(); d2 = 1 }
+        // 반발 12000 -- 3000 에서 올렸다. 상한 70 은 그대로다(가까운 쌍이 튕겨
+        // 나가는 것을 막는 안전장치이지 세기가 아니다).
+        //
+        // **`dx / d * f` 를 `dx * (f / d)` 로 접지 않는다.** 값이 같아 보여도
+        // 부동소수 반올림이 달라지고, 그러면 배치가 미세하게 바뀐다.
+        const f = Math.min(70, 12000 / d2), d = Math.sqrt(d2)
+        fx[i] += dx / d * f; fy[i] += dy / d * f; fz[i] += dz / d * f
+        fx[j] -= dx / d * f; fy[j] -= dy / d * f; fz[j] -= dz / d * f
+      }
     }
-    for (const [i, j] of edges) {
-      const dx = nodes[j].x - nodes[i].x, dy = nodes[j].y - nodes[i].y, dz = nodes[j].z - nodes[i].z
+    for (let e = 0; e < E; e++) {
+      const i = ea[e], j = eb[e]
+      const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i]
       // 스프링을 0.055 에서 0.03 으로 늦춘다. 세게 두면 L 을 늘려도 간선이
       // 다시 당겨 붙인다 -- 늘린 것은 쉬는 거리이지 당기는 힘이 아니다.
-      const d = Math.max(1, Math.hypot(dx, dy, dz)), f = (d - L) * 0.03
-      F[i][0] += dx / d * f; F[i][1] += dy / d * f; F[i][2] += dz / d * f
-      F[j][0] -= dx / d * f; F[j][1] -= dy / d * f; F[j][2] -= dz / d * f
+      const d = Math.max(1, Math.hypot(dx, dy, dz)), f = (d - L) * 0.03 / ek[e]
+      fx[i] += dx / d * f; fy[i] += dy / d * f; fz[i] += dz / d * f
+      fx[j] -= dx / d * f; fy[j] -= dy / d * f; fz[j] -= dz / d * f
     }
+    const cap = 8 * al + 0.3
     for (let i = 0; i < N; i++) {
-      const n = nodes[i], c = C.get(n.type), pk = pull[i]
+      const x = px[i], y = py[i], z = pz[i]
       // 목표는 **타입 중심을 연결도만큼 안으로 끌어당긴 자리**다. 그래야
       // 풀고 나서도 안팎 구분이 남는다 -- 타입 중심 그대로를 목표로 삼으면
       // 반발력이 다시 껍데기로 밀어낸다.
-      F[i][0] += (c.x * pk - n.x) * 0.02 - n.x * 0.004
-      F[i][1] += (c.y * pk - n.y) * 0.02 - n.y * 0.004
-      F[i][2] += (c.z * pk - n.z) * 0.02 - n.z * 0.004
-      const m = Math.hypot(F[i][0], F[i][1], F[i][2]), cap = 8 * al + 0.3, k = m > cap ? cap / m : 1
-      n.x += F[i][0] * k; n.y += F[i][1] * k; n.z += F[i][2] * k
+      //
+      // **괄호를 그대로 둔다.** `f + (a - b)` 와 `(f + a) - b` 는 부동소수에서
+      // 같은 값이 아니다. 접었다가 배치가 1e-12 만큼 흘렀다.
+      const ax = fx[i] + ((tx[i] - x) * 0.02 - x * 0.004)
+      const ay = fy[i] + ((ty[i] - y) * 0.02 - y * 0.004)
+      const az = fz[i] + ((tz[i] - z) * 0.02 - z * 0.004)
+      const m = Math.hypot(ax, ay, az), k = m > cap ? cap / m : 1
+      px[i] = x + ax * k; py[i] = y + ay * k; pz[i] = z + az * k
     }
   }
+  for (let i = 0; i < N; i++) { nodes[i].x = px[i]; nodes[i].y = py[i]; nodes[i].z = pz[i] }
 }
