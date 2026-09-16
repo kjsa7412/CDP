@@ -25,7 +25,7 @@ import DocView from './components/DocView.jsx'
 import CheckView from './components/CheckView.jsx'
 import Palette from './components/Palette.jsx'
 import StatusBar from './components/StatusBar.jsx'
-import SetupView from './components/SetupView.jsx'
+import AdminView from './components/admin/AdminView.jsx'
 import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
@@ -45,14 +45,18 @@ export default function App() {
   // 레포 안의 그 밖 문서 — MANUAL.md · README.md · CLAUDE.md 등.
   // **레포마다 있을 수도 없을 수도 있다.** 없는 것을 버튼으로 내밀지 않는다.
   const [others, setOthers] = useState([])
-  const [syncing, setSyncing] = useState(null)
   // 뻗어나가기의 뿌리. 목록에서 고른 것 하나. { kind, key, label }
   const [root, setRoot] = useState(null)
   const [docId, setDocId] = useState(null)
   // 문서 안에서 갈 자리 — { value, seq }. 섹션(좌표) 줄을 눌러 왔을 때만 있다.
   const [docAt, setDocAt] = useState(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // 관리 화면에서 지금 보고 있는 메뉴. **화면을 나갔다 와도 그 자리다** —
+  // 동기화를 보다 문서로 갔다가 다시 들어오면 동기화여야 한다.
+  const [adminTab, setAdminTab] = useState('overview')
+  // 동기화 진행 — **서버가 갖고 SSE 로 온다.** 이 컴포넌트가 들고 있으면
+  // 탭이 둘일 때 한쪽만 알게 된다. { phase, startedAt, last, log }
+  const [sync, setSync] = useState(null)
   // 도움말은 설정이 아니다. 단축키와 매뉴얼은 **읽는 것**이고, 레포 경로와
   // 에이전트 설치는 **바꾸는 것**이다. 한 창에 두면 매일 찾는 쪽이 매번
   // 평생 한 번 하는 것을 지나야 한다.
@@ -138,6 +142,13 @@ export default function App() {
         setRepo((r) => (r ? { ...r, watchAlive: ev.alive } : r))
         return
       }
+      // 동기화 단계 — **어느 탭에서 눌렀든 모든 화면이 같은 것을 본다**
+      if (ev.type === 'sync') {
+        setSync((s) => ({ ...(s || {}), phase: ev.phase, startedAt: ev.startedAt ?? s?.startedAt ?? null, last: ev.last ?? s?.last ?? null }))
+        // 끝났으면 이력까지 다시 읽는다. 그 한 줄이 표에 남아야 한다.
+        if (ev.phase === 'idle') api.sync().then(setSync).catch(() => {})
+        return
+      }
       if (ev.type !== 'changed') return
       // 목록은 즉시 갱신. 읽고 있는 본문은 바꾸지 않는다(§13-⑥)
       setChangedPaths(new Set([...ev.changed, ...ev.added]))
@@ -154,6 +165,7 @@ export default function App() {
     }, () => {
       // SSE 가 붙었다. 그 전에 지나간 상태 변화를 여기서 한 번 맞춘다.
       api.repo().then(setRepo).catch(() => {})
+      api.sync().then(setSync).catch(() => {})
     })
   }, [reload])
 
@@ -210,31 +222,22 @@ export default function App() {
     return hit ? hit.path : null
   }, [others])
 
-  // 문서 동기화 — **한 번에 fetch + (뒤처졌으면) pull + 재스캔.**
+  // 문서 동기화 — **순서는 서버가 갖는다**(`core/sync.js`).
   //
-  // ff 만 한다. merge·rebase 는 사람이 터미널에서 한다 — 섹션 두 갱신을
-  // 기계가 섞으면 그 결과가 정본 자리에 앉는다.
+  // 전에는 여기서 `git?fetch=1` -> `gitPull` -> `reload` 를 엮었다. 그래서
+  // 진행이 이 컴포넌트 안에만 있었고, 탭을 바꾸면 도는 중인지도 알 수 없었다.
+  // 지금은 한 번 부르고 단계는 SSE 로 받는다. `ctx sync` 도 같은 것을 쓴다.
   const syncNow = useCallback(async () => {
-    setSyncing('fetch')
     try {
-      const g = await api.git(true)
-      if (!g?.repo) return say('git 레포가 아닙니다')
-      if (g.behind > 0) {
-        setSyncing('pull')
-        const r = await api.gitPull()
-        if (!r?.ok) {
-          // ff 가 안 되면 **그대로 알린다.** 앱이 정리하지 않는다.
-          return say(r?.message || 'ff 불가 — 터미널에서 git pull --rebase', 6000)
-        }
-        await reload()
-        return say(`원격 ${g.behind}건 받았습니다`)
-      }
-      await reload()
-      say(g.ahead > 0 ? `이미 최신 · 미전송 ${g.ahead}건` : '이미 최신입니다')
+      const r = await api.runSync(true)
+      if (r?.error === 'busy') return say('이미 동기화가 도는 중입니다')
+      // ff 가 안 되면 **그대로 알린다.** 앱이 정리하지 않는다.
+      say(r.line || (r.ok ? '완료' : '동기화 실패'), r.ok ? 2600 : 8000)
+      if (r.ok && r.pulled > 0) await reload()
     } catch (e) {
-      say(e?.message || '동기화 실패')
+      say(e?.message || '동기화 실패', 6000)
     } finally {
-      setSyncing(null)
+      api.sync().then(setSync).catch(() => {})
     }
   }, [reload, say])
 
@@ -362,8 +365,7 @@ export default function App() {
         if (checkOpen) return setCheckOpen(false)
         if (helpOpen) return setHelpOpen(false)
         if (menuOpen) return setMenuOpen(false)
-        if (settingsOpen) return setSettingsOpen(false)
-        if (topMode === 'graph') return setTopMode('doc')
+        if (topMode !== 'doc') return setTopMode('doc')
         return
       }
       // 왼쪽이 하는 일을 바꾼다 — 탭 키는 브라우저 것이므로 쓰지 않는다
@@ -427,16 +429,34 @@ export default function App() {
     )
   }
 
+  // 첫 실행 — **관리>지식 레포와 같은 화면을 쓴다.**
+  //
+  // 전에는 `SetupView` 한 장이 따로 있었다. 그런데 경로를 지정하는 일은
+  // 나중에 또 하고, 그때는 설정 팝오버의 입력칸 하나로 했다 — 같은 일을
+  // 두 군데서 서로 다르게 하고 있었다. 구조 검증 다섯 줄이 첫 실행에만
+  // 있었던 이유도 그것이다.
   if (needSetup) {
     return (
-      <SetupView
-        initialPath={state?.repoPath || ''}
-        onDone={() => {
-          setNeedSetup(false)
-          setScanning(true)
-          reload().finally(() => setScanning(false))
-        }}
-      />
+      <div className="app app--bare">
+        <AdminView
+          tab="repo"
+          onTab={() => {}}
+          state={state || { repoPath: '' }}
+          repo={repo}
+          patch={() => {}}
+          sync={null}
+          onSync={() => {}}
+          onCheck={() => {}}
+          onClose={() => {}}
+          firstRun
+          onOpened={() => {
+            setNeedSetup(false)
+            setScanning(true)
+            reload().finally(() => setScanning(false))
+          }}
+          say={(m) => say(m, 6000)}
+        />
+      </div>
     )
   }
 
@@ -482,6 +502,11 @@ export default function App() {
           <button aria-pressed={topMode === 'graph'} onClick={() => setTopMode('graph')}>
             <Icon name="graph" size={14} /> 그래프
           </button>
+          {/* 관리도 **화면**이다. 레포 여섯 곳의 설치 상태와 이력 스무 줄은
+              380px 팝오버에 안 들어간다 — 그래프를 화면으로 올린 것과 같다. */}
+          <button aria-pressed={topMode === 'admin'} onClick={() => setTopMode('admin')} title="레포 · 동기화 · 에이전트 설치">
+            <Icon name="gear" size={14} /> 관리
+          </button>
         </div>
 
         {/* 접었을 때 펴는 버튼이 여기 나지 않는다 — **버튼이 영역을 옮기면
@@ -515,7 +540,7 @@ export default function App() {
         <button
           className="iconbtn"
           aria-expanded={menuOpen}
-          onClick={() => { setMenuOpen((m) => !m); setSettingsOpen(false) }}
+          onClick={() => setMenuOpen((m) => !m)}
           title="더보기"
         >
           <Icon name="more" size={16} />
@@ -528,10 +553,12 @@ export default function App() {
         <>
           <div className="scrim" onMouseDown={() => setMenuOpen(false)} />
           <div className="menu" role="menu">
-            <button className="menu__row" onClick={() => { setMenuOpen(false); syncNow() }} disabled={!!syncing}>
+            <button className="menu__row" onClick={() => { setMenuOpen(false); syncNow() }} disabled={!!sync && sync.phase !== 'idle'}>
               <span className="menu__ico"><Icon name="sync" size={15} /></span>
               문서 동기화
-              <span className="menu__hint">원격에서 받아온다 (ff 만)</span>
+              <span className="menu__hint">
+                {sync && sync.phase !== 'idle' ? '도는 중…' : '원격에서 받아온다 (ff 만)'}
+              </span>
             </button>
             <button className="menu__row" onClick={() => { setMenuOpen(false); setHelpOpen(true) }}>
               <span className="menu__ico"><Icon name="book" size={15} /></span>
@@ -578,21 +605,14 @@ export default function App() {
               </div>
             </div>
             <div className="menu__hr" />
-            <button className="menu__row" onClick={() => { setMenuOpen(false); setSettingsOpen(true) }}>
-              <span className="menu__ico"><Icon name="sliders" size={15} /></span>
-              설정 — 레포 · 에이전트 설치
+            {/* 설정은 팝오버가 아니라 **화면**이다. 줄은 남긴다 — 여기서 찾던
+                사람이 계속 여기서 찾는다. */}
+            <button className="menu__row" onClick={() => { setMenuOpen(false); setTopMode('admin') }}>
+              <span className="menu__ico"><Icon name="gear" size={15} /></span>
+              관리 — 레포 · 동기화 · 에이전트 설치
             </button>
           </div>
         </>
-      )}
-
-      {settingsOpen && (
-        <Settings
-          state={state}
-          repo={repo}
-          patch={patch}
-          onClose={() => setSettingsOpen(false)}
-        />
       )}
 
       {helpOpen && (
@@ -603,7 +623,21 @@ export default function App() {
         />
       )}
 
-      {topMode === 'graph' ? (
+      {topMode === 'admin' ? (
+        /* 관리 — 창 전체. **세팅과 현황이 구석의 팝오버에 있을 일이 아니다.** */
+        <AdminView
+          tab={adminTab}
+          onTab={setAdminTab}
+          state={state}
+          repo={repo}
+          patch={patch}
+          sync={sync}
+          onSync={syncNow}
+          onCheck={() => setCheckOpen(true)}
+          onClose={() => setTopMode('doc')}
+          say={(m) => say(m, 6000)}
+        />
+      ) : topMode === 'graph' ? (
         /* 그래프 — 창 전체. 왼쪽 패널도 문서도 없다.
            좌표를 고르면 문서 모드로 돌아가며 뻗어나가기가 열린다. */
         <div className="pane pane--graph">
@@ -890,244 +924,22 @@ function Help({ docs = [], onOpen, onClose }) {
   )
 }
 
-// 설정 — **바꾸는 것**만 남았다. 레포 경로 · 원격 · 에이전트 설치.
-//
-// 전에는 테마·글자 크기·본문 폭·매뉴얼·단축키까지 일곱 주제가 여기 있었다.
-// 매일 만지는 것(글자 크기)과 평생 한 번 하는 것(에이전트 설치)이 같은
-// 스크롤 안에 있으면, 자주 쓰는 쪽이 매번 긴 목록을 지나야 한다.
-// 읽기 설정은 `⋯` 메뉴로, 단축키와 매뉴얼은 도움말(`?`)로 나갔다.
-//
-// MANUAL.md · MANUAL-관리자.md · MANUAL-시스템.md — 시드가 넣는 이름.
-const MANUAL_RE = new RegExp('^MANUAL(-.+)?[.]md$', 'i')
-const MANUAL_MAIN = new RegExp('^MANUAL[.]md$', 'i')
-const PSEP = String.fromCharCode(92)
-
-const OPLBL = { create: '새로  ', update: '갱신  ', append: '블록  ', remove: '제거  ', same: '같음  ' }
-// 긴 절대경로를 다 보여 줄 자리가 없다. **무엇이 바뀌는지**만 보이면 된다.
-const shortOf = (a) =>
-  a.kind === 'skill' ? `.claude/skills/${a.name}` : a.kind === 'claude' ? 'CLAUDE.md' : '.claude/cdp.json'
-
 // 매뉴얼 이름 — **파일명이 이미 갖고 있는 구분을 버리지 않는다.**
 //
 // 전에는 `MANUAL.md` 가 아니면 전부 "관리자용"이었다. 레포에 관리자용과
 // 시스템용이 같이 있으면 **같은 이름 두 줄**이 뜬다 — 어느 것이 어느 것인지
 // 파일을 열어봐야 알았다.
+//
+// MANUAL.md · MANUAL-관리자.md · MANUAL-시스템.md — 시드가 넣는 이름.
+const MANUAL_RE = new RegExp('^MANUAL(-.+)?[.]md$', 'i')
+const MANUAL_MAIN = new RegExp('^MANUAL[.]md$', 'i')
+
 function manualLabel(path) {
   const m = String(path).match(/^MANUAL(?:-(.+))?\.md$/i)
   if (!m) return path
   return m[1] ? `사용 매뉴얼 — ${m[1]}용` : '사용 매뉴얼 — 일반 사용자용'
 }
 
-function Settings({ state, repo, patch, onClose }) {
-  // **경로를 바꾸면 앱이 다른 레포를 본다.** 그래서 마우스가 벗어나도 닫지
-  // 않는다 -- 입력 중에 닫히면 타이핑한 것이 사라진다. 닫는 길은 머리의 ✕ ·
-  // Esc · 바깥 클릭 셋이다.
-  const [path, setPath] = useState(state.repoPath || '')
-  const [probe, setProbe] = useState(null)
-  const [busy, setBusy] = useState(false)
-  // 원격 주소는 `/api/repo` 에 없다 — `/api/git` 이 낸다. **fetch 는 하지
-  // 않는다**(local): 설정을 열 때마다 네트워크를 치면 안 된다.
-  const [gitInfo, setGitInfo] = useState(null)
-  const dirty = !!path.trim() && path.trim() !== (state.repoPath || '')
-
-  // 작업 레포 — 여럿이다. **지식 레포가 하나인 것이 중요하지 작업 레포의
-  // 수가 아니다.** 목록은 개인 설정에 있다(경로는 기계마다 다르다).
-  const [wr, setWr] = useState('')
-  const [plan, setPlan] = useState(null)     // { path, actions, warnings } | { path, error }
-  const [inst, setInst] = useState(null)     // 설치 중인 경로
-
-  useEffect(() => {
-    api.git(false).then(setGitInfo).catch(() => setGitInfo(null))
-  }, [])
-
-  useEffect(() => {
-    if (!dirty) return setProbe(null)
-    let dead = false
-    const t = setTimeout(() => {
-      api.probe(path.trim()).then((x) => !dead && setProbe(x)).catch(() => !dead && setProbe(null))
-    }, 300)
-    return () => { dead = true; clearTimeout(t) }
-  }, [path, dirty])
-
-  const apply = async () => {
-    if (!probe?.ok) return
-    setBusy(true)
-    try {
-      await api.setRepo(path.trim())
-      // 레포가 바뀌면 캐시·읽음 표시·좌표 인덱스가 전부 달라진다.
-      // 부분 갱신으로 맞추려 들지 않는다 -- 다시 읽는 쪽이 정확하다.
-      location.reload()
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const addWr = () => {
-    const v = wr.trim()
-    if (!v) return
-    const list = state.workRepos || []
-    if (!list.includes(v)) patch({ workRepos: [...list, v] })
-    setWr('')
-  }
-
-  // **계획을 먼저 보여 준다.** 레포 밖에 쓰는 일이라, 무엇을 쓸지 모르고
-  // 누르게 하지 않는다.
-  const doPlan = async (w) => {
-    setPlan(null)
-    setInst(w)
-    try {
-      const r = await api.setup(w, false)
-      setPlan({ path: r.work, actions: r.actions, warnings: r.warnings })
-    } catch (e) {
-      setPlan({ path: w, error: String(e?.reason || e?.message || e) })
-    } finally {
-      setInst(null)
-    }
-  }
-
-  const doApply = async (w) => {
-    setInst(w)
-    try {
-      const r = await api.setup(w, true)
-      setPlan({ path: r.work, actions: r.actions, warnings: r.warnings, done: true })
-    } catch (e) {
-      setPlan({ path: w, error: String(e?.reason || e?.message || e) })
-    } finally {
-      setInst(null)
-    }
-  }
-
-  return (
-    <>
-      <div className="scrim" onMouseDown={onClose} />
-      <div className="popover popover--wide" role="dialog" aria-label="설정">
-        <div className="popover__head">
-          설정
-          <span className="topbar__spacer" />
-          <button className="iconbtn" onClick={onClose} aria-label="닫기"><Icon name="close" size={15} /></button>
-        </div>
-
-        <div className="popover__body">
-          <div className="popover__cap">지식 레포</div>
-
-          <div className="field field--stack">
-            <span>로컬 경로</span>
-            <input
-              className="popover__in"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && apply()}
-              placeholder={'C:' + PSEP + 'work' + PSEP + 'knowledge-repo'}
-              spellCheck={false}
-            />
-            {dirty && (
-              <div className="popover__note">
-                {!probe ? (
-                  '확인 중…'
-                ) : probe.ok ? (
-                  <>
-                    <b>지식 레포 맞습니다.</b>{' '}
-                    <button className="linkbtn" onClick={apply} disabled={busy}>
-                      {busy ? '바꾸는 중…' : '이 경로로 바꾸기'}
-                    </button>
-                  </>
-                ) : (
-                  probe.reason || '_vocab.md 가 없습니다 — 지식 레포가 아닙니다'
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="field">
-            <span>원격</span>
-            <span className="popover__mono">
-              {gitInfo === null ? '…' : gitInfo.upstream || gitInfo.remote || (gitInfo.repo ? 'upstream 없음' : 'git 레포 아님')}
-            </span>
-          </div>
-          {/* **자격 증명을 이 앱이 다루지 않는다.** 인증은 git 이 OS 자격 증명
-              관리자로 처리한다 -- 앱이 아이디·토큰을 들고 있으면 그것을 저장할
-              자리가 하나 더 생기고, 그 자리가 가장 약한 곳이 된다. */}
-          <div className="popover__note">
-            <b>git 로그인은 여기서 하지 않는다.</b> 인증은 git 이 OS 자격 증명
-            관리자로 처리한다.
-            <div className="popover__mono" style={{ marginTop: 4 }}>
-              git config --global credential.helper manager
-            </div>
-            한 번 설정하고 아무 <code>git push</code> 를 하면 OS 창이 뜬다. 그 뒤로는
-            앱의 받기·보내기가 그대로 된다.
-          </div>
-
-          <div className="hr" />
-          <div className="popover__cap">작업 레포 — 에이전트 설치</div>
-
-          {/* **앱이 레포 밖에 파일을 쓰는 유일한 자리다.**
-              그래서 먼저 무엇을 쓸지 보여 주고, 사람이 누르면 쓴다. */}
-          <div className="popover__note">
-            코드가 있는 레포에 규약과 skill 을 넣는다. <b>하네스는 프로젝트 루트의
-            <code> .claude/skills/</code> 만 읽으므로</b>, 넣지 않으면 그 레포에서
-            절차가 통째로 없다.
-          </div>
-
-          {(state.workRepos || []).map((w) => (
-            <div className="field" key={w}>
-              <span className="popover__mono" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{w}</span>
-              <button className="linkbtn" disabled={!!inst} onClick={() => doPlan(w)}>
-                {inst === w ? '설치 중…' : '에이전트 설치'}
-              </button>
-              <button className="linkbtn" onClick={() => patch({ workRepos: (state.workRepos || []).filter((x) => x !== w) })}>
-                빼기
-              </button>
-            </div>
-          ))}
-
-          <div className="field field--stack">
-            <span>레포 추가</span>
-            <input
-              className="popover__in"
-              value={wr}
-              onChange={(e) => setWr(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addWr()}
-              placeholder={'C:' + PSEP + 'gdi'}
-              spellCheck={false}
-            />
-            {wr.trim() && (
-              <div className="popover__note">
-                <button className="linkbtn" onClick={addWr}>목록에 넣기</button>
-              </div>
-            )}
-          </div>
-
-          {plan && (
-            <div className="popover__note">
-              {plan.error ? (
-                <b>{plan.error}</b>
-              ) : (
-                <>
-                  <b>{plan.path}</b> 에 이렇게 씁니다 —
-                  <div className="popover__mono" style={{ whiteSpace: 'pre-wrap', margin: '4px 0' }}>
-                    {plan.actions.filter((a) => a.op !== 'same').map((a) => `${OPLBL[a.op]}  ${shortOf(a)}`).join(String.fromCharCode(10)) || '(바뀔 것 없음)'}
-                  </div>
-                  {plan.warnings.map((w, i) => (
-                    <div key={i} style={{ color: 'var(--warn, var(--text-2))' }}><Icon name="warn" size={13} /> {w}</div>
-                  ))}
-                  <button className="linkbtn" disabled={!!inst} onClick={() => doApply(plan.path)}>
-                    {inst ? '쓰는 중…' : '이대로 설치'}
-                  </button>{' '}
-                  <button className="linkbtn" onClick={() => setPlan(null)}>취소</button>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="hr" />
-          {/* 지금 보고 있는 레포가 어디인지 — 경로를 바꾸는 칸 바로 아래가 아니라
-              맨 끝에 조용히 둔다. 확인하는 값이지 고치는 값이 아니다 */}
-          <div className="popover__mono" style={{ textAlign: 'left' }}>{state.repoPath}</div>
-        </div>
-      </div>
-    </>
-  )
-}
 
 // 폭 조절 — **드래그 중에는 CSS 변수만 만진다.**
 //
