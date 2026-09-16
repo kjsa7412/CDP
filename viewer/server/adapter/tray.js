@@ -101,7 +101,11 @@ export function startTray({ dataDir, url, repoPath, repoName, onOpen, onFolder, 
 
   try {
     fs.mkdirSync(dataDir, { recursive: true })
-    fs.writeFileSync(scriptPath, PS, 'utf8')
+    // **BOM 을 붙여서 쓴다.** Windows PowerShell 5.1 은 BOM 없는 .ps1 을
+    // 시스템 ANSI 코드페이지(한국어 Windows 면 CP949)로 읽는다. UTF-8 로 쓴
+    // '열기'·'종료' 가 그 자리에서 깨져 메뉴가 "?됯린" 꼴로 뜬다.
+    // BOM 이 있으면 5.1 도 7.x 도 UTF-8 로 읽는다 — 파일은 여전히 읽을 수 있다.
+    fs.writeFileSync(scriptPath, '\uFEFF' + PS, 'utf8')
   } catch {
     return null // 스크립트를 못 쓰면 트레이 없이 간다. 앱은 정상 동작한다
   }

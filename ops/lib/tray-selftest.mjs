@@ -37,6 +37,9 @@ const script = path.join(dataDir, 'tray.ps1')
 ok('스크립트가 읽을 수 있는 .ps1 로 디스크에 있다 (EncodedCommand 아님)', fs.existsSync(script))
 ok('스크립트에 난독화가 없다', !/FromBase64String|EncodedCommand/i.test(fs.readFileSync(script, 'utf8')))
 
+// BOM 이 없으면 Windows PowerShell 5.1 이 .ps1 을 CP949 로 읽어 메뉴가 깨진다.
+ok('스크립트가 UTF-8 BOM 으로 시작한다 (한글 메뉴가 안 깨진다)', fs.readFileSync(script)[0] === 0xef && fs.readFileSync(script)[1] === 0xbb && fs.readFileSync(script)[2] === 0xbf)
+
 setTimeout(() => {
   ok('헬퍼 프로세스가 살아 있다', tray.alive)
 
