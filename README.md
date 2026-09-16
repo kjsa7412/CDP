@@ -8,6 +8,8 @@
 | 사용 (하루) | [`agent/manual/user.md`](agent/manual/user.md) → 레포에 `MANUAL.md` 로 들어간다 |
 | 사용 (설치·운영) | [`agent/manual/admin.md`](agent/manual/admin.md) → 레포에 `MANUAL-관리자.md` |
 | 전제 문서 | [`docs/design/`](docs/design) — 프로토콜 · 작업환경 · 수행 설계서 |
+| 용어 | [`docs/용어.md`](docs/용어.md) — `.mjs` · SEA · 번들 · exit 127. **고치는 사람의 말이다** |
+| 그림 | [`docs/그림/`](docs/그림) — 세 레포 · 설치 5단계 · `ctx setup` · 빌드 · 실행 |
 | 작업 메모 | `docs/dev/` — 개발 중 검토·정정 기록. **보존 대상이 아니다** |
 
 ```
