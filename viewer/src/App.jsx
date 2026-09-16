@@ -521,6 +521,13 @@ export default function App() {
         </button>
         <span className="topbar__spacer" />
 
+        {/* 동기화 — **하루에 제일 먼저 누르는 것이다.**
+            ⋯ 안에 있으면 매일 메뉴를 열고 찾아 눌러야 하고, 무엇보다
+            **도는 중인지가 안 보였다** — 사내망 fetch 실측 19.5초 동안 화면이
+            조용하면 멎은 줄로 읽는다. 지금은 단계와 경과 초가 이 버튼에 뜬다.
+            받는 것만 여기 있다 — push 는 상태바와 관리>동기화에 따로 있다. */}
+        <SyncButton sync={sync} onSync={syncNow} />
+
         {/* 검증 — **아침에 제일 먼저 보는 값이다.** 상태바 11.5px 글씨에
             두면 매일 찾아 읽어야 한다. 0건이면 조용하다. */}
         {c.error > 0 ? (
@@ -548,18 +555,15 @@ export default function App() {
       </header>
 
       {/* 더보기 — 하루에 몇 번 안 누르는 것들. 상단바에 늘 펴 둘 이유가 없다.
-          전에는 동기화·매뉴얼·읽기모드·비율 4개·설정이 전부 상단바에 있었다. */}
+          전에는 동기화·매뉴얼·읽기모드·비율 4개·설정이 전부 상단바에 있었다.
+          **동기화는 다시 상단바로 나갔다** — 매일 누르는 것이고 도는 동안
+          보여야 하는 것이라 메뉴 안에 둘 것이 아니었다. 여기서 한 번 더
+          누를 수 있게 남기지 않는다: 같은 일을 하는 버튼 둘이 서로 다른
+          영역에 살면 도는 중 표시도 둘로 갈린다. */}
       {menuOpen && (
         <>
           <div className="scrim" onMouseDown={() => setMenuOpen(false)} />
           <div className="menu" role="menu">
-            <button className="menu__row" onClick={() => { setMenuOpen(false); syncNow() }} disabled={!!sync && sync.phase !== 'idle'}>
-              <span className="menu__ico"><Icon name="sync" size={15} /></span>
-              문서 동기화
-              <span className="menu__hint">
-                {sync && sync.phase !== 'idle' ? '도는 중…' : '원격에서 받아온다 (ff 만)'}
-              </span>
-            </button>
             <button className="menu__row" onClick={() => { setMenuOpen(false); setHelpOpen(true) }}>
               <span className="menu__ico"><Icon name="book" size={15} /></span>
               도움말 — 단축키 · 매뉴얼
@@ -814,6 +818,52 @@ export default function App() {
         />
       )}
     </div>
+  )
+}
+
+// ── 상단 동기화 — **하나뿐인 받기 버튼** ────────────────────────────────
+//
+// 단계 이름은 관리>동기화와 **같은 말**을 쓴다. 두 자리가 같은 순간을 다른
+// 말로 부르면 사용자는 둘이 다른 일인 줄 안다.
+//
+// **경과 초를 뺄 수 없다.** 사내망 fetch 실측이 19.5초다. 그 20초 동안 숫자가
+// 안 움직이면 멎은 것으로 읽고 한 번 더 누른다 — 두 번째 클릭은 `busy` 로
+// 튕기므로 아무 일도 안 일어나고, 그러면 앱이 고장난 것으로 읽는다.
+const SYNC_PHASE = { fetching: '원격 확인 중', pulling: '받는 중', rescanning: '다시 읽는 중' }
+
+function SyncButton({ sync, onSync }) {
+  const running = !!sync?.phase && sync.phase !== 'idle'
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (!running || !sync?.startedAt) return setElapsed(0)
+    const tick = () => setElapsed(Math.floor((Date.now() - sync.startedAt) / 1000))
+    tick()
+    const t = setInterval(tick, 250)
+    return () => clearInterval(t)
+  }, [running, sync?.startedAt])
+
+  const last = sync?.last
+  // 직전 결과는 **툴팁으로만** 말한다. 성공을 상단바에 띄우면 정상이 소리를
+  // 내게 되고(색 예산), 실패는 어차피 토스트와 관리>동기화가 문장으로 낸다.
+  const title = running
+    ? '원격에서 받아오는 중입니다 (fetch → ff pull)'
+    : last
+      ? `직전 — ${last.line || (last.ok ? '완료' : '실패')}`
+      : '원격에서 받아온다 (ff 만) · push 는 아래 상태바에 따로 있다'
+
+  return (
+    <button className="pill pill--sync" onClick={onSync} disabled={running} title={title} aria-live="polite">
+      <Icon name="sync" size={13} className={running ? 'spin' : undefined} />
+      {running ? (
+        <>
+          {SYNC_PHASE[sync.phase] || sync.phase}
+          <span className="num">{elapsed}초</span>
+        </>
+      ) : (
+        '동기화'
+      )}
+    </button>
   )
 }
 

@@ -9,8 +9,15 @@ import { loadRepo, repoStatus, unregisteredCoords } from './repo.js'
 import * as git from './git.js'
 import { reconcile } from './vocab.js'
 import { buildBacklinks, cmpDateDesc } from './validity.js'
-import { buildIndex, fullText } from './search.js'
+import { buildIndex, fullText, prepQuery, matchName, bestName } from './search.js'
 import { runBuiltinCheck } from './check.js'
+
+// 검색이 한 갈래에 내는 최대 줄 수. 그 아래는 사람이 안 읽는다 — 개수는
+// 언제나 전체를 말한다(§13-②).
+const SEARCH_LIMIT = 40
+// 좌표에서 문서를 끌고 올 때 쓰는 좌표 수. 한 글자 질의가 좌표 200개에 걸리면
+// 그 200개의 작업을 전부 끌고 오게 된다
+const SEARCH_SEEDS = 8
 
 export class Store {
   constructor({ root, settings = {}, onEvent = () => {}, hostWarning = false }) {
@@ -98,23 +105,27 @@ export class Store {
   // 붙지 않은 섹션은 좌표 경로로 도달할 수가 없다.
   managedList() {
     return this.managedDocs
-      .map((d) => {
-        const secs = (d.managedSections || []).filter((x) => x.hasAppliedComment || x.level === 2)
-        const rows = this.sections.filter((r) => r.doc === d.path)
-        const bad = rows.filter((r) => r.state === 'stale' || r.state === 'orphan')
-        const none = rows.filter((r) => r.state === 'unwritten' || r.state === 'empty')
-        return {
-          path: d.path,
-          title: d.title,
-          name: d.path.replace(/^docs\//, '').replace(/\.md$/, ''),
-          sections: secs.length,
-          written: secs.filter((x) => x.applied).length,
-          stale: bad.length,
-          unwritten: none.length,
-          size: d.size,
-        }
-      })
+      .map((d) => this.managedRow(d))
       .sort((a, b) => b.sections - a.sections || a.name.localeCompare(b.name))
+  }
+
+  // 관리 문서 한 줄. **목록과 검색이 같은 줄을 쓴다** — 같은 문서가 두 화면에서
+  // 다른 숫자를 말하면 어느 쪽이 맞는지 알 방법이 없다.
+  managedRow(d) {
+    const secs = (d.managedSections || []).filter((x) => x.hasAppliedComment || x.level === 2)
+    const rows = this.sections.filter((r) => r.doc === d.path)
+    const bad = rows.filter((r) => r.state === 'stale' || r.state === 'orphan')
+    const none = rows.filter((r) => r.state === 'unwritten' || r.state === 'empty')
+    return {
+      path: d.path,
+      title: d.title,
+      name: d.path.replace(/^docs\//, '').replace(/\.md$/, ''),
+      sections: secs.length,
+      written: secs.filter((x) => x.applied).length,
+      stale: bad.length,
+      unwritten: none.length,
+      size: d.size,
+    }
   }
 
   // ── 뻗어나가기 — 한 노드의 **다음 레벨** ──────────────────────────────
@@ -612,40 +623,160 @@ export class Store {
     return { coord, section, label: entry?.label || null, deprecated: entry?.deprecated || null, supersededBy: entry?.supersededBy || null, docs: list }
   }
 
-  // 검색 — 대조가 1차, 전문 검색이 폴백. 개수는 항상 함께 낸다(§13-②).
+  // ── 검색 — **이름으로 걸고, 객체 셋으로 낸다** ────────────────────────
+  //
+  //   거는 곳   관리문서명 · 작업문서명 · 좌표명 · 좌표 alias
+  //   나오는 것 관리문서 · 작업문서 · 좌표
+  //
+  // 왼쪽 목록(Finder)이 다루는 객체가 셋인데 검색만 `좌표 문서 / 전문 검색`
+  // 이라는 다른 갈래로 답하면, 같은 레포를 **두 가지 이름 체계**로 보게 된다.
+  // 전에는 그랬다 — 관리문서는 갈래가 없어 전문 검색에 섞여 나왔고, 좌표
+  // 자체는 결과에 아예 없었다(좌표에 걸린 **작업문서**만 나왔다).
+  //
+  // **걸린 좌표는 문서를 끌고 온다.** `계획서마스터` 를 찾은 사람은 그 좌표를
+  // 건드린 작업과 그 좌표가 실린 관리문서를 보려는 것이다. 그래서 세 갈래는
+  // 서로 독립이 아니다 —
+  //
+  //   좌표가 걸린다 → 그 좌표를 건드린 작업문서 · 그 좌표가 실린 관리문서
+  //
+  // 이름에서 아무것도 못 찾았을 때만 **본문 전문 검색**이 돈다(⇧⏎ 로 강제).
+  // 그 결과도 같은 세 갈래에 접힌다 — 갈래는 *어디서 걸렸나*가 아니라
+  // *무엇인가*로 정한다. 왜 걸렸는지는 줄마다 `why` 가 말한다(§13-⑤).
   search(query, { force = false } = {}) {
     const q = String(query || '').trim()
     const rec = reconcile(this.vocab, q)
-
-    let coordHits = []
-    if (rec) {
-      const all = this.coords.byCoord.get(rec.coord) || []
-      coordHits = all.map((d) => this.summary(d))
-    }
-
-    const needFullText = force || !rec || coordHits.length === 0
-    const ftRaw = needFullText ? fullText(this.mini, q) : []
-    const ft = ftRaw.map((r) => {
-      const d = this.byPath.get(r.path)
-      return d ? { ...this.summary(d), score: Math.round(r.score * 100) / 100 } : null
-    }).filter(Boolean)
-
+    const pq = prepQuery(q)
     const vocabLine = rec ? this.vocab.coords.get(rec.coord)?.line ?? null : null
-
-    return {
+    const head = {
       query: q,
       // 대조 결과를 항상 드러낸다 — 몰래 해주면 사용자는 정본을 영원히 모른다(§13-⑤)
       reconciled: rec ? { ...rec, vocabLine, label: this.vocab.coords.get(rec.coord)?.label || null } : null,
       coord: rec?.coord || null,
+      idJump: /^\d{4}-\d{4}-[\w가-힣-]+$/.test(q) && this.byId.has(q) ? q : null,
+    }
+    if (!q) {
+      return { ...head, managed: [], works: [], coords: [], counts: { managed: 0, work: 0, coord: 0 }, fullTextRan: false }
+    }
+
+    // ① 좌표 — 정본 · 값 · alias · 설명. 넷 중 가장 잘 맞은 자리 하나를 남긴다
+    const coordRows = []
+    for (const c of this.vocab.coords.values()) {
+      const value = c.coord.slice(c.coord.indexOf(':') + 1)
+      const m = bestName(
+        [
+          [c.coord, '좌표'],
+          [value, '좌표'],
+          ...c.aliases.map((a) => [a, 'alias']),
+          [c.label, '설명'],
+        ],
+        pq
+      )
+      // 대조가 집은 좌표는 이름이 안 걸려도 들어간다 — "연구계획 테이블 관련
+      // 최근 변경" 처럼 질의 **안에** alias 가 섞인 경우가 그것이다
+      if (!m && c.coord !== rec?.coord) continue
+      const sec = this.sections.find((r) => r.coord === c.coord) || null
+      coordRows.push({
+        coord: c.coord,
+        type: c.type,
+        label: c.label || null,
+        value,
+        count: (this.coords.byCoord.get(c.coord) || []).length,
+        sec: sec && sec.state !== 'ok' ? sec.state : null,
+        doc: sec?.doc || null,
+        deprecated: c.deprecated || null,
+        supersededBy: c.supersededBy || null,
+        // 왜 걸렸나 — alias 로 걸렸으면 **그 alias 를 그대로 보여준다**
+        why: m ? m.via : '대조',
+        matched: m ? m.text : rec?.aliasText || q,
+        score: (m?.score ?? 100) + (c.coord === rec?.coord ? 1000 : 0),
+      })
+    }
+    coordRows.sort((a, b) => b.score - a.score || b.count - a.count || a.coord.localeCompare(b.coord))
+
+    // ② 작업문서 — 제목이 먼저, 걸린 좌표를 건드린 것이 다음.
+    //
+    // `rank` 로 층을 가른다. 점수를 섞으면 "제목이 정확히 같은 것"과 "좌표가
+    // 걸려서 딸려온 것"이 한 줄기로 뒤엉켜, 이름을 정확히 친 사람의 결과가
+    // 딸려온 20건 밑으로 내려간다.
+    const works = new Map() // id → row
+    const putWork = (d, rank, score, why) => {
+      const cur = works.get(d.id)
+      if (cur && (cur.rank < rank || (cur.rank === rank && cur.score >= score))) return
+      works.set(d.id, { d, rank, score, why })
+    }
+    for (const d of this.works) {
+      const m = matchName(d.title, pq)
+      if (m) putWork(d, 0, m.score, '제목')
+    }
+    // 좌표에서 딸려오는 것은 **상위 좌표 몇 개**만 본다. 한 글자 질의가 좌표
+    // 200개에 걸리면 그 200개의 작업을 전부 끌고 오게 된다
+    const seeds = coordRows.slice(0, SEARCH_SEEDS)
+    for (const c of seeds) {
+      for (const d of this.coords.byCoord.get(c.coord) || []) putWork(d, 1, c.score, `좌표 ${c.coord}`)
+    }
+
+    // ③ 관리문서 — 문서명(= 파일명)과 제목. 그리고 걸린 좌표가 실린 문서.
+    const managed = new Map() // path → row
+    const putManaged = (d, rank, score, why, at = null) => {
+      const cur = managed.get(d.path)
+      if (cur && (cur.rank < rank || (cur.rank === rank && cur.score >= score))) return
+      managed.set(d.path, { d, rank, score, why, at: cur?.at ?? at })
+    }
+    for (const d of this.managedDocs) {
+      const name = d.path.replace(/^docs\//, '').replace(/\.md$/, '')
+      const m = bestName([[name, '문서명'], [d.title, '제목']], pq)
+      if (m) putManaged(d, 0, m.score, m.via)
+    }
+    for (const c of seeds) {
+      // 같은 문서의 섹션 여럿이 걸리면 **문서에 나오는 순서로 가장 앞선 것**을
+      // 연다 — 뻗어나가기(`nextNodes`)가 같은 규칙을 쓴다
+      const rows = this.sections
+        .filter((r) => r.coord === c.coord && r.doc)
+        .sort((a, b) => (a.line ?? Infinity) - (b.line ?? Infinity))
+      for (const r of rows) {
+        const d = this.byPath.get(r.doc)
+        if (!d) continue
+        putManaged(d, 1, c.score, `좌표 ${c.coord}`, (r.anchor || '').replace(/^#+\s*/, '') || r.coord)
+        break
+      }
+    }
+
+    // ④ 본문 — **이름에서 아무것도 못 찾았을 때만.** 결과는 위 세 갈래로 접힌다
+    const named = coordRows.length + works.size + managed.size
+    const needFullText = force || named === 0
+    if (needFullText) {
+      for (const r of fullText(this.mini, q)) {
+        const d = this.byPath.get(r.path)
+        if (!d) continue
+        const score = Math.round(r.score * 100) / 100
+        if (d.layer === 'work' && d.hasFrontmatter) putWork(d, 2, score, '본문')
+        else if (d.layer === 'managed') putManaged(d, 2, score, '본문')
+        // 그 밖(README · MANUAL · _vocab)은 **객체 셋에 없다.** 여기서 갈래를
+        // 하나 더 만들면 화면이 다루는 객체가 검색에서만 넷이 된다
+      }
+    }
+
+    const workRows = [...works.values()]
+      .sort((a, b) => a.rank - b.rank || b.score - a.score || cmpDateDesc(a.d, b.d))
+      .slice(0, SEARCH_LIMIT)
+      .map(({ d, why, rank, score }) => ({ ...this.summary(d), why, rank, score }))
+
+    const managedRows = [...managed.values()]
+      .sort((a, b) => a.rank - b.rank || b.score - a.score || a.d.path.localeCompare(b.d.path))
+      .slice(0, SEARCH_LIMIT)
+      .map(({ d, why, rank, score, at }) => ({ ...this.managedRow(d), why, rank, score, at }))
+
+    return {
+      ...head,
       // **정정된 문서를 검색에서 내리지 않는다** (정정_판정모델_v2 §3).
       // `supersedes` 는 판정이 아니라 참조다. 순서는 시간이 정한다.
-      coordHits,
-      coordHiddenSuperseded: [],
-      coordTotal: coordHits.length,
+      managed: managedRows,
+      works: workRows,
+      coords: coordRows.slice(0, SEARCH_LIMIT),
+      counts: { managed: managed.size, work: works.size, coord: coordRows.length },
+      // 본문까지 갔나 — 화면은 이것으로 "이름에서 찾았습니다" 와 "본문까지
+      // 찾았습니다" 를 가른다. 둘은 믿을 수 있는 정도가 다르다
       fullTextRan: needFullText,
-      fullTextReason: !needFullText ? '좌표 결과가 있어 실행하지 않음' : rec ? '좌표 매칭 0건' : '정본 좌표로 정규화하지 못함',
-      fullText: ft,
-      idJump: /^\d{4}-\d{4}-[\w가-힣-]+$/.test(q) && this.byId.has(q) ? q : null,
     }
   }
 

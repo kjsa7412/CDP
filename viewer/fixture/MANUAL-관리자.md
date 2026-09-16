@@ -26,7 +26,7 @@
 > **설계서는 레포에 안 들어온다.** 전에는 `design/` 에 도구 설계서를 통째로
 > 복사했는데, 그 안에 개발 중 작업 메모까지 따라 들어왔다 — 레포를 여는
 > 사람은 자기 프로젝트를 찾으러 온 것이다. 자족 층은 이 매뉴얼 두 부가
-> 맡고, 설계서는 배포본의 `docs/` 에 있다.
+> 맡고, **설계서는 배포본에도 안 들어간다** — CDP 를 고칠 사람의 것이다.
 
 **관리자가 실제로 손대는 것은 ③④⑤⑥뿐이다.** ①②는 사용자가 쓴다.
 
@@ -151,20 +151,21 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 
 ### ⑤ 훅을 넣는다
 
-배포본의 `repo-kit/` 을 통째로 부어 넣으면 훅·스킬·규약·매뉴얼·`bin/ctx` 가
-한 번에 들어온다.
+배포본의 `knowledge-repo-<이름>/` 을 통째로 복사하면 훅·스킬·규약·매뉴얼·
+`bin/ctx`·`tools/cdp.exe` 와 문서 골격·등록부·어휘가 **한 번에** 들어온다.
 
 ```
-xcopy /E /I <배포본>\repo-kit\* .
-git config core.hooksPath .githooks
+xcopy /E /I <배포본>\knowledge-repo-dpms C:\cdp
+cd /d C:\cdp
+git init && git config core.hooksPath .githooks
 ```
 
-### ⑥ exe 를 레포 안에 둔다
+**훅은 clone 을 따라오지 않는다.** 마지막 줄을 팀원도 각자 한 번 돌려야 한다
+(⑤ 팀원 PC).
 
-```
-mkdir tools
-copy <배포본>\cdp.exe tools\
-```
+### ⑥ exe 는 이미 레포 안에 있다
+
+`tools/cdp.exe` 가 폴더와 함께 들어온다. 전에는 여기서 손으로 옮겼다.
 
 두 가지가 여기에 달려 있다.
 
@@ -410,7 +411,7 @@ npm run release          # 화면 → ctx → exe → ops/release/v<버전>/
 ```
 
 **결과는 `ops/release/v<버전>/` 하나다.** 그 폴더를 통째로 옮기면 CDP 를 쓸 수
-있다 — exe · `repo-kit/` · `agent/packages/` · 설계서가 다 들어 있다. `release.cmd` 를
+있다 — exe 와 완성된 지식 레포 폴더가 들어 있다. `release.cmd` 를
 더블클릭해도 되고, 버전을 지정하려면 `npm run release -- 0.3.0`.
 
 또는 단계별로:
@@ -484,8 +485,9 @@ bin/ctx check
 
 ### 매일 — 30초
 
-상단 **⋯ → 문서 동기화**(⭮)를 누르면 fetch → (뒤처졌으면) ff pull → 재스캔을
-한 번에 한다. 터미널이면 —
+상단 **⭮ 동기화**를 누르면 fetch → (뒤처졌으면) ff pull → 재스캔을 한 번에
+한다. **도는 동안 단계와 걸린 초가 그 버튼에 뜬다** — 사내망에서는 원격 확인만
+20초쯤 걸린다. 터미널이면 —
 
 ```
 ctx brief
@@ -590,8 +592,7 @@ git config --global credential.helper manager
 | | |
 |---|---|
 | 하루 쓰는 법 | [MANUAL.md](MANUAL.md) |
-| **왜 이렇게 만들었는가 · 무엇을 고치면 깨지는가** | 배포본 `docs/CDP_시스템설계서_v1.0.md` |
-| 프로토콜 원문 | 배포본 `docs/맥락배포프로토콜_설계서_v1.1.md` |
-| 작업환경 · 수행 절차 | 배포본 `docs/CDP_작업환경_설계서_v1.1.md` · `docs/CDP_프로젝트수행_설계서_v1.0.md` |
+| **왜 이렇게 만들었는가 · 무엇을 고치면 깨지는가** | [MANUAL-시스템.md](MANUAL-시스템.md) — **정본** |
+| 설계서 네 부 (프로토콜 · 작업환경 · 수행 · 시스템) | **배포본에 없다.** CDP 소스 레포의 `docs/design/` |
 
 > 설계서는 **레포가 아니라 배포본**에 있다. 도구를 고칠 사람 것이다.
