@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="520" viewBox="0 0 680 520" role="img">
+<title>CDP 세 레포 구조</title>
+<desc>CDP 소스 레포가 배포본을 만들고, 그것을 복사해 지식 레포가 되고, 지식 레포의 ctx setup 이 작업 레포에 skill 과 규약과 경로 포인터를 넣는다.</desc>
+<style>
+text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif}
+.th{font-size:14px;font-weight:500}
+.ts{font-size:12px;font-weight:400}
+.arr{stroke:#888780;stroke-width:1.5;fill:none}
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect width="680" height="520" fill="#FFFFFF"/>
+
+<rect x="40" y="30" width="600" height="114" rx="20" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th" x="60" y="54" fill="#444441">CDP 레포 — 우리가 고치는 소스</text>
+<text class="ts" x="60" y="72" fill="#5F5E5A">C:\project\CDP · 도구 개발자만 연다</text>
+
+<rect x="60" y="84" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="148" y="98" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">agent/</text>
+<text class="ts" x="148" y="116" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">규약 · skill 정본</text>
+
+<rect x="252" y="84" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="340" y="98" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">viewer/</text>
+<text class="ts" x="340" y="116" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">앱 · ctx 소스</text>
+
+<rect x="444" y="84" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="532" y="98" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">ops/</text>
+<text class="ts" x="532" y="116" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">빌드 · 배포본</text>
+
+<line x1="340" y1="144" x2="340" y2="196" class="arr" marker-end="url(#arrow)"/>
+<rect x="360" y="152" width="234" height="32" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="ts" x="477" y="168" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">ops\release.cmd 0.5.0</text>
+
+<rect x="40" y="206" width="600" height="114" rx="20" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="th" x="60" y="230" fill="#085041">지식 레포 — 하나뿐이다</text>
+<text class="ts" x="60" y="248" fill="#0F6E56">예: C:\cdp · 관리자가 프로젝트당 1회</text>
+
+<rect x="60" y="260" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="148" y="274" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">지식</text>
+<text class="ts" x="148" y="292" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">_vocab · docs · work</text>
+
+<rect x="252" y="260" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="340" y="274" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">도구</text>
+<text class="ts" x="340" y="292" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">bin · tools/cdp.exe</text>
+
+<rect x="444" y="260" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="532" y="274" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">정본 세팅</text>
+<text class="ts" x="532" y="292" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">.claude/skills</text>
+
+<line x1="340" y1="320" x2="340" y2="372" class="arr" marker-end="url(#arrow)"/>
+<rect x="360" y="328" width="250" height="32" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="ts" x="485" y="344" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">cdp.exe ctx setup C:\gdi</text>
+
+<rect x="40" y="382" width="600" height="114" rx="20" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="th" x="60" y="406" fill="#3C3489">작업 레포 — 여럿이어도 된다</text>
+<text class="ts" x="60" y="424" fill="#534AB7">예: C:\gdi · 코드가 있는 곳 · 레포당 1회</text>
+
+<rect x="60" y="436" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="148" y="450" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">skill</text>
+<text class="ts" x="148" y="468" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">.claude/skills/cdp-*</text>
+
+<rect x="252" y="436" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="340" y="450" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">규약</text>
+<text class="ts" x="340" y="468" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">CLAUDE.md 블록</text>
+
+<rect x="444" y="436" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text class="th" x="532" y="450" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">포인터</text>
+<text class="ts" x="532" y="468" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">.claude/cdp.json</text>
+</svg>
