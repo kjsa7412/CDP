@@ -158,6 +158,16 @@ run('npx', [
   } else {
     log('⚠ ctx 번들 시각을 못 읽었다 — exe 의 ctx version 이 비어 있게 된다')
   }
+
+  // 앱 버전도 같이 심는다 — exe 안에는 package.json 이 없다(`core/appinfo.js`).
+  // 없으면 관리>진단이 버전을 "알 수 없음" 으로 말하게 되는데, 진단 화면에서
+  // 제일 먼저 묻는 값이 그것이다.
+  {
+    const ver = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version
+    const f = path.join(BUILD, 'bundle.cjs')
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').split('__CDP_VERSION__').join(ver), 'utf8')
+    log(`앱 버전 ${ver} 을 exe 에 심었다`)
+  }
 }
 
 // 4) SEA blob 생성

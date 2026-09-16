@@ -22,7 +22,11 @@ const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
 
 const arg = process.argv.slice(2).find((a) => !a.startsWith('-'))
 const VERSION = (arg || pkg.version).replace(/^v/, '')
-const OUT = path.join(ROOT, 'ops', 'release', 'v' + VERSION)
+// 버전 폴더가 사는 곳. **한 곳에서만 만든다** -- 전에는 목록은 `ops/release`
+// 에서 읽고 크기는 `release/` 에서 쟀다(구조 재편 때 옮겨진 자리). 그래서
+// 폴더가 셋을 넘는 순간 -- 다 만들어 놓고 마지막 안내에서 -- ENOENT 로 죽었다.
+const REL = path.join(ROOT, 'ops', 'release')
+const OUT = path.join(REL, 'v' + VERSION)
 
 const log = (...a) => console.log('[release]', ...a)
 const run = (cmd, args) =>
@@ -309,7 +313,7 @@ const tags = (() => {
 
 const semver = (v) => v.replace(/^v/, '').split('.').map(Number)
 const older = fs
-  .readdirSync(path.join(ROOT, 'ops', 'release'), { withFileTypes: true })
+  .readdirSync(REL, { withFileTypes: true })
   .filter((e) => e.isDirectory() && /^v\d/.test(e.name))
   .sort((a, b) => {
     const [x, y] = [semver(b.name), semver(a.name)]
@@ -335,9 +339,9 @@ if (older.length && tags) {
   log('보관: 버전 폴더 %d개 -- 최근 %d개를 넘습니다'
     .replace('%d', older.length + KEEP).replace('%d', KEEP))
   for (const e of safe) log('   %s  %s  태그 있음 -- 지워도 다시 만들 수 있습니다'
-    .replace('%s', e.name).replace('%s', size(path.join(ROOT, 'release', e.name))))
+    .replace('%s', e.name).replace('%s', size(path.join(REL, e.name))))
   for (const e of risky) log('   %s  %s  **태그 없음 -- 지우면 되살릴 수 없습니다**'
-    .replace('%s', e.name).replace('%s', size(path.join(ROOT, 'release', e.name))))
+    .replace('%s', e.name).replace('%s', size(path.join(REL, e.name))))
   if (safe.length) {
     log('')
     log('   되살리는 법:  git checkout %s && npm ci && ops\\release.cmd %s'
