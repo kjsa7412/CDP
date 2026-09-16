@@ -13,6 +13,9 @@ import { hereDir } from '../runtime.js'
 
 const CLIENT_DIR = path.resolve(hereDir(import.meta.url), '../../../ops/out/web')
 
+// 언제 떴나 — 진단이 쓴다. 로그 파일의 기동 줄과 맞춰 볼 수 있어야 한다.
+const START_AT = new Date().toISOString()
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -33,6 +36,18 @@ const MIME = {
 export function createServer({ store, appState, host, port, onIdle, devProxy }) {
   const clients = new Set()
   let lastBeat = Date.now()
+
+  // SSE 로 한 줄 뿌린다. 파일 변경(store.onEvent)과 같은 통로를 쓴다 —
+  // **진행 상태는 그것을 띄운 탭만의 것이 아니다.** 창을 둘 열어 두고
+  // 한쪽에서 동기화를 누르면 다른 쪽도 같은 단계를 봐야 한다.
+  const broadcast = (ev) => {
+    const payload = `data: ${JSON.stringify(ev)}\n\n`
+    for (const c of clients) c.write(payload)
+  }
+
+  // 동기화는 **한 번에 하나만 돈다.** 겹쳐 돌면 pull 두 개가 같은 작업 트리를
+  // 만지고, 그 결과는 사람이 재현할 수 없다.
+  const sync = { phase: 'idle', startedAt: null, last: null }
 
   const send = (res, status, body, headers = {}) => {
     const buf = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body)
@@ -60,9 +75,9 @@ export function createServer({ store, appState, host, port, onIdle, devProxy }) 
       if (!checkToken(req, url)) return send(res, 401, { error: 'token' })
       try {
         return await handleApi({
-          req, res, url, send, store, appState, clients,
+          req, res, url, send, store, appState, clients, broadcast, sync,
           beat: () => (lastBeat = Date.now()),
-          state: { keepAlive: () => keepAlive },
+          state: { keepAlive: () => keepAlive, host, port: () => server.address()?.port ?? port },
         })
       } catch (e) {
         return send(res, 500, { error: String(e?.message || e) })
@@ -112,7 +127,7 @@ export function createServer({ store, appState, host, port, onIdle, devProxy }) 
   }
 }
 
-async function handleApi({ req, res, url, send, store, appState, clients, beat, state }) {
+async function handleApi({ req, res, url, send, store, appState, clients, broadcast, sync, beat, state }) {
   const p = url.pathname.replace(/^\/api/, '')
   const method = req.method || 'GET'
 
@@ -170,16 +185,92 @@ async function handleApi({ req, res, url, send, store, appState, clients, beat, 
     const body = await readJson(req)
     const target = String(body?.path || '').trim()
     if (!target) return send(res, 400, { error: 'path required' })
-    const { planSetup, applySetup } = await import('../../../core/setup.js')
+    const { planSetup, applySetup, kitHash } = await import('../../../core/setup.js')
     const plan = await planSetup(store.root, target)
     if (!plan.ok) return send(res, 400, { error: 'plan', reason: plan.reason })
-    if (body?.apply) await applySetup(plan)
+
+    const kit = await kitHash(store.root)
+    if (body?.apply) {
+      const done = await applySetup(plan)
+      // **한 일이 남는다.** 전에는 설치하고 나면 아무 흔적도 없었다 --
+      // skill 을 고친 뒤 여섯 곳 중 어디가 옛 판인지 확인할 길이 없었다.
+      const ops = {}
+      for (const a of done) ops[a.op] = (ops[a.op] || 0) + 1
+      const at = new Date().toISOString()
+      appState.markWorkRepo(plan.work, { at, kit: kit.hash, ops })
+      appState.push('setupLog', {
+        at,
+        path: plan.work,
+        kit: kit.hash,
+        ops,
+        changes: done.map((a) => ({ kind: a.kind, name: a.name || null, op: a.op })),
+      })
+    }
     return send(res, 200, {
       applied: !!body?.apply,
       work: plan.work,
       knowledge: plan.knowledge,
+      kit: kit.hash,
       actions: plan.actions.map(({ kind, name, to, op }) => ({ kind, name, to, op })),
       warnings: plan.warnings,
+    })
+  }
+
+  // 등록된 작업 레포 전부의 설치 상태 — **열어 보지 않고 안다.**
+  //
+  // 각각 계획을 dry 로 돌린다. 파일은 건드리지 않는다. 레포가 여럿이면
+  // 디스크를 그만큼 읽지만, 이 화면을 열었을 때 한 번뿐이다.
+  if (p === '/workrepos' && method === 'GET') {
+    const { inspect, kitHash } = await import('../../../core/setup.js')
+    const list = (appState.all().workRepos || []).map((w) => (typeof w === 'string' ? { path: w } : w))
+    const kit = await kitHash(store.root)
+    const repos = []
+    for (const w of list) {
+      const r = await inspect(store.root, w.path).catch((e) => ({
+        path: w.path,
+        state: 'error',
+        reason: String(e?.message || e),
+        changes: [],
+        warnings: [],
+      }))
+      repos.push({ ...r, addedAt: w.addedAt || null, lastApplied: w.lastApplied || null })
+    }
+    return send(res, 200, { kit: kit.hash, kitSkills: kit.skills, repos, log: appState.all().setupLog || [] })
+  }
+
+  // 진단 — **값만 낸다. 행동은 없다.**
+  //
+  // 콘솔 없는 exe 에서 문제가 나면 볼 데가 로그 파일뿐인데, 그 파일이 어디
+  // 있는지 화면이 말한 적이 없었다(§6.1).
+  if (p === '/diag' && method === 'GET') {
+    const { appVersion, repoBundleStamp } = await import('../../../core/appinfo.js')
+    const { BUILT } = await import('../../bin/ctx-cli.mjs')
+    const { isSea } = await import('../runtime.js')
+    const { gitAvailable } = await import('../../../core/git.js')
+    const repoBundle = repoBundleStamp(store.root)
+    return send(res, 200, {
+      version: appVersion(hereDir(import.meta.url)),
+      sea: isSea,
+      node: process.version,
+      git: await gitAvailable(),
+      pid: process.pid,
+      startedAt: START_AT,
+      host: state.host,
+      port: state.port(),
+      keepAlive: state.keepAlive(),
+      hostWarning: store.hostWarning,
+      dataDir: appState.dir,
+      stateFile: appState.file,
+      logFile: path.join(appState.dir, 'logs', 'app.log'),
+      repoRoot: store.root,
+      // 번들 시각 둘 — 앱이 든 것과 레포가 든 것. **다르면 레포가 옛 답을 낸다**
+      appBundle: BUILT.startsWith('__') ? null : BUILT,
+      repoBundle: repoBundle?.stamp || null,
+      repoBundlePath: repoBundle?.path || null,
+      watchEnabled: store.settings?.watch !== false,
+      watchAlive: !!store.watchAlive,
+      scannedAt: store.stats?.scannedAt || null,
+      scanMs: store.stats?.ms ?? null,
     })
   }
 
@@ -247,6 +338,81 @@ async function handleApi({ req, res, url, send, store, appState, clients, beat, 
   // 바꾸거나 남의 눈에 들어가는 연산이라 사람이 누른 것이어야 한다.
   if (p === '/git' && method === 'GET') {
     return send(res, 200, await store.gitStatus({ fetch: url.searchParams.get('fetch') === '1' }))
+  }
+
+  // ── 동기화 — **진행이 서버에 있다** ─────────────────────────────────────
+  //
+  // 전에는 화면이 `git?fetch=1` -> `git/pull` -> `docs` 를 순서대로 불렀다.
+  // 그래서 진행 상태가 그 컴포넌트 안에만 있었고, 탭을 바꾸거나 다른 창에서
+  // 보면 **동기화 중인지조차 알 수 없었다.** 순서를 서버로 올리면 상태가
+  // 한 곳에 생기고, 그것을 SSE 로 뿌리면 모든 화면이 같은 것을 본다.
+  if (p === '/sync' && method === 'GET') {
+    return send(res, 200, {
+      phase: sync.phase,
+      startedAt: sync.startedAt,
+      last: sync.last,
+      log: appState.all().syncLog || [],
+    })
+  }
+
+  if (p === '/sync' && method === 'POST') {
+    if (sync.phase !== 'idle') {
+      return send(res, 409, { error: 'busy', phase: sync.phase, startedAt: sync.startedAt })
+    }
+    const body = await readJson(req)
+    const pull = body?.pull !== false
+    const { runSync, syncLine } = await import('../../../core/sync.js')
+
+    sync.phase = 'fetching'
+    sync.startedAt = Date.now()
+    broadcast({ type: 'sync', phase: 'fetching', startedAt: sync.startedAt })
+
+    try {
+      const r = await runSync(store.root, {
+        pull,
+        onPhase: (ev) => {
+          sync.phase = ev.phase
+          broadcast({ type: 'sync', startedAt: sync.startedAt, ...ev })
+        },
+        // 받아온 것이 있을 때만 다시 읽는다. 스캔은 싸지 않다.
+        rescan: () => store.load(),
+      })
+      // 이력은 **서버가 적는다.** 화면이 적으면 탭이 둘일 때 두 줄이 남는다.
+      sync.last = {
+        at: r.at,
+        ok: r.ok,
+        phase: r.phase,
+        reason: r.reason || null,
+        pulled: r.pulled || 0,
+        behind: r.behind || 0,
+        ahead: r.ahead || 0,
+        ms: r.ms,
+        message: r.message || null,
+        // 결과 문장은 **한 곳에서 만든다** — 토스트·이력 표·CLI 가 같은 말을 한다
+        line: syncLine(r),
+      }
+      appState.push('syncLog', sync.last)
+      return send(res, r.ok ? 200 : 409, { ...sync.last, status: r.status || null })
+    } finally {
+      sync.phase = 'idle'
+      sync.startedAt = null
+      broadcast({ type: 'sync', phase: 'idle', last: sync.last })
+    }
+  }
+
+  // git 설정 — 읽기만. 어떻게 돼 있는지 화면이 말할 수 있어야 한다.
+  if (p === '/git/config' && method === 'GET') {
+    const { readConfig } = await import('../../../core/git.js')
+    return send(res, 200, await readConfig(store.root))
+  }
+
+  // **앱이 git 설정을 쓰는 유일한 자리다.** 키 하나 · 값 하나 · 로컬만.
+  // 훅이 없으면 커밋이 검사 없이 통과한다 — 조용한 실패라 손해가 가장 크다.
+  if (p === '/git/hooks' && method === 'POST') {
+    const { setHooksPath } = await import('../../../core/git.js')
+    const r = await setHooksPath(store.root)
+    if (r.ok) store._git = await store.gitStatus({ fetch: false })
+    return send(res, r.ok ? 200 : 409, r)
   }
 
   if (p === '/git/pull' && method === 'POST') {

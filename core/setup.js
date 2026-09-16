@@ -9,6 +9,7 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import crypto from 'node:crypto'
 
 // CLAUDE.md 안에서 우리가 관리하는 구획.
 //
@@ -182,6 +183,72 @@ export async function planSetup(knowledgeRoot, workRoot) {
   }
 
   return { ok: true, knowledge: kn, work: wk, actions, warnings }
+}
+
+// ── kit 해시 — **무엇을 심었는지 말할 수 있어야 한다** ────────────────────
+//
+// 지금까지 남는 것은 "설치했다" 까지였다. *어느 판을* 심었는지는 아무도 모른다.
+// skill 을 고친 뒤 작업 레포 여섯 곳 중 어디가 옛 판인지 확인할 방법이 없었다.
+//
+// **판정에는 쓰지 않는다.** 낡았는지 아닌지는 `planSetup` 의 내용 비교가
+// 그대로 판단한다 -- 판정을 두 곳에 두면 갈라진다. 이 값은 **이력에 적는
+// 이름표**다.
+export async function kitHash(knowledgeRoot) {
+  const kn = path.resolve(knowledgeRoot)
+  const h = crypto.createHash('sha256')
+  const sSrc = path.join(kn, '.claude', 'skills')
+
+  const walk = async (dir, rel) => {
+    const ents = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+    for (const e of ents.sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(dir, e.name)
+      const r = rel + '/' + e.name
+      if (e.isDirectory()) await walk(p, r)
+      else h.update(r + '\0' + ((await read(p)) ?? '') + '\0')
+    }
+  }
+
+  const skills = (await fs.readdir(sSrc, { withFileTypes: true }).catch(() => []))
+    .filter((e) => e.isDirectory() && e.name.startsWith(PREFIX))
+    .map((e) => e.name)
+    .sort()
+  for (const n of skills) await walk(path.join(sSrc, n), n)
+  h.update((await read(path.join(kn, '.claude', 'work-repo', 'CLAUDE.md'))) ?? '')
+
+  return { hash: h.digest('hex').slice(0, 6), skills }
+}
+
+// ── 설치 상태 — **열어 보지 않고 안다** ───────────────────────────────────
+//
+// 계획을 dry 로 돌려서 한 글자로 접는다. 새 판정을 만들지 않는다.
+//
+//   ok      전부 same
+//   update  쓸 것이 있다
+//   none    아직 하나도 안 들어갔다
+//   error   폴더가 없다 · git 레포가 아니다 · 지식 레포 자신이다
+export async function inspect(knowledgeRoot, workRoot) {
+  const plan = await planSetup(knowledgeRoot, workRoot)
+  const wk = path.resolve(workRoot)
+
+  if (!plan.ok) return { path: wk, state: 'error', reason: plan.reason, changes: [], warnings: [] }
+
+  const changes = plan.actions
+    .filter((a) => a.op !== 'same')
+    .map((a) => ({ kind: a.kind, name: a.name || null, op: a.op }))
+
+  // 미설치 — `cdp-` skill 이 하나도 없고 포인터도 없다. 전부 새로 쓴다는 뜻.
+  const skills = plan.actions.filter((a) => a.kind === 'skill')
+  const pointer = plan.actions.find((a) => a.kind === 'pointer')
+  const fresh = skills.length > 0 && skills.every((a) => a.op === 'create') && pointer?.op === 'create'
+
+  return {
+    path: wk,
+    state: fresh ? 'none' : changes.length ? 'update' : 'ok',
+    // 들어가 있는 skill 수 — 카드가 "skill 7종" 이라고 말할 근거
+    skills: skills.filter((a) => a.op === 'same' || a.op === 'update').map((a) => a.name),
+    changes,
+    warnings: plan.warnings,
+  }
 }
 
 /**

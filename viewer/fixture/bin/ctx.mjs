@@ -6111,11 +6111,73 @@ function firstLine(s) {
   return String(s || "").split("\n").find((l) => l.trim()) || null;
 }
 
+// core/sync.js
+async function runSync(root, { pull = true, onPhase = () => {
+}, rescan = null } = {}) {
+  const t0 = Date.now();
+  const at = (/* @__PURE__ */ new Date()).toISOString();
+  const done = (r) => ({ at, ms: Date.now() - t0, ...r });
+  if (!await isRepo(root)) {
+    onPhase({ phase: "failed", reason: "not-a-repo" });
+    return done({ ok: false, phase: "failed", reason: "not-a-repo", message: "git \uB808\uD3EC\uAC00 \uC544\uB2D9\uB2C8\uB2E4. \uB3D9\uAE30\uD654\uD560 \uAC83\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." });
+  }
+  onPhase({ phase: "fetching" });
+  const f = await fetch(root);
+  let st = await status(root);
+  if (!f.ok) {
+    onPhase({ phase: "failed", reason: "fetch" });
+    return done({
+      ok: false,
+      phase: "failed",
+      reason: "fetch",
+      message: f.message || "\uC6D0\uACA9\uC5D0 \uB2FF\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.",
+      behind: st.behind,
+      ahead: st.ahead,
+      status: st
+    });
+  }
+  let pulled = 0;
+  if (pull && st.behind > 0) {
+    const want = st.behind;
+    onPhase({ phase: "pulling", behind: want });
+    const p = await pullFfOnly(root);
+    if (!p.ok) {
+      onPhase({ phase: "failed", reason: p.reason });
+      return done({
+        ok: false,
+        phase: "failed",
+        reason: p.reason,
+        message: p.message || "pull \uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.",
+        behind: want,
+        ahead: st.ahead,
+        status: p.status || st
+      });
+    }
+    st = p.status || await status(root);
+    pulled = p.skipped ? 0 : want;
+    if (pulled > 0 && rescan) {
+      onPhase({ phase: "rescanning", pulled });
+      await rescan();
+    }
+  }
+  onPhase({ phase: "done", pulled, ahead: st.ahead });
+  return done({
+    ok: true,
+    phase: "done",
+    pulled,
+    behind: st.behind,
+    ahead: st.ahead,
+    status: st,
+    // 훅 미설정은 실패가 아니지만 **조용한 실패의 씨앗**이라 결과에 같이 싣는다
+    hooksPath: st.hooksPath
+  });
+}
+
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-16 01:54";
+var BUILT = "2026-09-16 03:06";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-16 01:54)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-16 03:06)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -6588,19 +6650,19 @@ async function cmdSync(r, opt) {
     else out("ctx sync: git \uB808\uD3EC\uAC00 \uC544\uB2D9\uB2C8\uB2E4. \uB3D9\uAE30\uD654\uD560 \uAC83\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.");
     return 0;
   }
-  const f = await fetch(r.root);
-  let st = await status(r.root);
-  let pulled = null;
-  if (pull) {
-    pulled = await pullFfOnly(r.root);
-    if (pulled.status) st = pulled.status;
-  }
+  const PHASE = { fetching: "\uC6D0\uACA9 \uD655\uC778 \uC911...", pulling: "\uBC1B\uB294 \uC911...", rescanning: "\uB2E4\uC2DC \uC77D\uB294 \uC911..." };
+  const res = await runSync(r.root, {
+    pull,
+    onPhase: ({ phase }) => {
+      if (!opt.json && PHASE[phase]) err(PHASE[phase]);
+    }
+  });
+  const st = res.status || await status(r.root);
   if (opt.json) {
-    out(JSON.stringify({ fetch: f, status: st, pull: pulled }, null, 2));
-    return pulled && !pulled.ok ? 1 : 0;
+    out(JSON.stringify(res, null, 2));
+    return res.ok ? 0 : 1;
   }
   out(`\uBE0C\uB79C\uCE58  ${st.branch || "(\uC5C6\uC74C)"}${st.upstream ? "  ->  " + st.upstream : "  (upstream \uC5C6\uC74C)"}`);
-  if (!f.ok && f.message) out(`fetch   \uC2E4\uD328 -- ${f.message}`);
   out(`\uCC28\uC774    \uBC1B\uC744 \uAC83 ${st.behind}\uAC74 \xB7 \uBCF4\uB0BC \uAC83 ${st.ahead}\uAC74` + (st.dirty ? ` \xB7 \uCEE4\uBC0B \uC548 \uB41C \uBCC0\uACBD ${st.dirty}\uAC74` : ""));
   if (!st.hooksPath) {
     out("");
@@ -6612,18 +6674,15 @@ async function cmdSync(r, opt) {
     out("");
     out("[\uC8FC\uC758] " + w.message.split("\n").join("\n       "));
   }
-  if (pulled) {
-    out("");
-    if (pulled.ok) out(pulled.skipped === "up-to-date" ? "pull    \uC774\uBBF8 \uCD5C\uC2E0\uC785\uB2C8\uB2E4." : "pull    \uC644\uB8CC (ff).");
-    else {
-      err("pull    \uC2E4\uD328 -- " + pulled.reason);
-      err(String(pulled.message || "").split("\n").join("\n        "));
-      return 1;
-    }
-  } else if (st.behind > 0) {
-    out("");
-    out(`\uBC1B\uC744 \uAC83\uC774 ${st.behind}\uAC74 \uC788\uC2B5\uB2C8\uB2E4.  ctx sync --pull`);
+  out("");
+  if (!res.ok) {
+    err("sync    \uC2E4\uD328 -- " + res.reason);
+    err(String(res.message || "").split("\n").join("\n        "));
+    return 1;
   }
+  if (pull) out("pull    " + (res.pulled > 0 ? `\uC644\uB8CC (ff) -- ${res.pulled}\uAC74` : "\uC774\uBBF8 \uCD5C\uC2E0\uC785\uB2C8\uB2E4."));
+  else if (st.behind > 0) out(`\uBC1B\uC744 \uAC83\uC774 ${st.behind}\uAC74 \uC788\uC2B5\uB2C8\uB2E4.  ctx sync --pull`);
+  else out("\uC774\uBBF8 \uCD5C\uC2E0\uC785\uB2C8\uB2E4.");
   return 0;
 }
 async function cmdSetup(r, opt) {

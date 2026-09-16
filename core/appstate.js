@@ -53,7 +53,16 @@ const DEFAULTS = {
   // 지식 레포에 두면 팀원마다 경로가 달라 맞지 않는다. 그리고 한 사람이
   // 여러 작업 레포를 걸 수 있다 — 중요한 것은 **지식 레포가 하나**인 것이지
   // 작업 레포의 수가 아니다.
+  //
+  // v0.6 부터 **원소가 객체다** — { path, addedAt, lastApplied }.
+  // 문자열 배열이던 것은 load() 가 한 번 감싸 준다(아래 migrate).
   workRepos: [],
+  // 한 일의 기록 — **각각 20건에서 자른다.**
+  //
+  // 이 파일은 4초마다 통째로 다시 쓰인다. 무한히 자라면 그 비용도 같이 자란다.
+  // 그리고 20건을 넘겨 봐야 사람이 읽지 않는다.
+  syncLog: [],
+  setupLog: [],
   myCoords: [],
   read: {}, // id → ISO 시각
   scroll: {}, // id → { ratio, at }
@@ -75,7 +84,7 @@ export class AppState {
   load() {
     try {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'))
-      this.data = deepMerge({ ...DEFAULTS }, raw)
+      this.data = migrate(deepMerge({ ...DEFAULTS }, raw))
     } catch {
       this.data = { ...DEFAULTS }
     }
@@ -86,9 +95,31 @@ export class AppState {
   }
 
   merge(patch) {
-    this.data = deepMerge(this.data, patch || {})
+    this.data = migrate(deepMerge(this.data, patch || {}))
     this._dirty = true
     return this.data
+  }
+
+  // 이력 한 줄 — 맨 앞에 넣고 뒤를 자른다.
+  //
+  // **화면이 직접 넣지 않는다.** 서버가 일을 끝낸 자리에서 부른다 --
+  // 클라이언트가 쓰면 탭이 둘일 때 같은 일이 두 줄로 남는다.
+  push(key, entry, cap = 20) {
+    const list = Array.isArray(this.data[key]) ? this.data[key] : []
+    this.data = { ...this.data, [key]: [entry, ...list].slice(0, cap) }
+    this._dirty = true
+    return this.data[key]
+  }
+
+  // 작업 레포 한 곳의 기록을 갱신한다. 없으면 넣는다.
+  markWorkRepo(p, lastApplied) {
+    const list = (this.data.workRepos || []).map((w) => (typeof w === 'string' ? { path: w } : w))
+    const i = list.findIndex((w) => samePath(w.path, p))
+    if (i < 0) list.push({ path: p, addedAt: new Date().toISOString(), lastApplied })
+    else list[i] = { ...list[i], lastApplied }
+    this.data = { ...this.data, workRepos: list }
+    this._dirty = true
+    return list
   }
 
   flush() {
@@ -104,6 +135,35 @@ export class AppState {
     clearInterval(this._timer)
     this.flush()
   }
+}
+
+// 스키마 이관 — **옛 설정이 조용히 사라지지 않게.**
+//
+// 위 `dataDir` 이 `ctx-view` -> `cdp` 폴더를 한 번 옮겨 오는 것과 같은 일이다.
+// 그때 배운 것이 하나 있다 — **모양이 바뀌면 옛 모양도 읽어야 한다.**
+// 안 그러면 사용자는 "처음 실행" 화면을 보고 "경로를 넣었는데 안 된다" 고 읽는다.
+function migrate(d) {
+  const w = d.workRepos
+  if (Array.isArray(w) && w.some((x) => typeof x === 'string')) {
+    d = {
+      ...d,
+      workRepos: w
+        .map((x) => (typeof x === 'string' ? { path: x, addedAt: null, lastApplied: null } : x))
+        .filter((x) => x && x.path),
+    }
+  }
+  return d
+}
+
+// 경로 비교 — Windows 다. 대소문자와 구분자가 다를 뿐 같은 폴더인 경우가 흔하다.
+export function samePath(a, b) {
+  const norm = (s) =>
+    String(s || '')
+      .replace(/[\\/]+$/, '')
+      .split('\\')
+      .join('/')
+      .toLowerCase()
+  return norm(a) === norm(b)
 }
 
 function deepMerge(a, b) {

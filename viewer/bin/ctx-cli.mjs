@@ -22,6 +22,7 @@ import { reconcile, normKey } from '../../core/vocab.js'
 import { resolveCoord } from '../../core/managed.js'
 import { cmpDateDesc } from '../../core/validity.js'
 import * as git from '../../core/git.js'
+import { runSync } from '../../core/sync.js'
 
 // 번들 시각. `tools/build-ctx.mjs` 가 치환한다.
 //
@@ -659,6 +660,10 @@ async function cmdBrief(r, opt) {
 // "원격이 앞서 있고 로컬에도 커밋이 있다"는 뜻이고 그건 사람이 정리할 일이다 --
 // merge 를 대신 하면 관리 문서 섹션에서 두 갱신을 기계가 섞은 결과가 정본
 // 자리에 앉는다 (작업환경 §10).
+//
+// **순서는 `core/sync.js` 가 갖는다.** 화면도 같은 것을 부른다 -- 전에는 둘이
+// 각자 fetch/pull/재스캔을 엮고 있었고, 그러면 "앱에서는 됐는데 CLI 에서는
+// 안 된다" 가 생겼을 때 어느 쪽이 맞는지 알 수 없다.
 async function cmdSync(r, opt) {
   const pull = opt.args.includes('--pull') || opt.pull
 
@@ -668,22 +673,22 @@ async function cmdSync(r, opt) {
     return 0
   }
 
-  const f = await git.fetch(r.root)
-  let st = await git.status(r.root)
-
-  let pulled = null
-  if (pull) {
-    pulled = await git.pullFfOnly(r.root)
-    if (pulled.status) st = pulled.status
-  }
+  // 진행을 찍는다 -- 사내망 fetch 실측이 19.5초다. 조용하면 멎은 줄로 읽는다.
+  const PHASE = { fetching: '원격 확인 중...', pulling: '받는 중...', rescanning: '다시 읽는 중...' }
+  const res = await runSync(r.root, {
+    pull,
+    onPhase: ({ phase }) => {
+      if (!opt.json && PHASE[phase]) err(PHASE[phase])
+    },
+  })
+  const st = res.status || (await git.status(r.root))
 
   if (opt.json) {
-    out(JSON.stringify({ fetch: f, status: st, pull: pulled }, null, 2))
-    return pulled && !pulled.ok ? 1 : 0
+    out(JSON.stringify(res, null, 2))
+    return res.ok ? 0 : 1
   }
 
   out(`브랜치  ${st.branch || '(없음)'}${st.upstream ? '  ->  ' + st.upstream : '  (upstream 없음)'}`)
-  if (!f.ok && f.message) out(`fetch   실패 -- ${f.message}`)
   out(`차이    받을 것 ${st.behind}건 · 보낼 것 ${st.ahead}건` + (st.dirty ? ` · 커밋 안 된 변경 ${st.dirty}건` : ''))
 
   // 훅 미설정은 **조용한 실패**다. 커밋은 통과하고 검사는 안 돈다.
@@ -699,18 +704,15 @@ async function cmdSync(r, opt) {
     out('[주의] ' + w.message.split('\n').join('\n       '))
   }
 
-  if (pulled) {
-    out('')
-    if (pulled.ok) out(pulled.skipped === 'up-to-date' ? 'pull    이미 최신입니다.' : 'pull    완료 (ff).')
-    else {
-      err('pull    실패 -- ' + pulled.reason)
-      err(String(pulled.message || '').split('\n').join('\n        '))
-      return 1
-    }
-  } else if (st.behind > 0) {
-    out('')
-    out(`받을 것이 ${st.behind}건 있습니다.  ctx sync --pull`)
+  out('')
+  if (!res.ok) {
+    err('sync    실패 -- ' + res.reason)
+    err(String(res.message || '').split('\n').join('\n        '))
+    return 1
   }
+  if (pull) out('pull    ' + (res.pulled > 0 ? `완료 (ff) -- ${res.pulled}건` : '이미 최신입니다.'))
+  else if (st.behind > 0) out(`받을 것이 ${st.behind}건 있습니다.  ctx sync --pull`)
+  else out('이미 최신입니다.')
   return 0
 }
 

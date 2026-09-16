@@ -26,20 +26,29 @@ function readToken() {
 
 export const token = readToken()
 
+// `allowStatus` — **실패가 결과인 호출이 있다.**
+//
+// ff 불가·원격 안 닿음은 HTTP 오류가 아니라 **읽어야 하는 답**이다. 전에는
+// 그것도 예외로 던져서, 서버가 보낸 "원격이 3건 앞서 있고 로컬에도 2건이
+// 있습니다 — 터미널에서 git pull --rebase" 가 화면에서는 `HTTP 409` 로만
+// 보였다. 본문을 그대로 돌려준다.
 async function req(path, opts = {}) {
+  const { allowStatus = [], ...init } = opts
   const res = await fetch(`/api${path}`, {
-    ...opts,
+    ...init,
     headers: {
-      ...(opts.body ? { 'content-type': 'application/json' } : {}),
+      ...(init.body ? { 'content-type': 'application/json' } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...opts.headers,
+      ...init.headers,
     },
   })
   if (res.status === 401) throw new ApiError('토큰이 없거나 만료되었습니다. 앱을 다시 실행하세요.', 401)
+  if (!res.ok && allowStatus.includes(res.status)) return res.json()
   if (!res.ok) {
     let detail = ''
     try {
-      detail = (await res.json())?.error || ''
+      const j = await res.json()
+      detail = j?.error || j?.message || ''
     } catch {}
     throw new ApiError(detail || `HTTP ${res.status}`, res.status)
   }
@@ -77,8 +86,18 @@ export const api = {
   saveState: (patch) => req('/state', { method: 'POST', body: JSON.stringify(patch) }),
   // git — GET 은 읽기만. pull/push 는 사람이 누른 것이어야 하므로 POST.
   git: (doFetch) => req('/git' + (doFetch ? '?fetch=1' : '')),
-  gitPull: () => req('/git/pull', { method: 'POST', body: '{}' }),
-  gitPush: () => req('/git/push', { method: 'POST', body: '{}' }),
+  gitPull: () => req('/git/pull', { method: 'POST', body: '{}', allowStatus: [409] }),
+  gitPush: () => req('/git/push', { method: 'POST', body: '{}', allowStatus: [409] }),
+  // git 설정 — 읽기. 쓰는 것은 훅 한 줄뿐이다
+  gitConfig: () => req('/git/config'),
+  gitHooks: () => req('/git/hooks', { method: 'POST', body: '{}', allowStatus: [409] }),
+  // 동기화 — 순서는 서버가 갖는다. 진행은 SSE 로 온다
+  sync: () => req('/sync'),
+  runSync: (pull = true) =>
+    req('/sync', { method: 'POST', body: JSON.stringify({ pull }), allowStatus: [409] }),
+  // 작업 레포 — 설치 상태를 한 번에
+  workRepos: () => req('/workrepos'),
+  diag: () => req('/diag'),
   rescan: () => req('/rescan', { method: 'POST' }),
   fileUrl: (p) => `/api/file?path=${encodeURIComponent(p)}&t=${encodeURIComponent(token)}`,
   probeExternal: (p) => req(`/probe-external?path=${encodeURIComponent(p)}`),

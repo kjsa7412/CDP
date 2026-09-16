@@ -90,6 +90,86 @@ export async function status(root) {
   return st
 }
 
+// 설정 읽기 — **화면이 "어떻게 돼 있나" 를 말할 수 있어야 한다.**
+//
+// 지금까지 화면은 훅 미설정 하나만 배지로 냈다. 그런데 사용자가 막히는 자리는
+// upstream 없음 · 자격 증명 미설정 · user.name 없음 쪽이 더 많고, 그 셋은
+// **눌러 보기 전에는 알 수 없었다.** 전부 읽기다 -- 여기서 고치지 않는다.
+export async function readConfig(root) {
+  if (!(await isRepo(root))) return { repo: false }
+
+  const [remotes, branch, upstream, hooks, helper, name, email] = await Promise.all([
+    run(root, ['remote']),
+    run(root, ['rev-parse', '--abbrev-ref', 'HEAD']),
+    run(root, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']),
+    run(root, ['config', '--get', 'core.hooksPath']),
+    // --get 은 local -> global -> system 순으로 **실효값**을 낸다.
+    // 어느 층에 있는지는 안 묻는다 -- 사용자가 알아야 하는 것은 "되나" 뿐이다.
+    run(root, ['config', '--get', 'credential.helper']),
+    run(root, ['config', '--get', 'user.name']),
+    run(root, ['config', '--get', 'user.email']),
+  ])
+
+  const first = remotes.ok && remotes.out ? remotes.out.split('\n')[0].trim() : null
+  const url = first ? await run(root, ['remote', 'get-url', first]) : null
+
+  return {
+    repo: true,
+    branch: branch.ok ? branch.out : null,
+    remote: first,
+    // 원격 주소에 토큰이 박혀 있을 수 있다(https://user:token@host/...). 가린다.
+    remoteUrl: url?.ok ? maskUrl(url.out) : null,
+    upstream: upstream.ok ? upstream.out : null,
+    hooksPath: hooks.ok && hooks.out ? hooks.out : null,
+    credentialHelper: helper.ok && helper.out ? helper.out : null,
+    userName: name.ok && name.out ? name.out : null,
+    userEmail: email.ok && email.out ? email.out : null,
+    lastFetch: await lastFetchAt(root),
+    hooksDir: await fs
+      .access(path.join(root, '.githooks'))
+      .then(() => true)
+      .catch(() => false),
+  }
+}
+
+// 마지막 fetch 시각 — git 이 따로 안 알려준다. `.git/FETCH_HEAD` 의 mtime 이
+// 유일한 근거다. **추정하지 않는다** — 파일이 없으면 "한 번도 안 함" 이다.
+export async function lastFetchAt(root) {
+  const s = await fs.stat(path.join(root, '.git', 'FETCH_HEAD')).catch(() => null)
+  return s ? new Date(s.mtimeMs).toISOString() : null
+}
+
+// **앱이 git 설정을 쓰는 유일한 자리다.**
+//
+// 훅 미설정은 조용한 실패다 — 커밋은 통과하고 검사는 안 돈다. 그 하나만
+// 고친다. 여는 폭은 최소로 둔다 —
+//   · 키는 `core.hooksPath` 하나뿐 (인자로 키를 받지 않는다)
+//   · 값은 레포 안의 `.githooks` 하나뿐 (임의 경로를 못 넣는다)
+//   · **`--global` 을 쓰지 않는다.** 이 레포의 로컬 설정만 바뀐다
+export const HOOKS_DIR = '.githooks'
+
+export async function setHooksPath(root) {
+  if (!(await isRepo(root))) return { ok: false, reason: 'not-a-repo' }
+  const has = await fs
+    .access(path.join(root, HOOKS_DIR))
+    .then(() => true)
+    .catch(() => false)
+  if (!has) {
+    return {
+      ok: false,
+      reason: 'no-hooks-dir',
+      message: `${HOOKS_DIR}/ 가 레포에 없습니다. 배포본을 부으면 들어옵니다.`,
+    }
+  }
+  const r = await run(root, ['config', 'core.hooksPath', HOOKS_DIR])
+  return r.ok ? { ok: true, hooksPath: HOOKS_DIR } : { ok: false, reason: 'failed', message: firstLine(r.err) }
+}
+
+// 자격 증명이 새어 나갈 수 있는 유일한 문자열이 원격 주소다.
+function maskUrl(u) {
+  return String(u || '').replace(/\/\/[^/@]+@/, '//***@')
+}
+
 // fetch 는 작업 트리를 건드리지 않으므로 자동으로 해도 안전하다.
 // 실패는 조용히 삼킨다 -- 폐쇄망에서 remote 가 닿지 않는 것이 기본 상태다.
 export async function fetch(root) {
