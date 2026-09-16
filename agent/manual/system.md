@@ -526,11 +526,15 @@ npm ls --depth=0      지금 깔린 것
 ## 7.3 층 구조
 
 ```
-server/core/      스캔 · 프론트매터 · 어휘 · 등록부 · 최신성 · 검색 · 검사
-server/adapter/   HTTP + SSE · 트레이 · 토큰/Origin/경로 봉인
-src/              화면 (React). 마크다운 렌더는 전부 클라이언트가 소유한다
-bin/ctx-cli.mjs   CLI. core 를 그대로 부른다
+core/                    스캔 · 프론트매터 · 어휘 · 등록부 · 최신성 · 검색 · 검사
+viewer/server/adapter/   HTTP + SSE · 트레이 · 토큰/Origin/경로 봉인
+viewer/src/              화면 (React). 마크다운 렌더는 전부 클라이언트가 소유한다
+viewer/bin/ctx-cli.mjs   CLI. core 를 그대로 부른다
 ```
+
+**`core/` 가 루트에 있는 이유** — 앱과 `ctx` 의 **상위**다. 어느 한쪽 밑에
+두면 다른 쪽이 그 아래를 파고 들어와야 하고, 그러면 "누가 누구의 일부인가" 가
+폴더와 어긋난다.
 
 **앱과 `ctx` 는 같은 함수를 부른다.** `runBuiltinCheck` 하나다 — 그래서
 화면의 검사 결과와 커밋 훅의 판정이 어긋날 수 없다.

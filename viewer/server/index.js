@@ -13,13 +13,13 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { exec } from 'node:child_process'
-import { Store } from './core/store.js'
-import { AppState, dataDir } from './core/appstate.js'
+import { Store } from '../../core/store.js'
+import { AppState, dataDir } from '../../core/appstate.js'
 import { createServer } from './adapter/http.js'
 import { isLoopbackHost, devOriginHost } from './adapter/security.js'
 import { appRoot, hereDir, isSea } from './runtime.js'
 import { startTray } from './adapter/tray.js'
-import { initLogger } from './core/logger.js'
+import { initLogger } from '../../core/logger.js'
 import { main as ctxMain } from '../bin/ctx-cli.mjs'
 
 function parseArgs(argv) {

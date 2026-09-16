@@ -149,7 +149,7 @@ async function handleApi({ req, res, url, send, store, appState, clients, beat, 
     const body = await readJson(req)
     const next = String(body?.path || '').trim()
     if (!next) return send(res, 400, { error: 'path required' })
-    const { probe } = await import('../core/scan.js')
+    const { probe } = await import('../../../core/scan.js')
     const pr = await probe(next)
     if (!pr.ok) return send(res, 400, { error: 'not-found', path: next })
     appState.merge({ repoPath: next })
@@ -170,7 +170,7 @@ async function handleApi({ req, res, url, send, store, appState, clients, beat, 
     const body = await readJson(req)
     const target = String(body?.path || '').trim()
     if (!target) return send(res, 400, { error: 'path required' })
-    const { planSetup, applySetup } = await import('../core/setup.js')
+    const { planSetup, applySetup } = await import('../../../core/setup.js')
     const plan = await planSetup(store.root, target)
     if (!plan.ok) return send(res, 400, { error: 'plan', reason: plan.reason })
     if (body?.apply) await applySetup(plan)
@@ -185,7 +185,7 @@ async function handleApi({ req, res, url, send, store, appState, clients, beat, 
 
   if (p === '/repo/probe') {
     const target = url.searchParams.get('path')
-    const { probe } = await import('../core/scan.js')
+    const { probe } = await import('../../../core/scan.js')
     return send(res, 200, await probe(target || store.root))
   }
 

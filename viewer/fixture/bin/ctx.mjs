@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // 생성물 -- 손으로 고치지 마세요. `node ops/lib/build-ctx.mjs` 가 만듭니다.
-// 원본: viewer/server/core/ + viewer/bin/ctx-cli.mjs  (작업환경 설계서 3.1)
+// 원본: core/ + viewer/bin/ctx-cli.mjs  (작업환경 설계서 3.1)
 
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
 
-// viewer/server/core/vocab.js
+// core/vocab.js
 function parseVocab(text) {
   if (!text) return { types: [], coords: /* @__PURE__ */ new Map(), aliasIndex: /* @__PURE__ */ new Map(), errors: [] };
   const lines = text.split("\n");
@@ -107,7 +107,7 @@ function reconcile(vocab, query) {
 }
 var COORD;
 var init_vocab = __esm({
-  "viewer/server/core/vocab.js"() {
+  "core/vocab.js"() {
     COORD = /^[A-Za-z][A-Za-z0-9_-]*:\S+$/;
   }
 });
@@ -116,7 +116,7 @@ var init_vocab = __esm({
 import fs5 from "node:fs/promises";
 import path5 from "node:path";
 
-// viewer/server/core/setup.js
+// core/setup.js
 import fs from "node:fs/promises";
 import path from "node:path";
 var BEGIN = "<!-- cdp:begin -- \uC774 \uBE14\uB85D\uC740 ctx setup \uC774 \uAD00\uB9AC\uD55C\uB2E4. \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C -->";
@@ -259,11 +259,11 @@ async function applySetup(plan) {
   return done;
 }
 
-// viewer/server/core/repo.js
+// core/repo.js
 import fs3 from "node:fs/promises";
 import path3 from "node:path";
 
-// viewer/server/core/scan.js
+// core/scan.js
 import fs2 from "node:fs/promises";
 import path2 from "node:path";
 
@@ -3333,7 +3333,7 @@ var {
   safeDump
 } = yaml;
 
-// viewer/server/core/managed.js
+// core/managed.js
 var BS = String.fromCharCode(92);
 var RE_SPECIAL = ".+?^${}()|[]" + BS;
 var coordValue = (coord) => coord.slice(coord.indexOf(":") + 1);
@@ -3492,7 +3492,7 @@ function buildManagedIndex(registry, managedDocs) {
   };
 }
 
-// viewer/server/core/frontmatter.js
+// core/frontmatter.js
 var FM = /^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 function layerOf(p) {
   if (/^work\/(?!assets\/)[^/]+\.md$/i.test(p)) return "work";
@@ -3615,7 +3615,7 @@ function parseDoc(path6, text) {
   return doc;
 }
 
-// viewer/server/core/scan.js
+// core/scan.js
 var IGNORED_DIRS = /* @__PURE__ */ new Set([".git", "design", ".claude", "node_modules", "dist", "build", ".vite", ".cache", ".idea", ".vscode"]);
 var TEXT_EXT = /* @__PURE__ */ new Set([".md", ".markdown", ".txt", ".json", ".yml", ".yaml", ".sql", ".csv"]);
 function readText(text) {
@@ -3701,10 +3701,10 @@ function countIndexRows(text) {
   return text.split("\n").filter((l) => /^\|/.test(l.trim()) && !/^\|[\s:\-|]+\|$/.test(l.trim())).filter((l) => !/^\|\s*id\s*\|/i.test(l.trim())).length;
 }
 
-// viewer/server/core/repo.js
+// core/repo.js
 init_vocab();
 
-// viewer/server/core/validity.js
+// core/validity.js
 function cmpDateDesc(a, b) {
   const da = a.date || "";
   const db = b.date || "";
@@ -3878,7 +3878,7 @@ function buildValidity(docs) {
   };
 }
 
-// viewer/server/core/repo.js
+// core/repo.js
 async function readOr(root, name, fallback = "") {
   const t = await fs3.readFile(path3.join(root, name), "utf8").catch(() => null);
   return t == null ? fallback : readText(t);
@@ -3950,7 +3950,7 @@ function unregisteredCoords(r) {
   })).sort((a, b) => b.count - a.count || a.coord.localeCompare(b.coord));
 }
 
-// viewer/server/core/check.js
+// core/check.js
 var AGENDA = /* @__PURE__ */ new Set(["\uBBF8\uACB0", "\uC81C\uC548"]);
 var REQUIRED = ["id", "title", "date", "author"];
 function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus, bodies }) {
@@ -5949,7 +5949,7 @@ var objectToNumericMapAsync = async (object) => {
 var wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 var SPACE_OR_PUNCTUATION = /[\n\r\p{Z}\p{P}]+/u;
 
-// viewer/server/core/search.js
+// core/search.js
 var HANGUL = /[\uAC00-\uD7A3\u3130-\u318F]/;
 function tokenize(text) {
   const out2 = [];
@@ -6005,7 +6005,7 @@ function fullText(mini, query, limit = 50) {
 // viewer/bin/ctx-cli.mjs
 init_vocab();
 
-// viewer/server/core/git.js
+// core/git.js
 import { execFile } from "node:child_process";
 import fs4 from "node:fs/promises";
 import path4 from "node:path";
@@ -6112,10 +6112,10 @@ function firstLine(s) {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-15 08:45";
+var BUILT = "2026-09-16 01:54";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-15 08:45)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-16 01:54)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131

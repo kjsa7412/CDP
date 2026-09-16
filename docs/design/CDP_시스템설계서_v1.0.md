@@ -194,7 +194,7 @@ later(기준, 좌표) = 그 좌표를 touches 에 가진 작업 기록 중 기�
 | 섹션의 `applied` | 그 섹션에 **남은 갱신** |
 | `null` | 그 좌표의 최신 작업 기록 |
 
-**구현도 하나다** (`viewer/server/core/validity.js`). 세 곳에 따로 쓰면 규칙이 세
+**구현도 하나다** (`core/validity.js`). 세 곳에 따로 쓰면 규칙이 세
 곳이 되고 곧 갈라진다.
 
 ### 같은 날짜는 후속이 아니다
@@ -336,7 +336,7 @@ PC 에서는 정상으로 보이므로 이관 후에야 발견된다.
 
 ```
 viewer/bin/ctx-cli.mjs ──┐
-                         ├──▶ viewer/server/core/  ← **판정은 여기 한 곳**
+                         ├──▶ core/  ← **판정은 여기 한 곳**
 viewer/server/index.js ──┘         repo.js  loadRepo() 가 입구
                                         ↑
                          viewer/server/adapter/    http · tray · security
@@ -347,7 +347,7 @@ viewer/server/index.js ──┘         repo.js  loadRepo() 가 입구
 **앱과 CLI 가 같은 계산을 쓴다.** 두 곳에 판정을 두면 화면과 커밋 판정이
 갈라지고, 그때 사람은 화면을 믿는다.
 
-### `viewer/server/core/`
+### `core/`
 
 | 모듈 | 책임 |
 |---|---|
@@ -609,6 +609,8 @@ node 바이너리 복사
 ## 2.8 폴더 — 무엇이 무엇의 원본인가
 
 ```
+core/       **계산 — 정본.** 앱과 `ctx` 가 같이 쓴다
+            스캔 · 프론트매터 · 어휘 · 등록부 · 최신성 · 검색 · 검사
 viewer/     뷰어 프로그램      server · src · bin · index.html · vite.config
   fixture/    **뷰어 개발용 지식 레포.** 배포본에 안 들어간다 (재생성 가능)
 agent/      **받는 사람에게 가는 것의 원본**
@@ -651,9 +653,21 @@ docs/       **우리만 보는 것**
 > **산출물을 `ops/` 아래로 내린 이유** — 만드는 쪽이 거기다. 루트에 두면
 > 추적도 안 되는 부산물이 상위 폴더 행세를 한다.
 
-**루트에는 도구가 요구하는 것만 남는다** — `package.json`·`package-lock.json`
-은 npm 이, `.gitattributes`·`.gitignore` 는 git 이 루트에서만 읽는다.
-그 밖에 루트에 두는 것은 `README.md` 하나다.
+> **정정 (2026-09-16)** — `viewer/server/core/` 를 **`core/` 로 올렸다.**
+> 상위 폴더가 다섯이 됐다.
+>
+> `core/` 는 앱과 `ctx` **양쪽의 상위**인데 폴더로는 앱 밑에 있었다. 개념
+> 계층과 폴더 계층이 뒤집힌 유일한 자리였고, *"ctx 는 viewer 의 일부인가"*
+> 라는 질문이 반복해서 나왔다. `ctx-cli.mjs` 가 `../server/core/` 를 아홉 번
+> 부르고 있던 것이 그 어긋남의 모양이다.
+>
+> **2026-09-14 의 "넷으로 줄였다" 를 되돌리는 것이 아니다.** 그때 줄인 것은
+> *부산물과 사본*이 상위 자리를 차지하던 것이었고(`out/`·`release/`·
+> `sample-repo/`), `core/` 는 그 반대 — 이 시스템에서 **제일 위에 있는 것**이다.
+
+**루트에는 도구가 요구하는 것과 제일 위에 있는 것만 남는다** —
+`package.json`·`package-lock.json` 은 npm 이, `.gitattributes`·`.gitignore` 는
+git 이 루트에서만 읽는다. 그 밖에 루트에 두는 것은 `README.md` 와 `core/` 뿐이다.
 
 **`node_modules/` 만 예외다.** npm 은 `package.json` 옆에 만들고 node 는 파일
 위치에서 위로 올라가며 찾는다. `viewer/` 와 `ops/lib/` 가 둘 다 외부 의존을
@@ -721,7 +735,7 @@ release/v0.2.0/
 
 | # | 불변조건 | 깨지면 |
 |---|---|---|
-| 1 | **판정은 `viewer/server/core/` 한 곳** | 화면과 커밋 판정이 갈라지고, 사람은 화면을 믿는다 |
+| 1 | **판정은 `core/` 한 곳** | 화면과 커밋 판정이 갈라지고, 사람은 화면을 믿는다 |
 | 2 | **`later()` 는 하나** | 세 질문의 답이 서로 안 맞는다 |
 | 3 | **`work/` 는 불변** | 사건을 고치면 그 시점의 판단이 사라진다 |
 | 4 | **좌표는 `_vocab.md` 에만 있다** | 두 이름이 갈라지고 좌표가 좌표가 아니다 |

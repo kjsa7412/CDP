@@ -13,15 +13,15 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { planSetup, applySetup } from '../server/core/setup.js'
-import { loadRepo, repoStatus, unregisteredCoords } from '../server/core/repo.js'
-import { runBuiltinCheck } from '../server/core/check.js'
-import { buildIndex, fullText, tokenize } from '../server/core/search.js'
-import { outline } from '../server/core/frontmatter.js'
-import { reconcile, normKey } from '../server/core/vocab.js'
-import { resolveCoord } from '../server/core/managed.js'
-import { cmpDateDesc } from '../server/core/validity.js'
-import * as git from '../server/core/git.js'
+import { planSetup, applySetup } from '../../core/setup.js'
+import { loadRepo, repoStatus, unregisteredCoords } from '../../core/repo.js'
+import { runBuiltinCheck } from '../../core/check.js'
+import { buildIndex, fullText, tokenize } from '../../core/search.js'
+import { outline } from '../../core/frontmatter.js'
+import { reconcile, normKey } from '../../core/vocab.js'
+import { resolveCoord } from '../../core/managed.js'
+import { cmpDateDesc } from '../../core/validity.js'
+import * as git from '../../core/git.js'
 
 // 번들 시각. `tools/build-ctx.mjs` 가 치환한다.
 //

@@ -63,5 +63,5 @@ install.md         →  **배포본 루트** 설치.md
 
 작업 레포에는 이미 그 프로젝트의 `CLAUDE.md` 가 있을 수 있다. 통째로 덮지
 않고 `<!-- cdp:begin -->` … `<!-- cdp:end -->` 사이만 갈아 끼운다.
-`viewer/server/core/setup.js` 가 그 일을 하고, **앱과 `ctx setup` 이 같은
+`core/setup.js` 가 그 일을 하고, **앱과 `ctx setup` 이 같은
 함수를 부른다.**

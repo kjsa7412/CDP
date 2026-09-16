@@ -3,7 +3,7 @@
 // 왜 번들인가. `bin/ctx.mjs` 는 **지식 레포 안에** 들어가서 폐쇄망 PC 로
 // 이관된다. 거기에는 node_modules 도 이 프로젝트도 없다. 그런데 구현을 손으로
 // 베껴 두면 앱과 CLI 가 갈라진다 — 등록부를 한 곳에 두라고 한 것과 같은 이유로
-// **계산도 한 곳에 있어야 한다.** 그래서 `server/core/` 에서 생성한다.
+// **계산도 한 곳에 있어야 한다.** 그래서 `core/` 에서 생성한다.
 //
 //   node ops/lib/build-ctx.mjs [출력경로]
 //
@@ -52,7 +52,7 @@ const r = spawnSync(
     '--legal-comments=none',
     '--banner:js=#!/usr/bin/env node\n' +
       '// 생성물 -- 손으로 고치지 마세요. `node ops/lib/build-ctx.mjs` 가 만듭니다.\n' +
-      '// 원본: viewer/server/core/ + viewer/bin/ctx-cli.mjs  (작업환경 설계서 3.1)\n',
+      '// 원본: core/ + viewer/bin/ctx-cli.mjs  (작업환경 설계서 3.1)\n',
     "--define:__CTX_BUILT_DEF__='" + stamp + "'",
     '--outfile=' + outFile,
   ],

@@ -52,7 +52,7 @@ export default function CheckView({ onOpen }) {
             지원하지 않습니다` 를 늘 띄웠는데, 앱은 `bin/ctx` 를 부르려고
             시도한 적이 없다. 그리고 부를 필요도 없다 --
 
-              앱     store.check()  → runBuiltinCheck (server/core/check.js)
+              앱     store.check()  → runBuiltinCheck (core/check.js)
               ctx    cmdCheck()     → runBuiltinCheck (같은 파일을 번들)
 
             **같은 함수다.** 결과가 갈릴 수 있는 경우는 하나뿐이고, 그것은
@@ -60,7 +60,7 @@ export default function CheckView({ onOpen }) {
             아니라 번들이 낡은 것이므로, 그렇게 말한다. */}
         <div className="checkhead">
           <span>출처:</span>
-          <code>server/core/check.js</code>
+          <code>core/check.js</code>
           <span className="src"><Icon name="check" size={12} /> ctx check 와 같은 코드</span>
           <span style={{ color: 'var(--text-2)' }}>
             — 커밋을 막는 것은 git 훅의 <code>bin/ctx check</code> 다. 그 레포의
