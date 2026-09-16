@@ -22,9 +22,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 
-const TYPES = ['table', 'screen', 'api', 'module', 'code', 'term', 'batch', 'domain',
-  'req', 'proc', 'func', 'prog', 'arch', 'issue', 'test', 'scenario']
-
 // 기본 배율 = 전체가 들어오는 배율의 1.5배.
 //
 // **전체를 넣으면 읽히지 않는다.** 실측에서 전체 맞춤은 프레임을 폭 99% ·
@@ -605,14 +602,20 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
   const S = stRef.current
 
   // 카테고리 — **있는 것만.** 0건인 타입을 줄로 내면 고를 수 없는 줄이 생긴다.
-  // 순서는 `TYPES`(어휘 선언 순서)를 따른다 — 화면마다 다르면 눈이 자리를
-  // 기억할 수 없다.
+  //
+  // 순서는 **어휘가 선언한 순서**다. 전에는 여기 `TYPES` 라는 배열이 있었는데,
+  // 주석은 "어휘 선언 순서"라고 해 놓고 실은 **옛 어휘를 얼려 둔 복사본**이었다.
+  // 타입 이름은 레포가 정하므로 그 복사본은 맞을 수가 없다 — 한글 타입을 쓰는
+  // 레포에서는 14개가 전부 "모르는 타입"이 되어 알파벳순으로 뭉갰다.
+  //
+  // `g.nodes` 는 `build()` 가 `tree.types` 를 그대로 훑어 쌓은 것이고, 그것이
+  // `_vocab.md` 의 `## <타입>` 순서다. Map 은 넣은 순서를 지키므로 세기만 하면
+  // 순서가 따라온다.
   const groups = []
   {
     const cnt = new Map()
     for (const n of g.nodes) cnt.set(n.type, (cnt.get(n.type) || 0) + 1)
-    for (const t of TYPES) if (cnt.has(t)) groups.push([t, cnt.get(t)])
-    for (const [t, c] of cnt) if (!TYPES.includes(t)) groups.push([t, c])
+    for (const [t, c] of cnt) groups.push([t, c])
   }
 
   // 버튼은 상태만 바꾸고 **다시 그리라고 알린다** — React 리렌더는 캔버스를
@@ -858,8 +861,10 @@ function build(tree, docs, hideIso = false) {
 // 보인다. 그것이 이 그래프에서 가장 알고 싶은 것이다.
 function layout3d(nodes, edges) {
   const rand = rng(0x5eed)
+  // 어휘 선언 순서 그대로. `Set` 이 넣은 순서를 지키고 `nodes` 는 그 순서로
+  // 쌓여 있다 — 방향(구 위의 자리)이 어휘 순서를 따라야 왼쪽 목록과 같은
+  // 자리에서 같은 타입을 찾는다.
   const types = [...new Set(nodes.map((n) => n.type))]
-    .sort((a, b) => (TYPES.indexOf(a) + 99) % 99 - (TYPES.indexOf(b) + 99) % 99 || a.localeCompare(b))
 
   // 연결도 -- 이 좌표를 함께 건드린 다른 좌표가 몇 개인가
   const deg = nodes.map(() => 0)
