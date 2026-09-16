@@ -33,15 +33,26 @@ export async function loadRepo(root, { cache = new Map(), settings = {}, onProgr
   const works = docs.filter((d) => d.layer === 'work' && d.hasFrontmatter).sort(cmpDateDesc)
   const managedDocs = docs.filter((d) => d.layer === 'managed')
 
-  const coords = buildCoordIndex(works, { excludeTypes: settings.settledness?.excludeTypes || [] })
+  // 제외 타입은 **어휘가 선언한 것**과 앱 설정을 합친다. 어휘 쪽이 본체다 --
+  // 타입 이름은 레포마다 다르므로 앱 설정만으로는 맞출 수가 없다.
+  const coords = buildCoordIndex(works, {
+    excludeTypes: [...(vocab.excludedTypes || []), ...(settings.settledness?.excludeTypes || [])],
+  })
   const managedIndex = buildManagedIndex(registry, managedDocs)
 
   // 등록부에 걸릴 수 있는 좌표 전체 = 작업 기록이 쓴 것 ∪ 어휘에 등재된 것.
   // 어휘 쪽을 넣는 이유 — 작업 기록이 아직 없는 좌표의 섹션도 "미작성"으로
   // 보여야 한다. 작업이 없으니 안 보인다면 정리할 대상을 못 찾는다.
+  //
+  // **`example:` 로 표시된 어휘 줄은 빼고 센다.** 패키지가 서식 예시를 어휘에
+  // 올려 두는 것은 부은 직후에 한 바퀴 돌려 보라는 뜻이지 그것이 이 사업의
+  // 좌표라는 뜻이 아니다. 세면 좌표 수와 INDEX 가 예시로 부푼다.
+  //
+  // **작업 기록이 실제로 건드리면 그때는 좌표다.** 아래 순서가 그렇게 되어
+  // 있다 — touches 를 먼저 넣고 어휘는 예시가 아닌 것만 더한다.
   const all = new Set()
   for (const d of works) for (const c of d.touches) all.add(c)
-  for (const c of vocab.coords.keys()) all.add(c)
+  for (const [c, e] of vocab.coords) if (!e.example) all.add(c)
   const allCoords = [...all].sort()
 
   return {
@@ -84,7 +95,7 @@ export function repoStatus(r, { today = new Date() } = {}) {
     docs: r.docs.length,
     works: r.works.length,
     managedDocs: r.managedDocs.length,
-    coords: r.vocab.coords.size,
+    coords: r.vocab.counted.size,
     pendingDerive,
     brokenSections,
     unregistered: unregisteredCoords(r),

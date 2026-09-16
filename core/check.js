@@ -76,6 +76,20 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
   }
   push('error', 'unregistered-coord', '_vocab.md 미등재 좌표', unregistered)
 
+  // 서식 예시가 아직 어휘에 남아 있다.
+  //
+  // **경고다.** 예시를 달고 일해도 아무것도 깨지지 않는다 — 좌표로 세지
+  // 않으므로 좌표 수도 INDEX 도 부풀지 않는다. 다만 그대로 두면 `ctx match`
+  // 가 예시를 후보로 내놓고, 문서에서 예시 섹션만 지운 상태면 `ctx where` 가
+  // "섹션이 없음" 을 낸다. **지울 때가 됐다는 신호**로만 쓴다.
+  const examples = [...vocab.coords.values()].filter((e) => e.example)
+  push(
+    'warn',
+    'example-coord',
+    '서식 예시 좌표가 남아 있다 — 시작할 때 _vocab.md 와 문서에서 같이 지운다',
+    examples.map((e) => ({ coord: e.coord, detail: `_vocab.md:${e.line}${e.label ? ' · ' + e.label : ''}` }))
+  )
+
   // supersedes 대상 없음
   push(
     'error',

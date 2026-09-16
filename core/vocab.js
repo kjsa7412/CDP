@@ -23,10 +23,12 @@ const COORD = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*:\S+$/
 const TYPE = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*$/
 
 export function parseVocab(text) {
-  if (!text) return { types: [], coords: new Map(), aliasIndex: new Map(), errors: [] }
+  if (!text)
+    return { types: [], excludedTypes: [], coords: new Map(), counted: new Map(), aliasIndex: new Map(), errors: [] }
 
   const lines = text.split('\n')
   const types = []
+  const excludedTypes = []
   const coords = new Map() // 정본 좌표 → 항목
   const errors = []
   let curType = null
@@ -58,6 +60,17 @@ export function parseVocab(text) {
       continue
     }
 
+    // `## <타입>` 바로 아래의 `excluded:` — **이 타입은 정착도에서 뺀다.**
+    //
+    // 전에는 앱 설정에 `excludeTypes: ['domain']` 이 박혀 있었다. 그런데
+    // **타입 이름은 레포가 정한다** — 이 패키지가 `domain` 을 `업무영역` 으로
+    // 바꾸자 그 설정은 아무것도 가리키지 않게 됐고, 제외는 조용히 사라졌다.
+    // 죽은 설정은 없는 설정보다 나쁘다. 선언을 어휘 옆으로 옮긴다.
+    if (curType && !cur && /^excluded\s*:/i.test(raw)) {
+      if (!excludedTypes.includes(curType)) excludedTypes.push(curType)
+      continue
+    }
+
     // - `table:tb_x` — 설명
     const item = raw.match(/^\s*[-*]\s+`([^`]+)`\s*(?:[—–-]\s*(.*))?$/)
     if (item) {
@@ -72,12 +85,31 @@ export function parseVocab(text) {
         deprecated: null,
         supersededBy: null,
         deprecatedNote: null,
+        example: false,
         line: i + 1,
       }
       continue
     }
 
     if (!cur) continue
+
+    // **서식 예시는 좌표가 아니다.**
+    //
+    // 패키지는 문서마다 `## ex_plan_mst` 같은 예시 섹션을 달고 나가고, 그
+    // 좌표를 어휘에도 올려 둔다 -- 부은 직후에 파생 고리를 한 바퀴 돌려 볼 수
+    // 있게 하려는 것이다. 그런데 그러면 예시가 **좌표 수에 끼고 INDEX 에 실린다.**
+    //
+    // 더 나쁜 것은 지울 때다. 문서에서 예시 섹션만 지우고 어휘 줄을 남기면
+    // `ctx check` 는 통과하는데(dangling 검사는 작업 기록의 touches 만 본다)
+    // `ctx where` 가 "섹션이 없음 -- 주입해도 빈손이다" 를 낸다. 조용한 실패다.
+    //
+    // `example:` 은 그 줄을 **세지 않게** 한다. 찾기는 그대로 되고,
+    // `ctx check` 가 남아 있다고 알려 준다.
+    const ex = raw.match(/^\s+example\s*:/i)
+    if (ex) {
+      cur.example = true
+      continue
+    }
 
     const al = raw.match(/^\s+aliases\s*:\s*(.+)$/i)
     if (al) {
@@ -130,7 +162,15 @@ export function parseVocab(text) {
     if (c.label) put(c.label, c.coord, 'label', c.label)
   }
 
-  return { types, coords, aliasIndex, errors }
+  // **세는 것과 찾는 것을 나눈다.**
+  //   coords   전부 — `ctx where` · `ctx match` · 검색이 쓴다. 예시도 찾아진다
+  //   counted  예시를 뺀 것 — 좌표 수 · 목록 · INDEX 가 쓴다
+  //
+  // 서식 예시를 세면 갓 부은 레포가 "좌표 22개" 라고 말한다. 하나도 정하지
+  // 않았는데 22개다. 그러면 그 숫자를 아무도 안 믿게 된다.
+  const counted = new Map([...coords].filter(([, e]) => !e.example))
+
+  return { types, excludedTypes, coords, counted, aliasIndex, errors }
 }
 
 export function normKey(s) {

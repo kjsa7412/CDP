@@ -28,7 +28,7 @@ export class Store {
     this.cache = new Map()
     this.docs = []
     this.bodies = new Map()
-    this.vocab = { types: [], coords: new Map(), aliasIndex: new Map(), errors: [] }
+    this.vocab = { types: [], excludedTypes: [], coords: new Map(), counted: new Map(), aliasIndex: new Map(), errors: [] }
     this.stats = null
     this.watcher = null
     this.watchAlive = false
@@ -487,7 +487,7 @@ export class Store {
     for (const d of this.units) for (const c of d.touches) counts.set(c, (counts.get(c) || 0) + 1)
 
     const types = new Map()
-    for (const c of this.vocab.coords.values()) {
+    for (const c of this.vocab.counted.values()) {
       if (!types.has(c.type)) types.set(c.type, [])
       // 좌표별 섹션 상태를 함께 싣는다.
       //
@@ -838,7 +838,7 @@ export class Store {
       root: this.root,
       docs: this.units.length,
       files: this.docs.length,
-      coords: this.vocab.coords.size,
+      coords: this.vocab.counted.size,
       vocabTypes: this.vocab.types.length,
       // 미결·제안은 상태가 아니라 이관 대상이다 (정정_판정모델_v2 §2)
       legacyPending: this.units.filter((d) => d.status === '미결' || d.status === '제안').length,

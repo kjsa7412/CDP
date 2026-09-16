@@ -9,9 +9,11 @@ var __esm = (fn, res) => function __init() {
 
 // core/vocab.js
 function parseVocab(text) {
-  if (!text) return { types: [], coords: /* @__PURE__ */ new Map(), aliasIndex: /* @__PURE__ */ new Map(), errors: [] };
+  if (!text)
+    return { types: [], excludedTypes: [], coords: /* @__PURE__ */ new Map(), counted: /* @__PURE__ */ new Map(), aliasIndex: /* @__PURE__ */ new Map(), errors: [] };
   const lines = text.split("\n");
   const types2 = [];
+  const excludedTypes = [];
   const coords = /* @__PURE__ */ new Map();
   const errors = [];
   let curType = null;
@@ -32,6 +34,10 @@ function parseVocab(text) {
       }
       continue;
     }
+    if (curType && !cur && /^excluded\s*:/i.test(raw)) {
+      if (!excludedTypes.includes(curType)) excludedTypes.push(curType);
+      continue;
+    }
     const item = raw.match(/^\s*[-*]\s+`([^`]+)`\s*(?:[—–-]\s*(.*))?$/);
     if (item) {
       flush();
@@ -45,11 +51,17 @@ function parseVocab(text) {
         deprecated: null,
         supersededBy: null,
         deprecatedNote: null,
+        example: false,
         line: i + 1
       };
       continue;
     }
     if (!cur) continue;
+    const ex = raw.match(/^\s+example\s*:/i);
+    if (ex) {
+      cur.example = true;
+      continue;
+    }
     const al = raw.match(/^\s+aliases\s*:\s*(.+)$/i);
     if (al) {
       cur.aliases = al[1].split(",").map((s) => s.trim()).filter(Boolean);
@@ -90,7 +102,8 @@ function parseVocab(text) {
     for (const a of c.aliases) put(a, c.coord, "alias", a);
     if (c.label) put(c.label, c.coord, "label", c.label);
   }
-  return { types: types2, coords, aliasIndex, errors };
+  const counted = new Map([...coords].filter(([, e]) => !e.example));
+  return { types: types2, excludedTypes, coords, counted, aliasIndex, errors };
 }
 function normKey(s) {
   return String(s || "").toLowerCase().replace(/[\s_\-·]/g, "").trim();
@@ -3895,11 +3908,13 @@ async function loadRepo(root, { cache = /* @__PURE__ */ new Map(), settings = {}
   const indexInfo = indexText == null ? { exists: false } : { exists: true, rows: countIndexRows(indexText) };
   const works = docs.filter((d) => d.layer === "work" && d.hasFrontmatter).sort(cmpDateDesc);
   const managedDocs = docs.filter((d) => d.layer === "managed");
-  const coords = buildCoordIndex(works, { excludeTypes: settings.settledness?.excludeTypes || [] });
+  const coords = buildCoordIndex(works, {
+    excludeTypes: [...vocab.excludedTypes || [], ...settings.settledness?.excludeTypes || []]
+  });
   const managedIndex = buildManagedIndex(registry, managedDocs);
   const all = /* @__PURE__ */ new Set();
   for (const d of works) for (const c of d.touches) all.add(c);
-  for (const c of vocab.coords.keys()) all.add(c);
+  for (const [c, e] of vocab.coords) if (!e.example) all.add(c);
   const allCoords = [...all].sort();
   return {
     root,
@@ -3929,7 +3944,7 @@ function repoStatus(r, { today = /* @__PURE__ */ new Date() } = {}) {
     docs: r.docs.length,
     works: r.works.length,
     managedDocs: r.managedDocs.length,
-    coords: r.vocab.coords.size,
+    coords: r.vocab.counted.size,
     pendingDerive,
     brokenSections,
     unregistered: unregisteredCoords(r),
@@ -3995,6 +4010,13 @@ function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, secti
     }
   }
   push("error", "unregistered-coord", "_vocab.md \uBBF8\uB4F1\uC7AC \uC88C\uD45C", unregistered);
+  const examples = [...vocab.coords.values()].filter((e) => e.example);
+  push(
+    "warn",
+    "example-coord",
+    "\uC11C\uC2DD \uC608\uC2DC \uC88C\uD45C\uAC00 \uB0A8\uC544 \uC788\uB2E4 \u2014 \uC2DC\uC791\uD560 \uB54C _vocab.md \uC640 \uBB38\uC11C\uC5D0\uC11C \uAC19\uC774 \uC9C0\uC6B4\uB2E4",
+    examples.map((e) => ({ coord: e.coord, detail: `_vocab.md:${e.line}${e.label ? " \xB7 " + e.label : ""}` }))
+  );
   push(
     "error",
     "broken-supersedes",
@@ -6179,10 +6201,10 @@ async function runSync(root, { pull = true, onPhase = () => {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-16 08:22";
+var BUILT = "2026-09-16 08:50";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-16 08:22)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-16 08:50)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
