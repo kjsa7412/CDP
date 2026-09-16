@@ -185,7 +185,9 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       if (!text) continue
       const inTouches = new Set(d.touches)
       const seen = new Set()
-      for (const m of text.matchAll(/`([a-z][a-z0-9_-]*:[^`\s]+)`/gi)) {
+      // 타입에 한글이 올 수 있다(`core/vocab.js` 의 COORD 와 같은 문자 집합).
+      // 여기를 ASCII 로 두면 한글 타입을 쓰는 레포에서 이 경고만 조용히 꺼진다.
+      for (const m of text.matchAll(/`([a-z가-힣][a-z0-9가-힣_-]*:[^`\s]+)`/gi)) {
         const c = m[1]
         if (seen.has(c) || inTouches.has(c)) continue
         if (!vocab.coords.has(c)) continue // 등재된 좌표만. 오탐을 줄인다

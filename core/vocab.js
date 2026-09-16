@@ -11,7 +11,16 @@
 // 형식 고정을 요청했고, 그 전까지는 "화살표 뒤 첫 번째 타입:값 토큰"으로 읽는다.
 // 실패하면 산문을 그대로 보여준다 (§13-③ — 못 읽었다는 사실을 숨기지 않는다).
 
-const COORD = /^[A-Za-z][A-Za-z0-9_-]*:\S+$/
+// **타입에 한글을 허용한다.** 전에는 ASCII 만 받았는데, 그러면 좌표 타입이
+// `table` `screen` `req` 같은 영문 약어로 굳는다. 그 낱말들은 너무 보편적이라
+// 무엇을 가리키는지 이름만으로는 알 수 없고 -- 어느 시스템에나 테이블은 있다 --
+// 정본 문서와의 연결이 `_managed.md` 를 열어 봐야만 드러난다.
+//
+// 타입을 **정본 문서 이름에서 따면** 좌표 자체가 어디로 가는지 말한다:
+// `테이블정의서:ex_plan_mst`. 값은 여전히 무엇이든 된다.
+const COORD = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*:\S+$/
+// 좌표의 앞자리만. `## <타입>` 머리글이 타입인지 가르는 데 쓴다.
+const TYPE = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*$/
 
 export function parseVocab(text) {
   if (!text) return { types: [], coords: new Map(), aliasIndex: new Map(), errors: [] }
@@ -31,11 +40,21 @@ export function parseVocab(text) {
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]
 
+    // **`##` 이 전부 타입은 아니다.** 전에는 아무 `##` 이나 타입으로 등록했고,
+    // 그래서 이 파일에 산문 절을 하나 쓰면 `"무슨 일을 하면 무엇을 적나"` 가
+    // 타입 목록에 끼어 화면에 빈 카테고리로 떴다. 타입은 좌표의 앞자리이므로
+    // **공백을 가질 수 없다**(COORD 와 같은 문자 집합). 그것으로 가른다.
+    //
+    // 타입이 아닌 `##` 은 그냥 지나간다 — `curType` 을 비우지 않는다. 비우면
+    // 타입 절 사이에 설명을 끼워 넣을 수 없다.
     const h2 = raw.match(/^##\s+(.+?)\s*$/)
     if (h2) {
-      flush()
-      curType = h2[1].trim()
-      if (!types.includes(curType)) types.push(curType)
+      const head = h2[1].trim()
+      if (TYPE.test(head)) {
+        flush()
+        curType = head
+        if (!types.includes(curType)) types.push(curType)
+      }
       continue
     }
 
