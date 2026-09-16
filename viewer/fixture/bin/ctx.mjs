@@ -24,9 +24,12 @@ function parseVocab(text) {
     const raw = lines[i];
     const h2 = raw.match(/^##\s+(.+?)\s*$/);
     if (h2) {
-      flush();
-      curType = h2[1].trim();
-      if (!types2.includes(curType)) types2.push(curType);
+      const head = h2[1].trim();
+      if (TYPE.test(head)) {
+        flush();
+        curType = head;
+        if (!types2.includes(curType)) types2.push(curType);
+      }
       continue;
     }
     const item = raw.match(/^\s*[-*]\s+`([^`]+)`\s*(?:[—–-]\s*(.*))?$/);
@@ -105,10 +108,11 @@ function reconcile(vocab, query) {
   }
   return best ? { coord: best.coord, kind: best.kind, aliasText: best.aliasText, matched: best.aliasText, exact: false } : null;
 }
-var COORD;
+var COORD, TYPE;
 var init_vocab = __esm({
   "core/vocab.js"() {
-    COORD = /^[A-Za-z][A-Za-z0-9_-]*:\S+$/;
+    COORD = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*:\S+$/;
+    TYPE = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*$/;
   }
 });
 
@@ -4055,7 +4059,7 @@ function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, secti
       if (!text) continue;
       const inTouches = new Set(d.touches);
       const seen = /* @__PURE__ */ new Set();
-      for (const m of text.matchAll(/`([a-z][a-z0-9_-]*:[^`\s]+)`/gi)) {
+      for (const m of text.matchAll(/`([a-z가-힣][a-z0-9가-힣_-]*:[^`\s]+)`/gi)) {
         const c = m[1];
         if (seen.has(c) || inTouches.has(c)) continue;
         if (!vocab.coords.has(c)) continue;
@@ -5950,6 +5954,7 @@ var wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 var SPACE_OR_PUNCTUATION = /[\n\r\p{Z}\p{P}]+/u;
 
 // core/search.js
+init_vocab();
 var HANGUL = /[\uAC00-\uD7A3\u3130-\u318F]/;
 function tokenize(text) {
   const out2 = [];
@@ -6174,10 +6179,10 @@ async function runSync(root, { pull = true, onPhase = () => {
 }
 
 // viewer/bin/ctx-cli.mjs
-var BUILT = "2026-09-16 03:06";
+var BUILT = "2026-09-16 08:22";
 var BS2 = String.fromCharCode(92);
 var SEP = path5.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-16 03:06)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-16 08:22)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
