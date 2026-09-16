@@ -28,6 +28,25 @@ const log = (...a) => console.log('[release]', ...a)
 const run = (cmd, args) =>
   execFileSync(cmd, args, { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' })
 
+// **줄바꿈을 LF 로 맞춰서 담는다.**
+//
+// 이 레포의 작업본은 `core.autocrlf=true` 인 PC 에서 CRLF 로 놓인다. 그걸
+// 그대로 복사하면 배포본에 CRLF 가 섞여 나가고, 받는 사람의 **첫 커밋에서
+// 경고가 19줄** 뜬다 -- `.gitattributes` 의 `* text=auto eol=lf` 가 그제서야
+// 전부 되돌리기 때문이다. 복사 붙여넣기로 끝난다고 해 놓고 첫 화면이 경고면
+// 그 약속이 거짓말이 된다.
+//
+// 기준은 **자기 자신을 clone 한 결과와 같아지는 것**이다. 그래서 예외를 두지
+// 않는다 -- `.cmd` 도 clone 하면 LF 가 되고, 그래도 돈다.
+const BIN = /[.](?:exe|png|jpe?g|gif|ico|pdf|xlsx?|hwpx?|pptx?|zip|woff2?|ttf|otf|blob)$/i
+function copyFile(s, d) {
+  if (BIN.test(s)) return fs.copyFileSync(s, d)
+  const b = fs.readFileSync(s)
+  // NUL 이 있으면 확장자가 뭐든 이진이다. 확장자 목록은 언젠가 샌다.
+  if (b.includes(0)) return fs.copyFileSync(s, d)
+  fs.writeFileSync(d, b.toString('utf8').replace(/\r\n/g, '\n'))
+}
+
 function copyDir(src, dst) {
   fs.mkdirSync(dst, { recursive: true })
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
@@ -38,7 +57,7 @@ function copyDir(src, dst) {
     const s = path.join(src, e.name)
     const d = path.join(dst, e.name)
     if (e.isDirectory()) copyDir(s, d)
-    else fs.copyFileSync(s, d)
+    else copyFile(s, d)
   }
 }
 
@@ -48,7 +67,7 @@ function put(src, rel) {
   const d = path.join(OUT, rel)
   fs.mkdirSync(path.dirname(d), { recursive: true })
   if (fs.statSync(s).isDirectory()) copyDir(s, d)
-  else fs.copyFileSync(s, d)
+  else copyFile(s, d)
   return true
 }
 

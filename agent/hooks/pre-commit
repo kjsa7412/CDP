@@ -58,8 +58,15 @@ fi
 before=$(git diff --cached --name-only)
 sh "$ctx" index --repo "$repo" >/dev/null 2>&1 || true
 
+#    **`git diff` 는 추적 안 되는 파일을 차이로 보지 않는다.** 그래서 전에는
+#    `! git diff --quiet` 하나로만 걸었는데, 갓 부은 레포의 첫 커밋에서는
+#    INDEX 가 아직 추적 대상이 아니라 이 검사가 "차이 없음"을 내고 **영원히
+#    스테이지에 안 올라갔다.** 배포본을 부어 커밋해 보니 `?? INDEX.md` 로
+#    남아 있었다. 추적 여부를 먼저 묻는다.
 for f in INDEX.md INDEX-by-coord.md; do
-  if [ -f "$repo/$f" ] && ! git diff --quiet -- "$f" 2>/dev/null; then
+  [ -f "$repo/$f" ] || continue
+  if ! git ls-files --error-unmatch -- "$f" >/dev/null 2>&1 ||
+     ! git diff --quiet -- "$f" 2>/dev/null; then
     git add "$repo/$f"
     echo "[pre-commit] $f 를 갱신해 커밋에 포함했습니다." >&2
   fi
