@@ -1,7 +1,7 @@
 {
   "name": "cdp",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "description": "CDP 작업 환경 — 지식 레포 뷰어 + ctx 도구",
   "bin": {
