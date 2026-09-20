@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="680" viewBox="0 0 680 680" role="img">
+<title>상황별 MCP 서버 — 누가 만들고 어디서 도나</title>
+<desc>다섯 상황마다 호스트, MCP 서버, 실제 시스템을 왼쪽에서 오른쪽으로 배치했다. 보라색은 내가 만드는 서버, 청록색은 남이 만들어 둔 서버, 회색은 이미 있는 것이다. 화살표 위 글자는 전송 방식이다.</desc>
+<style>
+text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif}
+.th{font-size:14px;font-weight:500}
+.ts{font-size:12px;font-weight:400}
+.arr{stroke:#888780;stroke-width:1.5;fill:none}
+.row{fill:none;stroke:#B4B2A9;stroke-width:0.5;stroke-dasharray:4 3}
+.gray{fill:#F1EFE8;stroke:#5F5E5A;stroke-width:0.5}
+.purple{fill:#EEEDFE;stroke:#534AB7;stroke-width:0.5}
+.teal{fill:#E1F5EE;stroke:#0F6E56;stroke-width:0.5}
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect width="680" height="680" fill="#FFFFFF"/>
+
+<rect class="purple" x="40" y="37" width="14" height="14" rx="3"/><text class="ts" x="60" y="44" dominant-baseline="central" fill="#444441">내가 만든다</text>
+<rect class="teal" x="180" y="37" width="14" height="14" rx="3"/><text class="ts" x="200" y="44" dominant-baseline="central" fill="#444441">남이 만들어 둔 것 — 받기만</text>
+<rect class="gray" x="400" y="37" width="14" height="14" rx="3"/><text class="ts" x="420" y="44" dominant-baseline="central" fill="#444441">이미 있는 것 · 호스트</text>
+
+<rect class="row" x="40" y="76" width="600" height="104" rx="12"/>
+<text class="th" x="56" y="96" dominant-baseline="central" fill="#2C2C2A">① SaaS 가 MCP 를 제공한다 — Slack · GitHub · Notion</text>
+<rect class="gray" x="60" y="114" width="120" height="52" rx="8"/><text class="th" x="120" y="132" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">Claude Code</text><text class="ts" x="120" y="150" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">설정 한 줄</text>
+<text class="ts" x="208" y="126" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">HTTPS</text>
+<line x1="184" y1="140" x2="226" y2="140" class="arr" marker-end="url(#arrow)"/>
+<rect class="teal" x="236" y="114" width="184" height="52" rx="8"/><text class="th" x="328" y="132" text-anchor="middle" dominant-baseline="central" fill="#085041">벤더의 MCP 서버</text><text class="ts" x="328" y="150" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">벤더 인프라 · 코드 0</text>
+<text class="ts" x="448" y="126" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">API</text>
+<line x1="424" y1="140" x2="466" y2="140" class="arr" marker-end="url(#arrow)"/>
+<rect class="gray" x="476" y="114" width="144" height="52" rx="8"/><text class="th" x="548" y="132" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">Slack · GitHub</text><text class="ts" x="548" y="150" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">그쪽 DB</text>
+
+<rect class="row" x="40" y="194" width="600" height="104" rx="12"/>
+<text class="th" x="56" y="214" dominant-baseline="central" fill="#2C2C2A">② SaaS 에 REST API 만 있다</text>
+<rect class="gray" x="60" y="232" width="120" height="52" rx="8"/><text class="th" x="120" y="250" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">Claude Code</text><text class="ts" x="120" y="268" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">설정 한 줄</text>
+<text class="ts" x="208" y="244" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">stdio</text>
+<line x1="184" y1="258" x2="226" y2="258" class="arr" marker-end="url(#arrow)"/>
+<rect class="teal" x="236" y="232" width="184" height="52" rx="8"/><text class="th" x="328" y="250" text-anchor="middle" dominant-baseline="central" fill="#085041">커뮤니티 서버 · 내 것</text><text class="ts" x="328" y="268" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">내 PC · npx 로 받는다</text>
+<text class="ts" x="448" y="244" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">HTTPS</text>
+<line x1="424" y1="258" x2="466" y2="258" class="arr" marker-end="url(#arrow)"/>
+<rect class="gray" x="476" y="232" width="144" height="52" rx="8"/><text class="th" x="548" y="250" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">벤더 REST API</text><text class="ts" x="548" y="268" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">토큰으로 호출</text>
+
+<rect class="row" x="40" y="312" width="600" height="104" rx="12"/>
+<text class="th" x="56" y="332" dominant-baseline="central" fill="#2C2C2A">③ 내 시스템에 REST API 가 있다 — data_admin</text>
+<rect class="gray" x="60" y="350" width="120" height="52" rx="8"/><text class="th" x="120" y="368" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">Claude Code</text><text class="ts" x="120" y="386" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">설정 한 줄</text>
+<text class="ts" x="208" y="362" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">stdio</text>
+<line x1="184" y1="376" x2="226" y2="376" class="arr" marker-end="url(#arrow)"/>
+<rect class="purple" x="236" y="350" width="184" height="52" rx="8"/><text class="th" x="328" y="368" text-anchor="middle" dominant-baseline="central" fill="#3C3489">ezipez-ops</text><text class="ts" x="328" y="386" text-anchor="middle" dominant-baseline="central" fill="#534AB7">내 PC · 얇은 프록시</text>
+<text class="ts" x="448" y="362" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">HTTP</text>
+<line x1="424" y1="376" x2="466" y2="376" class="arr" marker-end="url(#arrow)"/>
+<rect class="gray" x="476" y="350" width="144" height="52" rx="8"/><text class="th" x="548" y="368" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">data_admin API</text><text class="ts" x="548" y="386" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">localhost:8100</text>
+
+<rect class="row" x="40" y="430" width="600" height="104" rx="12"/>
+<text class="th" x="56" y="450" dominant-baseline="central" fill="#2C2C2A">④ API 가 없다 — 함수 · 파일 뿐 (ctx)</text>
+<rect class="gray" x="60" y="468" width="120" height="52" rx="8"/><text class="th" x="120" y="486" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">Claude Code</text><text class="ts" x="120" y="504" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">설정 한 줄</text>
+<text class="ts" x="208" y="480" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">stdio</text>
+<line x1="184" y1="494" x2="226" y2="494" class="arr" marker-end="url(#arrow)"/>
+<rect class="purple" x="236" y="468" width="184" height="52" rx="8"/><text class="th" x="328" y="486" text-anchor="middle" dominant-baseline="central" fill="#3C3489">ctx mcp</text><text class="ts" x="328" y="504" text-anchor="middle" dominant-baseline="central" fill="#534AB7">내 PC · core/ 직접 호출</text>
+<text class="ts" x="448" y="480" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">함수</text>
+<line x1="424" y1="494" x2="466" y2="494" class="arr" marker-end="url(#arrow)"/>
+<rect class="gray" x="476" y="468" width="144" height="52" rx="8"/><text class="th" x="548" y="486" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">지식 레포</text><text class="ts" x="548" y="504" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">docs · work</text>
+
+<rect class="row" x="40" y="548" width="600" height="104" rx="12"/>
+<text class="th" x="56" y="568" dominant-baseline="central" fill="#2C2C2A">⑤ 밖에 내놓는다 — 진짜 서버</text>
+<rect class="gray" x="60" y="586" width="120" height="52" rx="8"/><text class="th" x="120" y="604" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">남의 호스트</text><text class="ts" x="120" y="622" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">외부 AI 대화창</text>
+<text class="ts" x="208" y="598" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">HTTPS</text>
+<line x1="184" y1="612" x2="226" y2="612" class="arr" marker-end="url(#arrow)"/>
+<rect class="purple" x="236" y="586" width="184" height="52" rx="8"/><text class="th" x="328" y="604" text-anchor="middle" dominant-baseline="central" fill="#3C3489">내 MCP 서버</text><text class="ts" x="328" y="622" text-anchor="middle" dominant-baseline="central" fill="#534AB7">내 인프라 · 인증 · TLS</text>
+<text class="ts" x="448" y="598" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">REST</text>
+<line x1="424" y1="612" x2="466" y2="612" class="arr" marker-end="url(#arrow)"/>
+<rect class="gray" x="476" y="586" width="144" height="52" rx="8"/><text class="th" x="548" y="604" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">내 서비스 API</text><text class="ts" x="548" y="622" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">web_back</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="600" viewBox="0 0 680 600" role="img">
+<title>CDP MCP 두 배치 모드</title>
+<desc>모드 A 는 작업 PC 안에서 Claude Code 가 stdio 로 ctx mcp 를 띄우고 지식 레포 clone 을 읽으며, 쓰기는 스킬과 git 훅이 한다. 모드 B 는 호스트가 HTTPS 로 인증 프록시를 거쳐 ctx serve 에 붙고, 서버가 레포 N 개를 들고 save 요청을 검사해 커밋한다.</desc>
+<style>
+text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif}
+.th{font-size:14px;font-weight:500}
+.ts{font-size:12px;font-weight:400}
+.arr{stroke:#888780;stroke-width:1.5;fill:none}
+.zone{fill:none;stroke:#B4B2A9;stroke-width:0.5;stroke-dasharray:4 3}
+.gray{fill:#F1EFE8;stroke:#5F5E5A;stroke-width:0.5}
+.purple{fill:#EEEDFE;stroke:#534AB7;stroke-width:0.5}
+.teal{fill:#E1F5EE;stroke:#0F6E56;stroke-width:0.5}
+.white{fill:#FFFFFF;stroke:#B4B2A9;stroke-width:0.5}
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect width="680" height="600" fill="#FFFFFF"/>
+
+<rect class="zone" x="40" y="30" width="600" height="240" rx="12"/>
+<text class="th" x="56" y="50" dominant-baseline="central" fill="#2C2C2A">모드 A — 로컬 · 작업 PC 한 대 안</text>
+
+<rect class="gray" x="60" y="76" width="180" height="52" rx="8"/><text class="th" x="150" y="94" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">Claude Code</text><text class="ts" x="150" y="112" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">cdp-* 스킬 · Bash · Edit</text>
+<text class="ts" x="265" y="88" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">stdio</text>
+<line x1="244" y1="102" x2="284" y2="102" class="arr" marker-end="url(#arrow)"/>
+<rect class="purple" x="290" y="76" width="130" height="52" rx="8"/><text class="th" x="355" y="94" text-anchor="middle" dominant-baseline="central" fill="#3C3489">ctx mcp</text><text class="ts" x="355" y="112" text-anchor="middle" dominant-baseline="central" fill="#534AB7">읽기 11종</text>
+<text class="ts" x="445" y="88" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">파일</text>
+<line x1="424" y1="102" x2="464" y2="102" class="arr" marker-end="url(#arrow)"/>
+<rect class="teal" x="470" y="76" width="170" height="52" rx="8"/><text class="th" x="555" y="94" text-anchor="middle" dominant-baseline="central" fill="#085041">지식 레포 clone</text><text class="ts" x="555" y="112" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">bin/ctx 가 안에 있다</text>
+
+<rect class="white" x="60" y="160" width="360" height="44" rx="8"/><text class="th" x="240" y="175" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">쓰기 = cdp-save 스킬 → git commit</text><text class="ts" x="240" y="193" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">pre-commit 훅이 ctx check</text>
+<line x1="150" y1="128" x2="150" y2="156" class="arr" marker-end="url(#arrow)"/>
+<line x1="424" y1="182" x2="464" y2="182" class="arr" marker-end="url(#arrow)"/>
+
+<rect class="white" x="470" y="160" width="170" height="44" rx="8"/><text class="th" x="555" y="175" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">git origin</text><text class="ts" x="555" y="193" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">pull · push 는 사람이</text>
+<line x1="555" y1="128" x2="555" y2="156" class="arr" marker-end="url(#arrow)"/>
+<text class="ts" x="60" y="236" dominant-baseline="central" fill="#5F5E5A">.mcp.json 은 ctx setup 이 PC 마다 쓴다 · 서버 없음 · 폐쇄망 자족</text>
+
+<rect class="zone" x="40" y="300" width="600" height="270" rx="12"/>
+<text class="th" x="56" y="320" dominant-baseline="central" fill="#2C2C2A">모드 B — 서버 · 레포 N 개를 한 곳에서</text>
+
+<rect class="gray" x="60" y="346" width="180" height="52" rx="8"/><text class="th" x="150" y="364" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">Claude Code · Desktop</text><text class="ts" x="150" y="382" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">claude.ai · 클라우드 루틴</text>
+<text class="ts" x="265" y="358" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">HTTPS</text>
+<line x1="244" y1="372" x2="284" y2="372" class="arr" marker-end="url(#arrow)"/>
+<rect class="white" x="290" y="346" width="130" height="52" rx="8"/><text class="th" x="355" y="364" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">인증 프록시</text><text class="ts" x="355" y="382" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">TLS · 토큰</text>
+<text class="ts" x="445" y="358" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">HTTP</text>
+<line x1="424" y1="372" x2="464" y2="372" class="arr" marker-end="url(#arrow)"/>
+<rect class="purple" x="470" y="346" width="170" height="52" rx="8"/><text class="th" x="555" y="364" text-anchor="middle" dominant-baseline="central" fill="#3C3489">ctx serve</text><text class="ts" x="555" y="382" text-anchor="middle" dominant-baseline="central" fill="#534AB7">읽기 11종 + save</text>
+
+<line x1="555" y1="398" x2="555" y2="426" class="arr" marker-end="url(#arrow)"/>
+<rect class="teal" x="470" y="430" width="170" height="52" rx="8"/><text class="th" x="555" y="448" text-anchor="middle" dominant-baseline="central" fill="#085041">레포 N (서버의 git)</text><text class="ts" x="555" y="466" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">save 검사 → 커밋 → 미러</text>
+
+<line x1="555" y1="482" x2="555" y2="510" class="arr" marker-end="url(#arrow)"/>
+<rect class="white" x="470" y="514" width="170" height="44" rx="8"/><text class="th" x="555" y="529" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">git origin 미러</text><text class="ts" x="555" y="547" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">사람은 읽기 전용 clone</text>
+
+<rect class="white" x="60" y="430" width="360" height="44" rx="8"/><text class="th" x="240" y="445" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">쓰기 = cdp-save 스킬 → save 도구 한 번</text><text class="ts" x="240" y="463" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">pull 없음 · 훅 없음 · 검사는 서버</text>
+<line x1="150" y1="398" x2="150" y2="426" class="arr" marker-end="url(#arrow)"/>
+<text class="ts" x="60" y="536" dominant-baseline="central" fill="#5F5E5A">.mcp.json 은 URL + 토큰 · 클라이언트에 clone 없음 · 서버는 운영 대상</text>
+</svg>
