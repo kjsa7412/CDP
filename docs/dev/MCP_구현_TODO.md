@@ -22,7 +22,7 @@
 | `ctx` CLI 11종 · 훅 · `setup` | **완료** |
 | 뷰어 — 로컬 트레이 · 읽기 · 그래프 · 관리 | **완료** |
 | **`ctx-mcp` — 도구 12종** | **완료** — 1단계 |
-| **모드 A — stdio** | **없음** — 2단계 |
+| **모드 A — stdio** | **완료** — 2단계 (배포물은 ⏸) |
 | **스킬의 MCP 전환** | **없음** — 3단계 |
 | **모드 B — `ctx serve` · 명부 · `save`** | **없음** — 4단계 |
 | **설치 — `setup --server` · `/kit` · 반입 묶음** | **없음** — 5단계 |
@@ -102,20 +102,34 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 도구 12종 · 명함 · 재스캔 · `repo` 인자를 stdio 에서 털어낸다. 여기서 안 잡힌 것은
 4단계에서 두 배로 비싸다. **배포물(`.mcp.json` · Desktop · exe)은 ⏸ 로 미룬다.**
 
-- [ ] `ctx mcp` 서브커맨드 · `StdioServerTransport` · `runStdio()`(부록 A)
-- [ ] `--root` · `--repo`(반복) · 없으면 지금 해결 순서 그대로(§3.1)
-- [ ] 레포 이름 충돌 → stderr 경고 후 뒤엣것 무시
-- [ ] **stdout 은 규약 전용.** `console.log` 금지 · 로그는 전부 stderr(§2.8)
+- [x] `ctx mcp` 서브커맨드 · `StdioServerTransport` · `runStdio()`(부록 A)
+- [x] `--root` · `--repo`(반복) · 없으면 지금 해결 순서 그대로(§3.1)
+- [x] 레포 이름 충돌 → stderr 경고 후 뒤엣것 무시
+- [x] **stdout 은 규약 전용.** `console.log` 금지 · 로그는 전부 stderr(§2.8)
 - [ ] ⏸ `ctx setup` 이 `.mcp.json` 을 쓴다 · `mcpServers.cdp` 키만 병합 · `.gitignore` 안내(§3.2)
 - [ ] ⏸ `--also <경로>` — 지식 레포 둘 이상을 **한 항목**으로(§3.2)
 - [ ] ⏸ `ctx setup --desktop` — 기존 `claude_desktop_config.json` 의 다른 키 보존(§3.2)
 - [ ] ⏸ `inspect()` 에 `.mcp.json` 상태 · 관리 > 작업 레포 화면에 열 하나
 - [ ] ⏸ `cdp.exe` 로 stdio 가 열리는지 실측 — 안 되면 `mcp` 만 CONSOLE 빌드(§10)
 - [ ] ⏸ Windows `.mcp.json` — `cmd /c … ctx.cmd mcp`
-- [ ] `--prompts auto` 판정 — Claude Code 의 `initialize` 를 픽스처로 저장(§2.5 · §10)
+- [x] `--prompts auto` 판정 — `/claude[-_ ]?code/i` 로 거르고 **clientInfo 를 stderr 에 한 줄 남긴다**
+- [ ] 그 한 줄로 **실제 Claude Code 의 `clientInfo.name` 을 확인**한다 — 값을 모른 채 패턴만 박아 두면 확인할 길이 없다. ⏸ 인 `.mcp.json` 배포가 풀릴 때 같이 닫는다
 
 **끝났다고 보는 기준** — `/mcp` 에 `cdp` 가 connected · `tools/list` 12건 · `repos` 가
 목적한 레포를 다 낸다.
+
+- [x] **실측.** 자식 프로세스 + 실제 stdio 파이프로 확인 — `tools/list` 12건 ·
+      `--prompts auto` 가 `claude-code` 에만 숨김 · `always` 로 강제됨 · 이름 충돌 경고 ·
+      `--root` 가 하위를 훑고 `_vocab.md` 없는 폴더는 건너뜀 · 스탬프 재스캔이 객체를 통째 교체 ·
+      **stdout 규약 밖 바이트 0**
+
+**2단계에서 나온 것**
+
+| | |
+|---|---|
+| 잡은 버그 | `runStdio` 가 `connect` 뒤에 반환하면 `ctx-cli` 진입점의 `process.exit` 가 **서버를 그 자리에서 죽인다.** 호스트에는 "응답 없음" 으로만 보인다. 전송이 닫힐 때까지 기다리게 고쳤다 |
+| 이름 | `C:\cdp` 의 레포 이름은 폴더명이라 **`cdp`** 다 — 0단계 결정 문서는 `gdi` 라 부른다. 모드 A 는 경유지라 그대로 두지만, 모드 B 에서 `git clone <origin> <root>/gdi` 로 받으면 거기서는 `gdi` 가 된다(§4.2) |
+| 설계서와 다른 곳 | 없음 |
 
 ---
 

@@ -51,20 +51,28 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx sync [--pull]         원격과의 차이. --pull 은 ff 만 한다 (실패면 exit 1)
   ctx version               이 번들이 언제 만들어졌나
   ctx setup <작업 레포>      그 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기)
+  ctx mcp                   MCP 서버로 선다 (stdio). 호스트가 띄운다 -- 직접 칠 일은 없다
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
+                            ctx mcp 에서는 여러 번 줄 수 있다 (첫 번째가 기본 레포)
+  --root <폴더>             ctx mcp -- 그 폴더의 하위를 전부 레포로 본다
+  --prompts auto|always|never   ctx mcp -- MCP prompt 노출 (기본 auto)
   --json                    기계 판독용 출력
 `
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const out = { cmd: null, args: [], json: false, repo: null, pull: false }
+  // `--repo` 는 `ctx mcp` 에서만 **여러 번** 쓴다(§3.1). 나머지 명령은 지금처럼
+  // 하나만 보므로 `repo` 에 첫 값을 그대로 남긴다 -- 기존 호출이 안 바뀐다.
+  const out = { cmd: null, args: [], json: false, repo: null, repos: [], root: null, prompts: null, pull: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--json') out.json = true
     else if (a === '--pull') out.pull = true
-    else if (a === '--repo') out.repo = argv[++i]
+    else if (a === '--repo') { const v = argv[++i]; out.repos.push(v); if (out.repo == null) out.repo = v }
+    else if (a === '--root') out.root = argv[++i]
+    else if (a === '--prompts') out.prompts = argv[++i]
     else if (a === '--dry') out.dry = true
     else if (a === '-h' || a === '--help' || a === 'help') out.cmd = out.cmd || 'help'
     else if (!out.cmd) out.cmd = a
@@ -774,6 +782,14 @@ export async function main(argv = process.argv.slice(2)) {
   if (!opt.cmd || opt.cmd === 'help') {
     out(USAGE)
     return opt.cmd ? 0 : 2
+  }
+
+  // `mcp` 는 **여기서 갈라진다.** 레포를 여럿 들 수 있고(§3.1) 스탬프 재스캔을
+  // 자기가 하므로(§2.6), 아래의 단일 findRepo + loadRepo 를 타면 안 된다.
+  // 그리고 이 아래로 내려가면 stdout 에 글이 나갈 수 있다 -- 규약이 깨진다.
+  if (opt.cmd === 'mcp') {
+    const { runStdio } = await import('./ctx-mcp.mjs')
+    return runStdio({ root: opt.root, repos: opt.repos, repo: opt.repo, prompts: opt.prompts, findRepo })
   }
 
   const root = await findRepo(opt.repo)

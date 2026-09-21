@@ -370,3 +370,120 @@ async function readSkill(root, name) {
   if (!body) return '(스킬 파일을 찾지 못했다 — 절차는 레포의 MANUAL 을 본다)'
   return body.replace(/^---[\s\S]*?^---\s*/m, '').trim()
 }
+
+// ── 모드 A — stdio (§3) ─────────────────────────────────────────────────────
+//
+// **stdout 은 규약 전용이다.** MCP 는 stdout(1) 으로만 JSON-RPC 를 주고받으므로
+// 여기서 `console.log` 한 줄이 섞이면 연결이 통째로 깨진다 — 그리고 그것은
+// "서버가 응답하지 않습니다" 로만 나타나서 원인을 짚기 어렵다. 로그는 전부
+// stderr(2) 로 간다(§2.8).
+
+const log = (s) => process.stderr.write('[cdp-mcp] ' + s + String.fromCharCode(10))
+
+// 레포의 한 줄 설명. `instructions` 와 `repos` 도구가 쓴다(§2.1).
+// README 의 첫 문단이다 — 따로 적는 파일을 만들지 않는다. 두 곳에 적으면
+// 반드시 어긋나고, 어긋난 설명은 모델이 레포를 잘못 고르게 한다.
+async function titleOf(root) {
+  const body = await fs.readFile(path.join(root, 'README.md'), 'utf8').catch(() => '')
+  const lines = body.split(NL)
+  const h = lines.findIndex((l) => l.startsWith('# '))
+  if (h < 0) return null
+  for (const l of lines.slice(h + 1)) {
+    const t = l.trim()
+    if (t && !t.startsWith('#')) return t.replace(/[*`]/g, '').slice(0, 80)
+  }
+  return lines[h].slice(2).trim() || null
+}
+
+async function isRepo(dir) {
+  return fs.access(path.join(dir, '_vocab.md')).then(() => true).catch(() => false)
+}
+
+// §3.1 의 해결 순서.
+//
+//   --repo <경로>   여러 번 줄 수 있다. 첫 번째가 기본 레포
+//   --root <폴더>   하위 디렉터리를 전부 레포로 본다 (모드 B 의 <root> 와 같은 모양)
+//   둘 다 없음      지금까지와 같다 — findRepo 가 하나를 찾는다
+//
+// 이름은 폴더명이다. **겹치면 stderr 경고 후 뒤엣것을 무시한다** — 조용히
+// 덮으면 어느 레포를 보고 있는지 아무도 모른다.
+export async function resolveRepos({ root = null, repos = [], repo = null, findRepo } = {}) {
+  const picked = []
+  const seen = new Map()
+  const add = async (dir) => {
+    const abs = path.resolve(dir)
+    const name = path.basename(abs)
+    if (seen.has(name)) {
+      log(`레포 이름이 겹친다: ${name} — ${abs} 를 무시한다 (먼저 잡힌 것: ${seen.get(name)})`)
+      return
+    }
+    if (!(await isRepo(abs))) {
+      log(`지식 레포가 아니다 (_vocab.md 없음): ${abs}`)
+      return
+    }
+    seen.set(name, abs)
+    picked.push({ name, root: abs, title: await titleOf(abs) })
+  }
+
+  for (const r of repos) await add(r)
+  if (root) {
+    const ents = await fs.readdir(path.resolve(root), { withFileTypes: true }).catch(() => [])
+    for (const e of ents.filter((x) => x.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+      await add(path.join(root, e.name))
+    }
+  }
+  if (!picked.length) {
+    const one = findRepo ? await findRepo(repo) : null
+    if (one) await add(one)
+  }
+  return picked
+}
+
+export async function runStdio(opt = {}) {
+  const { StdioServerTransport } = await import('@modelcontextprotocol/server/stdio')
+  const repos = await resolveRepos(opt)
+  if (!repos.length) {
+    log('지식 레포를 찾을 수 없다. --repo 로 지정하거나 CDP_REPO 를 설정한다.')
+    return 2
+  }
+
+  const prompts = opt.prompts || 'auto'
+  const server = buildServer({ repos, fallback: repos[0].name, mode: 'local', prompts })
+
+  // §2.5 — `auto` 는 Claude Code 에 prompt 를 내놓지 않는다.
+  //
+  // 그 자리에는 이미 스킬이 있고(근거 문서 §7), 같은 절차를 두 통로로 내면
+  // 사람이 어느 쪽을 쓸지 정해야 한다. Desktop·claude.ai 에는 스킬을 깔 자리가
+  // 없으므로 거기서는 내놓는다.
+  //
+  // clientInfo.name 을 stderr 에 한 줄 남긴다 — §10 의 "픽스처로 저장" 은 이
+  // 줄을 보고 닫는다. 값을 모른 채 패턴만 박아 두면 확인할 길이 없다.
+  server.server.oninitialized = () => {
+    const c = server.server.getClientVersion?.() || {}
+    log(`클라이언트 ${c.name || '(이름 없음)'} ${c.version || ''}`)
+    if (prompts === 'auto' && /claude[-_ ]?code/i.test(String(c.name || ''))) {
+      for (const p of Object.values(server._registeredPrompts || {})) p.disable?.()
+      log('prompts: Claude Code 라 내놓지 않는다 (--prompts always 로 강제)')
+    }
+  }
+
+  log(`시작 · 레포 ${repos.length}개 (${repos.map((r) => r.name).join(' · ')}) · 기본 ${repos[0].name} · 번들 ${BUILT}`)
+
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
+
+  // **여기서 돌아가면 안 된다.**
+  //
+  // `ctx-cli.mjs` 의 진입점은 `main()` 이 준 코드로 `process.exit` 를 부른다.
+  // 다른 명령은 한 번 답하고 죽는 것이 맞지만 MCP 서버는 세션 동안 살아서
+  // 계속 답한다 -- 연결하자마자 반환하면 프로세스가 그 자리에서 죽고, 호스트
+  // 쪽에는 "서버가 응답하지 않습니다" 로만 보인다. 실측으로 잡았다.
+  //
+  // 끝내는 쪽은 호스트다. stdin 이 닫히면 전송이 닫히고 그때 반환한다.
+  await new Promise((resolve) => {
+    transport.onclose = resolve
+    process.stdin.on('end', resolve)
+  })
+  log('연결이 닫혔다')
+  return 0
+}
