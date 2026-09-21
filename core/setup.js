@@ -79,7 +79,10 @@ export function mergeClaude(existing, body) {
 /**
  * 무엇을 할지 정한다. 파일은 건드리지 않는다.
  */
-export async function planSetup(knowledgeRoot, workRoot) {
+// `server` 를 주면 모드 B 다(§4.7). 포인터가 `{ server, repo }` 가 되고
+// **커밋한다** — 모드 A 가 커밋하지 않은 이유는 `knowledgeRepo` 가 PC 마다
+// 다른 절대경로여서였다. `{ server, repo }` 는 PC 와 무관하다.
+export async function planSetup(knowledgeRoot, workRoot, { server = null, repo = null } = {}) {
   const kn = path.resolve(knowledgeRoot)
   const wk = path.resolve(workRoot)
   const bad = (reason) => ({ ok: false, reason, knowledge: kn, work: wk, actions: [], warnings: [] })
@@ -155,7 +158,8 @@ export async function planSetup(knowledgeRoot, workRoot) {
   // 쓴다" 는 규약을 강요해야 했다. 규약이 아니라 설계로 풀 문제였다.
   const ptr = path.join(wk, '.claude', 'cdp.json')
   const curPtr = await read(ptr)
-  const nextPtr = JSON.stringify({ knowledgeRepo: kn.split(path.sep).join('/') }, null, 2) + '\n'
+  const nextPtr =
+    JSON.stringify(server ? { server, repo } : { knowledgeRepo: kn.split(path.sep).join('/') }, null, 2) + '\n'
   actions.push({
     kind: 'pointer',
     to: ptr,
@@ -175,14 +179,49 @@ export async function planSetup(knowledgeRoot, workRoot) {
         '팀은 받지 못합니다. `!.claude/skills/` 한 줄을 넣으세요.'
     )
   }
-  if (!ptrIgnored) {
+  if (!server && !ptrIgnored) {
     warnings.push(
       '.claude/cdp.json 은 **커밋하지 않습니다** — 지식 레포 경로는 사람마다 다릅니다.\n' +
         '.gitignore 에 `.claude/cdp.json` 을 넣으세요.'
     )
   }
+  if (server && ptrIgnored) {
+    warnings.push(
+      '.gitignore 가 .claude/cdp.json 을 막고 있습니다. 서버 모드에서는 **커밋합니다** — ' +
+        '{ server, repo } 는 PC 와 무관하고, 커밋해 두면 팀원은 pull 과 토큰만으로 끝납니다.'
+    )
+  }
 
   return { ok: true, knowledge: kn, work: wk, actions, warnings }
+}
+
+// ── .mcp.json — 호스트가 읽는 한 줄 (§3.2 · §4.7) ────────────────────────
+//
+// **토큰 원문을 넣지 않는다.** 이 파일은 커밋되므로 원문이 들어가면 레포에
+// 박제된다. `${CDP_TOKEN}` 으로 두고 값은 PC 의 환경변수에서 온다.
+//
+// 기존 파일이 있으면 `mcpServers.cdp` 키만 병합한다 — 다른 서버는 남긴다.
+export function mergeMcpJson(existing, entry) {
+  let j = {}
+  if (existing) {
+    try {
+      j = JSON.parse(existing)
+    } catch {
+      // 깨진 파일을 덮어쓰지 않는다. 사람이 고칠 것이다.
+      throw new Error('.mcp.json 이 JSON 이 아닙니다 — 손으로 고친 뒤 다시 돌리세요')
+    }
+  }
+  if (!j.mcpServers || typeof j.mcpServers !== 'object') j.mcpServers = {}
+  j.mcpServers.cdp = entry
+  return JSON.stringify(j, null, 2) + '\n'
+}
+
+export function mcpEntryServer(server, repo) {
+  return {
+    type: 'http',
+    url: String(server).replace(/\/+$/, '') + '/mcp/' + repo,
+    headers: { Authorization: 'Bearer ${CDP_TOKEN}' },
+  }
 }
 
 // ── kit 해시 — **무엇을 심었는지 말할 수 있어야 한다** ────────────────────

@@ -59,6 +59,9 @@ printf 'http://cdp-bot:<배포토큰>@10.10.20.250:2900\n' | sudo -u cdp tee /op
 sudo chmod 600 /opt/cdp/.git-credentials
 ```
 
+- git 서버는 **GitLab** 이다(nginx 뒤 · `/users/sign_in` 으로 302). 배포 토큰은
+  프로젝트 설정의 **Deploy Token**(`write_repository`) 또는 **Project Access Token** 으로
+  발급한다. 그룹은 `soln1`, 프로젝트는 `cdp`.
 - 배포 토큰은 **그 레포에만 쓰기** 권한으로 발급한다.
 - origin 이 평문 HTTP 라 토큰이 사내망에 그대로 흐른다. git 서버가 HTTPS 를
   지원하게 되면 그때 바꾼다.

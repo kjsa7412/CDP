@@ -26,8 +26,16 @@ cdp-load table:rp_plnd_mst screen:PSC043
 > | `ctx where <좌표>` 뒤에 섹션을 Read | `where` → **`section`**. 파일을 열지 않는다 |
 > | `ctx term <이름>` | **`match`** 에 흡수됐다 |
 >
-> **`git pull` · Write/Edit · `git commit` 은 그대로다.** 도구는 읽기뿐이고
-> 쓰기 경로는 바뀌지 않는다 — 커밋 훅도 CLI 를 그대로 쓴다.
+> **`save` 도구가 있으면 서버 모드다**(§4.8). 그때는 쓰기 경로가 바뀐다 —
+>
+> | | `save` 없음 (모드 A) | `save` 있음 (모드 B) |
+> |---|---|---|
+> | 시작 | `git pull --ff-only` | **생략.** 서버가 언제나 origin HEAD 다 |
+> | 고치기 | Write · Edit 로 파일에 | **메모리에 준비해 사람에게 보인다.** 파일을 안 만든다 |
+> | 끝 | `git commit` → 커밋 훅이 검사 | `save({ work, sections, vocab })` **한 번.** 서버가 검사하고 커밋한다 |
+> | 충돌 | 훅이 막는다 | `E_CONFLICT` 면 `section` 을 **다시 읽고 다시** 만든다 |
+>
+> 훅은 모드 A 에서만 돈다. 모드 B 는 클라이언트에 작업 트리가 없다.
 
 ---
 

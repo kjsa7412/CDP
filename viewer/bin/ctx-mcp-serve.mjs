@@ -16,6 +16,7 @@ import { createMcpHandler } from '@modelcontextprotocol/server'
 import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
 import { save as doSave } from '../../core/save.js'
+import { zip } from '../../core/zip.js'
 import { buildServer, makeRepoCache, mirrorOf, BUILT } from './ctx-mcp.mjs'
 
 const NL = String.fromCharCode(10)
@@ -357,6 +358,33 @@ export async function runServe(opt = {}) {
         return json(res, 200, rows)
       }
 
+      // GET /kit/<name> — 그 레포의 kit(스킬 · CLAUDE 블록) zip (§4.3).
+      //
+      // **지식 레포 안의 `.claude/` 가 정본이다.** 서버가 따로 들고 있지 않고
+      // 레포에서 그때그때 싼다 — 레포를 갱신하면 다음 요청부터 새 kit 이다.
+      const kitM = /^\/kit\/([^/]+)\/?$/.exec(url.pathname)
+      if (kitM && req.method === 'GET') {
+        const name = decodeURIComponent(kitM[1])
+        const found = (await store.list()).find((x) => x.name === name)
+        // 권한 밖 레포는 **없는 것**이다(§4.6). 403 은 존재를 알려 준다.
+        if (!found || (a.allow && !a.allow(name))) {
+          log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name, ms: Date.now() - t0, status: 404 })
+          return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 레포가 없다' } })
+        }
+        const files = await collectKit(found.root)
+        if (!files.length) {
+          return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '이 레포에 .claude/ kit 이 없다' } })
+        }
+        const buf = await zip(files)
+        log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name, ms: Date.now() - t0, status: 200 })
+        res.writeHead(200, {
+          'content-type': 'application/zip',
+          'content-length': buf.length,
+          'content-disposition': `attachment; filename="cdp-kit-${name}.zip"`,
+        })
+        return res.end(buf)
+      }
+
       if (url.pathname === '/mcp' || url.pathname.startsWith('/mcp/')) {
         let body = Buffer.alloc(0)
         if (req.method === 'POST') {
@@ -608,4 +636,35 @@ async function lastUsed(dataDir) {
     }
   }
   return out
+}
+
+// kit 에 담는 것 — `.claude/skills/cdp-*` 와 `.claude/work-repo/CLAUDE.md`.
+//
+// **`.claude/` 를 통째로 싸지 않는다.** 지식 레포의 `.claude` 에는 그 레포만의
+// 설정이 들어갈 수 있고, 그것은 작업 레포에 갈 것이 아니다 — `agent/README` 의
+// 판정 기준이 그대로다: **받는 사람에게 가는가.**
+async function collectKit(root) {
+  const out = []
+  const base = path.join(root, '.claude')
+
+  const skills = path.join(base, 'skills')
+  for (const e of await fs.readdir(skills, { withFileTypes: true }).catch(() => [])) {
+    if (!e.isDirectory() || !e.name.startsWith('cdp-')) continue
+    await walk(path.join(skills, e.name), '.claude/skills/' + e.name, out)
+  }
+
+  const claude = path.join(base, 'work-repo', 'CLAUDE.md')
+  const body = await fs.readFile(claude).catch(() => null)
+  if (body) out.push({ name: '.claude/work-repo/CLAUDE.md', data: body })
+
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+async function walk(dir, rel, out) {
+  for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const abs = path.join(dir, e.name)
+    const r = rel + '/' + e.name
+    if (e.isDirectory()) await walk(abs, r, out)
+    else out.push({ name: r, data: await fs.readFile(abs) })
+  }
 }

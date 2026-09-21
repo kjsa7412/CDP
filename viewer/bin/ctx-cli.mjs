@@ -51,6 +51,8 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx sync [--pull]         원격과의 차이. --pull 은 ff 만 한다 (실패면 exit 1)
   ctx version               이 번들이 언제 만들어졌나
   ctx setup <작업 레포>      그 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기)
+  ctx setup --server <url> --repo <이름> <작업 레포>
+                            모드 B — 지식 레포 없이 서버에서 kit 을 받아 넣는다
   ctx mcp                   MCP 서버로 선다 (stdio). 호스트가 띄운다 -- 직접 칠 일은 없다
   ctx serve --root <폴더>    MCP 서버로 선다 (HTTP). 상주 프로세스
   ctx serve user add|set|list --auth <f>    명부 — 권한은 여기 붙는다
@@ -82,6 +84,7 @@ function parseArgs(argv) {
     else if (a === '--auth') out.auth = argv[++i]
     else if (a === '--data') out.data = argv[++i]
     else if (a === '--mirror') out.mirror = true
+    else if (a === '--server') out.server = argv[++i]
     else if (a === '--name') out.name = argv[++i]
     else if (a === '--user') out.user = argv[++i]
     else if (a === '--label') out.label = argv[++i]
@@ -798,6 +801,10 @@ export async function main(argv = process.argv.slice(2)) {
   const opt = parseArgs(argv)
   if (opt.cmd === 'version') {
     out(BUILT.startsWith('__') ? '(원본 실행 — 번들 아님)' : BUILT)
+    // **무엇을 할 수 있는 번들인가**를 같이 낸다. 낡은 번들은 `ctx mcp` 를
+    // "모르는 명령" 으로 답하는데, 그것만으로는 번들이 낡은 것인지 설정이
+    // 잘못된 것인지 알 수 없다(MCP 설계서 §9).
+    out('mcp: stdio · http')
     return 0
   }
   if (!opt.cmd || opt.cmd === 'help') {
@@ -811,6 +818,13 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'mcp') {
     const { runStdio } = await import('./ctx-mcp.mjs')
     return runStdio({ root: opt.root, repos: opt.repos, repo: opt.repo, prompts: opt.prompts, findRepo })
+  }
+  // `setup --server` 는 지식 레포 없이 돈다(§4.7). 서버에서 kit 을 받아
+  // 임시 폴더에 풀고 그것을 지식 레포처럼 써서 기존 `planSetup` 을 그대로
+  // 태운다 — 설치 로직을 두 벌 만들지 않는다.
+  if (opt.cmd === 'setup' && opt.server) {
+    const { runSetupServer } = await import('./ctx-setup-server.mjs')
+    return runSetupServer(opt)
   }
   if (opt.cmd === 'serve') {
     // `serve user …` · `serve token …` 는 명부를 고치고 끝난다. 서버를 띄우지
