@@ -44,6 +44,7 @@ sudo mkdir -p /opt/cdp/{bin,repos,data}
 sudo chown -R cdp:cdp /opt/cdp
 
 node --version        # 20 이상이어야 한다. cdp.exe 는 서버 모드를 지원하지 않는다
+command -v node       # systemd 유닛의 ExecStart 와 같아야 한다
 ```
 
 서버에 올리는 것은 **둘뿐**이다 — `npm run build:ctx` 가 만든 `ops/out/ctx/ctx.mjs`
@@ -142,7 +143,7 @@ curl -s -H "Authorization: Bearer <토큰>" http://10.10.20.188:7374/repos
 
 | 증상 | 볼 곳 |
 |---|---|
-| 시작하자마자 죽는다 | `journalctl -u cdp-serve -n 50` · `--auth` 경로 · Node 버전 |
+| 시작하자마자 죽는다 | `journalctl -u cdp-serve -n 50` · `--auth` 경로 · Node 버전 · `ExecStart` 가 실제 node 경로인가(`203/EXEC`) |
 | `거부: --bind … 인증 없이 밖으로 열 수 없다` | `--auth` 가 빠졌다. 루프백 밖은 인증 없이 못 연다(§8) |
 | `mirror: lag` 가 안 풀린다 | 서버가 `10.10.20.250:2900` 에 닿는가 · `.git-credentials` 토큰 만료 |
 | 401 인데 토큰은 맞다 | 만료 · 명부에서 지워짐 · `active:false`. `serve user list` 로 본다 |
