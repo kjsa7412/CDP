@@ -44,6 +44,7 @@ sudo mkdir -p /opt/cdp/{bin,repos,data}
 sudo chown -R cdp:cdp /opt/cdp
 
 node --version        # 20 이상이어야 한다. cdp.exe 는 서버 모드를 지원하지 않는다
+git --version         # 서버가 clone · commit · push 를 직접 한다
 command -v node       # systemd 유닛의 ExecStart 와 같아야 한다
 ```
 
