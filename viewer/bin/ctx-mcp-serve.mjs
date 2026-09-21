@@ -251,7 +251,12 @@ export async function runServe(opt = {}) {
     return 2
   }
   if (!LOOPBACK.test(bind)) {
-    log.line(`경고: --bind ${bind} — 밖에서 닿는다. TLS·레이트리밋은 프록시가 한다(§4.9)`)
+    log.line(`경고: --bind ${bind} — 밖에서 닿는다. 프록시가 없으면 TLS·레이트리밋도 없다(§9.4)`)
+    // `0.0.0.0` 은 **모든 인터페이스**다. 프록시가 없는 배치에서 바인드는 유일한
+    // 경계이므로, 인터페이스 하나로 좁히라고 따로 말한다.
+    if (bind === '0.0.0.0' || bind === '::') {
+      log.line('경고: 모든 인터페이스에 열렸다 — 프록시가 없다면 --bind 를 그 IP 하나로 좁힌다')
+    }
   }
 
   const store = makeStore(root, log)

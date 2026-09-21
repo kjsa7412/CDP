@@ -1,0 +1,46 @@
+[Unit]
+Description=CDP MCP server (ctx serve)
+Documentation=file:///opt/cdp/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cdp
+Group=cdp
+WorkingDirectory=/opt/cdp
+
+# --bind 는 **그 인터페이스 하나에만** 연다. 0.0.0.0 으로 열지 않는다 —
+# 프록시가 없는 배치라 여기가 유일한 경계다.
+#
+# --auth 가 없으면 서버가 시작을 거부한다(설계서 §8). 루프백 밖에 인증 없이
+# 문을 내는 것은 실수가 아니라 사고다.
+ExecStart=/usr/bin/node /opt/cdp/bin/ctx.mjs serve \
+  --root /opt/cdp/repos \
+  --auth /opt/cdp/auth.json \
+  --data /opt/cdp/data \
+  --bind 10.10.20.187 \
+  --port 7374 \
+  --mirror
+
+Restart=always
+RestartSec=5
+
+# 로그는 stderr 로 나가고 serve.log 에도 쌓인다(3×1MB 회전).
+# journald 는 그것을 한 번 더 받는다 — 서비스가 시작조차 못 할 때 볼 곳이다.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cdp-serve
+
+# 서버는 /opt/cdp 밖을 쓸 일이 없다.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/cdp
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

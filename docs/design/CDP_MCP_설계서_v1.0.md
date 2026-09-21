@@ -610,7 +610,19 @@ CLI 까지 쓸 수 있다.
 <key>StandardErrorPath</key><string>/opt/cdp/data/logs/serve.err</string>
 ```
 
-**프록시** — 둘 중 하나.
+**systemd** (Linux · `/etc/systemd/system/cdp-serve.service`) — 실물은
+[`ops/deploy/cdp-serve.service`](../../ops/deploy/cdp-serve.service).
+
+```ini
+ExecStart=/usr/bin/node /opt/cdp/bin/ctx.mjs serve --root /opt/cdp/repos   --auth /opt/cdp/auth.json --data /opt/cdp/data --bind <사내 IP> --port 7374 --mirror
+Restart=always
+ProtectSystem=strict
+ReadWritePaths=/opt/cdp
+```
+
+**프록시** — 둘 중 하나. **없어도 된다**(사내망 배치) — 그때는 TLS · 레이트리밋 ·
+IP 제한이 함께 없는 것이고, `--bind` 를 `0.0.0.0` 이 아니라 그 인터페이스 하나에만
+여는 것이 유일한 경계다. 토큰이 평문으로 흐르는 것을 받아들이는 결정이다.
 
 ```
 # Caddy — TLS 자동
@@ -620,6 +632,11 @@ cdp.example.com { reverse_proxy 127.0.0.1:7374 }
 - hostname: cdp.example.com
   service: http://localhost:7374
 ```
+
+**git 자격** — 서버는 **전용 계정**으로 push 한다(`cdp-bot`). 사람 계정을 쓰지 않는다 —
+커밋 `author` 는 토큰의 사용자로 서버가 채우고(§4.5) push 주체만 봇이므로, 둘을 섞으면
+"누가 정했나" 와 "누가 보냈나" 가 한 이름으로 뭉개진다. Windows 의 `manager-core` 같은
+GUI 자격 저장소는 헤드리스 서버에서 동작하지 않는다.
 
 **운영 항목** — `GET /healthz` 감시(ops 봇 헬스체크 목록에 추가 · 레포별 지연은 감시용 사용자 토큰으로 `GET /repos`) · 분기마다 토큰 회전(§4.4.2) · `serve.log` 회전 · `auth.json` 0600 · 백업 = `--mirror` + `<root>` 디스크 스냅샷 · 갱신 = `bin/ctx.mjs` 교체 후 재시작(`/healthz.built` 로 확인).
 
