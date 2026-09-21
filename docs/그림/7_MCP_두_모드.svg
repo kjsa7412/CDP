@@ -21,7 +21,7 @@ text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sa
 <rect class="gray" x="60" y="76" width="180" height="52" rx="8"/><text class="th" x="150" y="94" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">Claude Code</text><text class="ts" x="150" y="112" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">cdp-* 스킬 · Bash · Edit</text>
 <text class="ts" x="265" y="88" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">stdio</text>
 <line x1="244" y1="102" x2="284" y2="102" class="arr" marker-end="url(#arrow)"/>
-<rect class="purple" x="290" y="76" width="130" height="52" rx="8"/><text class="th" x="355" y="94" text-anchor="middle" dominant-baseline="central" fill="#3C3489">ctx mcp</text><text class="ts" x="355" y="112" text-anchor="middle" dominant-baseline="central" fill="#534AB7">읽기 11종</text>
+<rect class="purple" x="290" y="76" width="130" height="52" rx="8"/><text class="th" x="355" y="94" text-anchor="middle" dominant-baseline="central" fill="#3C3489">ctx mcp</text><text class="ts" x="355" y="112" text-anchor="middle" dominant-baseline="central" fill="#534AB7">읽기 12종</text>
 <text class="ts" x="445" y="88" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">파일</text>
 <line x1="424" y1="102" x2="464" y2="102" class="arr" marker-end="url(#arrow)"/>
 <rect class="teal" x="470" y="76" width="170" height="52" rx="8"/><text class="th" x="555" y="94" text-anchor="middle" dominant-baseline="central" fill="#085041">지식 레포 clone</text><text class="ts" x="555" y="112" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">bin/ctx 가 안에 있다</text>
@@ -32,7 +32,7 @@ text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sa
 
 <rect class="white" x="470" y="160" width="170" height="44" rx="8"/><text class="th" x="555" y="175" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">git origin</text><text class="ts" x="555" y="193" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">pull · push 는 사람이</text>
 <line x1="555" y1="128" x2="555" y2="156" class="arr" marker-end="url(#arrow)"/>
-<text class="ts" x="60" y="236" dominant-baseline="central" fill="#5F5E5A">.mcp.json 은 ctx setup 이 PC 마다 쓴다 · 서버 없음 · 폐쇄망 자족</text>
+<text class="ts" x="60" y="236" dominant-baseline="central" fill="#5F5E5A">.mcp.json 은 ctx setup 이 PC 마다 쓴다 · 서버를 세울 수 없는 곳 전용</text>
 
 <rect class="zone" x="40" y="300" width="600" height="270" rx="12"/>
 <text class="th" x="56" y="320" dominant-baseline="central" fill="#2C2C2A">모드 B — 서버 · 레포 N 개를 한 곳에서</text>
@@ -43,7 +43,7 @@ text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sa
 <rect class="white" x="290" y="346" width="130" height="52" rx="8"/><text class="th" x="355" y="364" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">인증 프록시</text><text class="ts" x="355" y="382" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">TLS · 토큰</text>
 <text class="ts" x="445" y="358" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">HTTP</text>
 <line x1="424" y1="372" x2="464" y2="372" class="arr" marker-end="url(#arrow)"/>
-<rect class="purple" x="470" y="346" width="170" height="52" rx="8"/><text class="th" x="555" y="364" text-anchor="middle" dominant-baseline="central" fill="#3C3489">ctx serve</text><text class="ts" x="555" y="382" text-anchor="middle" dominant-baseline="central" fill="#534AB7">읽기 11종 + save</text>
+<rect class="purple" x="470" y="346" width="170" height="52" rx="8"/><text class="th" x="555" y="364" text-anchor="middle" dominant-baseline="central" fill="#3C3489">ctx serve</text><text class="ts" x="555" y="382" text-anchor="middle" dominant-baseline="central" fill="#534AB7">읽기 12종 + save</text>
 
 <line x1="555" y1="398" x2="555" y2="426" class="arr" marker-end="url(#arrow)"/>
 <rect class="teal" x="470" y="430" width="170" height="52" rx="8"/><text class="th" x="555" y="448" text-anchor="middle" dominant-baseline="central" fill="#085041">레포 N (서버의 git)</text><text class="ts" x="555" y="466" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">save 검사 → 커밋 → 미러</text>
