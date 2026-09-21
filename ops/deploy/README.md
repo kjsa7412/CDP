@@ -64,9 +64,13 @@ printf 'http://cdp-bot:<배포토큰>@10.10.20.250:2900\n' | sudo -u cdp tee /op
 sudo chmod 600 /opt/cdp/.git-credentials
 ```
 
-- git 서버는 **GitLab** 이다(nginx 뒤 · `/users/sign_in` 으로 302). 배포 토큰은
-  프로젝트 설정의 **Deploy Token**(`write_repository`) 또는 **Project Access Token** 으로
-  발급한다. 그룹은 `soln1`, 프로젝트는 `cdp`.
+- git 서버는 **GitLab** 이다(nginx 뒤 · `/users/sign_in` 으로 302). 그룹 `soln1` ·
+  프로젝트 `cdp`. **전용 계정 `cdp-bot` 을 만들고 그 계정의 Personal Access Token**
+  (스코프 `write_repository`)으로 간다 — 사용자명이 계정 이름이라 자격이 사람처럼
+  관리되고, 레포가 늘어도 그 프로젝트에 계정을 추가하면 된다. 프로젝트에 묶이는
+  Project Access Token · Deploy Token 은 레포마다 다시 발급해야 하고 에디션을 탄다.
+- **역할은 Maintainer 다.** Developer 는 보호 브랜치에 push 하지 못해 미러가
+  영원히 `lag` 로 남는다 — 읽기는 되므로 설치 중에는 안 드러난다.
 - 배포 토큰은 **그 레포에만 쓰기** 권한으로 발급한다.
 - origin 이 평문 HTTP 라 토큰이 사내망에 그대로 흐른다. git 서버가 HTTPS 를
   지원하게 되면 그때 바꾼다.
