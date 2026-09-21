@@ -18,7 +18,7 @@
 | 서버 | `10.10.20.188` · 사내 Linux |
 | 접속 | `http://10.10.20.188:7374` — **프록시 없음 · 평문** |
 | origin | `http://10.10.20.250:2900/soln1/cdp.git` — 사내 git · 평문 |
-| push 자격 | **전용 계정 + 배포 토큰** |
+| push 자격 | **사람 계정 + PAT** (Maintainer · `write_repository`) |
 | 레포 | `gdi` 하나 (`<root>/gdi`) |
 
 ### 프록시가 없다는 것의 뜻
@@ -50,27 +50,30 @@ node --version        # 20 이상이어야 한다. cdp.exe 는 서버 모드를 
 (MCP SDK · zod · core 가 다 들어 있다)와 `npm run build` 가 만든 `ops/out/web/`(화면).
 서버에 `node_modules` 는 필요 없다.
 
-## 2. git 자격 — 전용 계정
+## 2. git 자격 — 사람 계정 + PAT
 
-**사람 계정을 쓰지 않는다.** 서버가 push 하는 주체와 커밋 author 는 다른 것이다 —
-author 는 토큰의 사용자로 서버가 채우고(§4.5), push 만 봇이 한다.
+서버가 origin 으로 push 할 자격이다. **커밋 `author` 와는 다른 것** — author 는
+CDP 토큰의 사용자로 서버가 채우므로(§4.5) 누가 정했는지는 사람별로 그대로 남고,
+여기서 정하는 것은 **누가 보냈나** 뿐이다.
 
 ```bash
-sudo -u cdp git config --global user.name  "cdp-bot"
-sudo -u cdp git config --global user.email "cdp-bot@sjinc.co.kr"
+sudo -u cdp git config --global user.name  "<계정>"
+sudo -u cdp git config --global user.email "<계정>@sjinc.co.kr"
 sudo -u cdp git config --global credential.helper 'store --file=/opt/cdp/.git-credentials'
 
-printf 'http://cdp-bot:<배포토큰>@10.10.20.250:2900\n' | sudo -u cdp tee /opt/cdp/.git-credentials
+printf 'http://<계정>:<토큰>@10.10.20.250:2900\n' | sudo -u cdp tee /opt/cdp/.git-credentials
 sudo chmod 600 /opt/cdp/.git-credentials
 ```
 
 - git 서버는 **GitLab** 이다(nginx 뒤 · `/users/sign_in` 으로 302). 그룹 `soln1` ·
-  프로젝트 `cdp`. **전용 계정 `cdp-bot` 을 만들고 그 계정의 Personal Access Token**
-  (스코프 `write_repository`)으로 간다 — 사용자명이 계정 이름이라 자격이 사람처럼
-  관리되고, 레포가 늘어도 그 프로젝트에 계정을 추가하면 된다. 프로젝트에 묶이는
-  Project Access Token · Deploy Token 은 레포마다 다시 발급해야 하고 에디션을 탄다.
+  프로젝트 `cdp`. **사람 계정의 Personal Access Token** 으로 간다 — 사용자명이
+  GitLab 로그인 이름이고 비밀번호가 토큰이다.
 - **역할은 Maintainer 다.** Developer 는 보호 브랜치에 push 하지 못해 미러가
   영원히 `lag` 로 남는다 — 읽기는 되므로 설치 중에는 안 드러난다.
+- 사람 계정이라 셋이 따라온다 — ① 그 사람의 PAT 이 서버에 평문으로 있다(그래서
+  **이 용도로만 쓰는 토큰을 따로** 발급하고 스코프를 `write_repository` 하나로
+  좁힌다) ② 그 사람이 나가면 미러가 멈춘다 ③ GitLab 활동에 서버가 보낸 것과
+  그 사람이 직접 보낸 것이 섞여 보인다.
 - 배포 토큰은 **그 레포에만 쓰기** 권한으로 발급한다.
 - origin 이 평문 HTTP 라 토큰이 사내망에 그대로 흐른다. git 서버가 HTTPS 를
   지원하게 되면 그때 바꾼다.

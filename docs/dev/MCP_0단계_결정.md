@@ -131,7 +131,7 @@ URL 은 `POST /mcp/gdi`(고정)를 쓴다 — 레포 하나면 이쪽이 단순�
 |---|---|---|
 | 서버 | **`10.10.20.188`** · 사내 Linux | **systemd**. §9.4 의 LaunchAgent 대신 [`ops/deploy/cdp-serve.service`](../../ops/deploy/cdp-serve.service) |
 | 접속 | **`http://10.10.20.188:7374`** · 프록시 없음 | Caddy · Cloudflare Tunnel 절이 빠진다. **TLS · 레이트리밋 · IP 제한이 없다** |
-| push 자격 | **전용 계정 + 배포 토큰** | `cdp-bot`. 커밋 author 는 토큰의 사용자이고 push 주체만 봇이다 — 둘이 섞이지 않는다 |
+| push 자격 | **사람 계정 + PAT** (2026-09-21 변경) | 처음에는 전용 계정으로 정했으나 사람 계정으로 바꿨다. 커밋 `author` 는 CDP 토큰의 사용자라 **그대로 사람별로 남는다** — git 자격이 정하는 것은 push 주체뿐이다. 대가는 ① 그 사람의 PAT 이 서버에 평문 ② 그가 나가면 미러가 멈춤 ③ GitLab 활동이 섞여 보임 |
 | 레포 폴더 | `/opt/cdp/repos/**gdi**` | 폴더명이 레포 이름이다(§4.2). 로컬 `C:\cdp` 와 달라도 정상 |
 
 절차는 [`ops/deploy/README`](../../ops/deploy/README.md) 에 실물로 있다.
@@ -150,7 +150,7 @@ URL 은 `POST /mcp/gdi`(고정)를 쓴다 — 레포 하나면 이쪽이 단순�
 ### 아직 남은 확인
 
 - [ ] 서버가 `10.10.20.250:2900` 에 닿는가 — 안 닿으면 `--mirror` 가 영구히 `lag` 다
-- [ ] `cdp-bot` 계정과 배포 토큰 발급 (git 서버 관리자)
+- [ ] push 할 사람의 **PAT 발급** — `soln1/cdp` 에 **Maintainer** 여야 하고 스코프는 `write_repository` 하나. **이 용도로만 쓰는 토큰을 따로** 낸다
 - [ ] `C:\cdp` 는 **사람이 쓰던 작업 트리**다. 서버에는 **새로 clone** 하고 이 트리는 읽기 전용으로 남긴다(§4.2)
 
 ---
