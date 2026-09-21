@@ -25,7 +25,7 @@
 | | |
 |---|---|
 | 경로 | `C:\cdp` — **레포 이름은 폴더명이라 `cdp` 다**(§3.1). 서버에는 `<root>/gdi` 로 clone 해 `gdi` 로 든다(§4.2) |
-| origin | `git@10.10.20.250:soln1/cdp.git` — 내부 GitLab(12.9 미만) · **SSH** |
+| origin | `ssh://git@10.10.20.250:443/soln1/cdp.git` — 내부 GitLab(12.9 미만) · **SSH 443** |
 | 작업 기록 | 34건 |
 | 관리 문서 | 16개 |
 | 좌표 타입 | 8종 — `table` · `screen` · `api` · `module` · `code` · `term` · `issue` · `domain` |

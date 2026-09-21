@@ -17,7 +17,7 @@
 |---|---|
 | 서버 | `10.10.20.188` · 사내 Linux |
 | 접속 | `http://10.10.20.188:7374` — **프록시 없음 · 평문** |
-| origin | `git@10.10.20.250:soln1/cdp.git` — 사내 GitLab · **SSH** |
+| origin | `ssh://git@10.10.20.250:443/soln1/cdp.git` — 사내 GitLab · **SSH 443** |
 | push 자격 | **Deploy Key (SSH)** — 그 레포 push 만 |
 | 레포 | `gdi` 하나 (`<root>/gdi`) |
 
@@ -62,7 +62,7 @@ CDP 토큰의 사용자로 서버가 채우므로(§4.5) 누가 정했는지는 
 sudo -u cdp -H mkdir -p /opt/cdp/.ssh && sudo -u cdp -H chmod 700 /opt/cdp/.ssh
 sudo -u cdp -H ssh-keygen -t ed25519 -N '' -f /opt/cdp/.ssh/id_ed25519
 sudo cat /opt/cdp/.ssh/id_ed25519.pub        # → GitLab Deploy Keys 에 붙여넣는다
-sudo -u cdp -H sh -c 'ssh-keyscan -H 10.10.20.250 >> /opt/cdp/.ssh/known_hosts'
+sudo -u cdp -H sh -c 'ssh-keyscan -p 443 -H 10.10.20.250 >> /opt/cdp/.ssh/known_hosts'
 ```
 
 - **이 GitLab 은 12.9 미만**이라 PAT 에 `write_repository` 스코프가 없다. push 가
@@ -74,11 +74,14 @@ sudo -u cdp -H sh -c 'ssh-keyscan -H 10.10.20.250 >> /opt/cdp/.ssh/known_hosts'
   push 만 막히는데, 그 증상은 `mirror: lag` 뿐이라 원인이 안 드러난다.
 - `ssh-keyscan` 을 빠뜨리면 systemd 밑에서 host key 확인 프롬프트를 답할 사람이
   없어 `push` 가 영영 기다린다.
+- **SSH 포트는 443 이다**(22 아님). 프로젝트의 `Clone > Clone with SSH` 가 정본이다 —
+  22 번은 그 장비의 OS sshd 이고 `git` 계정이 없어 패스워드를 묻는다. 포트가
+  표준이 아니라 `git@host:path` 축약형이 안 먹고 `ssh://` 형태로 써야 한다.
 
 ## 3. 레포
 
 ```bash
-sudo -u cdp -H git clone git@10.10.20.250:soln1/cdp.git /opt/cdp/repos/gdi
+sudo -u cdp -H git clone ssh://git@10.10.20.250:443/soln1/cdp.git /opt/cdp/repos/gdi
 ```
 
 폴더명이 곧 레포 이름이다(§4.2). **`cdp` 가 아니라 `gdi` 로 받는다** — 로컬
