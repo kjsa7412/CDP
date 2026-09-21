@@ -1,11 +1,17 @@
-# CDP MCP 설계서 v1.0
+# CDP MCP 설계서 v1.1
 
-2026-09-20 · 현재 v0.8.0 · 근거 문서 [`개념정리_MCP`](개념정리_MCP.md) ·
+2026-09-21 개정 · 현재 v0.8.0 · 근거 문서 [`개념정리_MCP`](개념정리_MCP.md) ·
 검토 경위 [`docs/dev/MCP_적용검토_설계서_v0.1`](../dev/MCP_적용검토_설계서_v0.1.md)
 
-> `core/` 의 세 번째 소비자 `ctx-mcp` 를 만든다. 전송이 둘이다 — **모드 A(로컬 · stdio)** 는
-> 작업 PC 의 지식 레포 clone 을 읽고, **모드 B(서버 · HTTP)** 는 서버가 레포 N 개를 들고
-> 읽기와 `save` 를 받는다. 도구 · 리소스 · 명함 · 판정 코드는 두 모드가 같다.
+> `core/` 의 세 번째 소비자 `ctx-mcp` 를 만든다. 전송이 둘이다 — **모드 B(서버 · HTTP)** 가
+> 기본이다. 서버가 지식 레포 N 개를 들고 읽기 · `save` · 뷰어를 한 프로세스에서 낸다.
+> **모드 A(로컬 · stdio)** 는 서버를 세울 수 없는 곳(§3.0)에서 작업 PC 의 clone 을 읽는다.
+> 두 모드 모두 **서버 하나가 레포 여럿**을 들고 부르는 쪽이 고른다(§2.9). 도구 · 리소스 ·
+> 명함 · 판정 코드는 두 모드가 같다.
+
+> **v1.1 개정** — ① 모드 A 를 폐쇄망 전용으로 좁혔다(§3.0) ② 서버 하나가 레포 N 개를
+> 다루고 호출 쪽이 고른다(§2.9) ③ 설치 절차를 호스트별로 묶었다(§5) ④ 뷰어의 원격
+> 서비스화를 범위에 넣었다(§6).
 
 ---
 
@@ -15,12 +21,15 @@
 |---|---|
 | 호스트 | Claude Code · Claude Desktop · claude.ai 등 MCP 클라이언트 |
 | 서버 | `ctx-mcp` — 이 문서가 만드는 것 |
-| 모드 A | `ctx mcp` · stdio · 작업 PC · 레포 = 로컬 clone · 쓰기는 스킬 + git 훅 |
-| 모드 B | `ctx serve` · Streamable HTTP · 서버 1대 · 레포 N 개 · 쓰기는 `save` 도구 |
+| 모드 A | `ctx mcp` · stdio · 작업 PC · 레포 = 로컬 clone · 쓰기는 스킬 + git 훅. **서버를 세울 수 없는 곳 전용**(§3.0) |
+| 모드 B | `ctx serve` · Streamable HTTP · 서버 1대 · 쓰기는 `save` 도구 · 뷰어 동거(§6). **기본** |
+| 레포 | 지식 레포 하나. 폴더명이 이름이다. 두 모드 모두 서버 하나가 N 개를 든다(§2.9) |
+| 기본 레포 | `repo` 인자를 생략했을 때 쓰이는 레포. 클라이언트가 설치 때 정한다(§2.9) |
 | 명함 | 도구의 `description` + `inputSchema` |
 | 단위 | 작업 기록 1건 + 파생 섹션 갱신 + 어휘 등재 — 한 커밋 |
 
-범위 밖: 뷰어의 원격 모드 · 프로젝트 간 좌표 조회 · 문서별 권한 · OAuth 서버 구현.
+범위 밖: **레포 간 조인**(한 질문이 두 레포의 좌표를 엮는 것 — 레포는 고르는 대상이지
+합치는 대상이 아니다) · 문서별 권한 · OAuth 서버 구현 · 뷰어에서의 편집(§6.5).
 
 ---
 
@@ -32,21 +41,23 @@
 core/                          판정 · 스캔 · 어휘 · 등록부 · 검증 · git         (변경 없음)
 viewer/bin/ctx-cli.mjs         CLI  — 서브커맨드 mcp · serve 추가
 viewer/bin/ctx-mcp.mjs         신설 — 도구 · 리소스 · prompts 정의 + 핸들러 (전송 무관)
-viewer/bin/ctx-mcp-serve.mjs   신설 — 모드 B: HTTP 서버 · 레포 저장소 · 인증 · save
+viewer/bin/ctx-mcp-serve.mjs   신설 — 모드 B: HTTP 서버 · 레포 저장소 · 인증 · save · 뷰어 라우트
 ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs 하나
 ```
 
 | | 모드 A | 모드 B |
 |---|---|---|
+| 언제 | 서버를 세울 수 없다 — 폐쇄망 · 반입 PC · 1인 (§3.0) | 그 밖의 전부 · **기본** |
 | 프로세스 | 호스트가 세션마다 띄운다 | 상주 (LaunchAgent / systemd) |
 | 전송 | stdio | Streamable HTTP (stateless) |
-| 레포 | `bin/ctx` 가 든 지식 레포 자신 | `<root>/<name>/` 작업 트리 N 개 |
+| 레포 | `--root` 아래 clone N 개 (하나면 그 폴더) | `<root>/<name>/` 작업 트리 N 개 |
 | 인증 | 없음 (자식 프로세스) | Bearer 토큰 · TLS 는 프록시 |
-| 도구 | 읽기 11 | 읽기 11 + `save` |
+| 도구 | 읽기 12 | 읽기 12 + `save` |
 | 쓰기 경로 | 스킬 → Edit/Write → git commit → 훅 `ctx check` | 스킬 → `save` → 서버 검사 → 커밋 → 미러 |
 | 훅 | 그대로 | 없음 |
 | 설치 | `ctx setup` 이 `.mcp.json` 을 PC 마다 쓴다 | `ctx setup --server` 가 URL + 토큰 헤더를 쓴다 |
 | 런타임 | Node 또는 `cdp.exe` (shim) | Node ≥ 20 |
+| 뷰어 | 로컬 트레이 앱 (루프백) | 같은 프로세스가 `/` 로 낸다(§6) |
 
 ---
 
@@ -59,10 +70,14 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 | `serverInfo.name` | `cdp` |
 | `serverInfo.version` | `BUILT` (= `ctx version` 의 번들 시각) |
 | `capabilities` | `tools` · `resources` (templates 포함) · `prompts` (§2.5 조건부) |
-| `instructions` | 아래 문단. `<이름>` 은 레포 폴더명 |
+| `instructions` | 아래 문단. 레포 줄은 서버가 실제 목록으로 채운다 |
 
 ```
-<이름> 지식 레포의 도구다. 여기 있는 것이 정본이고 모델의 기억이 아니다.
+지식 레포의 도구다. 여기 있는 것이 정본이고 모델의 기억이 아니다.
+· 다루는 레포 —                                  ← 서버가 레포마다 한 줄. 6개 이상이면 repos 도구로 대체
+    ezipez  이지펠 단지 데이터 마트 · 팩터 · 배치
+    dpms    DPMS 패키지 · 변환 규칙
+  기본은 ezipez. 다른 레포면 repo 를 넘긴다. 어느 레포인지 모르면 match 가 찾아준다.
 · 시스템의 지금 상태·결정 이유를 물으면 기억으로 답하지 않는다.
 · 좌표를 말로 받았으면 match 로 확정 → where 로 상태 → section 으로 그 섹션만.
   이유는 where 가 준 작업 id 로 work 를 연다.
@@ -71,13 +86,16 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 · 기록·갱신은 cdp-save 절차로만 한다.           ← 모드 A: "쓰기 도구는 없다" 로 대체
 ```
 
-### 2.2 도구 — 읽기 11종
+### 2.2 도구 — 읽기 12종
 
 입력은 JSON Schema(zod). 출력 필드는 `ctx <명령> --json` 과 동일한 객체다.
 
+`version` 을 뺀 **모든 도구가 `repo?: string` 을 받는다** — 생략하면 기본 레포(§2.9).
+출력에는 어느 레포로 답했는지 `repo` 가 항상 붙는다. 표에서는 이 둘을 생략했다.
+
 | 도구 | 입력 | 출력 필드 | 명함 |
 |---|---|---|---|
-| `match` | `names: string[]` (1~20) | `[{ name, coord, kind: 이름\|값\|alias\|미등재, vocabLine, deprecated?, successor? }]` | 이름·alias·자유 표현을 정본 좌표로 대조한다. 테이블·화면·API·팩터·원천·용어를 말로 가리켰으면 좌표를 짐작하지 말고 먼저 이것으로 확정한다. `미등재` 는 어휘에 없다는 뜻이다 — 다른 좌표로 바꾸지 말고 그대로 보고한다. 폐기 좌표면 후속 좌표를 준다 |
+| `match` | `names: string[]` (1~20) | `[{ name, coord, kind: 이름\|값\|alias\|미등재, vocabLine, deprecated?, successor? }]` | 이름·alias·자유 표현을 정본 좌표로 대조한다. 테이블·화면·API·팩터·원천·용어를 말로 가리켰으면 좌표를 짐작하지 말고 먼저 이것으로 확정한다. `미등재` 는 어휘에 없다는 뜻이다 — 다른 좌표로 바꾸지 말고 그대로 보고한다. 폐기 좌표면 후속 좌표를 준다. `repo` 를 주지 않으면 **든 레포를 전부 대조**하고 결과마다 `repo` 를 적는다 — 그 값을 이후 도구에 그대로 넘긴다. 두 레포에 다 있으면 둘 다 보고한다(고르지 않는다) |
 | `where` | `coord: string` · `limit?: int (기본 5, 최대 50)` | `{ coord, normalized?, registry, section: { doc, anchor, line, end, applied, state: ok\|derive-pending\|missing }, works: [{ id, date, title }], total }` | 좌표의 지금 상태가 어느 관리 문서 어느 섹션에 있나, 마지막으로 반영된 작업, 그 좌표를 건드린 작업들. "지금 어떻게 돼 있나"는 이것. alias 를 주면 정본으로 바꾸고 `normalized` 에 적는다. `state` 가 `derive-pending` 이면 그 섹션은 아직 최신이 아니다 — 답에 그 사실을 적는다. 등록부에 없는 타입은 관리 문서가 없는 것이 정상이고 작업 기록이 유일한 근거다 |
 | `section` | `coord: string` | `{ coord, doc, anchor, line, end, applied, heading, body }` | 관리 문서에서 그 좌표의 섹션 본문만 돌려준다. 문서 전체를 읽지 않는다. 섹션이 없으면 `body: null` 로 알린다 |
 | `work` | `id: string` | `{ id, frontmatter, body, path }` | 작업 기록 본문. "왜 그렇게 정했나"는 관리 문서가 아니라 여기 있다. 한 기록에 좌표가 여럿이고 좌표마다 그 뒤 사정이 다르다 — 문서 단위로 "덮였다"고 판정하지 말고 좌표별로 `where` 를 본다 |
@@ -87,9 +105,13 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 | `check` | — | `{ ok, errors, warnings, findings }` | 커밋 가능한가. 커밋 때 같은 검사가 돈다 — 이 도구로 미리 본다 |
 | `sync` | — | 모드 A `{ mode: "local", remote, behind, ahead, hooksPath }` · 모드 B `{ mode: "server", head, mirror: ok\|lag\|off }` | 원격과의 차이와 훅 설정 여부. 받지 않는다. 받을 것이 있으면 주입한 섹션이 최신이 아닐 수 있다고 알린다 |
 | `brief` | — | `{ lines: [string, string] }` | 두 줄 요약 — 절차와 살아 있는 레포 상태 |
-| `version` | — | `{ built, mode, repo }` | 이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다 |
+| `repos` | — | `[{ name, title, default, coords, works, updated }]` | 이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다 |
+| `version` | — | `{ built, mode, repos: [name] }` | 이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다 |
 
 명함은 도구당 3~4문장. `term` 은 `match` 에 흡수. `setup` · `index` · `sync --pull` 은 도구가 아니다.
+
+`match` 만 레포를 가로지른다. 나머지 11종은 **레포 하나 안**에서만 돈다 — `repo` 가 확정되지
+않으면 기본 레포로 답하고 `repo` 필드로 알린다. 기본 레포가 없는데 생략하면 `E_REPO`.
 
 ### 2.3 결과 형식 · 오류
 
@@ -116,12 +138,14 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 
 | URI | 내용 | 목록 |
 |---|---|---|
-| `cdp://section/{coord}` | `section` 과 같음 (text/markdown) | 템플릿 |
-| `cdp://work/{id}` | `work` 와 같음 | 템플릿 |
-| `cdp://doc/{name}` | 등록부의 관리 문서 전체. `description` = `"<name> <크기>KB — 섹션 리소스를 우선 쓴다"` | 정적 (등록부 문서 수) |
-| `cdp://index` · `cdp://vocab` · `cdp://managed` | `INDEX.md` · `_vocab.md` · `_managed.md` | 정적 |
+| `cdp://{repo}/section/{coord}` | `section` 과 같음 (text/markdown) | 템플릿 |
+| `cdp://{repo}/work/{id}` | `work` 와 같음 | 템플릿 |
+| `cdp://{repo}/doc/{name}` | 등록부의 관리 문서 전체. `description` = `"<repo>/<name> <크기>KB — 섹션 리소스를 우선 쓴다"` | 정적 (레포 × 등록부 문서 수) |
+| `cdp://{repo}/index` · `/vocab` · `/managed` | `INDEX.md` · `_vocab.md` · `_managed.md` | 정적 (레포 × 3) |
 
 작업 기록은 정적 목록에 올리지 않는다. `resources/list` 는 정적 항목만, `resources/templates/list` 는 템플릿 둘.
+레포 이름은 URI 의 첫 조각이다 — 하나만 든 서버도 형식을 지킨다(`cdp://ezipez/index`). 정적
+목록이 레포 수에 비례해 늘므로 **레포 6개 이상이면 `cdp://{repo}/doc` 만 템플릿으로 돌린다.**
 
 ### 2.5 prompts
 
@@ -134,6 +158,7 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 
 ### 2.6 레포 로딩 · 재스캔 · 직렬화
 
+- 레포마다 독립된 캐시를 둔다 — 키는 레포 이름. 아래는 레포 하나에 대한 설명이다.
 - 첫 요청에 `loadRepo(root)` → 메모리. 요청마다 스탬프 계산: `_vocab.md` · `_managed.md` · `docs/*.md` · `work/*.md` 의 `(count, max mtime)` + `.git/HEAD` 의 mtime. 스탬프가 바뀌면 다시 `loadRepo` 하고 객체를 **통째로 교체**한다(부분 갱신 없음). 감시(chokidar)는 쓰지 않는다.
 - 읽기 도구는 교체된 객체를 읽을 뿐 상태를 바꾸지 않는다 — 동시 실행 허용.
 - `save`(모드 B)는 레포당 뮤텍스. 직렬화된다.
@@ -154,17 +179,98 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 
 stdout 은 모드 A 에서 규약 전용 — `ctx-mcp.mjs` 는 `console.log` 를 쓰지 않는다.
 
+### 2.9 레포가 여럿일 때
+
+**서버 하나가 레포 N 개를 든다. 고르는 것은 부르는 쪽이다.** 레포마다 서버를 따로 등록하는
+길도 있었으나 택하지 않았다 —
+
+| | 레포마다 서버 (안 택함) | 서버 하나 + `repo` 인자 (택함) |
+|---|---|---|
+| 호스트 등록 | 레포 수만큼 | 하나 |
+| 명함 비용 | 12 × N 개가 매 요청 컨텍스트에 | 12 + `repos` 한 줄씩 |
+| 도구 이름 | `mcp__cdp-ezipez__where` | `mcp__cdp__where` |
+| 잘못 부를 위험 | 도구 이름을 잘못 고른다 | 인자를 잘못 고른다 — **위험은 옮겨질 뿐 줄지 않는다** |
+| 레포 추가 | PC 마다 `.mcp.json` 을 고친다 | 서버에 폴더만 둔다 |
+| 권한 | 토큰을 서버마다 | 토큰 하나의 `repos` 로 (§4.4) |
+
+명함 비용이 결정적이다. 레포 3개면 명함 36개가 **매 요청** 실린다. 그리고 레포를 늘릴 때마다
+전원이 `.mcp.json` 을 고치는 것은 운영이 되지 않는다.
+
+**잘못 고를 위험은 줄지 않는다** — 도구 이름에서 인자로 자리만 바뀐다. 그래서 짐작을 막는
+장치를 규약이 아니라 **절차**에 둔다.
+
+```
+좌표를 말로 받았다 → match (repo 없이)  → 결과의 repo 를 그대로 들고
+                   → where / section / work (repo 명시)
+```
+
+`match` 가 레포까지 확정해 주므로 모델이 레포를 짐작할 자리가 없다. 명함(§2.2)과
+instructions(§2.1)에 이 순서를 박는다. `save` 는 **`repo` 필수**다 — 쓰기에서 기본값은 사고다.
+
+**기본 레포** — 생략을 허용하는 이유는 대부분의 작업 레포가 지식 레포 하나만 본다는 것이다.
+
+| 모드 | 기본 레포 |
+|---|---|
+| A | `--repo` 로 준 것 · 하나뿐이면 그것 · `.claude/cdp.json.knowledgeRepo` |
+| B | URL 이 `/mcp/<name>` 이면 `<name>` · `/mcp` 면 토큰의 `repos` 가 하나일 때만 그것 |
+| 둘 다 | 정해지지 않았는데 `repo` 를 생략하면 `E_REPO` — 임의로 고르지 않는다 |
+
+**레포 간 조인은 하지 않는다.** `where`·`section`·`work` 는 레포 하나 안에서만 돈다. 좌표가
+두 레포에 있으면 `match` 가 둘 다 보고하고 거기서 멈춘다 — 어느 쪽을 쓸지는 사람이 정한다.
+레포가 다르면 어휘 · 등록부 · 파생 규칙이 다르고, 섞는 순간 판정의 근거가 무너진다.
+
 ---
 
-## 3. 모드 A — 로컬 (stdio)
+## 3. 모드 A — 로컬 (stdio) · 폐쇄망
+
+### 3.0 전제 — 언제 이 모드인가
+
+모드 A 는 **기본이 아니다.** 조건은 하나다 —
+
+> **레포를 들어 줄 서버를 세울 수 없다.** 그래서 PC 마다 clone 을 두는 수밖에 없다.
+
+폐쇄망이 그 대표다. 다만 **"폐쇄망 = 모드 A" 가 아니다.** 망이 닫혀 있어도 그 안에 서버
+한 대를 세울 수 있으면 모드 B 가 낫다 — 루프백 대신 사내 IP 에 바인드하고 프록시만
+사내 인증서로 바꾼다. 모드 A 를 골라야 하는 진짜 자리는 **서버가 없는 폐쇄망 · 반입 노트북
+한 대 · 혼자 쓰는 PC** 다.
+
+**먼저 확인할 것 — 호스트가 모델에 닿는가.** MCP 는 호스트가 모델을 부를 수 있을 때만
+성립한다(근거 문서 §0). 서버는 도구를 낼 뿐 모델을 들고 있지 않다. 망을 등급으로 나누면 —
+
+| 등급 | 모델 API | git 원격 | 쓸 것 |
+|---|---|---|---|
+| 완전 에어갭 | 닿지 않는다 | 없음 | **MCP 가 성립하지 않는다.** `ctx` CLI 와 뷰어만 쓴다 |
+| 모델만 개방 | 프록시로 허용 | 내부 git 서버 | 서버를 세울 수 있으면 **B**, 없으면 **A** |
+| 사내망 | 허용 | 내부 git 서버 | **B** |
+| 일반망 | 허용 | GitHub 등 | **B** |
+
+첫 줄이 중요하다. 완전 에어갭에서는 이 설계서의 어느 모드도 켜지지 않는다 — 모델이 없는데
+도구만 있는 것이기 때문이다. 도입 전에 **대상 망이 어느 줄인지 먼저 확정한다.**
+
+폐쇄망이 실제로 바꾸는 것 —
+
+| | 일반망 | 폐쇄망 |
+|---|---|---|
+| 반입 | 릴리스 URL · `npm i` | **파일 하나**(`bin/ctx.mjs` + `cdp.exe` + 스킬 kit)를 매체로 |
+| 런타임 | Node 를 받으면 된다 | Node 가 없을 수 있다 → `cdp.exe` 경로가 **선택이 아니라 필수**(§9) |
+| 갱신 | 받아서 덮는다 | 손으로 반입. 번들이 낡으면 옛 판정을 낸다 — `version.built` 가 90일 넘으면 `brief` 에 경고 한 줄 |
+| git 원격 | origin | 내부 git 서버 · **없을 수도 있다**(`sync` 가 `remote: null` 을 낸다) |
+| 훅 | 그대로 | 그대로 — 폐쇄망일수록 훅이 유일한 보증이다 |
 
 ### 3.1 실행 · 레포 해결
 
 ```
-bin/ctx mcp [--repo <경로>] [--prompts auto|always|never]
+bin/ctx mcp [--root <폴더>] [--repo <경로>]… [--prompts auto|always|never]
 ```
 
-레포 해결 순서는 CLI 와 같다: `--repo` → `CDP_REPO` → `.claude/cdp.json` 상위 탐색 → **자기 위치**(`<repo>/bin/ctx.mjs` 의 부모). 프로세스는 호스트가 띄우고 죽인다. 유휴 종료 없음.
+| 플래그 | 뜻 |
+|---|---|
+| `--repo <경로>` | 지식 레포 하나. **여러 번 줄 수 있다.** 첫 번째가 기본 레포 |
+| `--root <폴더>` | 그 폴더의 하위 디렉터리를 전부 레포로 본다(모드 B 의 `<root>` 와 같은 모양) |
+| 둘 다 없음 | 지금까지와 같다 — `CDP_REPO` → `.claude/cdp.json` 상위 탐색 → **자기 위치**(`<repo>/bin/ctx.mjs` 의 부모). 레포 하나 · 그것이 기본 |
+
+레포 이름은 폴더명이다. 이름이 겹치면 시작 시 stderr 경고 후 뒤엣것을 무시한다.
+프로세스는 호스트가 띄우고 죽인다. 유휴 종료 없음.
 
 ### 3.2 설치 — `ctx setup` 산출물
 
@@ -181,6 +287,8 @@ bin/ctx mcp [--repo <경로>] [--prompts auto|always|never]
     "command": "cmd", "args": ["/c", "C:\\work\\ezipez_cdp\\bin\\ctx.cmd", "mcp"] } } }
 ```
 
+- 지식 레포를 둘 이상 붙이려면 `args` 를 `["mcp","--repo","<A>","--repo","<B>"]` 로 쓴다.
+  `ctx setup <작업레포> --also <다른 지식레포 경로>` 가 그 줄을 만든다. **서버 항목은 하나로 유지한다** — 레포마다 `mcpServers` 키를 늘리지 않는다(§2.9).
 - 기존 `.mcp.json` 이 있으면 `mcpServers.cdp` 키만 병합한다. 다른 서버는 건드리지 않는다.
 - `.gitignore` 안내에 `.mcp.json` 한 줄을 추가한다(`cdp.json` 과 같은 이유).
 - `inspect()` 가 `.mcp.json` 상태를 낸다: `command` 가 `cdp.json.knowledgeRepo` 와 일치 → 최신 · 불일치 → 갱신 필요 · 없음 → 미설치. 관리 > 작업 레포 화면에 열 하나 추가.
@@ -233,7 +341,10 @@ tools: Read, Grep, Glob, mcp__cdp__match, mcp__cdp__where, mcp__cdp__section, mc
 ```
 bin/ctx serve --root <레포들 폴더> [--bind 127.0.0.1] [--port 7374] --auth <auth.json>
               [--mirror] [--data <폴더>] [--prompts auto|always|never]
-bin/ctx serve token  --auth <auth.json> --user <이름> [--write] [--repos a,b|*]      # 발급 · 1회 출력
+bin/ctx serve user  add|set|list --auth <auth.json> …                                # 명부 (§4.4.0)
+bin/ctx serve token  --auth <auth.json> --user <이름> [--expires <일수>|never] [--note <메모>]
+                     # 발급 · 1회 출력 · 기본 90일 · 권한은 명부에서 온다
+bin/ctx serve token list   --auth <auth.json>                                        # 남은 일수 · 해시 앞 8자
 bin/ctx serve token revoke --auth <auth.json> --user <이름>
 ```
 
@@ -256,30 +367,106 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
 
 | 메서드 · 경로 | 인증 | 내용 |
 |---|---|---|
-| `POST /mcp/<name>` | Bearer | MCP Streamable HTTP. stateless — 세션 id 없음. 응답은 JSON 또는 SSE(SDK 결정) |
-| `GET /mcp/<name>` · `DELETE /mcp/<name>` | — | 405 |
-| `GET /healthz` | 없음 | `{ ok, built, repos: n, mirror: [{ name, lag }] }` |
-| `GET /repos` | Bearer | 토큰이 볼 수 있는 레포 목록 |
+| `POST /mcp` | Bearer | MCP Streamable HTTP. **레포는 도구의 `repo` 인자로 고른다**(§2.9). 기본 레포는 토큰의 `repos` 가 하나일 때만 정해진다. stateless — 세션 id 없음. 응답은 JSON 또는 SSE(SDK 결정) |
+| `POST /mcp/<name>` | Bearer | 같은 규약 · **`<name>` 이 기본 레포로 고정**된다. 다른 `repo` 를 넘기면 토큰 권한 안에서 허용한다. 레포 하나만 쓰는 팀은 이쪽이 단순하다 |
+| `GET · DELETE /mcp` · `/mcp/<name>` | — | 405 |
+| `GET /healthz` | 없음 | `{ ok, built, repos: n, mirror: { ok: n, lag: n, off: n } }` — **이름을 싣지 않는다.** 인증 없는 자리라 집계까지다 |
+| `GET /repos` | Bearer | 그 사용자가 볼 수 있는 레포 목록 + 레포별 `mirror` · `head`. 어느 레포가 밀렸는지는 여기서 본다 |
 | `GET /kit/<name>` | Bearer | 그 레포의 kit(스킬 · CLAUDE 블록 · TEMPLATE) zip — `ctx setup --server` 가 받는다 |
 
 `X-Forwarded-For` 는 로그용으로만 읽는다. 요청 본문 상한 2MB(`save` 포함).
 
-### 4.4 인증
+### 4.4 인증 — 명부와 토큰
 
-`auth.json` —
+**`auth.json` 은 토큰 대장이 아니라 명부다.** 사람이 먼저 있고 토큰이 거기 달린다.
+권한(`repos` · `write`)은 **사람에게** 붙는다 — 토큰은 신원을 증명할 뿐 권한을 들지 않는다.
 
 ```json
-{ "tokens": [
-  { "sha256": "9f2c…", "user": "kjsa", "write": true,  "repos": ["*"] },
-  { "sha256": "41ab…", "user": "qa",   "write": false, "repos": ["ezipez"] }
-] }
+{
+  "users": [
+    { "name": "kjsa", "label": "사경진 · 개발", "active": true,  "repos": ["*"],       "write": true },
+    { "name": "qa",   "label": "QA 공용",       "active": true,  "repos": ["ezipez"], "write": false },
+    { "name": "park", "label": "박아무개",       "active": false, "repos": ["ezipez"], "write": false, "left": "2026-09-01" }
+  ],
+  "tokens": [
+    { "sha256": "9f2c…", "user": "kjsa", "issued": "2026-09-21", "expires": "2026-12-20", "note": "노트북" },
+    { "sha256": "7b10…", "user": "kjsa", "issued": "2026-09-21", "expires": "never",      "note": "폐쇄망 PC" }
+  ]
+}
 ```
 
-- 클라이언트: `Authorization: Bearer <토큰>`. 서버는 sha256 으로 조회. 원문 토큰은 어디에도 저장하지 않는다.
+이렇게 나누면 사람 하나가 기계마다 토큰을 따로 들어도 **권한은 한 줄**이다. 프로젝트에서
+빠지면 `repos` 한 줄을 고치고, 퇴사하면 `active: false` — 토큰을 일일이 찾아 지우지 않아도
+그 사람 것 전부가 다음 요청부터 막힌다.
+
+**판정 순서** (매 요청) —
+
+```
+1  Bearer 토큰 → sha256 조회          없다 → 401 E_AUTH
+2  expires 확인                       지났다 → 401 E_AUTH ("만료")
+3  token.user 로 users[] 조회         없다 → 401 E_AUTH ("명부에 없는 토큰")   ← 고아 토큰
+4  active 확인                        false → 401 E_AUTH ("사용 중지된 사용자")
+5  repos · write 는 users[] 에서       밖 → 403 E_FORBIDDEN
+```
+
+3번이 있어야 명부에서 지운 사람의 토큰이 살아남지 못한다. **권한의 근거는 언제나 명부다.**
+
+- 클라이언트: `Authorization: Bearer <토큰>`. 원문 토큰은 어디에도 저장하지 않는다(해시만).
 - 토큰 = 32바이트 난수 base64url. `token` 명령이 1회 출력하고 해시만 파일에 붙인다.
-- `repos` 밖 → `E_FORBIDDEN`. `write: false` 인 토큰의 `save` → `E_FORBIDDEN`.
-- `save.work.author` 는 토큰의 `user` 로 서버가 채운다. 클라이언트가 다른 값을 보내면 `E_INPUT`.
+- `write: false` 인 사용자의 `save` → `E_FORBIDDEN`.
+- `save.work.author` 는 `users[].name` 으로 서버가 채운다. 클라이언트가 다른 값을 보내면 `E_INPUT`.
+- 뷰어의 세션 쿠키(§6.4)도 같은 5단계를 탄다 — 쿠키가 살아 있어도 `active: false` 면 끊긴다.
 - TLS · 레이트리밋 · IP 제한은 프록시가 한다. 서버는 평문 HTTP 를 루프백에서만 듣는다.
+
+#### 4.4.0 명부 다루기
+
+```
+bin/ctx serve user add  --auth <f> --name kjsa --label "사경진 · 개발" --repos '*' --write
+bin/ctx serve user set  --auth <f> --name kjsa [--repos a,b] [--write|--no-write] [--active|--inactive]
+bin/ctx serve user list --auth <f> [--repo ezipez]      # 이름 · 권한 · 상태 · 토큰 수 · 마지막 사용
+```
+
+- **`serve token --user <이름>` 은 명부에 없는 이름을 거부한다**(`E_INPUT`). 오타로 유령
+  사용자가 생기지 않게 — v1.0 은 `--user` 가 자유 문자열이라 이것을 막지 못했다.
+- `user list --repo ezipez` 가 **"이 레포를 지금 볼 수 있는 사람 전원"** 에 답한다. 명부를
+  둔 목적이 이 질문이다.
+- `--inactive` 는 토큰을 지우지 않는다. 되돌릴 수 있어야 하고, 이력이 남아야 한다.
+- **마지막 사용**은 `serve.log` 를 훑어 집계한다 — `auth.json` 을 매 요청 쓰지 않는다(§2.6 의
+  직렬화 원칙과 같은 이유). 안 쓰는 토큰을 찾아 걷어내는 용도다.
+
+#### 4.4.1 발급 — 요청으로 받는 것이 아니다
+
+**발급 엔드포인트는 없다. 만들지 않는다.** `serve token` 은 서버 기계에서 도는 CLI 이고,
+누구에게 줄지는 사람이 정한다. 그래서 발급의 인증은 **OS 가 한다** —
+
+| 무엇이 막나 | 어떻게 |
+|---|---|
+| 서버 계정 | 서버에 셸이 있는 사람만 `serve token` 을 돌릴 수 있다 |
+| 파일 권한 | `auth.json` 0600 · 소유자만. 쓰지 못하면 발급도 못 한다 |
+| 명부 | `--user` 가 `users[]` 에 있어야 한다(§4.4.0). **발급 전에 사람을 먼저 등록한다** |
+| 그 밖 | 서버가 확인할 방법이 없다. **누가 정당한 요청자인지는 서버가 판단하지 않는다** |
+
+마지막 줄이 이 설계의 경계다. HTTP 로 발급을 받으려면 "발급을 요청할 자격"을 다시 인증해야
+하고(그게 OAuth 가 푸는 문제다), 그것은 §0 에서 범위 밖으로 둔 것이다. 대신 발급을
+**사람의 절차**로 남긴다 — 이 규모에서는 그편이 정직하고 안전하다.
+
+#### 4.4.2 전달 · 만료 · 이력
+
+발급 자체보다 **발급한 뒤**가 약한 고리다. 셋을 규칙으로 못 박는다.
+
+| | 규칙 |
+|---|---|
+| **전달** | 원문은 발급 때 한 번만 출력된다. **본인에게 직접** 전한다 — 메신저 · 메일 · 이슈 · 위키에 평문으로 남기지 않는다. 남겼으면 유출로 보고 `revoke` 후 재발급한다 |
+| **만료** | `--expires <일수>` · **기본 90일**. 만료된 토큰은 `401`(`E_AUTH`). 무기한이 필요하면 `--expires never` 를 명시한다 — 기본값이 되지 않게 |
+| **이력** | 발급 · 폐기 · 만료 **그리고 명부 변경**(`user add` · `set`)을 `<data>/logs/auth.log` 에 한 줄씩. `시각 · 명령 · user · 바뀐 값 · 해시 앞 8자`. **원문은 적지 않는다**. 퇴사·권한 변경의 근거가 여기 남는다 |
+
+```
+bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일수 · 해시 앞 8자
+```
+
+- 만료 7일 전부터 `brief` 가 경고 한 줄을 낸다("토큰이 N일 뒤 만료된다").
+- 회전 = 새로 발급 → 클라이언트 `CDP_TOKEN` 교체 → 옛것 `revoke`. 겹치는 동안 둘 다 유효하다.
+- `revoke` 는 `auth.json` 에서 줄을 지운다. **다음 요청부터** 막힌다 — 서버에 세션이 없으므로 지울 다른 곳이 없다(§6.4).
 
 ### 4.5 `save` 도구
 
@@ -289,6 +476,7 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
 
 ```jsonc
 {
+  "repo": "ezipez",                                   // 필수 — 기본 레포로 대신하지 않는다 (§2.9)
   "work": {
     "id": "2026-0919-마스터단지-총주차대수-추가",     // YYYY-MMDD-slug · work/<id>.md 가 없어야 한다
     "title": "…",
@@ -311,7 +499,8 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
 처리 순서(레포 뮤텍스 안) —
 
 ```
-1  권한       write 토큰 · repos 포함                                    아니면 E_FORBIDDEN
+0  레포       repo 가 있고 사용자의 repos 에 든다                        없으면 E_INPUT / 밖이면 E_FORBIDDEN
+1  권한       users[].write · active                                     아니면 E_FORBIDDEN
 2  스키마     §2.7 형식 · body 에 "<!-- applied:" 포함 금지               아니면 E_INPUT
 3  존재       work/<id>.md 없음                                          있으면 E_EXISTS
 4  어휘       vocab 를 각 "## <type>" 섹션 끝에 "- `coord` — label\n  aliases: …" 로 붙인다 (메모리)
@@ -336,7 +525,8 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
 
 ### 4.6 읽기 도구 — 모드 B 차이
 
-`sync` 만 다르다(§2.2). 나머지 11종은 동일. `prompts` 는 §2.5 규칙 그대로.
+`sync` 만 다르다(§2.2). 나머지 12종은 동일. `prompts` 는 §2.5 규칙 그대로. `repos` 는 **그 사용자가
+볼 수 있는 레포만** 낸다 — 권한 밖 레포는 목록에 나타나지 않는다(존재를 알리지 않는다).
 
 ### 4.7 설치 — `ctx setup --server`
 
@@ -393,7 +583,7 @@ cdp.example.com { reverse_proxy 127.0.0.1:7374 }
   service: http://localhost:7374
 ```
 
-**운영 항목** — `GET /healthz` 감시(ops 봇 헬스체크 목록에 추가) · `serve.log` 회전 · `auth.json` 0600 · 백업 = `--mirror` + `<root>` 디스크 스냅샷 · 갱신 = `bin/ctx.mjs` 교체 후 재시작(`/healthz.built` 로 확인).
+**운영 항목** — `GET /healthz` 감시(ops 봇 헬스체크 목록에 추가 · 레포별 지연은 감시용 사용자 토큰으로 `GET /repos`) · 분기마다 토큰 회전(§4.4.2) · `serve.log` 회전 · `auth.json` 0600 · 백업 = `--mirror` + `<root>` 디스크 스냅샷 · 갱신 = `bin/ctx.mjs` 교체 후 재시작(`/healthz.built` 로 확인).
 
 ### 4.10 이전
 
@@ -406,7 +596,198 @@ cdp.example.com { reverse_proxy 127.0.0.1:7374 }
 
 ---
 
-## 5. 프로토콜 세부
+## 5. 설치 절차
+
+호스트에 만드는 것은 **설정 한 줄**이다(근거 문서 §5). 이 절은 그 한 줄을 어디에 어떻게
+넣고 무엇으로 확인하는지를 순서대로 적는다.
+
+### 5.1 시작 전에 정할 것
+
+| 정할 것 | 어떻게 |
+|---|---|
+| **명부** | 누가 어느 레포를 보나 · 누가 쓰나. `users[]` 의 초기 목록이 된다(§4.4) |
+| 망 등급 | §3.0 표에서 한 줄을 고른다. **완전 에어갭이면 여기서 멈춘다** |
+| 모드 | 서버를 세울 수 있나 → 있으면 B, 없으면 A (§3.0) |
+| 레포 목록 | 이름(폴더명) · 한 줄 설명. instructions 와 `repos` 에 그대로 실린다(§2.1) |
+| 기본 레포 | 작업 레포마다 하나. 대부분 그 팀이 늘 보는 것 (§2.9) |
+| 쓰기 권한 | 누가 `save` 를 하나 — 명부의 `write: true` (모드 B) |
+
+### 5.2 모드 B — 서버 (관리자, 1회)
+
+```bash
+# ① 레포를 둔다 — 등록은 폴더를 두는 것이 전부다
+git clone <origin> /opt/cdp/repos/ezipez
+git clone <origin> /opt/cdp/repos/dpms
+
+# ② 사람을 명부에 올린다 — 권한은 여기 붙는다 (§4.4.0)
+bin/ctx serve user add --auth /opt/cdp/auth.json --name kjsa --label "사경진 · 개발" --repos '*' --write
+bin/ctx serve user add --auth /opt/cdp/auth.json --name qa   --label "QA 공용"      --repos ezipez
+
+# ③ 토큰을 발급한다 — 원문은 이때 한 번만 출력된다 · 기계마다 하나
+bin/ctx serve token --auth /opt/cdp/auth.json --user kjsa --note "노트북"
+bin/ctx serve token --auth /opt/cdp/auth.json --user qa
+
+# ④ 띄운다
+bin/ctx serve --root /opt/cdp/repos --auth /opt/cdp/auth.json --mirror --data /opt/cdp/data
+
+# ⑤ 확인 — 프록시 없이 루프백에서
+curl -s localhost:7374/healthz
+```
+
+상주와 TLS 는 §9.4(LaunchAgent · Caddy / Cloudflare Tunnel). `auth.json` 은 0600.
+
+### 5.3 모드 B — 사용자 PC
+
+**토큰을 환경변수에 둔다.** `.mcp.json` 은 커밋되므로 토큰 원문이 들어가면 안 된다.
+
+```bash
+# macOS / Linux — 셸 프로파일
+export CDP_TOKEN=<발급받은 토큰>
+# Windows — 사용자 환경변수
+setx CDP_TOKEN <발급받은 토큰>
+```
+
+| 호스트 | 하는 일 | 확인 |
+|---|---|---|
+| **Claude Code** | `ctx setup --server https://cdp.example.com --repo ezipez <작업레포>` — `.mcp.json` · `cdp.json` · 스킬 kit 를 쓴다(§4.7) | `/mcp` 에 `cdp` 가 **connected** |
+| **Claude Desktop** | `ctx setup --server … --desktop` — `claude_desktop_config.json` 에 같은 항목을 병합(§3.2 경로) | 설정 > 커넥터에 `cdp` · `+` 메뉴에 prompt 둘 |
+| **claude.ai 커넥터** | 커넥터 추가 > URL `https://cdp.example.com/mcp` | **미검증**(§10) — 공개 HTTPS 가 필요하고 정적 Bearer 를 UI 가 받는 범위가 버전마다 다르다. 폐쇄망에서는 불가 |
+
+`ctx setup` 없이 손으로 붙이려면 —
+
+```bash
+claude mcp add --transport http cdp https://cdp.example.com/mcp   --header "Authorization: Bearer $CDP_TOKEN"
+```
+
+### 5.4 모드 A — 폐쇄망 반입
+
+반입 묶음은 **파일 넷**이다. 그 밖에 받아야 할 것이 없다.
+
+```
+cdp-<BUILT>.zip
+  bin/ctx.mjs        번들 하나 — SDK · zod 포함 (§9)
+  bin/cdp.exe        Node 없는 PC 용 (§3.0)
+  bin/ctx · ctx.cmd  shim
+  kit/               스킬 · CLAUDE 블록 · TEMPLATE
+```
+
+```bash
+# ① 지식 레포를 PC 에 둔다 (내부 git 서버에서 clone · 없으면 묶음에 포함해 반입)
+git clone <내부 origin> C:\work\ezipez_cdp
+
+# ② 작업 레포에 붙인다 — .mcp.json · 스킬 · 훅
+C:\work\ezipez_cdp\bin\ctx.cmd setup C:\work\내작업레포
+
+# 지식 레포가 둘 이상이면
+... ctx.cmd setup C:\work\내작업레포 --also C:\work\dpms_cdp
+```
+
+Node 가 없으면 `.mcp.json` 의 `command` 가 `cdp.exe` 를 가리키게 `ctx setup` 이 알아서 쓴다.
+갱신은 `bin/` 을 덮는 것이 전부다 — 덮은 뒤 호스트를 다시 켠다(세션마다 띄우므로 재시작 불필요).
+
+### 5.5 설치 확인 — 공통
+
+| # | 확인 | 정상 |
+|---|---|---|
+| 1 | 호스트의 MCP 목록 | `cdp` 가 connected |
+| 2 | `tools/list` | **12건**(모드 B 는 13건 — `save` 포함) |
+| 3 | `version` 를 부른다 | `built` 가 반입한 번들 시각 · `mode` 가 `local`/`server` |
+| 4 | `repos` 를 부른다 | 둘 목적한 레포가 다 보이고 `default` 가 하나 |
+| 5 | `brief` 를 부른다 | 두 줄 · 레포 상태가 살아 있다 |
+| 6 | 아무 좌표나 `match` | 좌표와 `repo` 가 붙어 돌아온다 |
+
+### 5.6 막혔을 때
+
+| 증상 | 까닭 | 손볼 곳 |
+|---|---|---|
+| 목록에 안 뜬다 | `.mcp.json` 경로가 이 PC 의 실제 경로가 아니다 | `ctx setup` 다시 · `inspect` 가 불일치를 낸다(§3.2) |
+| 떴는데 도구 0건 | 서버가 시작 중 죽었다 | 모드 A: stderr · 모드 B: `serve.log`(§2.8) |
+| 연결이 바로 끊긴다 | stdout 에 규약 밖 바이트 | `console.log` 를 stderr 로(§2.8) |
+| 401 | `CDP_TOKEN` 미설정 · 셸이 환경변수를 못 봤다 | 호스트를 껐다 켠다 — 환경변수는 프로세스 시작 때 읽힌다 |
+| 401 인데 토큰은 맞다 | 만료 · 명부에서 지워졌다 · `active: false` | `serve user list` 로 상태 확인(§4.4.0) |
+| 403 | 명부의 `repos` 밖 · `write: false` 로 `save` | **토큰이 아니라 명부**를 고친다 — `serve user set`(§4.4.0) |
+| `E_REPO` | 기본 레포가 없는데 `repo` 를 생략 | `.claude/cdp.json` 에 `repo` · 또는 URL 을 `/mcp/<name>` 으로(§2.9) |
+| 옛 답을 낸다 | 번들이 낡았다 | `version.built` 확인 · 반입 묶음 교체(§3.0) |
+
+---
+
+## 6. 뷰어 — 원격 서비스화
+
+### 6.1 왜 지금인가
+
+모드 B 를 택하는 순간 **뷰어가 볼 대상이 사라진다.** 지금 뷰어는 PC 의 로컬 clone 을 읽는
+트레이 앱인데(루프백 · 세션 토큰 · Host 검증), 모드 B 에서는 그 clone 이 없다. 서버가
+유일한 작성자이고 사람은 origin 을 읽기 전용으로 받을 뿐이다(§4.2). 그래서 뷰어도 서버로
+간다 — **`ctx serve` 가 이미 레포 N 개를 메모리에 들고 있다**(§2.6). 화면만 붙이면 된다.
+
+### 6.2 API 를 두 부류로 가른다
+
+이것이 이 절의 핵심이다. 지금 `viewer/server/adapter/http.js` 의 라우트는 성격이 섞여 있다.
+
+| 부류 | 라우트 | 원격에서 |
+|---|---|---|
+| **레포를 읽는다** | `/diag` · `/git` · `/sync`(GET) | **그대로 낸다** — 대상이 `<root>/<repo>` 로 바뀔 뿐 |
+| **이 PC 를 만진다** | `/setup` · `/repo`(POST) · `/workrepos` · `/git/hooks` · `/git/pull` · `/git/push` · `/open` · `/quit` · `/rescan` | **내지 않는다.** 404 |
+| **사람마다 다르다** | `/state` | 세션에 매단다 — 서버 전역이 아니다 |
+
+`/open`(편집기로 파일 열기)과 `/quit`(트레이 종료)이 경계를 보여 준다. 서버에서 서버의
+파일을 여는 것은 무의미하고, 브라우저에서 남의 서버를 끄는 것은 사고다. **원격 뷰어는
+로컬 뷰어의 부분집합**이고, 빠지는 쪽이 관리·설치 화면이다.
+
+`/git/pull` · `/git/push` 가 빠지는 이유는 따로다 — 모드 B 에서 그것은 `save` 와 `--mirror`
+가 한다(§4.5). 화면이 끼어들면 작성자가 둘이 된다.
+
+### 6.3 배치
+
+```
+ctx serve  ─┬─ POST /mcp · /mcp/<name>      MCP            (§4.3)
+            ├─ GET  /api/<repo>/…           뷰어 읽기 API   (§6.2 첫 줄)
+            ├─ GET  /                       뷰어 정적 파일  — 번들에 포함
+            └─ GET  /healthz                감시           (인증 없음)
+```
+
+한 프로세스 · 한 포트다. 레포 캐시(§2.6)를 MCP 와 공유하므로 두 번 읽지 않는다.
+레포는 **경로 조각**으로 고른다(`/api/ezipez/diag`) — 브라우저에는 주소가 곧 상태이기
+때문이다. MCP 의 `repo` 인자(§2.9)와 뜻은 같다.
+
+### 6.4 인증 — 방어 모델이 통째로 바뀐다
+
+**`security.js` 의 전제가 원격에서는 성립하지 않는다.** 그 파일은 "브라우저가 `Host` 헤더를
+위조할 수 없다"에 기대 루프백 주소만 허용해 왔다. 원격에서는 `Host: cdp.example.com` 이
+**정상값**이므로 그 검사는 아무것도 막지 않는다. 다시 세운다.
+
+| | 로컬 뷰어 (지금) | 원격 뷰어 |
+|---|---|---|
+| 신원 | 프로세스가 만든 세션 토큰 | `auth.json` 의 토큰으로 로그인 → **세션 쿠키**. 쿠키에는 `user` 만 담고 권한은 매 요청 명부에서 읽는다(§4.4) |
+| 쿠키 속성 | — | `HttpOnly` · `Secure` · `SameSite=Lax` · 만료 12시간 |
+| 주요 위협 | 외부 페이지의 `fetch(127.0.0.1)` | CSRF · 세션 탈취 |
+| 막는 법 | `Host` 화이트리스트 | `Origin` 검사 + `SameSite` · 쓰기 요청에 CSRF 토큰 |
+| 전송 | 평문 (루프백) | TLS 필수 — 프록시(§9.4) |
+
+브라우저는 `Authorization` 헤더를 스스로 달 수 없다(주소창으로 들어온다). 그래서 MCP 는
+Bearer, 뷰어는 쿠키다 — **같은 `auth.json` 을 보되 통로가 둘이다.** 로그인 화면은 토큰
+원문을 한 번 받아 sha256 으로 조회하고(§4.4) 쿠키로 바꾼다. 원문은 저장하지 않는다.
+
+`repos` 권한은 그대로 적용된다 — 그 사용자가 볼 수 없는 레포는 화면 목록에도 없다.
+`active: false` 로 바꾸면 **열려 있던 화면도 다음 요청에서 끊긴다** — 쿠키를 따로 지울 필요가 없다.
+
+### 6.5 범위
+
+- **읽기만.** 편집·커밋은 MCP `save` 로만 한다(§4.5). 작성자를 둘로 만들지 않는다.
+- 관리 화면(작업 레포 · 설치 · 훅)은 **로컬 뷰어에만** 남는다.
+- 로컬 뷰어는 없어지지 않는다 — 모드 A 의 PC 에서는 지금 그대로다.
+
+### 6.6 남은 결정
+
+| 항목 | 후보 |
+|---|---|
+| 프런트 배포 | 번들에 포함(반입 한 파일 유지) vs 별도 정적 호스팅 |
+| 세션 저장 | 메모리(재시작 시 재로그인) vs `<data>/sessions` |
+| 다중 사용자 `/state` | 쿠키 세션에 매단다 vs 사용자별 파일 |
+
+---
+
+## 7. 프로토콜 세부
 
 - SDK `@modelcontextprotocol/server` + `zod`. stdio 전송 · Streamable HTTP 전송 둘 다 SDK. esbuild 가 번들에 포함(순수 JS · SEA 영향 없음).
 - 처리 메서드: `initialize` · `notifications/initialized` · `ping` · `tools/list` · `tools/call` · `resources/list` · `resources/templates/list` · `resources/read` · `prompts/list` · `prompts/get`. 나머지는 SDK 기본 응답.
@@ -416,80 +797,120 @@ cdp.example.com { reverse_proxy 127.0.0.1:7374 }
 
 ---
 
-## 6. 보안
+## 8. 보안
 
 | | 공통 | 모드 A | 모드 B |
 |---|---|---|---|
 | 경로 | `root` 접두 검사 · `..` 거부 | | |
-| 쓰기 | 읽기 도구는 파일을 바꾸지 않는다 | 쓰기 도구 없음 | `save` 만 · write 토큰만 · 레포 뮤텍스 |
+| 쓰기 | 읽기 도구는 파일을 바꾸지 않는다 | 쓰기 도구 없음 | `save` 만 · 명부의 `write: true` 만 · 레포 뮤텍스 |
 | 리스너 | | 없음 | 루프백 + 프록시. 프록시 없이 `--bind 0.0.0.0` 이면 시작 시 stderr 경고 |
-| 비밀 | | 없음 | 토큰 해시만 저장 · 로그에 토큰 없음 · `auth.json` 0600 |
+| 비밀 | | 없음 | 토큰 해시만 저장 · 로그에 토큰 없음 · `auth.json` 0600 · 기본 90일 만료(§4.4.2) |
+| 권한의 근거 | | — | **명부(`users[]`)뿐.** 토큰은 신원만 증명한다 — 고아 토큰은 401(§4.4) |
+| 인증 없는 자리 | | stdio — 리스너가 없다 | `GET /healthz` 뿐. **집계만 싣는다** — 레포 이름도 노출이다(§4.3) |
 | 로그 | 본문 · 검색어 안 남김 | | user · 도구 · coord/id · 결과 코드 |
 | 본문 크기 | `section` · `work` 응답 상한 512KB — 넘으면 `E_INPUT`(`cdp://doc` 리소스로) | | 요청 2MB |
 
 ---
 
-## 7. 빌드 · 릴리스
+## 9. 빌드 · 릴리스
 
 - `build-ctx.mjs`: entry 그대로 `ctx-cli.mjs`. `ctx-mcp.mjs` · `ctx-mcp-serve.mjs` · SDK · zod 가 같은 `ctx.mjs` 에 들어간다. `__CTX_BUILT__` 치환 그대로.
 - `ctx version` 출력에 `mcp: stdio · http` 한 줄 추가.
 - 배포본: `bin/ctx.mjs` 하나가 두 모드를 다 든다. 서버는 그 파일 + Node 로 돈다 — 별도 서버 패키지 없음.
+- **폐쇄망 반입 묶음** `cdp-<BUILT>.zip` 을 릴리스 산출물에 더한다 — `bin/` 넷 + `kit/`(§5.4). 인터넷에서 받아야 할 것이 하나도 없어야 한다.
+- 뷰어 정적 파일(§6.3)을 서버 번들에 넣을지는 §6.6 의 열린 항목. 넣으면 반입이 한 파일로 유지되고, 번들이 커진다.
 - 번들 크기를 릴리스 로그에 적는다(현재 246KB 대비).
-- `cdp.exe`: `ctx mcp` 는 동작해야 한다(§8) · `ctx serve` 는 "서버 모드는 Node 로" 메시지 후 exit 2.
+- `cdp.exe`: `ctx mcp` 는 동작해야 한다(§10) · `ctx serve` 는 "서버 모드는 Node 로" 메시지 후 exit 2.
 
 ---
 
-## 8. 검증 항목
+## 10. 검증 항목
 
 **공통**
 ```
 □ where · match · derive · check · brief · version 의 tools/call 결과가 ctx <명령> --json 과 바이트까지 같다
 □ 좌표 `..` · 절대경로 · 제어문자가 E_COORD / E_INPUT 으로 거부된다
 □ 세션 중 work/ 에 파일이 생기면 다음 호출이 그것을 본다 (스탬프 재스캔)
-□ 명함 11개 토큰 비용 실측 (세션 시작 컨텍스트 차이)
+□ 명함 12개 토큰 비용 실측 (세션 시작 컨텍스트 차이) · 레포 3개일 때 instructions 증가분
 □ Claude Code 의 initialize (protocolVersion · clientInfo.name) 를 픽스처로 저장 · prompts auto 판정에 반영
 □ tools: 를 제한한 에이전트가 Bash 없이 where 를 부른다
+□ repo 를 생략하면 기본 레포로 답하고 출력의 repo 가 그것을 가리킨다
+□ 기본 레포가 없는 서버에서 repo 생략 → E_REPO (임의로 고르지 않는다)
+□ 두 레포에 같은 좌표가 있을 때 match 가 둘 다 낸다 · where 는 repo 없이는 답하지 않는다
+□ 레포 이름 충돌 · `..` 이 든 repo 값 → E_INPUT
 ```
 
 **모드 A**
 ```
-□ /mcp 에 cdp 가 연결로 뜨고 tools/list 가 11건이다
+□ /mcp 에 cdp 가 연결로 뜨고 tools/list 가 12건이다
 □ mcp 모드에서 stdout 규약 밖 바이트 0 (로그는 stderr)
 □ Node 없는 PC: shim → cdp.exe ctx mcp 로 stdio 가 열린다 (콘솔 서브시스템 제거 exe · 파이프 실측 · 안 되면 mcp 만 CONSOLE 빌드)
 □ Windows .mcp.json: cmd /c … ctx.cmd mcp 로 연결된다
 □ ctx setup --dry 에 .mcp.json 이 보이고, 적용 후 inspect 가 최신을 낸다
 □ ctx setup --desktop 이 기존 claude_desktop_config.json 의 다른 키를 보존한다
+□ --repo 를 두 번 준 .mcp.json 이 레포 둘을 들고 첫 번째가 default 다
+□ 인터넷이 끊긴 PC 에서 반입 묶음만으로 설치 → 연결까지 간다 (npm · 다운로드 0회)
+□ git 원격이 없는 레포에서 sync 가 remote: null 로 답하고 죽지 않는다
+□ version.built 가 90일 이상 지난 번들에서 brief 가 경고 줄을 낸다
 ```
 
 **모드 B**
 ```
-□ 토큰 없음 401 · 무효 401 · repos 밖 403 · read 토큰의 save 403
+□ 토큰 없음 401 · 무효 401 · repos 밖 403 · write:false 사용자의 save 403
+□ 명부에 없는 --user 로 토큰 발급 → E_INPUT (유령 사용자가 안 생긴다)
+□ users[] 에서 사람을 지운 뒤 그 토큰 → 401 (고아 토큰이 살아남지 않는다)
+□ active:false 로 바꾸면 토큰을 지우지 않아도 다음 요청이 401 · 열려 있던 뷰어 화면도 끊긴다
+□ 한 사람의 토큰 둘(노트북 · 폐쇄망)이 같은 권한을 쓰고, user set 한 번이 둘 다에 먹는다
+□ serve user list --repo ezipez 가 그 레포를 볼 수 있는 active 사용자 전원을 낸다
+□ user add · set 이 auth.log 에 남고 원문 토큰은 어디에도 없다
 □ save 정상: 커밋 1개 · work 파일 · 섹션 applied 갱신 · INDEX 재생성 · 미러 push
 □ save 충돌: 두 클라이언트가 같은 섹션 — 둘째가 E_CONFLICT 로 거부되고 트리가 깨끗하다
 □ save 검사 실패: 파생 누락 · 미등재 좌표 → E_CHECK · 파일 복원 · 커밋 0
 □ 같은 id 두 번 → E_EXISTS
 □ 요청 2MB 초과 → 413
-□ /healthz 가 프록시 없이 루프백에서 응답 · mirror lag 가 표시된다
+□ /healthz 가 프록시 없이 루프백에서 응답 · 본문에 **레포 이름이 하나도 없다**(집계만)
+□ /repos 가 토큰 권한 안의 레포별 mirror · head 를 낸다
+□ 만료된 토큰 → 401 · serve token list 가 남은 일수를 낸다
+□ --expires 를 주지 않으면 90일이 붙는다 (무기한이 기본이 되지 않는다)
+□ revoke 직후 그 토큰의 다음 요청이 401 (세션이 남지 않는다)
 □ ctx setup --server 가 GET /kit 로 스킬을 받아 넣고 .mcp.json 이 ${CDP_TOKEN} 을 쓴다
 □ 서버 재시작 없이 <root> 에 레포 폴더를 추가하면 60초 안에 /repos 에 나온다
 □ Desktop 대화창에서 load prompt 가 섹션까지 한 번에 넣는다 · Claude Code 에서는 /mcp-cdp-load 가 안 보인다
+□ POST /mcp (레포 미고정) 와 POST /mcp/<name> (고정) 이 같은 도구 목록을 낸다
+□ repos 가 토큰 권한 밖 레포를 목록에 내지 않는다 (존재를 알리지 않는다)
+□ save 에 repo 누락 → E_INPUT · 권한 밖 repo → E_FORBIDDEN
+□ claude.ai 커넥터에 URL 을 등록했을 때 정적 Bearer 가 받아들여지는가 — **미검증 항목**(§5.3)
+```
+
+**뷰어 원격**(§6)
+```
+□ /api/<repo>/diag 가 쿠키 세션으로 열리고 Bearer 없이도 동작한다
+□ 토큰 권한 밖 레포의 /api/<repo>/* → 403 · 화면 목록에도 없다
+□ /setup · /open · /quit · /git/hooks · /git/pull · /git/push 가 서버 모드에서 404
+□ 다른 오리진에서 온 쓰기 요청이 Origin 검사로 끊긴다 (로컬의 Host 검사는 여기서 안 먹는다)
+□ 쿠키가 HttpOnly · Secure · SameSite=Lax 로 내려간다 · 12시간 뒤 재로그인
+□ 두 사람이 동시에 볼 때 /state 가 섞이지 않는다
+□ MCP 와 뷰어가 같은 레포 캐시를 쓴다 (레포가 두 번 로드되지 않는다)
 ```
 
 ---
 
-## 9. 설정 · 플래그 레퍼런스
+## 11. 설정 · 플래그 레퍼런스
 
 | 자리 | 키 · 플래그 | 값 |
 |---|---|---|
-| `ctx mcp` | `--repo` · `--prompts` | 경로 · `auto\|always\|never` |
+| `ctx mcp` | `--root` · `--repo`(반복 가능) · `--prompts` | 폴더 · 경로 · `auto\|always\|never` |
 | `ctx serve` | `--root` · `--bind` · `--port` · `--auth` · `--mirror` · `--data` · `--prompts` | 폴더 · IP(기본 127.0.0.1) · 정수(기본 7374) · 파일 · 플래그 · 폴더(기본 OS 앱데이터) · 위와 같음 |
-| `ctx serve token` | `--user` · `--write` · `--repos` · `revoke` | 이름 · 플래그 · `a,b\|*` |
-| `ctx setup` | `--desktop` · `--server <url> --repo <name>` · `--dry` | |
-| `.mcp.json` (A) | `mcpServers.cdp` | `{ type: stdio, command, args: [mcp] }` |
-| `.mcp.json` (B) | `mcpServers.cdp` | `{ type: http, url: <server>/mcp/<name>, headers: { Authorization: "Bearer ${CDP_TOKEN}" } }` |
+| `ctx serve user` | `add` · `set` · `list` · `--name` · `--label` · `--repos` · `--write\|--no-write` · `--active\|--inactive` | 명부 (§4.4.0) |
+| `ctx serve token` | `--user` · `--expires` · `--note` · `list` · `revoke` | 명부의 이름 · 일수 또는 `never`(기본 90) · 메모 |
+| `ctx setup` | `--desktop` · `--server <url> --repo <name>` · `--also <경로>` · `--dry` | |
+| `.mcp.json` (A) | `mcpServers.cdp` | `{ type: stdio, command, args: [mcp, --repo, <A>, --repo, <B>] }` — **항목은 하나** |
+| `.mcp.json` (B) | `mcpServers.cdp` | `{ type: http, url: <server>/mcp 또는 /mcp/<name>, headers: { Authorization: "Bearer ${CDP_TOKEN}" } }` |
 | `.claude/cdp.json` | A `knowledgeRepo` · B `server` + `repo` | |
 | 환경변수 | `CDP_REPO`(A) · `CDP_TOKEN`(B) | |
-| `auth.json` | `tokens[]` | `{ sha256, user, write, repos }` |
+| `auth.json` | `users[]` · `tokens[]` | `{ name, label, active, repos, write }` · `{ sha256, user, issued, expires, note }` — **권한은 `users[]` 에만** |
+| 도구 인자 | `repo` | 전 도구 선택(생략 = 기본 레포) · `save` 는 **필수** (§2.9) |
+| 뷰어 (B) | 경로 | `/api/<repo>/…` · 인증은 세션 쿠키 (§6.4) |
 
 ---
 
@@ -504,24 +925,40 @@ import { resolveCoord } from '../../core/managed.js'
 import { reconcile } from '../../core/vocab.js'
 // … ctx-cli.mjs 와 같은 import
 
-export function buildServer({ root, mode, prompts, user }) {
+// repos: [{ name, root }] · fallback: 기본 레포 이름 또는 null (§2.9)
+export function buildServer({ repos, fallback, mode, prompts, user, allow }) {
   const server = new McpServer({ name: 'cdp', version: BUILT })
-  const repo = makeRepoCache(root)                 // §2.6 스탬프 재스캔
+  const caches = new Map(repos.map(r => [r.name, makeRepoCache(r.root)]))   // §2.6 레포마다
 
+  const pick = (name) => {                         // 레포 확정 — 임의로 고르지 않는다
+    const n = name || fallback
+    if (!n) throw new CtxError('E_REPO', 'repo 를 주지 않았고 기본 레포가 없다')
+    if (!caches.has(n) || (allow && !allow(n))) throw new CtxError('E_FORBIDDEN', n)
+    return n
+  }
+
+  // repo?: 전 도구 공통 (§2.2) · 출력에 repo 를 붙여 어느 레포로 답했는지 알린다
   const tool = (name, description, shape, run) =>
-    server.registerTool(name, { description, inputSchema: z.object(shape) }, async (args) => {
-      try {
-        const r = await run(await repo(), args)
-        return { content: [{ type: 'text', text: JSON.stringify(r) }], structuredContent: r }
-      } catch (e) {
-        return { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: toError(e) }) }] }
-      }
-    })
+    server.registerTool(name, { description, inputSchema: z.object({ repo: z.string().optional(), ...shape }) },
+      async ({ repo: want, ...args }) => {
+        try {
+          const n = pick(want)
+          const r = { repo: n, ...(await run(await caches.get(n)(), args)) }
+          return { content: [{ type: 'text', text: JSON.stringify(r) }], structuredContent: r }
+        } catch (e) {
+          return { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: toError(e) }) }] }
+        }
+      })
 
-  tool('match', CARD.match, { names: z.array(z.string().max(100)).min(1).max(20) }, matchImpl)
   tool('where', CARD.where, { coord: z.string(), limit: z.number().int().min(1).max(50).optional() }, whereImpl)
-  // section · work · search · derive · apply · check · sync · brief · version
-  if (mode === 'server') tool('save', CARD.save, SAVE_SHAPE, (r, a) => saveImpl(r, a, user))
+  // section · work · search · derive · apply · check · sync · brief
+  tool('repos', CARD.repos, {}, () => listRepos(caches, fallback, allow))
+
+  // match 만 레포를 가로지른다 (§2.9) — repo 를 주면 그 레포만
+  server.registerTool('match', { description: CARD.match, inputSchema: MATCH_SHAPE }, matchAcrossRepos(caches, allow))
+  server.registerTool('version', { description: CARD.version, inputSchema: z.object({}) }, versionImpl)
+
+  if (mode === 'server') tool('save', CARD.save, SAVE_SHAPE, (r, a) => saveImpl(r, a, user))   // repo 필수
 
   registerResources(server, repo)                  // §2.4
   if (prompts !== 'never') registerPrompts(server, repo, prompts)   // §2.5 — clientInfo 는 initialize 뒤 판정
@@ -530,7 +967,8 @@ export function buildServer({ root, mode, prompts, user }) {
 
 // 모드 A 진입 (ctx-cli.mjs 의 mcp 서브커맨드)
 export async function runStdio(opts) {
-  const server = buildServer({ root: await resolveRepo(opts), mode: 'local', prompts: opts.prompts })
+  const repos = await resolveRepos(opts)           // --root · --repo… · 자기 위치 (§3.1)
+  const server = buildServer({ repos, fallback: repos[0]?.name, mode: 'local', prompts: opts.prompts })
   await server.connect(new StdioServerTransport())   // stdout 은 여기서만 쓴다
 }
 ```
