@@ -129,8 +129,8 @@ URL 은 `POST /mcp/gdi`(고정)를 쓴다 — 레포 하나면 이쪽이 단순�
 
 | 무엇 | 답 | 그래서 |
 |---|---|---|
-| 서버 | **`10.10.20.187`** · 사내 Linux | **systemd**. §9.4 의 LaunchAgent 대신 [`ops/deploy/cdp-serve.service`](../../ops/deploy/cdp-serve.service) |
-| 접속 | **`http://10.10.20.187:7374`** · 프록시 없음 | Caddy · Cloudflare Tunnel 절이 빠진다. **TLS · 레이트리밋 · IP 제한이 없다** |
+| 서버 | **`10.10.20.188`** · 사내 Linux | **systemd**. §9.4 의 LaunchAgent 대신 [`ops/deploy/cdp-serve.service`](../../ops/deploy/cdp-serve.service) |
+| 접속 | **`http://10.10.20.188:7374`** · 프록시 없음 | Caddy · Cloudflare Tunnel 절이 빠진다. **TLS · 레이트리밋 · IP 제한이 없다** |
 | push 자격 | **전용 계정 + 배포 토큰** | `cdp-bot`. 커밋 author 는 토큰의 사용자이고 push 주체만 봇이다 — 둘이 섞이지 않는다 |
 | 레포 폴더 | `/opt/cdp/repos/**gdi**` | 폴더명이 레포 이름이다(§4.2). 로컬 `C:\cdp` 와 달라도 정상 |
 
@@ -143,7 +143,7 @@ URL 은 `POST /mcp/gdi`(고정)를 쓴다 — 레포 하나면 이쪽이 단순�
 | | |
 |---|---|
 | 토큰이 사내망을 평문으로 흐른다 | 망을 믿는 것이 전제다. git origin 도 이미 평문 HTTP 다 |
-| 좁히는 것 | `--bind` 를 `0.0.0.0` 이 아니라 **`10.10.20.187` 하나**에만 · 루프백 아닌 `Origin` 은 403(§8) |
+| 좁히는 것 | `--bind` 를 `0.0.0.0` 이 아니라 **`10.10.20.188` 하나**에만 · 루프백 아닌 `Origin` 은 403(§8) |
 | 레이트리밋 없음 | 사용자 2~5명 규모라 두지 않는다 |
 | **claude.ai 커넥터 불가** | 공개 HTTPS 가 아니다 — §5.3 의 미검증 항목은 **이 배치에서 해당 없음**으로 닫는다 |
 

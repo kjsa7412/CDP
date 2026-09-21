@@ -3,8 +3,11 @@
 설계 [`CDP_MCP_설계서 v1.1 §9.4`](../../docs/design/CDP_MCP_설계서_v1.0.md) ·
 확정값 [`MCP_0단계_결정`](../../docs/dev/MCP_0단계_결정.md)
 
-> **여기 있는 것은 사내 배치 하나에 맞춘 실물이다.** 다른 배치로 가면
-> §9.4 의 일반형(LaunchAgent · Caddy · Cloudflare Tunnel)을 본다.
+> **실제로 올릴 때는 [`설치절차.md`](설치절차.md) 를 따른다.** 순서와 확인이
+> 거기 있다. 이 문서는 참조 — 무엇을 왜 그렇게 했는지다.
+>
+> 사내 배치 하나에 맞춘 실물이다. 다른 배치로 가면 §9.4 의 일반형
+> (LaunchAgent · Caddy · Cloudflare Tunnel)을 본다.
 
 ---
 
@@ -12,8 +15,8 @@
 
 | | |
 |---|---|
-| 서버 | `10.10.20.187` · 사내 Linux |
-| 접속 | `http://10.10.20.187:7374` — **프록시 없음 · 평문** |
+| 서버 | `10.10.20.188` · 사내 Linux |
+| 접속 | `http://10.10.20.188:7374` — **프록시 없음 · 평문** |
 | origin | `http://10.10.20.250:2900/soln1/cdp.git` — 사내 git · 평문 |
 | push 자격 | **전용 계정 + 배포 토큰** |
 | 레포 | `gdi` 하나 (`<root>/gdi`) |
@@ -26,7 +29,7 @@
 | | |
 |---|---|
 | 토큰 | 사내망을 **평문으로** 흐른다. 망을 믿는 것이 전제다 |
-| 바인드 | `0.0.0.0` 이 아니라 `10.10.20.187` 하나에만. 다른 인터페이스로는 안 뜬다 |
+| 바인드 | `0.0.0.0` 이 아니라 `10.10.20.188` 하나에만. 다른 인터페이스로는 안 뜬다 |
 | Origin | 루프백이 아닌 `Origin` 헤더는 403(§8). 브라우저에서 찌르는 길은 막혀 있다 |
 | 레이트리밋 | 없다. 사내 사용자 2~5명 규모라 두지 않는다 |
 | claude.ai 커넥터 | **불가능하다.** 공개 HTTPS 가 아니다 — §5.3 의 미검증 항목은 이 배치에서 해당 없음 |
@@ -43,7 +46,9 @@ sudo chown -R cdp:cdp /opt/cdp
 node --version        # 20 이상이어야 한다. cdp.exe 는 서버 모드를 지원하지 않는다
 ```
 
-`bin/ctx.mjs` 를 `/opt/cdp/bin/` 에 둔다(릴리스 산출물).
+서버에 올리는 것은 **둘뿐**이다 — `npm run build:ctx` 가 만든 `ops/out/ctx/ctx.mjs`
+(MCP SDK · zod · core 가 다 들어 있다)와 `npm run build` 가 만든 `ops/out/web/`(화면).
+서버에 `node_modules` 는 필요 없다.
 
 ## 2. git 자격 — 전용 계정
 
@@ -109,8 +114,8 @@ sudo systemctl status cdp-serve
 확인 —
 
 ```bash
-curl -s http://10.10.20.187:7374/healthz
-curl -s -H "Authorization: Bearer <토큰>" http://10.10.20.187:7374/repos
+curl -s http://10.10.20.188:7374/healthz
+curl -s -H "Authorization: Bearer <토큰>" http://10.10.20.188:7374/repos
 ```
 
 `/healthz` 는 인증 없이 열린다(§4.3). **레포 이름은 싣지 않는다** — 집계까지다.

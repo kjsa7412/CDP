@@ -15,12 +15,16 @@ WorkingDirectory=/opt/cdp
 #
 # --auth 가 없으면 서버가 시작을 거부한다(설계서 §8). 루프백 밖에 인증 없이
 # 문을 내는 것은 실수가 아니라 사고다.
+#
+# --web 은 관리 서비스의 화면이다(§6.3). 없으면 MCP 와 읽기 API 는 그대로
+# 돌고 화면만 안내문이 뜬다 — 서버가 죽지는 않는다.
 ExecStart=/usr/bin/node /opt/cdp/bin/ctx.mjs serve \
   --root /opt/cdp/repos \
   --auth /opt/cdp/auth.json \
   --data /opt/cdp/data \
-  --bind 10.10.20.187 \
+  --bind 10.10.20.188 \
   --port 7374 \
+  --web /opt/cdp/web \
   --mirror
 
 Restart=always

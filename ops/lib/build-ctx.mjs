@@ -50,9 +50,20 @@ const r = spawnSync(
     '--format=esm',
     '--target=node18',
     '--legal-comments=none',
+    // **`require` 를 살려 둔다.**
+    //
+    // ESM 으로 말면 esbuild 는 `require` 를 "Dynamic require ... is not
+    // supported" 를 던지는 셔임으로 바꾼다. 번들에 들어온 CJS 모듈(chokidar ·
+    // MCP SDK)이 `require('events')` 같은 내장 모듈을 그렇게 부르므로, 서버가
+    // **시작하자마자 죽는다.** 실측으로 잡았다.
+    //
+    // `createRequire` 로 진짜 `require` 를 준다 — 내장 모듈은 그대로 풀리고,
+    // chokidar 의 `fsevents`(macOS 전용 네이티브)는 원래 try/catch 안이라
+    // 없으면 없는 대로 간다.
     '--banner:js=#!/usr/bin/env node\n' +
       '// 생성물 -- 손으로 고치지 마세요. `node ops/lib/build-ctx.mjs` 가 만듭니다.\n' +
-      '// 원본: core/ + viewer/bin/ctx-cli.mjs  (작업환경 설계서 3.1)\n',
+      '// 원본: core/ + viewer/bin/ctx-cli.mjs  (작업환경 설계서 3.1)\n' +
+      "import{createRequire as __cr}from'node:module';var require=__cr(import.meta.url);\n",
     "--define:__CTX_BUILT_DEF__='" + stamp + "'",
     '--outfile=' + outFile,
   ],
