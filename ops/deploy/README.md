@@ -18,7 +18,7 @@
 | 서버 | `10.10.20.188` · 사내 Linux |
 | 접속 | `http://10.10.20.188:7374` — **프록시 없음 · 평문** |
 | origin | `http://10.10.20.250:2900/soln1/cdp.git` — 사내 git · 평문 |
-| push 자격 | **사람 계정 + PAT** (Maintainer · `write_repository`) |
+| push 자격 | **`kjsa` 계정 + PAT** (Maintainer · `write_repository`) |
 | 레포 | `gdi` 하나 (`<root>/gdi`) |
 
 ### 프록시가 없다는 것의 뜻
@@ -57,11 +57,11 @@ CDP 토큰의 사용자로 서버가 채우므로(§4.5) 누가 정했는지는 
 여기서 정하는 것은 **누가 보냈나** 뿐이다.
 
 ```bash
-sudo -u cdp git config --global user.name  "<계정>"
-sudo -u cdp git config --global user.email "<계정>@sjinc.co.kr"
+sudo -u cdp git config --global user.name  "kjsa"
+sudo -u cdp git config --global user.email "kjsa@sjinc.co.kr"
 sudo -u cdp git config --global credential.helper 'store --file=/opt/cdp/.git-credentials'
 
-printf 'http://<계정>:<토큰>@10.10.20.250:2900\n' | sudo -u cdp tee /opt/cdp/.git-credentials
+printf 'http://kjsa:<토큰>@10.10.20.250:2900\n' | sudo -u cdp tee /opt/cdp/.git-credentials
 sudo chmod 600 /opt/cdp/.git-credentials
 ```
 
