@@ -17,8 +17,8 @@
 |---|---|
 | 서버 | `10.10.20.188` · 사내 Linux |
 | 접속 | `http://10.10.20.188:7374` — **프록시 없음 · 평문** |
-| origin | `http://10.10.20.250:2900/soln1/cdp.git` — 사내 git · 평문 |
-| push 자격 | **`kjsa` 계정 + PAT** (Maintainer · `write_repository`) |
+| origin | `git@10.10.20.250:soln1/cdp.git` — 사내 GitLab · **SSH** |
+| push 자격 | **Deploy Key (SSH)** — 그 레포 push 만 |
 | 레포 | `gdi` 하나 (`<root>/gdi`) |
 
 ### 프록시가 없다는 것의 뜻
@@ -52,39 +52,33 @@ command -v node       # systemd 유닛의 ExecStart 와 같아야 한다
 (MCP SDK · zod · core 가 다 들어 있다)와 `npm run build` 가 만든 `ops/out/web/`(화면).
 서버에 `node_modules` 는 필요 없다.
 
-## 2. git 자격 — 사람 계정 + PAT
+## 2. git 자격 — Deploy Key (SSH)
 
 서버가 origin 으로 push 할 자격이다. **커밋 `author` 와는 다른 것** — author 는
-CDP 토큰의 사용자로 서버가 채우므로(§4.5) 누가 정했는지는 사람별로 그대로 남고,
-여기서 정하는 것은 **누가 보냈나** 뿐이다.
+CDP 토큰의 사용자로 서버가 채우므로(§4.5) 누가 정했는지는 사람별로 남고, 여기서
+정하는 것은 **누가 보냈나** 뿐이다.
 
 ```bash
-sudo -u cdp git config --global user.name  "kjsa"
-sudo -u cdp git config --global user.email "kjsa@sjinc.co.kr"
-sudo -u cdp git config --global credential.helper 'store --file=/opt/cdp/.git-credentials'
-
-printf 'http://kjsa:<토큰>@10.10.20.250:2900\n' | sudo -u cdp tee /opt/cdp/.git-credentials
-sudo chmod 600 /opt/cdp/.git-credentials
+sudo -u cdp -H mkdir -p /opt/cdp/.ssh && sudo -u cdp -H chmod 700 /opt/cdp/.ssh
+sudo -u cdp -H ssh-keygen -t ed25519 -N '' -f /opt/cdp/.ssh/id_ed25519
+sudo cat /opt/cdp/.ssh/id_ed25519.pub        # → GitLab Deploy Keys 에 붙여넣는다
+sudo -u cdp -H sh -c 'ssh-keyscan -H 10.10.20.250 >> /opt/cdp/.ssh/known_hosts'
 ```
 
-- git 서버는 **GitLab** 이다(nginx 뒤 · `/users/sign_in` 으로 302). 그룹 `soln1` ·
-  프로젝트 `cdp`. **사람 계정의 Personal Access Token** 으로 간다 — 사용자명이
-  GitLab 로그인 이름이고 비밀번호가 토큰이다.
-- **역할은 Maintainer 다.** Developer 는 보호 브랜치에 push 하지 못해 미러가
-  영원히 `lag` 로 남는다 — 읽기는 되므로 설치 중에는 안 드러난다.
-- 사람 계정이라 셋이 따라온다 — ① 그 사람의 PAT 이 서버에 평문으로 있다(그래서
-  **이 용도로만 쓰는 토큰을 따로** 발급하고 스코프를 `write_repository` 하나로
-  좁힌다) ② 그 사람이 나가면 미러가 멈춘다 ③ GitLab 활동에 서버가 보낸 것과
-  그 사람이 직접 보낸 것이 섞여 보인다.
-- 배포 토큰은 **그 레포에만 쓰기** 권한으로 발급한다.
-- origin 이 평문 HTTP 라 토큰이 사내망에 그대로 흐른다. git 서버가 HTTPS 를
-  지원하게 되면 그때 바꾼다.
-- `store` 는 평문 파일 하나다. 0600 · `cdp` 소유 — 그것이 방어의 전부다.
+- **이 GitLab 은 12.9 미만**이라 PAT 에 `write_repository` 스코프가 없다. push 가
+  되는 스코프는 `api` 하나인데 그것은 **계정 전체**(모든 그룹·프로젝트 읽기·쓰기)를
+  연다 — 서버 평문 파일에 두기엔 너무 넓다.
+- **Deploy Key 는 그 레포에 push 하는 것 하나만** 할 수 있다. 사람 계정과 무관해서
+  담당자가 바뀌어도 미러가 멈추지 않고, SSH 라 자격이 평문으로 흐르지 않는다.
+- 등록할 때 **`Write access allowed` 체크**가 핵심이다. 안 누르면 clone 은 되고
+  push 만 막히는데, 그 증상은 `mirror: lag` 뿐이라 원인이 안 드러난다.
+- `ssh-keyscan` 을 빠뜨리면 systemd 밑에서 host key 확인 프롬프트를 답할 사람이
+  없어 `push` 가 영영 기다린다.
 
 ## 3. 레포
 
 ```bash
-sudo -u cdp git clone http://10.10.20.250:2900/soln1/cdp.git /opt/cdp/repos/gdi
+sudo -u cdp -H git clone git@10.10.20.250:soln1/cdp.git /opt/cdp/repos/gdi
 ```
 
 폴더명이 곧 레포 이름이다(§4.2). **`cdp` 가 아니라 `gdi` 로 받는다** — 로컬
@@ -138,7 +132,7 @@ curl -s -H "Authorization: Bearer <토큰>" http://10.10.20.188:7374/repos
 | 백업 | `--mirror` + `/opt/cdp/repos` 디스크 스냅샷 |
 | 토큰 | 기본 90일. 분기마다 회전 — 새로 발급 → `CDP_TOKEN` 교체 → 옛것 `revoke` |
 | 갱신 | `bin/ctx.mjs` 교체 후 `systemctl restart cdp-serve` · `/healthz.built` 로 확인 |
-| 권한 | `auth.json` · `.git-credentials` 0600 유지 |
+| 권한 | `auth.json` 0600 · `/opt/cdp/.ssh` 700 · 키 600 |
 
 ## 7. 막혔을 때
 
@@ -146,6 +140,6 @@ curl -s -H "Authorization: Bearer <토큰>" http://10.10.20.188:7374/repos
 |---|---|
 | 시작하자마자 죽는다 | `journalctl -u cdp-serve -n 50` · `--auth` 경로 · Node 버전 · `ExecStart` 가 실제 node 경로인가(`203/EXEC`) |
 | `거부: --bind … 인증 없이 밖으로 열 수 없다` | `--auth` 가 빠졌다. 루프백 밖은 인증 없이 못 연다(§8) |
-| `mirror: lag` 가 안 풀린다 | 서버가 `10.10.20.250:2900` 에 닿는가 · `.git-credentials` 토큰 만료 |
+| `mirror: lag` 가 안 풀린다 | 서버가 `10.10.20.250:2900` 에 닿는가 · Deploy Key 가 지워졌나 |
 | 401 인데 토큰은 맞다 | 만료 · 명부에서 지워짐 · `active:false`. `serve user list` 로 본다 |
 | 레포가 안 보인다 | 폴더에 `_vocab.md` 가 있는가 · 목록 갱신은 60초 주기 |

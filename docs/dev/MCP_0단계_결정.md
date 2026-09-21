@@ -25,7 +25,7 @@
 | | |
 |---|---|
 | 경로 | `C:\cdp` — **레포 이름은 폴더명이라 `cdp` 다**(§3.1). 서버에는 `<root>/gdi` 로 clone 해 `gdi` 로 든다(§4.2) |
-| origin | `http://10.10.20.250:2900/soln1/cdp.git` — **내부 git 서버 · 평문 HTTP** |
+| origin | `git@10.10.20.250:soln1/cdp.git` — 내부 GitLab(12.9 미만) · **SSH** |
 | 작업 기록 | 34건 |
 | 관리 문서 | 16개 |
 | 좌표 타입 | 8종 — `table` · `screen` · `api` · `module` · `code` · `term` · `issue` · `domain` |
@@ -131,7 +131,7 @@ URL 은 `POST /mcp/gdi`(고정)를 쓴다 — 레포 하나면 이쪽이 단순�
 |---|---|---|
 | 서버 | **`10.10.20.188`** · 사내 Linux | **systemd**. §9.4 의 LaunchAgent 대신 [`ops/deploy/cdp-serve.service`](../../ops/deploy/cdp-serve.service) |
 | 접속 | **`http://10.10.20.188:7374`** · 프록시 없음 | Caddy · Cloudflare Tunnel 절이 빠진다. **TLS · 레이트리밋 · IP 제한이 없다** |
-| push 자격 | **`kjsa` 계정 + PAT** (2026-09-21 변경) | 처음에는 전용 계정으로 정했으나 사람 계정으로 바꿨다. 커밋 `author` 는 CDP 토큰의 사용자라 **그대로 사람별로 남는다** — git 자격이 정하는 것은 push 주체뿐이다. 대가는 ① 그 사람의 PAT 이 서버에 평문 ② 그가 나가면 미러가 멈춤 ③ GitLab 활동이 섞여 보임 |
+| push 자격 | **Deploy Key (SSH)** (2026-09-21 최종) | 전용 계정 → 사람 계정 + PAT → Deploy Key 로 두 번 바뀌었다. **사내 GitLab 이 12.9 미만**이라 PAT 에 `write_repository` 가 없고 push 가 되는 스코프는 `api`(계정 전체) 뿐이었다. Deploy Key 는 그 레포 push 만 하고, 사람과 무관하며, SSH 라 평문 문제도 없다 |
 | 레포 폴더 | `/opt/cdp/repos/**gdi**` | 폴더명이 레포 이름이다(§4.2). 로컬 `C:\cdp` 와 달라도 정상 |
 
 절차는 [`ops/deploy/README`](../../ops/deploy/README.md) 에 실물로 있다.
@@ -150,7 +150,7 @@ URL 은 `POST /mcp/gdi`(고정)를 쓴다 — 레포 하나면 이쪽이 단순�
 ### 아직 남은 확인
 
 - [ ] 서버가 `10.10.20.250:2900` 에 닿는가 — 안 닿으면 `--mirror` 가 영구히 `lag` 다
-- [ ] **`kjsa` 의 PAT 발급** — `kjsa` 가 `soln1/cdp` 에 **Maintainer** 여야 하고 스코프는 `write_repository` 하나. **이 용도로만 쓰는 토큰을 따로** 낸다
+- [ ] **Deploy Key 등록** — 서버가 만든 공개키를 `soln1/cdp` > Settings > Repository > Deploy Keys 에 넣고 **`Write access allowed` 체크**
 - [ ] `C:\cdp` 는 **사람이 쓰던 작업 트리**다. 서버에는 **새로 clone** 하고 이 트리는 읽기 전용으로 남긴다(§4.2)
 
 ---
