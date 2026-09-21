@@ -530,8 +530,8 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
              치환 범위 = "## <값>" 헤딩 다음 줄 ~ 같은/상위 레벨 다음 헤딩 전.  헤딩은 유지, applied 주석은 서버가 <id> 로 쓴다
              새 섹션은 문서 끝(또는 등록부 규칙 위치)에 헤딩 + applied + body
 7  기록       work/<id>.md = TEMPLATE 순서의 프론트매터(author = 토큰 user) + body
-8  검사       runBuiltinCheck(갱신된 트리)                                error 있으면 파일 복원 후 E_CHECK { findings }
-9  인덱스     INDEX.md · INDEX-by-coord.md 재생성
+8  인덱스     INDEX.md · INDEX-by-coord.md 재생성                         **검사보다 먼저**
+9  검사       runBuiltinCheck(갱신된 트리)                                error 있으면 파일 복원 후 E_CHECK { findings }
 10 커밋       git add <바뀐 경로만> · git commit --author="<user> <<user>@cdp>" -m "<title>"    실패면 복원 후 E_GIT
 11 미러       --mirror 면 비동기 push
 ```
@@ -541,6 +541,11 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 ```json
 { "commit": "a1b2c3d", "id": "2026-0919-…", "sections": 1, "vocab": 0, "warnings": [], "mirror": "queued" }
 ```
+
+8 과 9 의 순서는 v1.1 에서 뒤집혔다. **검사가 낡은 INDEX 를 보면 안 된다** —
+작업 기록을 방금 하나 더했으니 행 수가 반드시 어긋나고, "INDEX.md 불일치" 경고가
+`save` 마다 빠짐없이 나온다. 매번 나오는 경고는 아무것도 알리지 않는다. 검사는
+**커밋될 트리**를 봐야 한다.
 
 규칙 — 기존 `work/*.md` 는 수정·삭제하지 않는다(정정은 `supersedes` 를 단 새 기록). 어휘 삭제 없음(폐기는 사람이 `deprecated` 표기). `_managed.md` 는 `save` 로 바꾸지 않는다.
 

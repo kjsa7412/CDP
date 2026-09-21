@@ -15,7 +15,8 @@ import fs from 'node:fs/promises'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
-import { buildServer, makeRepoCache, BUILT } from './ctx-mcp.mjs'
+import { save as doSave } from '../../core/save.js'
+import { buildServer, makeRepoCache, mirrorOf, BUILT } from './ctx-mcp.mjs'
 
 const NL = String.fromCharCode(10)
 
@@ -280,6 +281,17 @@ export async function runServe(opt = {}) {
         prompts: opt.prompts || 'auto',
         allow: a.allow,
         notice,
+        // `save` 는 토큰의 사용자로 author 를 채운다. 클라이언트가 보내면
+        // 거절한다 — 보낼 수 있으면 남의 이름으로 기록이 남는다(§4.5).
+        saver: (name, input) => {
+          const r = repos.find((x) => x.name === name)
+          return doSave(r.root, input, {
+            user: a.user,
+            write: a.write,
+            mirror: !!opt.mirror,
+            log: (m) => log.line(m),
+          })
+        },
       })
     },
     { legacy: 'stateless', onerror: (e) => log.line('handler: ' + (e?.message || e)) }
@@ -312,8 +324,7 @@ export async function runServe(opt = {}) {
         const list = await store.list()
         const mirror = { ok: 0, lag: 0, off: 0 }
         for (const r of list) {
-          const st = await git.status(r.root).catch(() => null)
-          mirror[st?.repo ? (st.upstream ? 'ok' : 'off') : 'off']++
+          mirror[mirrorOf(await git.status(r.root).catch(() => null))]++
         }
         return json(res, 200, { ok: true, built: BUILT, repos: list.length, mirror })
       }
@@ -332,8 +343,9 @@ export async function runServe(opt = {}) {
           rows.push({
             name: r.name,
             title: await titleOf(r.root),
-            head: st?.branch ?? null,
-            mirror: st?.upstream ? 'ok' : 'off',
+            head: st?.head ?? null,
+            branch: st?.branch ?? null,
+            mirror: mirrorOf(st),
           })
         }
         log.req({ ip, user: a.user, method: 'GET', tool: '/repos', ms: Date.now() - t0, status: 200 })

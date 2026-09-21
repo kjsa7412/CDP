@@ -74,6 +74,9 @@ export async function status(root) {
   // 커밋이 하나도 없는 새 레포에서는 rev-list 가 실패한다. 오류가 아니다.
   const head = await run(root, ['rev-parse', '--verify', 'HEAD'])
   st.hasCommits = head.ok
+  // `head` 는 **커밋 sha** 다. 브랜치 이름이 아니다 — `sync` 도구(§2.2)와
+  // `GET /repos`(§4.3)가 "지금 어디까지 실려 있나" 를 이것으로 답한다.
+  st.head = head.ok ? head.out.slice(0, 7) : null
 
   if (st.upstream && st.hasCommits) {
     const counts = await run(root, ['rev-list', '--left-right', '--count', `${st.upstream}...HEAD`])
@@ -223,6 +226,34 @@ export async function push(root) {
 
   const r = await run(root, ['push', '--quiet'], { timeout: 60000 })
   return r.ok ? { ok: true, status: await status(root) } : { ok: false, reason: 'failed', message: firstLine(r.err) }
+}
+
+// 모드 B 의 서버가 커밋한다. MCP 설계서 §4.5 의 10단계.
+//
+// **이 모듈에서 유일하게 작업 트리를 바꾸는 함수다.** 위의 "안 한다" 목록을
+// 늘리는 것이 아니다 — merge·rebase·reset 은 여전히 안 한다. 서버 모드에서는
+// 사람이 그 트리에서 커밋하지 않으므로(§4.2) 충돌이 날 자리가 없다.
+//
+// **경로를 받아서 그것만 add 한다.** `git add -A` 로 하지 않는다 — 서버 트리에
+// 다른 것이 있으면 그것까지 딸려 들어가고, 그러면 커밋이 작업 단위가 아니게 된다.
+export async function commitPaths(root, paths, { message, author, email }) {
+  if (!paths.length) return { ok: false, reason: 'nothing' }
+  const add = await run(root, ['add', '--', ...paths])
+  if (!add.ok) return { ok: false, reason: 'add', message: firstLine(add.err) }
+
+  const who = `${author} <${email || author + '@cdp'}>`
+  const c = await run(root, ['-c', 'user.name=' + author, '-c', 'user.email=' + (email || author + '@cdp'), 'commit', '--author=' + who, '-m', message])
+  if (!c.ok) return { ok: false, reason: 'commit', message: firstLine(c.err) || firstLine(c.out) }
+
+  const head = await run(root, ['rev-parse', '--short', 'HEAD'])
+  return { ok: true, commit: head.ok ? head.out : null }
+}
+
+// 커밋을 되돌린다. `save` 가 커밋 뒤에 실패했을 때만 쓴다 — 미러 전이라
+// 아무에게도 안 간 커밋이다.
+export async function undoLastCommit(root) {
+  const r = await run(root, ['reset', '--hard', 'HEAD~1'])
+  return { ok: r.ok }
 }
 
 // 안 보낸 커밋은 남에게 존재하지 않는 것과 같다(§1의 5번). 오래되면 알린다.

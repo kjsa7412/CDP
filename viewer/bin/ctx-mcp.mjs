@@ -49,6 +49,8 @@ const CARD = {
   repos:
     '이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다',
   version: '이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다',
+  save:
+    '작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘. 검사를 통과해야 커밋된다. 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다. `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
 }
 
 // ── 레포 캐시 (§2.6) ────────────────────────────────────────────────────────
@@ -112,9 +114,10 @@ export function makeRepoCache(root) {
 // fallback 기본 레포 이름 또는 null (§2.9)
 // mode     'local' | 'server'
 // allow    (name) => boolean   모드 B 의 토큰 권한. 없으면 전부 허용
+// saver    (repoName, input) => 결과   모드 B 만. 없으면 `save` 를 등록하지 않는다
 // notice   brief 에 한 줄 더 — 토큰 만료 임박 등(§4.4.2). 레포와 무관한 알림 자리
 
-export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null, notice = null } = {}) {
+export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null, notice = null, saver = null } = {}) {
   if (!repos.length) throw new CtxError('E_REPO', '지식 레포가 하나도 없다', {})
 
   const caches = new Map()
@@ -238,6 +241,62 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
     ok({ built: BUILT, mode, repos: visible() })
   )
 
+  // save — 모드 B 만. **`repo` 는 필수다**(§2.9). 읽기 도구처럼 기본 레포로
+  // 대신하지 않는다 — 쓰기에서 기본값은 사고다.
+  if (saver) {
+    server.registerTool(
+      'save',
+      {
+        description: CARD.save,
+        inputSchema: {
+          repo: z.string().max(64),
+          work: z.object({
+            id: z.string().max(140),
+            title: z.string().max(400),
+            date: z.string().max(40).optional(),
+            touches: z.array(z.string().max(240)).max(50).optional(),
+            supersedes: z.string().max(140).nullable().optional(),
+            tags: z.array(z.string().max(60)).max(30).optional(),
+            body: z.string(),
+          })
+            // **모르는 키를 거절한다.** zod 는 기본으로 조용히 버리는데,
+            // 그러면 `author` 를 보낸 클라이언트가 자기 값이 무시된 것을
+            // 모른 채 "기록했다" 고 답한다(§4.5). 오타도 같은 자리에서 걸린다.
+            .strict(),
+          sections: z
+            .array(
+              z.object({
+                coord: z.string().max(240),
+                applied: z.string().max(140).nullable().optional(),
+                heading: z.string().max(200).optional(),
+                body: z.string(),
+              })
+            )
+            .max(50)
+            .optional(),
+          vocab: z
+            .array(
+              z.object({
+                coord: z.string().max(240),
+                label: z.string().max(200),
+                aliases: z.array(z.string().max(100)).max(30).optional(),
+              })
+            )
+            .max(50)
+            .optional(),
+        },
+      },
+      async ({ repo: want, ...input }) => {
+        try {
+          const n = pick(want)
+          return ok({ repo: n, ...(await saver(n, input)) })
+        } catch (e) {
+          return bad(e)
+        }
+      }
+    )
+  }
+
   registerResources(server, { caches, meta, pick, visible })
   if (prompts !== 'never') registerPrompts(server, { caches, pick, fallback, prompts })
 
@@ -277,11 +336,18 @@ function instructions({ repos, fallback, mode, allow }) {
 // **받지 않는다.** `--pull` 은 도구가 아니다(§2.2 각주) -- 작업 트리를 바꾸는
 // 것은 사람의 승인 아래서만 한다.
 
+// 미러 상태 — 원격이 없으면 `off`, 안 보낸 커밋이 있으면 `lag`, 같으면 `ok`.
+// **push 를 여기서 하지 않는다.** `sync` 는 받지도 보내지도 않는다(§2.2).
+export function mirrorOf(st) {
+  if (!st?.repo || !st.upstream) return 'off'
+  return st.ahead > 0 ? 'lag' : 'ok'
+}
+
 async function syncOf(r, mode) {
   const git = await import('../../core/git.js')
   const st = await git.status(r.root).catch(() => null)
   if (mode === 'server') {
-    return { mode: 'server', head: st?.head ?? null, mirror: 'off' }
+    return { mode: 'server', head: st?.head ?? null, mirror: mirrorOf(st) }
   }
   return {
     mode: 'local',
