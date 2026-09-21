@@ -424,14 +424,33 @@ export async function runServe(opt = {}) {
     const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '-'
 
     // **Origin 이 있으면 브라우저가 부른 것이다.** MCP 호스트는 Origin 을 보내지
-    // 않는다. 외부 페이지의 fetch 가 루프백 서버를 찌르는 길을 여기서 끊는다.
+    // 않는다. 외부 페이지의 fetch 가 이 서버를 찌르는 길을 여기서 끊는다.
+    //
+    // 통과 조건은 **같은 출처**다 -- 처음에는 루프백만 봤는데, 그것은 모드 A 만
+    // 생각한 규칙이었다. 모드 B 는 `10.10.20.188:7374` 로 뜨므로 자기 화면이
+    // 자기 서버를 부르는 것까지 403 이 났다(실측). 루프백은 모드 A 를 위해
+    // 남기고, 프록시 뒤라면 `--public-url` 의 출처도 자기 것이다.
+    //
+    // 공격 페이지는 Origin 을 못 고친다. evil.com 에서 부르면 Origin 은
+    // evil.com 이고 Host 는 이 서버라 둘이 어긋난다 -- 그래서 이 비교로 족하다.
     const origin = req.headers.origin
     if (origin) {
       let host = ''
+      let hostPort = ''
       try {
-        host = new URL(origin).hostname
+        const u = new URL(origin)
+        host = u.hostname
+        hostPort = u.host
       } catch {}
-      if (!LOOPBACK.test(host)) {
+      const self = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim()
+      let allowed = hostPort !== '' && hostPort === self
+      if (!allowed && LOOPBACK.test(host)) allowed = true
+      if (!allowed && opt.publicUrl) {
+        try {
+          allowed = new URL(String(opt.publicUrl)).host === hostPort
+        } catch {}
+      }
+      if (!allowed) {
         log.req({ ip, method: req.method, key: url.pathname, ms: Date.now() - t0, status: 403, code: 'E_ORIGIN' })
         return json(res, 403, { error: { code: 'E_FORBIDDEN', message: 'Origin 이 허용되지 않는다' } })
       }
