@@ -141,6 +141,14 @@ export const api = {
     mode.server ? Promise.resolve(saveLocalState(patch)) : req('/state', { method: 'POST', body: JSON.stringify(patch) }),
   // 누구인가 · 무엇을 볼 수 있는가. 서버 모드에만 있다.
   me: () => (mode.server ? req('/me', { absolute: true }) : Promise.resolve(null)),
+
+  // ── 설치 대장 (§6.7.2) — 서버 모드 전용. 로컬의 `/workrepos` 와 **다른
+  // 것**이다: 로컬은 이 PC 에 깐 곳을, 서버는 등록과 추적을 든다(§6.2).
+  registry: () => req('/workrepos', { absolute: true }),
+  registryAdd: (body) => req('/workrepos', { absolute: true, method: 'POST', body: JSON.stringify(body) }),
+  registryDel: (id) => req('/workrepos/' + encodeURIComponent(id), { absolute: true, method: 'DELETE' }),
+  // 설치 꾸러미. **토큰은 들어 있지 않다**(§6.7.3) — 브라우저가 그냥 받는다.
+  kitUrl: (id) => `/kit/${encodeURIComponent(mode.repo)}?workrepo=${encodeURIComponent(id)}`,
   // git — GET 은 읽기만. pull/push 는 사람이 누른 것이어야 하므로 POST.
   git: (doFetch) => req('/git' + (doFetch ? '?fetch=1' : '')),
   gitPull: () => req('/git/pull', { method: 'POST', body: '{}', allowStatus: [409] }),

@@ -44,7 +44,7 @@ const CARD = {
   apply: '파생할 섹션에 붙일 변경 줄 초안. 파일은 고치지 않는다 — 고치는 것은 `cdp-save` 안에서 사람이 승인한 뒤',
   check: '커밋 가능한가. 커밋 때 같은 검사가 돈다 — 이 도구로 미리 본다',
   sync:
-    '원격과의 차이와 훅 설정 여부. 받지 않는다. 받을 것이 있으면 주입한 섹션이 최신이 아닐 수 있다고 알린다',
+    '원격과의 차이와 훅 설정 여부. 받지 않는다. 받을 것이 있으면 주입한 섹션이 최신이 아닐 수 있다고 알린다. 모드 B 의 `kit.hash` 는 서버가 가진 스킬의 해시다 — 이 작업 레포 `CLAUDE.md` 의 `cdp:kit` 값과 다르면 여기 깔린 스킬이 낡았다는 뜻이므로 답에 적는다',
   brief: '두 줄 요약 — 절차와 살아 있는 레포 상태',
   repos:
     '이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다',
@@ -347,7 +347,17 @@ async function syncOf(r, mode) {
   const git = await import('../../core/git.js')
   const st = await git.status(r.root).catch(() => null)
   if (mode === 'server') {
-    return { mode: 'server', head: st?.head ?? null, mirror: mirrorOf(st) }
+    // kit 해시를 같이 낸다(§6.7.4). **서버는 클라이언트의 `.claude/skills` 를
+    // 볼 수 없으므로** 비교의 한쪽을 이렇게 건네고, 다른 쪽은 스킬이
+    // `CLAUDE.md` 의 `cdp:kit` 에서 읽는다.
+    const { kitHash } = await import('../../core/setup.js')
+    const kit = await kitHash(r.root).catch(() => null)
+    return {
+      mode: 'server',
+      head: st?.head ?? null,
+      mirror: mirrorOf(st),
+      kit: kit ? { hash: kit.hash, skills: kit.skills } : null,
+    }
   }
   return {
     mode: 'local',

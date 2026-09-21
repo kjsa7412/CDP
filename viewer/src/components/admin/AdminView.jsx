@@ -20,6 +20,7 @@ import Overview from './Overview.jsx'
 import Repo from './Repo.jsx'
 import Sync from './Sync.jsx'
 import WorkRepos from './WorkRepos.jsx'
+import WorkReposServer from './WorkReposServer.jsx'
 import Diag from './Diag.jsx'
 import { isServer } from '../../lib/api.js'
 
@@ -30,7 +31,9 @@ const MENU = [
   { key: 'overview', icon: 'check', label: '현황', sub: '지금 쓸 수 있는 상태인가' },
   { key: 'repo', icon: 'managed', label: '지식 레포', sub: '어디를 보고 있나', local: true },
   { key: 'sync', icon: 'sync', label: '동기화', sub: '원격 · git 설정' },
-  { key: 'work', icon: 'plug', label: '작업 레포', sub: '에이전트 설치', local: true },
+  // **서버에도 있다 — 다른 화면이다**(§6.7.3). 로컬은 이 PC 에 깔고,
+  // 서버는 등록하고 꾸러미를 내주고 결과를 추적한다.
+  { key: 'work', icon: 'plug', label: '작업 레포', sub: '에이전트 설치' },
   { key: 'diag', icon: 'info', label: '진단 · 정보', sub: '버전 · 경로 · 로그' },
 ]
 
@@ -112,7 +115,8 @@ export default function AdminView({
             />
           )}
           {cur === 'sync' && <Sync sync={sync} onSync={onSync} say={say} />}
-          {cur === 'work' && <WorkRepos state={state} patch={patch} say={say} />}
+          {cur === 'work' &&
+            (isServer ? <WorkReposServer say={say} /> : <WorkRepos state={state} patch={patch} say={say} />)}
           {cur === 'diag' && <Diag diag={diag} repo={repo} say={say} />}
         </div>
       </div>

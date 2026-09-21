@@ -16,7 +16,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { unzip } from '../../core/zip.js'
-import { planSetup, applySetup, mergeMcpJson, mcpEntryServer } from '../../core/setup.js'
+import { planSetup, applySetup, mergeMcpJson, mcpEntryServer, kitHash, kitOf } from '../../core/setup.js'
 
 const NL = String.fromCharCode(10)
 const out = (s = '') => process.stdout.write(s + NL)
@@ -69,7 +69,23 @@ export async function runSetupServer(opt) {
       await fs.writeFile(dst, f.data)
     }
 
-    const plan = await planSetup(tmp, work, { server, repo })
+    // kit 해시 — 임시 폴더가 곧 지식 레포 모양이라 같은 함수를 쓴다.
+    const kit = (await kitHash(tmp)).hash
+
+    // `--check` — **받아서 쓰지 않고 비교만 한다**(§4.7).
+    //
+    // `inspect()` 는 로컬 지식 레포를 전제하므로 서버 모드에서는 못 쓴다.
+    // 대신 `CLAUDE.md` 의 `cdp:kit` 과 견준다 — §6.7.4 가 그 한 줄을 박아 둔 이유다.
+    if (opt.check) {
+      const cur = kitOf(await fs.readFile(path.join(path.resolve(work), 'CLAUDE.md'), 'utf8').catch(() => ''))
+      const state = !cur ? '미설치' : cur === kit ? '최신' : '낡음'
+      out('')
+      out(`${state}    여기 ${cur || '(없음)'}  ·  서버 ${kit}`)
+      if (state === '낡음') out('        ctx setup --server … 로 다시 받는다')
+      return state === '낡음' ? 1 : 0
+    }
+
+    const plan = await planSetup(tmp, work, { server, repo, kit })
     if (!plan.ok) return bail(plan.reason)
 
     // ── .mcp.json 을 계획에 더한다. `planSetup` 은 모드 A 시절 산출물만 안다.
@@ -110,7 +126,18 @@ export async function runSetupServer(opt) {
 
     await applySetup(plan)
     out('')
-    out(`${changes.length}건 적용했습니다.`)
+    out(`${changes.length}건 적용했습니다. (kit ${kit})`)
+
+    // 설치 결과를 보고한다(§6.7.4). **관문이 아니다** — 실패해도 설치는 끝났고
+    // 대장이 "미설치" 로 남을 뿐이다. 그래서 조용히 삼킨다.
+    if (opt.workrepo) {
+      const r = await fetch(`${server}/workrepos/${encodeURIComponent(opt.workrepo)}/applied`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+        body: JSON.stringify({ kit }),
+      }).catch(() => null)
+      out(r?.ok ? '대장에 보고했습니다.' : '대장 보고는 실패했습니다 — 설치는 끝났습니다 (보고는 추적용입니다)')
+    }
     out('')
     out('다음 —')
     out('  1. Claude Code 를 다시 켠다 (환경변수는 프로세스 시작 때 읽힌다)')

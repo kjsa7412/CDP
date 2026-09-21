@@ -17,6 +17,8 @@ import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
 import { save as doSave } from '../../core/save.js'
 import { zip } from '../../core/zip.js'
+import * as wr from '../../core/workrepos.js'
+import { kitHash, mergeClaude, mcpEntryServer, mergeMcpJson } from '../../core/setup.js'
 import { Store } from '../../core/store.js'
 import { handleRead, MIME } from '../server/adapter/read-api.js'
 import { hereDir } from '../server/runtime.js'
@@ -454,7 +456,8 @@ export async function runServe(opt = {}) {
         url.pathname.startsWith('/r/') ||
         url.pathname === '/' ||
         url.pathname === '/me' ||
-        url.pathname === '/repos'
+        url.pathname === '/repos' ||
+        url.pathname.startsWith('/workrepos')
       // 화면 자산 — **인증 앞에서 낸다.**
       //
       // 로그인 화면을 그리려면 그 전에 받아야 하고, 담긴 것은 빌드 산출물뿐이라
@@ -533,6 +536,50 @@ export async function runServe(opt = {}) {
         return json(res, 200, rows)
       }
 
+      // ── 설치 대장 (§6.7.2) ─────────────────────────────────────────────
+      if (url.pathname === '/workrepos' || url.pathname.startsWith('/workrepos/')) {
+        if (!dataDir) return json(res, 501, { error: { code: 'E_REPO', message: '--data 가 없어 대장을 둘 곳이 없다' } })
+        const db = await wr.load(dataDir)
+        const mine = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
+
+        try {
+          if (url.pathname === '/workrepos' && req.method === 'GET') {
+            const kits = {}
+            for (const r of mine) kits[r.name] = (await kitHash(r.root)).hash
+            const rows = wr.list(db, { kits }).filter((r) => mine.some((m) => m.name === r.knowledge))
+            return json(res, 200, { repos: rows, users: await usersOf(opt.auth) })
+          }
+          if (url.pathname === '/workrepos' && req.method === 'POST') {
+            const body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
+            const row = wr.add(db, body, { users: await usersOf(opt.auth), repos: mine.map((r) => r.name) })
+            await wr.save(dataDir, db)
+            log.req({ ip, user: a.user, method: 'POST', tool: '/workrepos', key: row.id, ms: Date.now() - t0, status: 200 })
+            return json(res, 200, row)
+          }
+          const am = /^\/workrepos\/([^/]+)\/applied$/.exec(url.pathname)
+          if (am && req.method === 'POST') {
+            const body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
+            if (body.by || body.at) {
+              return json(res, 400, { error: { code: 'E_INPUT', message: 'by · at 은 서버가 채운다 — 보내지 않는다' } })
+            }
+            const row = wr.applied(db, am[1], { kit: body.kit, by: a.user })
+            await wr.save(dataDir, db)
+            log.req({ ip, user: a.user, method: 'POST', tool: '/applied', key: am[1], ms: Date.now() - t0, status: 200 })
+            return json(res, 200, row)
+          }
+          const dm = /^\/workrepos\/([^/]+)$/.exec(url.pathname)
+          if (dm && req.method === 'DELETE') {
+            wr.remove(db, dm[1])
+            await wr.save(dataDir, db)
+            return json(res, 200, { ok: true })
+          }
+        } catch (e) {
+          const code = e?.code || 'E_INPUT'
+          return json(res, code === 'E_NOT_FOUND' ? 404 : 400, { error: { code, message: e.message, detail: e.detail } })
+        }
+        return json(res, 405, { error: { code: 'E_INPUT', message: '그 메서드는 없다' } })
+      }
+
       // GET /api/<repo>/… — 관리 서비스의 읽기 API (§6.2 · §6.3).
       //
       // **로컬 뷰어와 같은 함수를 쓴다**(`handleRead`). 이 PC 를 만지는
@@ -583,6 +630,33 @@ export async function runServe(opt = {}) {
         if (!files.length) {
           return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '이 레포에 .claude/ kit 이 없다' } })
         }
+
+        // `?workrepo=<id>` — 사람이 내려받아 **그대로 푸는** 설치 꾸러미(§6.7.3).
+        // 서버가 그 자리에서 조립한다. 미리 만들어 두지 않는다 — kit 이 바뀌면
+        // 다음 요청부터 새것이어야 한다.
+        //
+        // **토큰은 넣지 않는다.** 꾸러미는 파일로 남고 사람 손을 거친다 —
+        // 여기에 원문을 넣으면 §4.4.1 의 "발급 엔드포인트는 없다" 를 뒷문으로
+        // 깨는 셈이 된다.
+        const wid = url.searchParams.get('workrepo')
+        if (wid && dataDir) {
+          const db = await wr.load(dataDir)
+          const row = db.repos.find((r) => r.id === wid)
+          if (!row) return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 등록이 없다' } })
+          const origin = publicOrigin(req, opt)
+          const claudeTpl = files.find((f) => f.name === '.claude/work-repo/CLAUDE.md')
+          const kit = (await kitHash(found.root)).hash
+          files.push({ name: '.mcp.json', data: mergeMcpJson(null, mcpEntryServer(origin, name)) })
+          files.push({
+            name: '.claude/cdp.json',
+            data: JSON.stringify({ server: origin, repo: name }, null, 2) + NL,
+          })
+          if (claudeTpl) {
+            files.push({ name: 'CLAUDE.md', data: mergeClaude(null, claudeTpl.data.toString('utf8'), kit) })
+          }
+          files.push({ name: '설치.md', data: installNote({ origin, repo: name, row, kit }) })
+        }
+
         const buf = await zip(files)
         log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name, ms: Date.now() - t0, status: 200 })
         res.writeHead(200, {
@@ -972,4 +1046,67 @@ async function serveWeb({ req, res, url, webDir, log }) {
     'cache-control': rel === '/index.html' ? 'no-store' : 'public, max-age=31536000, immutable',
   })
   res.end(buf)
+}
+
+// 명부의 이름들. 대장의 `owner` 가 여기 있어야 한다(§6.7.2).
+async function usersOf(authFile) {
+  if (!authFile) return []
+  const db = await auth.load(authFile).catch(() => auth.emptyDb())
+  return db.users.filter((u) => u.active !== false).map((u) => u.name)
+}
+
+// 클라이언트가 서버를 부를 주소.
+//
+// **요청이 들어온 주소를 쓴다.** 서버가 자기 주소를 따로 알 방법이 없고,
+// 프록시 뒤에 있으면 바인드 주소와 바깥 주소가 다르다. 프록시가 `Forwarded`
+// 계열을 넣어 주면 그것을 본다.
+function publicOrigin(req, opt) {
+  if (opt.publicUrl) return String(opt.publicUrl).replace(/\/+$/, '')
+  const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || 'http'
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim()
+  return `${proto}://${host}`
+}
+
+// 꾸러미 안의 안내. **`bin/ctx` 없이 설치되는 길**이 여기 적힌다(§6.7.1) —
+// 그래서 설치 부트스트랩이 사라진다.
+function installNote({ origin, repo, row, kit }) {
+  return `# ${row.name} 에 CDP 붙이기
+
+이 꾸러미는 \`${repo}\` 지식 레포의 것이다. kit ${kit}
+
+## 1. 이 zip 을 작업 레포 루트에 푼다
+
+들어가는 것 —
+
+    .mcp.json              호스트가 읽는다 (토큰은 환경변수)
+    .claude/cdp.json       { server, repo }
+    .claude/skills/cdp-*   절차
+    CLAUDE.md              업무 맥락 블록
+
+**\`CLAUDE.md\` 가 이미 있으면** 이 파일로 덮지 말고 \`<!-- cdp:begin -->\` 부터
+\`<!-- cdp:end -->\` 까지만 갈아 끼운다. 나머지는 프로젝트가 쓰던 것이다.
+(\`bin/ctx\` 가 있으면 \`ctx setup --server ${origin} --repo ${repo} <작업레포>\` 가
+그 병합을 대신한다.)
+
+## 2. 토큰을 환경변수에 둔다
+
+    # macOS · Linux
+    export CDP_TOKEN=<관리자에게 받은 토큰>
+    # Windows
+    setx CDP_TOKEN <관리자에게 받은 토큰>
+
+**이 꾸러미에 토큰은 없다.** 관리자에게 직접 받는다 — 메신저·메일에 남기지 않는다.
+
+## 3. Claude Code 를 다시 켠다
+
+환경변수는 프로세스 시작 때 읽힌다. \`/mcp\` 에 \`cdp\` 가 connected 면 된 것이다.
+
+## 4. 커밋한다
+
+    git add .mcp.json .claude CLAUDE.md
+    git commit -m "CDP 붙인다 — ${repo}"
+
+**팀원은 여기서부터 \`git pull\` 과 \`CDP_TOKEN\` 만으로 끝난다.** 이 꾸러미를
+다시 받을 필요가 없다.
+`
 }

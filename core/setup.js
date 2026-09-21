@@ -50,13 +50,26 @@ async function sameTree(a, b) {
   return true
 }
 
-function blockOf(body) {
-  return `${BEGIN}\n${body.trim()}\n${END}\n`
+// 블록 첫 줄에 **kit 해시**를 박는다 (MCP 설계서 §6.7.4).
+//
+// 모드 B 에서 서버는 클라이언트의 `.claude/skills` 를 볼 수 없다 — `kitHash()` 도
+// `inspect()` 도 로컬 지식 레포를 전제한다. 그래서 비교의 한쪽을 **클라이언트가
+// 들고 오게** 만든 것이 이 한 줄이다. `sync` 도구가 서버의 해시를 내고, 스킬이
+// 둘을 견준다.
+export const KIT_MARK = /<!--\s*cdp:kit\s+([0-9a-f]{4,64})\s*-->/
+
+export function kitOf(claudeText) {
+  return KIT_MARK.exec(String(claudeText || ''))?.[1] ?? null
+}
+
+function blockOf(body, kit) {
+  const mark = kit ? `<!-- cdp:kit ${kit} -->\n` : ''
+  return `${BEGIN}\n${mark}${body.trim()}\n${END}\n`
 }
 
 // 기존 CLAUDE.md 에 블록을 끼우거나 갈아 끼운다.
-export function mergeClaude(existing, body) {
-  const block = blockOf(body)
+export function mergeClaude(existing, body, kit = null) {
+  const block = blockOf(body, kit)
   if (existing == null) return block
   const i = existing.indexOf(BEGIN)
   const j = existing.indexOf(END)
@@ -82,7 +95,7 @@ export function mergeClaude(existing, body) {
 // `server` 를 주면 모드 B 다(§4.7). 포인터가 `{ server, repo }` 가 되고
 // **커밋한다** — 모드 A 가 커밋하지 않은 이유는 `knowledgeRepo` 가 PC 마다
 // 다른 절대경로여서였다. `{ server, repo }` 는 PC 와 무관하다.
-export async function planSetup(knowledgeRoot, workRoot, { server = null, repo = null } = {}) {
+export async function planSetup(knowledgeRoot, workRoot, { server = null, repo = null, kit = null } = {}) {
   const kn = path.resolve(knowledgeRoot)
   const wk = path.resolve(workRoot)
   const bad = (reason) => ({ ok: false, reason, knowledge: kn, work: wk, actions: [], warnings: [] })
@@ -143,7 +156,7 @@ export async function planSetup(knowledgeRoot, workRoot, { server = null, repo =
   // ── CLAUDE.md — 블록만 ────────────────────────────────────────────
   const claude = path.join(wk, 'CLAUDE.md')
   const had = await read(claude)
-  const next = mergeClaude(had, body)
+  const next = mergeClaude(had, body, kit)
   actions.push({
     kind: 'claude',
     to: claude,
