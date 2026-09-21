@@ -26,7 +26,7 @@
 | **스킬의 MCP 전환** | **없음** — 3단계 |
 | **모드 B — `ctx serve` · 명부 · `save`** | **없음** — 4단계 |
 | **설치 — `setup --server` · `/kit` · 반입 묶음** | **없음** — 5단계 |
-| **뷰어 원격** | **없음** — 6단계 |
+| **관리 서비스 (원격 화면 · 설치 관리)** | **없음** — 6단계 |
 
 ### CLI 와 도구의 실제 차이 (실측)
 
@@ -167,6 +167,7 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 ## 5. 설치
 
 - [ ] `ctx setup --server <url> --repo <name>` — `.mcp.json`(HTTP · `${CDP_TOKEN}`) · `cdp.json` · kit(§4.7)
+- [ ] **`cdp.json` 을 커밋한다**(§4.7) — `{ server, repo }` 는 PC 독립적이라 모드 A 의 이유가 사라진다
 - [ ] `GET /kit/<name>` zip
 - [ ] 스킬 본문에 한 줄 — *"`save` 도구가 있으면 서버 모드다: pull 하지 않고 커밋 대신 `save` 한 번"*(§4.8)
 - [ ] 모드 B 스킬 분기 — `pull` 생략 · Write/Edit 대신 메모리 준비 · `E_CONFLICT` 면 다시 읽고 다시
@@ -176,14 +177,16 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 
 ---
 
-## 6. 뷰어 원격
+## 6. 관리 서비스
 
 **4단계가 서야 붙는다.** 의존은 한 방향이고, 먼저 만들어도 얹힐 데가 없다.
+"뷰어"가 아니라 **관리 서비스**다 — 읽기 · 레포 전환 · 작업 레포 설치 관리까지 한다(§6.1).
 
 ### 6.1 서버
 
 - [ ] `/api/<repo>/…` 로 경로 조각 · 레포 캐시를 MCP 와 **공유**(§6.3)
-- [ ] 로컬 전용 라우트 **404** — `/setup` · `/repo`(POST) · `/workrepos` · `/git/hooks` · `/git/pull|push` · `/open` · `/quit` · `/rescan`(§6.2)
+- [ ] 로컬 전용 라우트 **404** — `/repo`(POST) · `/git/hooks` · `/git/pull|push` · `/open` · `/quit` · `/rescan`(§6.2)
+- [ ] `/setup` · `/workrepos` 는 404 가 아니라 **다시 정의한다**(§6.2 셋째 줄 · §6.7)
 - [ ] `GET·POST /login` · `GET /r/<repo>/…`(같은 정적 파일) · `GET /` → 기본 레포로
 - [ ] **서명 쿠키** — `HttpOnly` · `Secure` · `SameSite=Lax` · 12시간 · `<data>/secret` 0600(§6.4)
 - [ ] 쿠키 검증이 §4.4 의 3~5 단계를 탄다 — `active:false` 가 **열린 화면도** 끊는다
@@ -200,6 +203,22 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 - [ ] 관리 메뉴 분기 — 지식 레포 ✗ · 작업 레포 ✗ · 동기화 읽기만 · 진단 일부(§6.6.3)
 - [ ] `loopback 아님` 경고 제거 · 그 자리에 `user` · 로그아웃
 - [ ] `firstRun` 분기 없음 — 로그인 뒤 바로 문서
+
+### 6.3 설치 관리 (§6.7)
+
+**브라우저는 사용자 PC 에 파일을 못 쓴다.** 관리 서비스가 맡는 것은 설치 행위가 아니라
+등록 · 꾸러미 발급 · 결과 추적이다(§6.7.1).
+
+- [ ] 설치 대장 `<data>/workrepos.json` — `{ id, name, knowledge, owner, applied }`(§6.7.2)
+- [ ] `GET · POST /workrepos` — `owner` 가 **명부에 없으면 `E_INPUT`**(§4.4 의 `users[]`)
+- [ ] `GET /kit/<name>?workrepo=<id>` — kit + 그 레포용 `.mcp.json` · `cdp.json` · `설치.md` 를 **그 자리에서 조립**
+- [ ] **꾸러미에 토큰을 넣지 않는다** · 화면에도 내지 않는다(§4.4.1 — HTTP 발급 경로를 만들면 안 된다)
+- [ ] `POST /workrepos/<id>/applied` — `{ kit }` 만 받고 `at` · `by` 는 토큰에서 채운다
+- [ ] 관리 > 작업 레포 화면 — 목록(최신 · 낡음 · 미설치) · `[+ 등록]` · `[설치 방법]` 패널(§6.7.3)
+- [ ] `ctx setup` 이 `CLAUDE.md` 블록에 `<!-- cdp:kit <hash> -->` 를 박는다(§6.7.4)
+- [ ] `sync` 도구 출력에 `kit: { hash, skills }` · 스킬이 `cdp:kit` 과 비교해 답에 적는다(§2.2)
+- [ ] `ctx setup --server --check` — 받지 않고 비교만. `inspect()` 는 로컬 전제라 못 쓴다(§4.7)
+- [ ] **보고는 관문이 아니다** — 보고 없이도 설치는 된다. 대장만 미설치로 남는다
 
 ---
 
