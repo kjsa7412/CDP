@@ -21,12 +21,16 @@ import Repo from './Repo.jsx'
 import Sync from './Sync.jsx'
 import WorkRepos from './WorkRepos.jsx'
 import Diag from './Diag.jsx'
+import { isServer } from '../../lib/api.js'
 
+// 서버 모드에서는 **이 PC 를 만지는 화면이 없다**(MCP 설계서 §6.6.3).
+// 지우는 것이 아니라 내지 않는 것이다 — 라우트도 404 이므로 화면만 숨겨서
+// API 가 살아 있는 구멍이 생기지 않는다(§6.2).
 const MENU = [
   { key: 'overview', icon: 'check', label: '현황', sub: '지금 쓸 수 있는 상태인가' },
-  { key: 'repo', icon: 'managed', label: '지식 레포', sub: '어디를 보고 있나' },
+  { key: 'repo', icon: 'managed', label: '지식 레포', sub: '어디를 보고 있나', local: true },
   { key: 'sync', icon: 'sync', label: '동기화', sub: '원격 · git 설정' },
-  { key: 'work', icon: 'plug', label: '작업 레포', sub: '에이전트 설치' },
+  { key: 'work', icon: 'plug', label: '작업 레포', sub: '에이전트 설치', local: true },
   { key: 'diag', icon: 'info', label: '진단 · 정보', sub: '버전 · 경로 · 로그' },
 ]
 
@@ -52,13 +56,15 @@ export default function AdminView({
     api.diag().then(setDiag).catch(() => setDiag(null))
   }, [repo?.root, sync?.phase])
 
-  const cur = firstRun ? 'repo' : tab
+  // 서버 모드에는 첫 실행 분기가 없다 — 고를 레포 경로가 없다(§6.6.3).
+  const menu = MENU.filter((m) => !m.local || !isServer)
+  const cur = !isServer && firstRun ? 'repo' : menu.some((m) => m.key === tab) ? tab : 'overview'
 
   return (
     <div className="admin">
       {!firstRun && (
         <nav className="admin__menu" aria-label="관리">
-          {MENU.map((m) => (
+          {menu.map((m) => (
             <button
               key={m.key}
               className="astep"

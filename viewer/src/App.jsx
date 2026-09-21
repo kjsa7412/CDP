@@ -26,6 +26,7 @@ import CheckView from './components/CheckView.jsx'
 import Palette from './components/Palette.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import AdminView from './components/admin/AdminView.jsx'
+import { isServer, mode as appMode, gotoRepo } from './lib/api.js'
 import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
@@ -67,6 +68,9 @@ export default function App() {
   const [scanning, setScanning] = useState(false)
   const [fatal, setFatal] = useState(null)
   const [needSetup, setNeedSetup] = useState(false)
+  // 서버 모드의 나 — 누구인가 · 무엇을 볼 수 있는가(§6.6.2). 로컬은 null.
+  const [me, setMe] = useState(null)
+  const [repoMenu, setRepoMenu] = useState(false)
   // 검사 결과는 뷰가 아니라 **오버레이**다.
   //
   // 오류는 커밋을 막으므로 **무엇이 막았는지**로 가는 길이 항상 있어야 한다.
@@ -99,13 +103,16 @@ export default function App() {
     setState(s)
     setManagedList(m || [])
     setOthers(d.others || [])
+    if (isServer) api.me().then(setMe).catch(() => {})
     return { r, d, v, s, m: m || [] }
   }, [])
 
   useEffect(() => {
     reload()
       .then(({ r, d, s, m }) => {
-        if (!s.repoPath || r.docs === 0) {
+        // **서버 모드에는 첫 실행 분기가 없다**(§6.6.3). 고를 레포 경로가
+        // 없고, 로그인 뒤 바로 문서다.
+        if (!isServer && (!s.repoPath || r.docs === 0)) {
           if (!s.repoPath) setNeedSetup(true)
         }
         // 첫 화면 — 마지막에 읽던 문서를 그대로 연다. 시작점도 거기서 잡는다.
@@ -485,11 +492,41 @@ export default function App() {
       data-force-status={repo.watchEnabled && !repo.watchAlive ? '1' : '0'}
     >
       <header className="topbar">
-        <span className="topbar__name">
-          <span className="topbar__mark" aria-hidden="true">{repoName.slice(0, 1)}</span>
-          {repoName}
-        </span>
-        {repo.hostWarning && (
+        {/* 로컬은 이름표, 서버는 **고르는 자리**다(§6.6.2). 레포가 하나면
+            전환 UI 를 내지 않는다 — 고를 것이 없는데 메뉴를 내밀지 않는다. */}
+        {isServer && (me?.repos?.length || 0) > 1 ? (
+          <span className="topbar__repo">
+            <button className="topbar__name" onClick={() => setRepoMenu((v) => !v)} aria-expanded={repoMenu}>
+              <span className="topbar__mark" aria-hidden="true">{appMode.repo.slice(0, 1)}</span>
+              {appMode.repo}
+              <Icon name="chevronDown" size={12} />
+            </button>
+            {repoMenu && (
+              <div className="repomenu" role="menu">
+                {me.repos.map((r) => (
+                  <button
+                    key={r.name}
+                    className="repomenu__row"
+                    role="menuitem"
+                    aria-current={r.name === appMode.repo}
+                    onClick={() => r.name !== appMode.repo && gotoRepo(r.name)}
+                  >
+                    <b>{r.name}</b>
+                    <span>{r.title || ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
+        ) : (
+          <span className="topbar__name">
+            <span className="topbar__mark" aria-hidden="true">{repoName.slice(0, 1)}</span>
+            {repoName}
+          </span>
+        )}
+        {/* loopback 경고는 **로컬만의 것**이다. 원격에서는 늘 참이라 경고가
+            아니다 — 그 자리에 user 와 로그아웃이 온다(§6.6.3). */}
+        {!isServer && repo.hostWarning && (
           <span className="hostwarn"><Icon name="warn" size={13} /> loopback 아님</span>
         )}
 
@@ -526,7 +563,9 @@ export default function App() {
             **도는 중인지가 안 보였다** — 사내망 fetch 실측 19.5초 동안 화면이
             조용하면 멎은 줄로 읽는다. 지금은 단계와 경과 초가 이 버튼에 뜬다.
             받는 것만 여기 있다 — push 는 상태바와 관리>동기화에 따로 있다. */}
-        <SyncButton sync={sync} onSync={syncNow} />
+        {/* 동기화 버튼은 **로컬만** — 서버는 언제나 origin HEAD 이고 받을
+            것이 없다(§4.8). 상태는 관리 > 동기화에서 읽기로 본다. */}
+        {!isServer && <SyncButton sync={sync} onSync={syncNow} />}
 
         {/* 검증 — **아침에 제일 먼저 보는 값이다.** 상태바 11.5px 글씨에
             두면 매일 찾아 읽어야 한다. 0건이면 조용하다. */}
@@ -542,6 +581,16 @@ export default function App() {
           <button className="pill" onClick={() => setCheckOpen(true)} title="검사 결과 — 통과했을 때도 볼 수 있다">
             <Icon name="check" size={13} /> 검사
           </button>
+        )}
+
+        {/* 서버 모드에서 loopback 경고가 있던 자리(§6.6.3). */}
+        {isServer && me && (
+          <span className="who">
+            {me.user}
+            <a className="who__out" href="/logout" title="로그아웃">
+              <Icon name="power" size={13} />
+            </a>
+          </span>
         )}
 
         <button

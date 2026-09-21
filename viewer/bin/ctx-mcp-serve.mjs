@@ -18,7 +18,8 @@ import * as auth from '../../core/auth.js'
 import { save as doSave } from '../../core/save.js'
 import { zip } from '../../core/zip.js'
 import { Store } from '../../core/store.js'
-import { handleRead } from '../server/adapter/read-api.js'
+import { handleRead, MIME } from '../server/adapter/read-api.js'
+import { hereDir } from '../server/runtime.js'
 import { buildServer, makeRepoCache, mirrorOf, BUILT } from './ctx-mcp.mjs'
 
 const NL = String.fromCharCode(10)
@@ -362,6 +363,9 @@ export async function runServe(opt = {}) {
     }
   }
 
+  // 화면 파일. 없으면 안내만 낸다 — 서버는 화면 없이도 돈다(MCP 는 별개다).
+  const webDir = opt.web ? path.resolve(opt.web) : path.resolve(hereDir(import.meta.url), '../../ops/out/web')
+
   const store = makeStore(root, log)
   await store.refresh()
   const authenticate = makeAuth({ authFile: opt.auth, log })
@@ -445,7 +449,21 @@ export async function runServe(opt = {}) {
       }
 
       // 브라우저 경로(`/api` · `/r`)는 쿠키를, 나머지는 Bearer 를 본다(§6.4).
-      const isBrowserPath = url.pathname.startsWith('/api/') || url.pathname.startsWith('/r/')
+      const isBrowserPath =
+        url.pathname.startsWith('/api/') ||
+        url.pathname.startsWith('/r/') ||
+        url.pathname === '/' ||
+        url.pathname === '/me' ||
+        url.pathname === '/repos'
+      // 화면 자산 — **인증 앞에서 낸다.**
+      //
+      // 로그인 화면을 그리려면 그 전에 받아야 하고, 담긴 것은 빌드 산출물뿐이라
+      // 숨길 것이 없다. 인증 뒤에 두면 401 이 나서 화면이 아예 안 뜬다 —
+      // 실측으로 잡았다.
+      if (/^\/(assets\/|favicon|[^/]+\.(?:js|css|svg|png|ico|woff2?)$)/.test(url.pathname)) {
+        return serveWeb({ req, res, url, webDir, log })
+      }
+
       // ── 로그인 (§6.6.1) — 인증 앞에 온다
       if (url.pathname === '/login') {
         if (req.method === 'GET') {
@@ -486,6 +504,16 @@ export async function runServe(opt = {}) {
           return res.end()
         }
         return json(res, a.status, { error: { code: a.code, message: a.message } })
+      }
+
+      // GET /me — 화면 껍데기가 한 번에 필요한 것. 누구인가 · 무엇을 볼 수
+      // 있는가. **모드는 묻지 않는다** — 화면이 `/r/` 로 서빙됐으면 서버 모드다.
+      if (url.pathname === '/me' && req.method === 'GET') {
+        const mine = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
+        const rows = []
+        for (const r of mine) rows.push({ name: r.name, title: await titleOf(r.root) })
+        log.req({ ip, user: a.user, method: 'GET', tool: '/me', ms: Date.now() - t0, status: 200 })
+        return json(res, 200, { mode: 'server', user: a.user, label: a.label ?? null, write: !!a.write, repos: rows })
       }
 
       if (url.pathname === '/repos' && req.method === 'GET') {
@@ -637,9 +665,9 @@ export async function runServe(opt = {}) {
           res.writeHead(302, { location: '/r/' + encodeURIComponent(mine[0].name) + '/' })
           return res.end()
         }
-        // 화면 자체는 6.2 에서. 지금은 붙었다는 것만 낸다.
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-        return res.end(shellPage({ user: a.user, repo: decodeURIComponent(m[1]), repos: mine.map((r) => r.name) }))
+        // 화면 — 빌드된 SPA 를 낸다. **같은 번들이 로컬에서도 돈다**(§6.8) —
+        // 경로가 `/r/` 로 시작하면 서버 모드라고 화면이 스스로 안다.
+        return serveWeb({ req, res, url, webDir, log })
       }
 
       return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '없는 경로' } })
@@ -911,4 +939,37 @@ function shellPage({ user, repo, repos }) {
 <p><code>/api/${repo}/status</code> · <code>/api/${repo}/docs</code> · <code>/api/${repo}/managed</code></p>
 <hr><p class="mut">${user} · <a href="/logout">로그아웃</a></p>`
   )
+}
+
+// SPA 정적 서빙.
+//
+// `/r/<repo>/무엇이든` 은 전부 `index.html` 이다 — 라우팅은 화면이 한다.
+// 자산(`/assets/…`)만 실제 파일로 낸다.
+async function serveWeb({ req, res, url, webDir, log }) {
+  let rel = decodeURIComponent(url.pathname)
+  const asset = /^\/(assets\/.+|[^/]+\.(?:js|css|svg|png|ico|woff2?))$/.exec(rel)
+  rel = asset ? rel : '/index.html'
+
+  const abs = path.resolve(webDir, '.' + rel)
+  if (!abs.startsWith(path.resolve(webDir))) {
+    res.writeHead(403).end()
+    return
+  }
+  const buf = await fs.readFile(abs).catch(() => null)
+  if (!buf) {
+    if (asset) {
+      res.writeHead(404).end()
+      return
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    return res.end(page('CDP', `<h1>화면이 빌드되지 않았습니다</h1>
+<p class="mut"><code>npm run build</code> 를 돌려 <code>ops/out/web</code> 을 만든 뒤
+서버의 <code>--web</code> 로 가리키거나 그 자리에 두세요.</p>
+<hr><p class="mut">읽기 API 와 MCP 는 화면 없이도 돕니다.</p>`))
+  }
+  res.writeHead(200, {
+    'content-type': MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream',
+    'cache-control': rel === '/index.html' ? 'no-store' : 'public, max-age=31536000, immutable',
+  })
+  res.end(buf)
 }

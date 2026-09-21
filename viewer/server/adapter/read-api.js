@@ -14,7 +14,18 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { resolveInside } from './security.js'
 
+// 화면 자산도 이 표를 쓴다(관리 서비스의 `serveWeb`). **`.js` 가 빠지면
+// 브라우저가 모듈 실행을 거부한다** — 화면이 통째로 안 뜬다.
 const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.avif': 'image/avif',
+  '.ico': 'image/x-icon',
+  '.map': 'application/json; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',

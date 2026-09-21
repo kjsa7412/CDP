@@ -85,6 +85,7 @@ function parseArgs(argv) {
     else if (a === '--data') out.data = argv[++i]
     else if (a === '--mirror') out.mirror = true
     else if (a === '--server') out.server = argv[++i]
+    else if (a === '--web') out.web = argv[++i]
     else if (a === '--name') out.name = argv[++i]
     else if (a === '--user') out.user = argv[++i]
     else if (a === '--label') out.label = argv[++i]

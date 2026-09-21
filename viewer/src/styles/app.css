@@ -1444,3 +1444,92 @@
 .gr__selmeta { flex: none; font-size: 11px; color: var(--text-3); white-space: nowrap; }
 .gr__btn--go { color: var(--accent); border-color: var(--accent); font-weight: 600; }
 .gr__btn--go:hover { background: var(--accent-bg); }
+
+/* ── 관리 서비스 (모드 B) — MCP 설계서 §6.6.2 · §6.6.3 ──────────────────
+   로컬 뷰어에는 이 클래스가 붙지 않는다. 같은 번들이 두 모드에서 도므로
+   (§6.8) 스타일도 한 파일에 두고, 쓰는 쪽이 갈린다. */
+
+/* 레포 전환 — 이름표가 있던 자리다. 레포가 하나면 아예 안 나온다. */
+.topbar__repo {
+  position: relative;
+}
+.topbar__repo .topbar__name {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: var(--r-sm);
+}
+.topbar__repo .topbar__name:hover {
+  background: var(--surface-3, rgba(127, 127, 127, 0.12));
+}
+.repomenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -6px;
+  z-index: 40;
+  min-width: 260px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.repomenu__row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.repomenu__row:hover {
+  background: var(--surface-2);
+}
+.repomenu__row[aria-current='true'] {
+  background: var(--surface-2);
+  cursor: default;
+}
+.repomenu__row b {
+  font-size: 13px;
+  font-weight: 600;
+}
+.repomenu__row span {
+  font-size: 11.5px;
+  color: var(--text-dim, #6b6a65);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 누구로 보고 있나 — loopback 경고가 있던 자리(§6.6.3) */
+.who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim, #6b6a65);
+  white-space: nowrap;
+}
+.who__out {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: inherit;
+  border-radius: var(--r-sm);
+}
+.who__out:hover {
+  background: var(--surface-3, rgba(127, 127, 127, 0.12));
+  color: var(--text);
+}

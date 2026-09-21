@@ -99,6 +99,13 @@ const P = {
   ),
   close: <path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" />,
   check: <path d="M20 6.5 9.5 17 4 11.5" />,
+  // 로그아웃 — 전원 기호. 서버 모드의 토프바에만 쓴다(MCP 설계서 §6.6.3).
+  power: (
+    <>
+      <path d="M12 3.5v8" />
+      <path d="M7.5 6.6a7 7 0 1 0 9 0" />
+    </>
+  ),
   more: (
     <g fill="currentColor" stroke="none">
       <circle cx="5.2" cy="12" r="1.7" />
