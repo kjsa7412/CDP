@@ -68,6 +68,13 @@ export default function WorkReposServer({ say }) {
         {open && <HowTo row={data.repos.find((r) => r.id === open)} />}
       </Card>
 
+      {!data.write ? (
+        <Card title="등록" hint="쓰기 권한이 필요합니다">
+          <Note>
+            등록·삭제는 <code>write</code> 가 있는 사람만 할 수 있습니다. 목록과 설치 방법은 그대로 보입니다.
+          </Note>
+        </Card>
+      ) : (
       <Card title="등록" hint="담당자는 명부에 있어야 합니다">
         <div className="wr-form">
           <input
@@ -89,6 +96,7 @@ export default function WorkReposServer({ say }) {
           </Btn>
         </div>
       </Card>
+      )}
     </>
   )
 }

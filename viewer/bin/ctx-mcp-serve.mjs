@@ -572,12 +572,27 @@ export async function runServe(opt = {}) {
             const kits = {}
             for (const r of mine) kits[r.name] = (await kitHash(r.root)).hash
             const rows = wr.list(db, { kits }).filter((r) => mine.some((m) => m.name === r.knowledge))
-            return json(res, 200, { repos: rows, users: await usersOf(opt.auth) })
+            // `write` 를 같이 낸다 -- 화면이 등록 칸을 낼지 말지 정해야 하는데,
+            // 못 할 일을 띄워 놓고 누른 뒤에 403 을 내는 것은 화면이 아니다.
+            return json(res, 200, { repos: rows, users: await usersOf(opt.auth), write: !!a.write })
+          }
+          // **등록·삭제는 `write` 가 있어야 한다.**
+          //
+          // 목록과 보고는 전원에게 연다 -- 보고를 막으면 대장이 사실과 어긋나고,
+          // 그러면 대장을 둔 이유가 없어진다. 대장은 권한을 들지 않으므로
+          // 지워도 되돌릴 수 있지만, **누가 지웠는지는 남아야 한다.**
+          const mutating =
+            (url.pathname === '/workrepos' && req.method === 'POST') ||
+            (req.method === 'DELETE' && /^\/workrepos\/[^/]+$/.test(url.pathname))
+          if (mutating && !a.write) {
+            log.req({ ip, user: a.user, method: req.method, tool: '/workrepos', key: url.pathname, ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '쓰기 권한이 없다 — 등록·삭제는 write 인 사람만' } })
           }
           if (url.pathname === '/workrepos' && req.method === 'POST') {
             const body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
             const row = wr.add(db, body, { users: await usersOf(opt.auth), repos: mine.map((r) => r.name) })
             await wr.save(dataDir, db)
+            await auth.audit(dataDir, `workrepo add · ${a.user} · ${row.id} · ${row.name} · ${row.knowledge}`)
             log.req({ ip, user: a.user, method: 'POST', tool: '/workrepos', key: row.id, ms: Date.now() - t0, status: 200 })
             return json(res, 200, row)
           }
@@ -594,8 +609,11 @@ export async function runServe(opt = {}) {
           }
           const dm = /^\/workrepos\/([^/]+)$/.exec(url.pathname)
           if (dm && req.method === 'DELETE') {
+            const gone = db.repos.find((r) => r.id === dm[1])
             wr.remove(db, dm[1])
             await wr.save(dataDir, db)
+            await auth.audit(dataDir, `workrepo del · ${a.user} · ${dm[1]} · ${gone?.name ?? '-'}`)
+            log.req({ ip, user: a.user, method: 'DELETE', tool: '/workrepos', key: dm[1], ms: Date.now() - t0, status: 200 })
             return json(res, 200, { ok: true })
           }
         } catch (e) {
