@@ -153,7 +153,7 @@ export default function App() {
       if (ev.type === 'sync') {
         setSync((s) => ({ ...(s || {}), phase: ev.phase, startedAt: ev.startedAt ?? s?.startedAt ?? null, last: ev.last ?? s?.last ?? null }))
         // 끝났으면 이력까지 다시 읽는다. 그 한 줄이 표에 남아야 한다.
-        if (ev.phase === 'idle') api.sync().then(setSync).catch(() => {})
+        if (ev.phase === 'idle' && !isServer) api.sync().then(setSync).catch(() => {})
         return
       }
       if (ev.type !== 'changed') return
@@ -172,7 +172,8 @@ export default function App() {
     }, () => {
       // SSE 가 붙었다. 그 전에 지나간 상태 변화를 여기서 한 번 맞춘다.
       api.repo().then(setRepo).catch(() => {})
-      api.sync().then(setSync).catch(() => {})
+      // 모드 B 에는 `/sync` 가 없다 — 부르면 404 만 쌓인다.
+      if (!isServer) api.sync().then(setSync).catch(() => {})
     })
   }, [reload])
 

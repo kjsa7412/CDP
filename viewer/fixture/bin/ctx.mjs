@@ -30681,7 +30681,7 @@ var init_ctx_mcp = __esm({
     init_repo();
     init_tools();
     init_tools();
-    BUILT = "2026-09-21 09:10";
+    BUILT = "2026-09-21 11:03";
     NL2 = String.fromCharCode(10);
     CARD = {
       match: "\uC774\uB984\xB7alias\xB7\uC790\uC720 \uD45C\uD604\uC744 \uC815\uBCF8 \uC88C\uD45C\uB85C \uB300\uC870\uD55C\uB2E4. \uD14C\uC774\uBE14\xB7\uD654\uBA74\xB7API\xB7\uD329\uD130\xB7\uC6D0\uCC9C\xB7\uC6A9\uC5B4\uB97C \uB9D0\uB85C \uAC00\uB9AC\uCF30\uC73C\uBA74 \uC88C\uD45C\uB97C \uC9D0\uC791\uD558\uC9C0 \uB9D0\uACE0 \uBA3C\uC800 \uC774\uAC83\uC73C\uB85C \uD655\uC815\uD55C\uB2E4. `\uBBF8\uB4F1\uC7AC` \uB294 \uC5B4\uD718\uC5D0 \uC5C6\uB2E4\uB294 \uB73B\uC774\uB2E4 \u2014 \uB2E4\uB978 \uC88C\uD45C\uB85C \uBC14\uAFB8\uC9C0 \uB9D0\uACE0 \uADF8\uB300\uB85C \uBCF4\uACE0\uD55C\uB2E4. \uD3D0\uAE30 \uC88C\uD45C\uBA74 \uD6C4\uC18D \uC88C\uD45C\uB97C \uC900\uB2E4. `repo` \uB97C \uC8FC\uC9C0 \uC54A\uC73C\uBA74 **\uB4E0 \uB808\uD3EC\uB97C \uC804\uBD80 \uB300\uC870**\uD558\uACE0 \uACB0\uACFC\uB9C8\uB2E4 `repo` \uB97C \uC801\uB294\uB2E4 \u2014 \uADF8 \uAC12\uC744 \uC774\uD6C4 \uB3C4\uAD6C\uC5D0 \uADF8\uB300\uB85C \uB118\uAE34\uB2E4. \uB450 \uB808\uD3EC\uC5D0 \uB2E4 \uC788\uC73C\uBA74 \uB458 \uB2E4 \uBCF4\uACE0\uD55C\uB2E4(\uACE0\uB974\uC9C0 \uC54A\uB294\uB2E4)",
@@ -40400,10 +40400,10 @@ async function runSync(root, { pull = true, onPhase = () => {
 
 // viewer/bin/ctx-cli.mjs
 init_tools();
-var BUILT2 = "2026-09-21 09:10";
+var BUILT2 = "2026-09-21 11:03";
 var BS2 = String.fromCharCode(92);
 var SEP = path15.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-21 09:10)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-21 11:03)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131

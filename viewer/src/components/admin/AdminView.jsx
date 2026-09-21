@@ -30,7 +30,11 @@ import { isServer } from '../../lib/api.js'
 const MENU = [
   { key: 'overview', icon: 'check', label: '현황', sub: '지금 쓸 수 있는 상태인가' },
   { key: 'repo', icon: 'managed', label: '지식 레포', sub: '어디를 보고 있나', local: true },
-  { key: 'sync', icon: 'sync', label: '동기화', sub: '원격 · git 설정' },
+  // **서버 모드에는 없다.** 모드 B 에서 git 을 도는 것은 서버 자신이다 —
+  // `save` 가 커밋하고 `--mirror` 가 push 한다(§4.5). 사람이 브라우저에서
+  // pull/push 를 누를 자리가 아니고, 실제로 `POST /git/pull` · `/git/push` ·
+  // `/sync` 는 모드 B 에 없다. 화면만 남으면 눌러서 404 를 보게 된다.
+  { key: 'sync', icon: 'sync', label: '동기화', sub: '원격 · git 설정', local: true },
   // **서버에도 있다 — 다른 화면이다**(§6.7.3). 로컬은 이 PC 에 깔고,
   // 서버는 등록하고 꾸러미를 내주고 결과를 추적한다.
   { key: 'work', icon: 'plug', label: '작업 레포', sub: '에이전트 설치' },

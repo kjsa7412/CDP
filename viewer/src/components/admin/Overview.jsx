@@ -9,7 +9,7 @@
 // **알림을 만들지 않는다**(설계서 제4부). 이 화면은 사람이 열었을 때 말한다.
 
 import { useEffect, useState } from 'react'
-import { api } from '../../lib/api.js'
+import { api, isServer } from '../../lib/api.js'
 import Icon from '../Icon.jsx'
 import { Card, Row, Mark, Mono, Note, Btn, when } from './ui.jsx'
 
@@ -51,6 +51,22 @@ export default function Overview({ repo, sync, diag, onGo, onCheck, onSync }) {
           </Row>
         </Card>
 
+        {/* **서버 모드는 버튼이 없다.** 미는 것은 서버 자신이다(§4.5) —
+            여기서 보는 것은 "밀렸나" 하나다. 누를 것이 없으니 카드도 다르다. */}
+        {isServer ? (
+          <Card title="미러">
+            <Row label="보낼 것" mark={git?.ahead > 0 ? 'warn' : null}>
+              <b className="num">{git?.ahead ?? '–'}</b> 건
+            </Row>
+            <Row label="받을 것">
+              <b className="num">{git?.behind ?? '–'}</b> 건
+            </Row>
+            <Note>
+              커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 보낼 것이 계속 쌓이면
+              origin 자격이나 보호 브랜치를 봅니다.
+            </Note>
+          </Card>
+        ) : (
         <Card
           title="동기화"
           actions={
@@ -77,6 +93,7 @@ export default function Overview({ repo, sync, diag, onGo, onCheck, onSync }) {
             )}
           </Row>
         </Card>
+        )}
 
         <Card title="검증" actions={<Btn onClick={onCheck}>검사 결과</Btn>}>
           <Row label="커밋을 막는 것" mark={c.error > 0 ? 'bad' : null}>
