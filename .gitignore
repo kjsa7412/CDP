@@ -33,3 +33,6 @@ viewer/fixture/.claude/
 
 # 로컬 개발 편의 설정 — 절대경로(C:/cdp)가 박혀 있어 사람마다 다르다.
 .claude/launch.json
+
+# 세션 작업용 — 커밋하지 않는다
+.scratch/

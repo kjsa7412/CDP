@@ -23,6 +23,9 @@ import { resolveCoord } from '../../core/managed.js'
 import { cmpDateDesc } from '../../core/validity.js'
 import * as git from '../../core/git.js'
 import { runSync } from '../../core/sync.js'
+// 도구 12종의 형태는 **여기서 만들지 않는다.** `core/tools.js` 가 만든 것을
+// 그대로 낸다 -- MCP 의 tools/call 과 바이트까지 같아야 하기 때문이다(MCP 설계서 §10).
+import * as T from '../../core/tools.js'
 
 // 번들 시각. `tools/build-ctx.mjs` 가 치환한다.
 //
@@ -43,7 +46,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx search <말...>        말 -> 좌표 후보 (match 가 미등재를 낼 때의 폴백)
   ctx derive [--json]       파생이 안 된 섹션 목록
   ctx term <이름>           어휘 조회 (정본 / alias / deprecated)
-  ctx apply <좌표>          파생할 섹션에 붙일 변경 줄 초안
+  ctx apply <좌표> [--json] 파생할 섹션에 붙일 변경 줄 초안
   ctx brief                 두 줄 요약 (절차 + 살아 있는 레포 상태)
   ctx sync [--pull]         원격과의 차이. --pull 은 ff 만 한다 (실패면 exit 1)
   ctx version               이 번들이 언제 만들어졌나
@@ -167,8 +170,9 @@ async function cmdCheck(r, opt) {
   const nWarn = warns.reduce((a, f) => a + f.items.length, 0)
 
   if (opt.json) {
-    out(JSON.stringify({ ok: nErr === 0, errors: nErr, warnings: nWarn, findings: res.findings }, null, 2))
-    return nErr === 0 ? 0 : 1
+    const j = T.toolCheck(r)
+    out(JSON.stringify(j, null, 2))
+    return j.ok ? 0 : 1
   }
 
   for (const f of errors) {
@@ -234,34 +238,21 @@ async function cmdMatch(r, opt) {
     err('ctx match: 대조할 이름을 주세요.  예) ctx match "면접심사의견등록" PS130')
     return 2
   }
-  const rows = opt.args.map((q) => {
-    const hit = reconcile(r.vocab, q)
-    if (!hit) return { input: q, coord: null }
-    const e = r.vocab.coords.get(hit.coord)
-    return {
-      input: q,
-      coord: hit.coord,
-      kind: hit.kind, // canonical | value | alias | label
-      exact: !!hit.exact,
-      line: e ? e.line : null,
-      deprecated: e ? e.deprecated : null,
-      supersededBy: e ? e.supersededBy : null,
-    }
-  })
+  const rows = T.toolMatch(r, { names: opt.args })
 
   if (opt.json) {
     out(JSON.stringify(rows, null, 2))
     return 0
   }
-  const w = Math.max(...rows.map((x) => [...x.input].reduce((a, c) => a + (c.codePointAt(0) > 0x1100 ? 2 : 1), 0)), 8)
+  const w = Math.max(...rows.map((x) => [...x.name].reduce((a, c) => a + (c.codePointAt(0) > 0x1100 ? 2 : 1), 0)), 8)
   for (const x of rows) {
     if (!x.coord) {
-      out(`${pad(x.input, w)}  ->  (미등재)  _vocab.md 에 없습니다`)
+      out(`${pad(x.name, w)}  ->  (미등재)  _vocab.md 에 없습니다`)
       continue
     }
-    const how = x.kind === 'canonical' ? '정본' : x.kind === 'alias' ? 'alias 일치' : x.kind === 'label' ? '이름 일치' : '값 일치'
-    const dep = x.deprecated ? `  [폐기 ${x.deprecated}${x.supersededBy ? ' -> ' + x.supersededBy : ''}]` : ''
-    out(`${pad(x.input, w)}  ->  ${x.coord}  (${how}${x.exact ? '' : ' / 부분'} · _vocab.md:${x.line})${dep}`)
+    const how = x.matchedBy === 'canonical' ? '정본' : x.matchedBy === 'alias' ? 'alias 일치' : x.matchedBy === 'label' ? '이름 일치' : '값 일치'
+    const dep = x.deprecated ? `  [폐기 ${x.deprecated}${x.successor ? ' -> ' + x.successor : ''}]` : ''
+    out(`${pad(x.name, w)}  ->  ${x.coord}  (${how}${x.exact ? '' : ' / 부분'} · _vocab.md:${x.vocabLine})${dep}`)
   }
   return 0
 }
@@ -304,7 +295,7 @@ async function cmdWhere(r, opt) {
       return { coord: c, sec, state: stateLabel(st, c), works: works.length, ids: works.slice(0, 3) }
     })
     if (opt.json) {
-      out(JSON.stringify(rows, null, 2))
+      out(JSON.stringify(opt.args.map((c) => T.toolWhere(r, { coord: c, limit: 50 })), null, 2))
       return 0
     }
     for (const x of rows) {
@@ -334,7 +325,7 @@ async function cmdWhere(r, opt) {
   const works = r.coords.byCoord.get(coord) || []
 
   if (opt.json) {
-    out(JSON.stringify({ coord, registry: hit, section: sec, works: works.map((d) => ({ id: d.id, date: d.date })) }, null, 2))
+    out(JSON.stringify(T.toolWhere(r, { coord, limit: 50 }), null, 2))
     return 0
   }
   if (!hit) {
@@ -471,10 +462,7 @@ async function cmdSearch(r, opt) {
     .sort((a, b) => b.n - a.n || (b.section - a.section) || a.coord.localeCompare(b.coord))
 
   if (opt.json) {
-    out(JSON.stringify({
-      words,
-      candidates: rows.map((c) => ({ coord: c.coord, matched: [...c.words], section: c.section, works: [...c.work] })),
-    }, null, 2))
+    out(JSON.stringify(T.toolSearch(r, { words, limit: 50 }), null, 2))
     return 0
   }
   if (!rows.length) {
@@ -503,7 +491,7 @@ async function cmdDerive(r, opt) {
   const todo = [...st.pendingDerive]
   const broken = st.brokenSections
   if (opt.json) {
-    out(JSON.stringify({ pendingDerive: todo, brokenSections: broken }, null, 2))
+    out(JSON.stringify(T.toolDerive(r), null, 2))
     return 0
   }
   if (!todo.length && !broken.length) {
@@ -569,6 +557,12 @@ async function cmdApply(r, opt) {
     return 2
   }
   const sec = r.sections.find((x) => x.coord === coord)
+  if (!sec || sec.state === 'ok' || !(sec.items.length || (r.coords.byCoord.get(coord) || []).length)) {
+    if (opt.json) {
+      out(JSON.stringify(T.toolApply(r, { coord }), null, 2))
+      return 0
+    }
+  }
   if (!sec) {
     out(`${coord}: 등록부에 없어 붙일 섹션이 없습니다.`)
     return 0
@@ -583,6 +577,11 @@ async function cmdApply(r, opt) {
     return 0
   }
   const newest = items[0]
+
+  if (opt.json) {
+    out(JSON.stringify(T.toolApply(r, { coord }), null, 2))
+    return 0
+  }
 
   out(`# ${sec.doc}  ${sec.anchor || ''}`)
   out('')
@@ -646,11 +645,10 @@ async function cmdBrief(r, opt) {
   if (st.indexStale) parts.push('INDEX 불일치')
 
   if (opt.json) {
-    out(JSON.stringify(st, null, 2))
+    out(JSON.stringify(T.toolBrief(r), null, 2))
     return 0
   }
-  out('[CDP] 절차: (1) 검토(대상 추출) -> (2) 맥락 주입(필요시) -> (3) 요청수행 / 작업 끝에 cdp-save')
-  out('[CDP] 레포: ' + parts.join(' · '))
+  for (const l of T.toolBrief(r).lines) out(l)
   return 0
 }
 

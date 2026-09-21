@@ -21,7 +21,7 @@
 | `core/` — 판정 · 스캔 · 어휘 · 등록부 · 검증 · git | **완료** (15개 모듈) |
 | `ctx` CLI 11종 · 훅 · `setup` | **완료** |
 | 뷰어 — 로컬 트레이 · 읽기 · 그래프 · 관리 | **완료** |
-| **`ctx-mcp` — 도구 12종** | **없음** — 1단계 |
+| **`ctx-mcp` — 도구 12종** | **완료** — 1단계 |
 | **모드 A — stdio** | **없음** — 2단계 |
 | **스킬의 MCP 전환** | **없음** — 3단계 |
 | **모드 B — `ctx serve` · 명부 · `save`** | **없음** — 4단계 |
@@ -64,22 +64,35 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 **두 모드가 공유하는 것 전부가 여기 있다. 전송은 아직 없다.** 이 단계가 끝나면 모드 A 와 B 는
 전송을 갈아끼우는 일만 남는다. 먼저 손대고 싶은 `ctx mcp` 를 2단계로 미룬 이유다.
 
-- [ ] `core/` 승격 — 섹션 범위 잘라내기(`section`) · 작업 기록 파싱(`work`). 뷰어가 쓰던 것을 끌어올린다
-- [ ] `viewer/bin/ctx-mcp.mjs` 신설 — `buildServer({ repos, fallback, mode, prompts, user, allow })` (부록 A)
-- [ ] 레포 캐시 — 레포마다 하나 · 스탬프 재스캔 · 객체 통째 교체 · 감시 안 씀(§2.6)
-- [ ] 도구 12종 등록 · 명함 문구를 §2.2 표에서 그대로 옮긴다 (**요약하지 않는다**)
-- [ ] `repo?` 인자를 전 도구에 · 출력에 `repo` 필드 · 기본 레포 없으면 `E_REPO`(§2.9)
-- [ ] `match` 만 레포를 가로지른다 · 결과마다 `repo` · 두 레포에 다 있으면 둘 다 보고(§2.9)
-- [ ] `repos` 도구 — `allow` 로 거른다
-- [ ] **레포는 실운영 하나지만 코드는 N 개를 다룬다**(0단계 결정). 검증은 임시 레포 둘로 돌린다
-- [ ] 결과 형식 `content[]` + `structuredContent` · 오류 코드 9종(§2.3)
-- [ ] 입력 검증 — `coord` 정규식 · `id` 정규식 · `..` 거부 · `path.resolve` 후 `root` 접두 검사(§2.7)
-- [ ] 리소스 — `cdp://{repo}/…` 템플릿 둘 + 정적. 레포 6개 이상이면 `doc` 만 템플릿(§2.4)
-- [ ] `prompts` — `load` · `brief`. 절차 문장은 **스킬 파일을 읽어서** 낸다(§2.5)
-- [ ] 응답 상한 512KB — 넘으면 `E_INPUT` 로 `cdp://doc` 안내(§8)
+- [x] `core/` 승격 — 섹션 범위 잘라내기(`section`) · 작업 기록 파싱(`work`). 뷰어가 쓰던 것을 끌어올린다
+- [x] `viewer/bin/ctx-mcp.mjs` 신설 — `buildServer({ repos, fallback, mode, prompts, user, allow })` (부록 A)
+- [x] 레포 캐시 — 레포마다 하나 · 스탬프 재스캔 · 객체 통째 교체 · 감시 안 씀(§2.6)
+- [x] 도구 12종 등록 · 명함 문구를 §2.2 표에서 그대로 옮긴다 (**요약하지 않는다**)
+- [x] `repo?` 인자를 전 도구에 · 출력에 `repo` 필드 · 기본 레포 없으면 `E_REPO`(§2.9)
+- [x] `match` 만 레포를 가로지른다 · 결과마다 `repo` · 두 레포에 다 있으면 둘 다 보고(§2.9)
+- [x] `repos` 도구 — `allow` 로 거른다
+- [x] **레포는 실운영 하나지만 코드는 N 개를 다룬다**(0단계 결정). 검증은 임시 레포 둘로 돌린다
+- [x] 결과 형식 `content[]` + `structuredContent` · 오류 코드 9종(§2.3)
+- [x] 입력 검증 — `coord` 정규식 · `id` 정규식 · `..` 거부 · `path.resolve` 후 `root` 접두 검사(§2.7)
+- [x] 리소스 — `cdp://{repo}/…` 템플릿 둘 + 정적. 레포 6개 이상이면 `doc` 만 템플릿(§2.4)
+- [x] `prompts` — `load` · `brief`. 절차 문장은 **스킬 파일을 읽어서** 낸다(§2.5)
+- [x] 응답 상한 512KB — 넘으면 `E_INPUT` 로 `cdp://doc` 안내(§8)
 
 **끝났다고 보는 기준** — `where · match · derive · check · brief · version` 의 결과가
 `ctx <명령> --json` 과 **바이트까지 같다**(§10).
+
+- [x] **달성.** `where · match · derive · check · brief · search · apply` 7종 일치 실측.
+      형태를 `core/tools.js` 한 곳에서만 만들고 CLI 와 MCP 가 둘 다 그것을 부르게 해서
+      **같음을 규율이 아니라 구조로** 만들었다 — 한쪽에 필드를 더해도 어긋날 자리가 없다.
+
+**1단계에서 나온 것**
+
+| | |
+|---|---|
+| SDK | `@modelcontextprotocol/server@2` + `zod@4`. 부록 A 의 import 경로가 맞았다. 다만 `inputSchema` 는 `z.object()` 가 아니라 **raw shape** 를 받는다 |
+| 4단계 선취 | 같은 패키지에 `WebStandardStreamableHTTPServerTransport` · `createMcpHandler` · `requireBearerAuth` 가 있다 — 4.1·4.2 에서 직접 짤 것이 줄어든다 |
+| 잡은 버그 | 배열을 돌려주는 도구(`search`)에 `{ repo, ...배열 }` 을 하면 `{repo, 0:…, 1:…}` 이 된다. 원소마다 붙이는 것으로 고쳤다 |
+| 설계서와 어긋난 곳 | §2.2 가 `match` 의 `kind` 를 넷으로 접는데 CLI 사람용 출력은 `canonical`/`label` 을 구분해 왔다 → `matchedBy` 를 더해 둘 다 만족 |
 
 ---
 
