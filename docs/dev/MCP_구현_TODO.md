@@ -23,7 +23,7 @@
 | 뷰어 — 로컬 트레이 · 읽기 · 그래프 · 관리 | **완료** |
 | **`ctx-mcp` — 도구 12종** | **완료** — 1단계 |
 | **모드 A — stdio** | **완료** — 2단계 (배포물은 ⏸) |
-| **스킬의 MCP 전환** | **없음** — 3단계 |
+| **스킬의 MCP 전환** | **완료** — 3단계 |
 | **모드 B — `ctx serve` · 명부 · `save`** | **없음** — 4단계 |
 | **설치 — `setup --server` · `/kit` · 반입 묶음** | **없음** — 5단계 |
 | **관리 서비스 (원격 화면 · 설치 관리)** | **없음** — 6단계 |
@@ -137,12 +137,26 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 
 2단계 뒤 언제든. 다만 모드 A/B 문장이 달라서 4단계 뒤에 한 번 더 손댄다.
 
-- [ ] 스킬 머리에 한 문장 — *"`ctx` 호출은 MCP 도구 `cdp:*` 가 있으면 그것으로, 없으면 `<repo>/bin/ctx …` 로. 둘은 같은 함수다"*(§3.3)
-- [ ] `cdp-load` §0 `sync` · §2 `where`→`section` · §5 `search`
-- [ ] `cdp-work` ① · `cdp-save` ② · `cdp-import` ③ → `match`
-- [ ] `cdp-save` ④ · `cdp-managed` → `derive` · `apply`
-- [ ] **`git pull` · Write/Edit · `git commit` 은 그대로.** 훅도 CLI 를 그대로 쓴다(§3.3)
-- [ ] `tools:` 를 제한한 에이전트 예시 — Bash 없이 정본만 읽는다(§3.4)
+**명령마다 고치지 않았다.** 스킬 2,861줄에 `ctx` 호출이 80군데 넘는데, 그것을 전부
+도구 호출로 바꾸면 CLI 경로가 문서에서 사라진다 — 모드 A 와 훅은 여전히 CLI 를 쓴다.
+대신 §3.3 이 말한 대로 **머리에 한 문장**을 넣어 전부를 양쪽 길로 만들었다. 예시의
+터미널 출력은 CLI 실물이라 그대로 유효하다.
+
+- [x] 스킬 머리에 한 문장 — *"`ctx` 호출은 MCP 도구 `cdp:*` 가 있으면 그것으로, 없으면 `<repo>/bin/ctx …` 로. 둘은 같은 함수다"*(§3.3)
+- [x] `cdp-load` §0 `sync` · §2 `where`→`section` · §5 `search`
+- [x] `cdp-work` ① · `cdp-save` ② · `cdp-import` ③ → `match`
+- [x] `cdp-save` ④ · `cdp-managed` → `derive` · `apply`
+- [x] **`git pull` · Write/Edit · `git commit` 은 그대로.** 훅도 CLI 를 그대로 쓴다(§3.3)
+- [x] `tools:` 를 제한한 에이전트 예시 — Bash 없이 정본만 읽는다(§3.4)
+
+**3단계에서 나온 것**
+
+| | |
+|---|---|
+| 넣은 곳 | 스킬 6종 머리(`cdp-push` 는 코드 레포용이라 제외) + `agent/CLAUDE-프로젝트레포.md` |
+| 이름이 다른 것 둘 | `ctx where` 뒤의 섹션 Read → **`section`** · `ctx term` → **`match`** 에 흡수. 나머지 아홉은 이름이 같다 |
+| 실제로 달라지는 동작 | `cdp-load` §2 의 주입 — 도구 쪽은 **문서 전체를 읽을 방법 자체가 없다.** 경로도 줄 범위도 몰라도 된다 |
+| 배포 경로 | `ops/lib/release.mjs:129` 가 `agent/skills` → `<지식레포>/.claude/skills` 로 넣는다. 원본과 배포본은 개행만 다르고 내용은 같았다 |
 
 ---
 
