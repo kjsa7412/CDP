@@ -24,7 +24,8 @@
 | **`ctx-mcp` — 도구 12종** | **완료** — 1단계 |
 | **모드 A — stdio** | **완료** — 2단계 (배포물은 ⏸) |
 | **스킬의 MCP 전환** | **완료** — 3단계 |
-| **모드 B — `ctx serve` · 명부 · `save`** | **없음** — 4단계 |
+| **모드 B — 전송 · 레포 저장소** | **완료** — 4.1 |
+| **모드 B — 명부 · `save` · 미러** | **없음** — 4.2 ~ 4.4 |
 | **설치 — `setup --server` · `/kit` · 반입 묶음** | **없음** — 5단계 |
 | **관리 서비스 (원격 화면 · 설치 관리)** | **없음** — 6단계 |
 
@@ -164,14 +165,28 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 
 ### 4.1 전송 · 레포 저장소
 
-- [ ] `viewer/bin/ctx-mcp-serve.mjs` · Streamable HTTP · **stateless**(§4.3 · §7)
-- [ ] `POST /mcp`(레포 미고정) · `POST /mcp/<name>`(고정) · GET·DELETE 405
-- [ ] `<root>/<name>/` 스캔 · 폴더 목록 60초 갱신 · 재시작 없이 인식(§4.2)
-- [ ] `GET /healthz` — **레포 이름을 싣지 않는다.** 집계까지(§4.3)
-- [ ] `GET /repos` — 권한 안의 레포 + `mirror` · `head`
-- [ ] 요청 본문 상한 2MB → 초과 413 · `X-Forwarded-For` 는 로그용만
-- [ ] `--bind` 기본 루프백 · `0.0.0.0` 이면 시작 시 stderr 경고
-- [ ] `serve.log` 회전 3×1MB — 본문 · 검색어 안 남김(§2.8)
+- [x] `viewer/bin/ctx-mcp-serve.mjs` · Streamable HTTP · **stateless**(§4.3 · §7)
+- [x] `POST /mcp`(레포 미고정) · `POST /mcp/<name>`(고정) · GET·DELETE 405
+- [x] `<root>/<name>/` 스캔 · 폴더 목록 60초 갱신 · 재시작 없이 인식(§4.2)
+- [x] `GET /healthz` — **레포 이름을 싣지 않는다.** 집계까지(§4.3)
+- [x] `GET /repos` — 권한 안의 레포 + `mirror` · `head`
+- [x] 요청 본문 상한 2MB → 초과 413 · `X-Forwarded-For` 는 로그용만
+- [x] `--bind` 기본 루프백 · `0.0.0.0` 이면 시작 시 stderr 경고
+- [x] `serve.log` 회전 3×1MB — 본문 · 검색어 안 남김(§2.8)
+
+**4.1 에서 나온 것**
+
+| | |
+|---|---|
+| SDK 가 해 준 것 | `createMcpHandler(factory, { legacy: 'stateless' })` 가 `{ fetch }` 를 준다. **GET·DELETE 405 는 SDK 가 이미 낸다** — 직접 짤 것이 없었다. 팩토리는 `requestInfo.url` 과 `headers` 를 받아 레포 경로와 토큰을 거기서 꺼낸다 |
+| 직접 이어야 했던 것 | 팩토리는 SDK 가 부르므로 **요청별 인증 결과와 레포 목록을 실을 자리가 없다.** 전역은 동시 요청이 서로 덮는다 → `AsyncLocalStorage` |
+| 413 이 까다로웠다 | ① 넘는 순간 `destroy` 하면 "other side closed" 로 보여 거절인지 죽음인지 구별이 안 된다 ② 큰 몸통은 `Expect: 100-continue` 를 먼저 보내고 그때는 `request` 가 아니라 `checkContinue` 가 난다. **`content-length` 로 미리 끊는 것**이 둘 다의 답이다 |
+| 설계보다 강하게 간 것 | `--auth` 없이 루프백 밖 바인드는 **경고가 아니라 거부**. `Origin` 이 붙어 있고 루프백이 아니면 403 — 둘 다 §8 에 반영했다 |
+
+**끝났다고 보는 기준** — 실측. `/healthz` 에 레포 이름 0 · `/repos` 2건 ·
+`/mcp/<name>` 이 레포를 고정 · `/mcp` 는 둘일 때 `E_REPO` · GET·DELETE 405 ·
+Origin 403 · 2MB 413 (fetch · curl 둘 다) · 재시작 없이 62초 뒤 gamma 인식 ·
+로그에 본문·검색어 없음.
 
 ### 4.2 명부 · 인증 — `save` 보다 먼저
 

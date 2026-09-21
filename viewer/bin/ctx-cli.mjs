@@ -52,11 +52,13 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx version               이 번들이 언제 만들어졌나
   ctx setup <작업 레포>      그 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기)
   ctx mcp                   MCP 서버로 선다 (stdio). 호스트가 띄운다 -- 직접 칠 일은 없다
+  ctx serve --root <폴더>    MCP 서버로 선다 (HTTP). 상주 프로세스
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
                             ctx mcp 에서는 여러 번 줄 수 있다 (첫 번째가 기본 레포)
   --root <폴더>             ctx mcp -- 그 폴더의 하위를 전부 레포로 본다
-  --prompts auto|always|never   ctx mcp -- MCP prompt 노출 (기본 auto)
+  --prompts auto|always|never   MCP prompt 노출 (기본 auto)
+  --bind · --port · --auth · --data · --mirror   ctx serve 용
   --json                    기계 판독용 출력
 `
 
@@ -73,6 +75,11 @@ function parseArgs(argv) {
     else if (a === '--repo') { const v = argv[++i]; out.repos.push(v); if (out.repo == null) out.repo = v }
     else if (a === '--root') out.root = argv[++i]
     else if (a === '--prompts') out.prompts = argv[++i]
+    else if (a === '--bind') out.bind = argv[++i]
+    else if (a === '--port') out.port = argv[++i]
+    else if (a === '--auth') out.auth = argv[++i]
+    else if (a === '--data') out.data = argv[++i]
+    else if (a === '--mirror') out.mirror = true
     else if (a === '--dry') out.dry = true
     else if (a === '-h' || a === '--help' || a === 'help') out.cmd = out.cmd || 'help'
     else if (!out.cmd) out.cmd = a
@@ -790,6 +797,10 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'mcp') {
     const { runStdio } = await import('./ctx-mcp.mjs')
     return runStdio({ root: opt.root, repos: opt.repos, repo: opt.repo, prompts: opt.prompts, findRepo })
+  }
+  if (opt.cmd === 'serve') {
+    const { runServe } = await import('./ctx-mcp-serve.mjs')
+    return runServe(opt)
   }
 
   const root = await findRepo(opt.repo)
