@@ -208,7 +208,7 @@ function makeAuth({ authFile, log }) {
   }
 
   return {
-    // MCP · /kit · /repos — **Bearer 만.** 호스트는 쿠키를 들지 않는다.
+    // MCP — **Bearer 만.** 호스트는 쿠키를 들지 않는다.
     async bearer(headers) {
       await reload()
       const h = String(headers.authorization || headers.Authorization || '')
@@ -470,9 +470,15 @@ export async function runServe(opt = {}) {
       }
 
       // 브라우저 경로(`/api` · `/r`)는 쿠키를, 나머지는 Bearer 를 본다(§6.4).
+      //
+      // **`/kit` 도 여기 있다.** 화면의 내려받기는 `<a href download>` 라
+      // `Authorization` 을 달 수 없고 쿠키만 간다 -- Bearer 전용으로 두면
+      // 401 JSON 이 내려와 브라우저가 그것을 `<이름>.json` 으로 저장한다(실측).
+      // `browser()` 는 Bearer 도 받아 주므로 `ctx setup` 쪽은 그대로다.
       const isBrowserPath =
         url.pathname.startsWith('/api/') ||
         url.pathname.startsWith('/r/') ||
+        url.pathname.startsWith('/kit/') ||
         url.pathname === '/' ||
         url.pathname === '/me' ||
         url.pathname === '/repos' ||
