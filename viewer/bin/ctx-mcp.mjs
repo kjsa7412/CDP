@@ -112,8 +112,9 @@ export function makeRepoCache(root) {
 // fallback 기본 레포 이름 또는 null (§2.9)
 // mode     'local' | 'server'
 // allow    (name) => boolean   모드 B 의 토큰 권한. 없으면 전부 허용
+// notice   brief 에 한 줄 더 — 토큰 만료 임박 등(§4.4.2). 레포와 무관한 알림 자리
 
-export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null } = {}) {
+export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null, notice = null } = {}) {
   if (!repos.length) throw new CtxError('E_REPO', '지식 레포가 하나도 없다', {})
 
   const caches = new Map()
@@ -172,7 +173,10 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
   tool('derive', {}, (r) => T.toolDerive(r))
   tool('apply', { coord: z.string().max(240) }, (r, a) => T.toolApply(r, a))
   tool('check', {}, (r) => T.toolCheck(r))
-  tool('brief', {}, (r) => T.toolBrief(r))
+  tool('brief', {}, (r) => {
+    const b = T.toolBrief(r)
+    return notice ? { ...b, lines: [...b.lines, notice] } : b
+  })
   tool('sync', {}, async (r) => syncOf(r, mode))
 
   // match 만 레포를 가로지른다 (§2.9).

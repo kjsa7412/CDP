@@ -421,14 +421,19 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
 2  expires 확인                       지났다 → 401 E_AUTH ("만료")
 3  token.user 로 users[] 조회         없다 → 401 E_AUTH ("명부에 없는 토큰")   ← 고아 토큰
 4  active 확인                        false → 401 E_AUTH ("사용 중지된 사용자")
-5  repos · write 는 users[] 에서       밖 → 403 E_FORBIDDEN
+5  repos · write 는 users[] 에서       못 보는 레포 → E_REPO "그런 레포가 없다"
+                                      보이는데 write 아님 → 403 E_FORBIDDEN
 ```
 
 3번이 있어야 명부에서 지운 사람의 토큰이 살아남지 못한다. **권한의 근거는 언제나 명부다.**
 
+5번의 두 갈래가 §4.6 과 같은 규칙이다 — **볼 수 없는 레포는 "권한 없음" 이 아니라 "없음"
+이다.** `E_FORBIDDEN` 은 그 레포가 존재한다는 것을 알려 주고, 그것이 이미 노출이다. 권한
+안의 레포 목록만 서버 객체에 실으므로(§2.9 의 `allow`) 이 성질은 코드에서 저절로 나온다.
+
 - 클라이언트: `Authorization: Bearer <토큰>`. 원문 토큰은 어디에도 저장하지 않는다(해시만).
 - 토큰 = 32바이트 난수 base64url. `token` 명령이 1회 출력하고 해시만 파일에 붙인다.
-- `write: false` 인 사용자의 `save` → `E_FORBIDDEN`.
+- `write: false` 인 사용자의 `save` → `E_FORBIDDEN`. 레포는 보이는데 쓰지 못하는 것이라 숨길 것이 없다.
 - `save.work.author` 는 `users[].name` 으로 서버가 채운다. 클라이언트가 다른 값을 보내면 `E_INPUT`.
 - 관리 서비스의 세션 쿠키(§6.4)도 같은 5단계를 탄다 — 쿠키가 살아 있어도 `active: false` 면 끊긴다.
 - git 밖의 상태는 **명부와 설치 대장**(§6.7.2) 둘뿐이다. 대장은 권한을 들지 않는다 — 잃어도 등록만 다시 하면 된다.
@@ -515,7 +520,7 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 처리 순서(레포 뮤텍스 안) —
 
 ```
-0  레포       repo 가 있고 사용자의 repos 에 든다                        없으면 E_INPUT / 밖이면 E_FORBIDDEN
+0  레포       repo 가 있고 사용자의 repos 에 든다                        없으면 E_INPUT / 못 보면 E_REPO
 1  권한       users[].write · active                                     아니면 E_FORBIDDEN
 2  스키마     §2.7 형식 · body 에 "<!-- applied:" 포함 금지               아니면 E_INPUT
 3  존재       work/<id>.md 없음                                          있으면 E_EXISTS

@@ -53,6 +53,8 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx setup <작업 레포>      그 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기)
   ctx mcp                   MCP 서버로 선다 (stdio). 호스트가 띄운다 -- 직접 칠 일은 없다
   ctx serve --root <폴더>    MCP 서버로 선다 (HTTP). 상주 프로세스
+  ctx serve user add|set|list --auth <f>    명부 — 권한은 여기 붙는다
+  ctx serve token [list|revoke] --auth <f>  토큰 — 신원만 증명한다
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
                             ctx mcp 에서는 여러 번 줄 수 있다 (첫 번째가 기본 레포)
@@ -80,6 +82,18 @@ function parseArgs(argv) {
     else if (a === '--auth') out.auth = argv[++i]
     else if (a === '--data') out.data = argv[++i]
     else if (a === '--mirror') out.mirror = true
+    else if (a === '--name') out.name = argv[++i]
+    else if (a === '--user') out.user = argv[++i]
+    else if (a === '--label') out.label = argv[++i]
+    else if (a === '--note') out.note = argv[++i]
+    else if (a === '--id') out.id = argv[++i]
+    else if (a === '--expires') out.expires = argv[++i]
+    else if (a === '--repos') out.repos2 = argv[++i]
+    else if (a === '--of-repo') out.repoFilter = argv[++i]
+    else if (a === '--write') out.write = true
+    else if (a === '--no-write') out.write = false
+    else if (a === '--active') out.active = true
+    else if (a === '--inactive') out.active = false
     else if (a === '--dry') out.dry = true
     else if (a === '-h' || a === '--help' || a === 'help') out.cmd = out.cmd || 'help'
     else if (!out.cmd) out.cmd = a
@@ -799,6 +813,12 @@ export async function main(argv = process.argv.slice(2)) {
     return runStdio({ root: opt.root, repos: opt.repos, repo: opt.repo, prompts: opt.prompts, findRepo })
   }
   if (opt.cmd === 'serve') {
+    // `serve user …` · `serve token …` 는 명부를 고치고 끝난다. 서버를 띄우지
+    // 않으므로 여기서 갈라진다.
+    if (opt.args[0] === 'user' || opt.args[0] === 'token') {
+      const { runAuthCmd } = await import('./ctx-mcp-serve.mjs')
+      return runAuthCmd({ ...opt, repos: opt.repos2 })
+    }
     const { runServe } = await import('./ctx-mcp-serve.mjs')
     return runServe(opt)
   }

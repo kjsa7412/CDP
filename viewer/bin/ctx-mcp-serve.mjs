@@ -14,6 +14,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import * as git from '../../core/git.js'
+import * as auth from '../../core/auth.js'
 import { buildServer, makeRepoCache, BUILT } from './ctx-mcp.mjs'
 
 const NL = String.fromCharCode(10)
@@ -138,20 +139,44 @@ async function titleOf(root) {
   return lines[h].slice(2).trim() || null
 }
 
-// ── 인증 자리 (4.2 에서 채운다) ─────────────────────────────────────────────
+// ── 인증 (§4.4) ─────────────────────────────────────────────────────────────
 //
-// 지금은 통과시킨다. **그래서 `--auth` 없이 루프백 밖에 바인드하는 것을
+// `--auth` 가 없으면 통과시킨다(개발용). **그래서 루프백 밖에 바인드하는 것을
 // 막는다** — 자물쇠가 없는데 문을 밖으로 내면 그것은 실수가 아니라 사고다.
+//
+// 명부는 요청마다 다시 읽지 않는다. mtime 이 바뀌었을 때만 다시 읽는다 --
+// `serve user set --inactive` 가 **다음 요청부터** 먹어야 하므로 캐시를 오래
+// 들고 있을 수 없고, 그렇다고 매 요청 파일을 열 이유도 없다.
 
 const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|::1|\[::1\])$/i
 
 function makeAuth({ authFile, log }) {
   if (!authFile) {
     log.line('경고: --auth 가 없다. 인증 없이 돈다 (개발용). 루프백에서만 허용한다')
-    return () => ({ ok: true, user: '(dev)', allow: null, write: false })
+    return async () => ({ ok: true, user: '(dev)', allow: null, write: false, expiresInDays: null })
   }
-  // 4.2 — auth.json 의 명부와 5단계 판정이 여기 들어온다(§4.4).
-  return () => ({ ok: false, status: 401, code: 'E_AUTH', message: '인증이 아직 구현되지 않았다 (4.2단계)' })
+
+  let db = auth.emptyDb()
+  let sig = null
+  const reload = async () => {
+    const st = await fs.stat(authFile).catch(() => null)
+    const now = st ? st.mtimeMs + ':' + st.size : 'none'
+    if (now === sig) return
+    try {
+      db = await auth.load(authFile)
+      sig = now
+      log.line(`명부: 사용자 ${db.users.length}명 · 토큰 ${db.tokens.length}개`)
+    } catch (e) {
+      log.line('명부를 읽을 수 없다: ' + (e?.message || e))
+    }
+  }
+
+  return async (headers) => {
+    await reload()
+    const h = String(headers.authorization || headers.Authorization || '')
+    const token = /^Bearer\s+(.+)$/i.exec(h)?.[1]?.trim() || null
+    return auth.decide(db, token)
+  }
 }
 
 // ── HTTP ────────────────────────────────────────────────────────────────────
@@ -230,7 +255,7 @@ export async function runServe(opt = {}) {
 
   const store = makeStore(root, log)
   await store.refresh()
-  const auth = makeAuth({ authFile: opt.auth, log })
+  const authenticate = makeAuth({ authFile: opt.auth, log })
 
   // 요청마다 서버를 새로 만든다(stateless). 레포 캐시는 store 가 들고 있으므로
   // 여기서 만드는 것은 **등록표뿐**이다 -- 레포를 다시 읽지 않는다.
@@ -240,6 +265,12 @@ export async function runServe(opt = {}) {
       const m = /^\/mcp(?:\/([^/]+))?\/?$/.exec(url.pathname)
       const fixed = m?.[1] ? decodeURIComponent(m[1]) : null
       const { auth: a, repos } = CTX.getStore() || { auth: { allow: null }, repos: [] }
+      // 만료 7일 전부터 `brief` 가 한 줄을 더 낸다(§4.4.2). 만료된 뒤에 아는
+      // 것은 늦다 — 그때는 이미 붙어 있던 것이 끊긴 뒤다.
+      const notice =
+        a.expiresInDays != null && a.expiresInDays <= 7
+          ? `[CDP] 토큰이 ${a.expiresInDays}일 뒤 만료된다 — 관리자에게 재발급을 요청한다`
+          : null
       return buildServer({
         repos,
         // `/mcp/<name>` 이면 그 레포가 기본이다. `/mcp` 면 권한 안의 레포가
@@ -248,6 +279,7 @@ export async function runServe(opt = {}) {
         mode: 'server',
         prompts: opt.prompts || 'auto',
         allow: a.allow,
+        notice,
       })
     },
     { legacy: 'stateless', onerror: (e) => log.line('handler: ' + (e?.message || e)) }
@@ -286,7 +318,7 @@ export async function runServe(opt = {}) {
         return json(res, 200, { ok: true, built: BUILT, repos: list.length, mirror })
       }
 
-      const a = auth(req.headers)
+      const a = await authenticate(req.headers)
       if (!a.ok) {
         log.req({ ip, method: req.method, key: url.pathname, ms: Date.now() - t0, status: a.status, code: a.code })
         return json(res, a.status, { error: { code: a.code, message: a.message } })
@@ -394,4 +426,169 @@ export async function runServe(opt = {}) {
     process.on('SIGTERM', () => server.close(resolve))
   })
   return 0
+}
+
+// ── serve user · serve token (§4.4.0 · §4.4.1) ──────────────────────────────
+//
+// **발급은 HTTP 요청이 아니다.** 여기는 서버 기계에서 도는 CLI 이고, 발급의
+// 인증은 OS 가 한다 — 서버에 셸이 있고 `auth.json` 에 쓸 수 있는 사람만
+// 돌릴 수 있다. 그 이상을 서버가 확인할 방법이 없다(§4.4.1).
+
+const out = (s = '') => process.stdout.write(s + NL)
+const err = (s = '') => process.stderr.write(s + NL)
+
+function need(opt, key, what) {
+  const v = opt[key]
+  if (!v) {
+    err(`ctx serve: ${what} 가 필요하다 (--${key})`)
+    return null
+  }
+  return v
+}
+
+const pad = (s, n) => {
+  const w = [...String(s ?? '')].reduce((a, c) => a + (c.codePointAt(0) > 0x1100 ? 2 : 1), 0)
+  return String(s ?? '') + ' '.repeat(Math.max(0, n - w))
+}
+
+export async function runAuthCmd(opt) {
+  const [group, sub] = opt.args
+  const file = need(opt, 'auth', 'auth.json 경로')
+  if (!file) return 2
+  const dataDir = opt.data ? path.resolve(opt.data) : null
+
+  let db
+  try {
+    db = await auth.load(file)
+  } catch (e) {
+    err('ctx serve: ' + e.message)
+    return 2
+  }
+
+  const done = async (line) => {
+    await auth.store(file, db)
+    await auth.audit(dataDir, line)
+    return 0
+  }
+
+  try {
+    if (group === 'user') {
+      if (sub === 'add') {
+        const name = need(opt, 'name', '이름')
+        if (!name) return 2
+        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos: opt.repos ?? [], write: !!opt.write })
+        out(`명부에 넣었다: ${u.name} · repos ${u.repos.join(',') || '(없음)'} · write ${u.write}`)
+        return done(`user add · ${u.name} · repos=${u.repos.join(',')} · write=${u.write}`)
+      }
+      if (sub === 'set') {
+        const name = need(opt, 'name', '이름')
+        if (!name) return 2
+        const patch = {}
+        if (opt.label !== undefined) patch.label = opt.label
+        if (opt.repos !== undefined) patch.repos = opt.repos
+        if (opt.write !== undefined) patch.write = opt.write
+        if (opt.active !== undefined) patch.active = opt.active
+        const u = auth.userSet(db, name, patch)
+        out(`고쳤다: ${u.name} · active ${u.active} · repos ${(u.repos || []).join(',')} · write ${u.write}`)
+        return done(`user set · ${u.name} · ${JSON.stringify(patch)}`)
+      }
+      if (sub === 'list' || sub === undefined) {
+        const rows = auth.userList(db, { repo: opt.repoFilter || null })
+        const used = await lastUsed(dataDir)
+        for (const r of rows) r.lastUsed = used.get(r.name) ?? null
+        if (opt.json) {
+          out(JSON.stringify(rows, null, 2))
+          return 0
+        }
+        if (opt.repoFilter) out(`${opt.repoFilter} 를 볼 수 있는 사람 ${rows.length}명`)
+        out(`${pad('이름', 14)}${pad('상태', 8)}${pad('레포', 20)}${pad('쓰기', 6)}${pad('토큰', 8)}${pad('마지막 사용', 14)}설명`)
+        for (const r of rows) {
+          out(
+            pad(r.name, 14) +
+              pad(r.active ? '활성' : '중지', 8) +
+              pad((r.repos || []).join(',') || '-', 20) +
+              pad(r.write ? 'write' : '-', 6) +
+              pad(`${r.liveTokens}/${r.tokens}`, 8) +
+              pad(r.lastUsed ? r.lastUsed.slice(0, 10) : '-', 14) +
+              (r.label || '')
+          )
+        }
+        return 0
+      }
+      err('ctx serve user: add · set · list')
+      return 2
+    }
+
+    if (group === 'token') {
+      if (sub === 'list') {
+        const rows = auth.tokenList(db)
+        if (opt.json) {
+          out(JSON.stringify(rows, null, 2))
+          return 0
+        }
+        out(`${pad('id', 10)}${pad('user', 14)}${pad('발급', 12)}${pad('만료', 12)}${pad('남음', 8)}메모`)
+        for (const t of rows) {
+          out(
+            pad(t.id, 10) +
+              pad(t.user, 14) +
+              pad(t.issued || '-', 12) +
+              pad(t.expires || '-', 12) +
+              pad(t.daysLeft === null ? '무기한' : `${t.daysLeft}일`, 8) +
+              (t.note || '')
+          )
+        }
+        return 0
+      }
+      if (sub === 'revoke') {
+        const name = need(opt, 'name', '이름 (--name)')
+        if (!name) return 2
+        const n = auth.revoke(db, { user: name, id: opt.id || null })
+        out(`지웠다: ${n}개. **다음 요청부터** 막힌다 — 서버에 세션이 없으므로 지울 다른 곳이 없다`)
+        return done(`token revoke · ${name} · ${n}개`)
+      }
+      // 발급
+      const user = need(opt, 'user', '사용자 (--user)')
+      if (!user) return 2
+      const { raw, rec } = auth.issue(db, {
+        user,
+        expiresDays: opt.expires === 'never' ? 'never' : Number(opt.expires || auth.DEFAULT_EXPIRES_DAYS),
+        note: opt.note ?? null,
+      })
+      await auth.store(file, db)
+      await auth.audit(dataDir, `token issue · ${user} · ${rec.sha256.slice(0, 8)} · expires=${rec.expires}`)
+      // **원문은 여기서 한 번만 나온다.** 파일에는 해시만 남는다.
+      out(raw)
+      err('')
+      err(`위 한 줄이 토큰 원문이다. 다시 볼 수 없다 — 본인에게 직접 전한다(§4.4.2).`)
+      err(`메신저·메일·이슈·위키에 평문으로 남기지 않는다. 남겼으면 유출로 보고 revoke 후 재발급한다.`)
+      err(`id ${rec.sha256.slice(0, 8)} · 사용자 ${user} · 만료 ${rec.expires}`)
+      return 0
+    }
+  } catch (e) {
+    err('ctx serve: ' + (e?.message || e))
+    return 2
+  }
+
+  err('ctx serve: user · token 중 하나를 준다')
+  return 2
+}
+
+// **마지막 사용은 `serve.log` 에서 집계한다.** `auth.json` 에 적지 않는다 --
+// 매 요청 명부 파일을 쓰면 레포 뮤텍스와 같은 경합이 생기고(§2.6), 그것도
+// 읽기 요청 하나마다다. 안 쓰는 토큰을 걷어내는 용도라 하루 단위면 충분하다.
+async function lastUsed(dataDir) {
+  const out = new Map()
+  if (!dataDir) return out
+  for (const name of ['serve.log.3', 'serve.log.2', 'serve.log.1', 'serve.log']) {
+    const body = await fs.readFile(path.join(dataDir, 'logs', name), 'utf8').catch(() => null)
+    if (!body) continue
+    for (const line of body.split(NL)) {
+      const f = line.split(' · ')
+      if (f.length < 3 || !f[0].startsWith('20')) continue
+      const user = f[1].trim()
+      if (!user || user === '-') continue
+      out.set(user, f[0])
+    }
+  }
+  return out
 }
