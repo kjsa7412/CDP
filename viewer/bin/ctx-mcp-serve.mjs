@@ -814,6 +814,16 @@ export async function runAuthCmd(opt) {
     return 2
   }
 
+  // `--repos a,b` (쉼표 하나) 와 `--repo a --repo b` (반복) 를 둘 다 받는다.
+  // **안 준 경우는 undefined 여야 한다** -- `user set` 에서 "안 건드림" 과
+  // "비움" 이 갈리는 자리다. `opt.repos` 는 파서가 `[]` 로 초기화하므로
+  // 그대로 쓰면 둘을 구별할 수 없고, 레포 목록이 조용히 지워진다.
+  const reposOpt = () => {
+    if (opt.repos2 !== undefined) return opt.repos2
+    if (Array.isArray(opt.repos) && opt.repos.length) return opt.repos
+    return undefined
+  }
+
   const done = async (line) => {
     await auth.store(file, db)
     await auth.audit(dataDir, line)
@@ -825,7 +835,7 @@ export async function runAuthCmd(opt) {
       if (sub === 'add') {
         const name = need(opt, 'name', '이름')
         if (!name) return 2
-        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos: opt.repos ?? [], write: !!opt.write })
+        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos: reposOpt() ?? [], write: !!opt.write })
         out(`명부에 넣었다: ${u.name} · repos ${u.repos.join(',') || '(없음)'} · write ${u.write}`)
         return done(`user add · ${u.name} · repos=${u.repos.join(',')} · write=${u.write}`)
       }
@@ -834,7 +844,8 @@ export async function runAuthCmd(opt) {
         if (!name) return 2
         const patch = {}
         if (opt.label !== undefined) patch.label = opt.label
-        if (opt.repos !== undefined) patch.repos = opt.repos
+        const r = reposOpt()
+        if (r !== undefined) patch.repos = r
         if (opt.write !== undefined) patch.write = opt.write
         if (opt.active !== undefined) patch.active = opt.active
         const u = auth.userSet(db, name, patch)
