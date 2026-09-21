@@ -17,6 +17,8 @@ import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
 import { save as doSave } from '../../core/save.js'
 import { zip } from '../../core/zip.js'
+import { Store } from '../../core/store.js'
+import { handleRead } from '../server/adapter/read-api.js'
 import { buildServer, makeRepoCache, mirrorOf, BUILT } from './ctx-mcp.mjs'
 
 const NL = String.fromCharCode(10)
@@ -96,6 +98,13 @@ export function makeStore(root, log) {
   let repos = []
   let at = 0
   const caches = new Map()
+  // 화면용 `Store` — 관리 서비스의 읽기 API 가 쓴다(§6.3).
+  //
+  // **감시를 켜지 않는다.** 로컬 뷰어는 chokidar 로 파일을 지켜보지만 서버는
+  // 레포가 N 개고 유일한 작성자가 자기 자신이다 — `save` 가 끝나면 그때
+  // 재스캔하면 된다. 감시자 N 개를 살려 둘 이유가 없다.
+  const views = new Map()
+  const loading = new Map()
 
   const refresh = async () => {
     const ents = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
@@ -110,6 +119,9 @@ export function makeStore(root, log) {
       if (!ok) continue
       found.push({ name: e.name, root: dir })
       if (!caches.has(e.name)) caches.set(e.name, makeRepoCache(dir))
+      if (!views.has(e.name)) {
+        views.set(e.name, new Store({ root: dir, settings: { watch: false, settledness: { excludeTypes: ['domain'] } } }))
+      }
     }
     const before = repos.map((r) => r.name).join(',')
     repos = found.sort((a, b) => a.name.localeCompare(b.name))
@@ -124,6 +136,25 @@ export function makeStore(root, log) {
       return repos
     },
     cache: (name) => caches.get(name),
+    async view(name) {
+      const v = views.get(name)
+      if (!v) return null
+      // 첫 요청에 한 번 읽는다. 감시를 안 켜므로 갱신은 `save` 가 알린다.
+      if (!v.stats?.scannedAt) {
+        if (!loading.has(name)) loading.set(name, v.load().finally(() => loading.delete(name)))
+        await loading.get(name)
+      }
+      return v
+    },
+    // `save` 가 끝나면 화면도 새 것을 봐야 한다. MCP 쪽 캐시는 스탬프로
+    // 스스로 알아채지만(§2.6) `Store` 는 감시가 꺼져 있어 말해 줘야 한다.
+    reload: (name) => {
+      const v = views.get(name)
+      if (!v) return null
+      const pr = v.load().catch((e) => log.line(`재스캔 실패 ${name}: ${e?.message || e}`))
+      loading.set(name, pr.finally(() => loading.delete(name)))
+      return pr
+    },
     refresh,
   }
 }
@@ -173,12 +204,83 @@ function makeAuth({ authFile, log }) {
     }
   }
 
-  return async (headers) => {
-    await reload()
-    const h = String(headers.authorization || headers.Authorization || '')
-    const token = /^Bearer\s+(.+)$/i.exec(h)?.[1]?.trim() || null
-    return auth.decide(db, token)
+  return {
+    // MCP · /kit · /repos — **Bearer 만.** 호스트는 쿠키를 들지 않는다.
+    async bearer(headers) {
+      await reload()
+      const h = String(headers.authorization || headers.Authorization || '')
+      const token = /^Bearer\s+(.+)$/i.exec(h)?.[1]?.trim() || null
+      return auth.decide(db, token)
+    },
+    // 관리 서비스 — 쿠키. 브라우저는 `Authorization` 을 스스로 달 수 없다(§6.4).
+    // Bearer 도 받아 준다: curl 로 확인하는 길을 막을 이유가 없다.
+    async browser(headers, secret) {
+      await reload()
+      const h = String(headers.authorization || headers.Authorization || '')
+      const token = /^Bearer\s+(.+)$/i.exec(h)?.[1]?.trim() || null
+      if (token) return auth.decide(db, token)
+      const c = auth.parseCookies(headers.cookie)['cdp_s']
+      return auth.decideSession(db, auth.readSession(secret, c))
+    },
+    // 로그인 — 토큰 원문을 받아 **한 번** 판정하고 쿠키로 바꾼다.
+    async login(token) {
+      await reload()
+      return auth.decide(db, token)
+    },
   }
+}
+
+// 로그인 화면 (§6.6.1).
+//
+// **입력이 하나다.** 아이디 칸이 없다 — 토큰이 아이디를 들고 있다(§4.4).
+// 사람이 외워 치는 값이 아니라 붙여넣는 값이라 한 칸 · 자동 trim · 마스킹.
+//
+// **실패 메시지는 하나다.** 만료 · 명부에 없음 · 사용 중지를 화면에서 구분해
+// 주면 명부의 내용을 흘리는 것이 된다. 구분은 serve.log 에만 남긴다.
+function loginPage({ next = '/', failed = false } = {}) {
+  const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+  return `<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CDP</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#2C2C2A; --mut:#5F5E5A; --line:#B4B2A9; --acc:#534AB7 }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1b1b1a; --fg:#eceae4; --mut:#a8a69f; --line:#484743 } }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--fg);
+         font:14px/1.6 'Pretendard','Malgun Gothic',system-ui,sans-serif }
+  form { width:min(92vw,360px) }
+  h1 { font-size:20px; margin:0 0 4px }
+  p.sub { color:var(--mut); margin:0 0 24px }
+  label { display:block; font-size:13px; color:var(--mut); margin-bottom:6px }
+  .row { display:flex; gap:6px }
+  input { flex:1; min-width:0; padding:9px 11px; border:1px solid var(--line); border-radius:7px;
+          background:transparent; color:inherit; font:inherit; font-family:ui-monospace,monospace }
+  input:focus { outline:2px solid var(--acc); outline-offset:1px; border-color:transparent }
+  button { padding:9px 14px; border:1px solid var(--line); border-radius:7px; background:transparent;
+           color:inherit; font:inherit; cursor:pointer }
+  button.go { width:100%; margin-top:12px; background:var(--acc); border-color:var(--acc); color:#fff }
+  .err { color:#b3261e; margin:12px 0 0 }
+  .note { color:var(--mut); font-size:12.5px; margin-top:22px; border-top:1px solid var(--line); padding-top:14px }
+</style>
+<form method="post" action="/login">
+  <h1>CDP</h1>
+  <p class="sub">지식 레포 관리 서비스</p>
+  <input type="hidden" name="next" value="${esc(next)}">
+  <label for="t">토큰</label>
+  <div class="row">
+    <input id="t" name="token" type="password" autocomplete="off" autofocus spellcheck="false">
+    <button type="button" onclick="t.type = t.type === 'password' ? 'text' : 'password'">보기</button>
+  </div>
+  ${failed ? '<p class="err">토큰을 확인하세요.</p>' : ''}
+  <button class="go" type="submit">들어가기</button>
+  <p class="note">토큰은 관리자에게 받는다. 분실하면 재발급 — 재사용할 수 없다.</p>
+</form>`
+}
+
+function setCookie(res, value, { maxAge = 12 * 3600, secure = false } = {}) {
+  const parts = [`cdp_s=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`]
+  // 평문 HTTP 배치에서는 Secure 를 붙이면 쿠키가 아예 안 간다(§9.4).
+  if (secure) parts.push('Secure')
+  res.setHeader('set-cookie', parts.join('; '))
 }
 
 // ── HTTP ────────────────────────────────────────────────────────────────────
@@ -263,6 +365,10 @@ export async function runServe(opt = {}) {
   const store = makeStore(root, log)
   await store.refresh()
   const authenticate = makeAuth({ authFile: opt.auth, log })
+  // 서명 비밀. 갈면 전원 재로그인이다(§6.4).
+  const secret = dataDir ? await auth.loadSecret(dataDir) : Buffer.from('dev-only-secret-not-persisted!!')
+  if (!dataDir) log.line('경고: --data 가 없어 세션 비밀이 프로세스마다 바뀐다 (개발용)')
+  const secureCookie = String(opt.server || '').startsWith('https://')
 
   // 요청마다 서버를 새로 만든다(stateless). 레포 캐시는 store 가 들고 있으므로
   // 여기서 만드는 것은 **등록표뿐**이다 -- 레포를 다시 읽지 않는다.
@@ -296,6 +402,9 @@ export async function runServe(opt = {}) {
             write: a.write,
             mirror: !!opt.mirror,
             log: (m) => log.line(m),
+          }).then((out) => {
+            store.reload(name) // 화면이 방금 커밋한 것을 봐야 한다
+            return out
           })
         },
       })
@@ -335,9 +444,47 @@ export async function runServe(opt = {}) {
         return json(res, 200, { ok: true, built: BUILT, repos: list.length, mirror })
       }
 
-      const a = await authenticate(req.headers)
+      // 브라우저 경로(`/api` · `/r`)는 쿠키를, 나머지는 Bearer 를 본다(§6.4).
+      const isBrowserPath = url.pathname.startsWith('/api/') || url.pathname.startsWith('/r/')
+      // ── 로그인 (§6.6.1) — 인증 앞에 온다
+      if (url.pathname === '/login') {
+        if (req.method === 'GET') {
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+          return res.end(loginPage({ next: url.searchParams.get('next') || '/' }))
+        }
+        if (req.method === 'POST') {
+          const body = (await readBody(req, 64 * 1024)) || Buffer.alloc(0)
+          const form = new URLSearchParams(body.toString('utf8'))
+          const token = (form.get('token') || '').trim()
+          const next = safeNext(form.get('next'))
+          const d = await authenticate.login(token)
+          log.req({ ip, method: 'POST', tool: '/login', key: d.ok ? d.user : '-', ms: Date.now() - t0, status: d.ok ? 302 : 401, code: d.ok ? null : d.message })
+          if (!d.ok) {
+            res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+            return res.end(loginPage({ next, failed: true }))
+          }
+          setCookie(res, auth.signSession(secret, d.user), { secure: secureCookie })
+          res.writeHead(302, { location: next })
+          return res.end()
+        }
+      }
+      if (url.pathname === '/logout') {
+        setCookie(res, '', { maxAge: 0, secure: secureCookie })
+        res.writeHead(302, { location: '/login' })
+        return res.end()
+      }
+
+      const a = isBrowserPath
+        ? await authenticate.browser(req.headers, secret)
+        : await authenticate.bearer(req.headers)
       if (!a.ok) {
-        log.req({ ip, method: req.method, key: url.pathname, ms: Date.now() - t0, status: a.status, code: a.code })
+        log.req({ ip, method: req.method, key: url.pathname, ms: Date.now() - t0, status: a.status, code: a.code, tool: a.message })
+        // 화면 경로면 로그인으로 보낸다. **보던 곳을 들고 간다**(§6.6.1) —
+        // 돌아왔을 때 처음부터 다시 찾게 하지 않는다.
+        if (url.pathname.startsWith('/r/') || url.pathname === '/') {
+          res.writeHead(302, { location: '/login?next=' + encodeURIComponent(url.pathname + url.search) })
+          return res.end()
+        }
         return json(res, a.status, { error: { code: a.code, message: a.message } })
       }
 
@@ -356,6 +503,39 @@ export async function runServe(opt = {}) {
         }
         log.req({ ip, user: a.user, method: 'GET', tool: '/repos', ms: Date.now() - t0, status: 200 })
         return json(res, 200, rows)
+      }
+
+      // GET /api/<repo>/… — 관리 서비스의 읽기 API (§6.2 · §6.3).
+      //
+      // **로컬 뷰어와 같은 함수를 쓴다**(`handleRead`). 이 PC 를 만지는
+      // 라우트(`/setup` · `/open` · `/quit` · `/git/pull` …)는 여기 없다 —
+      // 없는 것이지 막은 것이 아니다.
+      const apiM = /^\/api\/([^/]+)(\/.*)?$/.exec(url.pathname)
+      if (apiM) {
+        const name = decodeURIComponent(apiM[1])
+        const found = (await store.list()).find((x) => x.name === name)
+        if (!found || (a.allow && !a.allow(name))) {
+          log.req({ ip, user: a.user, method: req.method, tool: '/api', key: name, ms: Date.now() - t0, status: 404 })
+          return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 레포가 없다' } })
+        }
+        const view = await store.view(name)
+        const sub = apiM[2] || '/'
+        const sendV = (r, status, body, headers = {}) => {
+          const buf = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body)
+          r.writeHead(status, {
+            'content-type': 'application/json; charset=utf-8',
+            'x-content-type-options': 'nosniff',
+            'referrer-policy': 'no-referrer',
+            'cache-control': 'no-store',
+            ...headers,
+          })
+          r.end(buf)
+        }
+        const done = await handleRead({ p: sub, method: req.method, url, res, send: sendV, store: view })
+        log.req({ ip, user: a.user, repo: name, method: req.method, tool: sub, ms: Date.now() - t0, status: done ? 200 : 404 })
+        if (done) return
+        // 로컬 전용 라우트다. **막은 것이 아니라 없는 것**이다(§6.2).
+        return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '관리 서비스에 없는 경로다 — 로컬 뷰어의 것' } })
       }
 
       // GET /kit/<name> — 그 레포의 kit(스킬 · CLAUDE 블록) zip (§4.3).
@@ -438,6 +618,28 @@ export async function runServe(opt = {}) {
           res.write(Buffer.from(value))
         }
         return res.end()
+      }
+
+      // `GET /` → 기본 레포로. 볼 수 있는 레포가 없으면 그렇게 말하고 멈춘다
+      // (§6.6.1) — 토큰은 맞으므로 401 로 돌려보내지 않는다.
+      if (url.pathname === '/' || /^\/r(\/.*)?$/.test(url.pathname)) {
+        const mine = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
+        if (!mine.length) {
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+          return res.end(emptyPage(a.user))
+        }
+        const m = /^\/r\/([^/]+)/.exec(url.pathname)
+        if (!m) {
+          res.writeHead(302, { location: '/r/' + encodeURIComponent(mine[0].name) + '/' })
+          return res.end()
+        }
+        if (!mine.some((r) => r.name === decodeURIComponent(m[1]))) {
+          res.writeHead(302, { location: '/r/' + encodeURIComponent(mine[0].name) + '/' })
+          return res.end()
+        }
+        // 화면 자체는 6.2 에서. 지금은 붙었다는 것만 낸다.
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+        return res.end(shellPage({ user: a.user, repo: decodeURIComponent(m[1]), repos: mine.map((r) => r.name) }))
       }
 
       return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '없는 경로' } })
@@ -667,4 +869,46 @@ async function walk(dir, rel, out) {
     if (e.isDirectory()) await walk(abs, r, out)
     else out.push({ name: r, data: await fs.readFile(abs) })
   }
+}
+
+// 로그인 뒤 돌아갈 곳. **밖으로 보내지 않는다** — `//evil.example` 같은 값이
+// 오면 열린 리다이렉트가 된다.
+function safeNext(v) {
+  const t = String(v || '/')
+  return /^\/(?!\/)/.test(t) ? t : '/'
+}
+
+function page(title, body) {
+  return `<!doctype html><html lang="ko"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+<style>:root{color-scheme:light dark;--bg:#fff;--fg:#2C2C2A;--mut:#5F5E5A;--line:#B4B2A9}
+@media(prefers-color-scheme:dark){:root{--bg:#1b1b1a;--fg:#eceae4;--mut:#a8a69f;--line:#484743}}
+body{margin:0;padding:40px 24px;background:var(--bg);color:var(--fg);
+font:14px/1.7 'Pretendard','Malgun Gothic',system-ui,sans-serif}
+main{max-width:620px;margin:0 auto}h1{font-size:19px;margin:0 0 6px}
+.mut{color:var(--mut)}a{color:inherit}code{font-family:ui-monospace,monospace}
+hr{border:0;border-top:1px solid var(--line);margin:22px 0}</style><main>${body}</main>`
+}
+
+function emptyPage(user) {
+  return page('CDP', `<h1>볼 수 있는 지식 레포가 없습니다</h1>
+<p class="mut">계정 <code>${user}</code> 에 아직 레포 권한이 없습니다. 관리자에게 문의하세요.</p>
+<hr><p class="mut"><a href="/logout">로그아웃</a></p>`)
+}
+
+// 6.2 에서 React 화면이 이 자리를 가져간다. 지금은 **서버가 붙었다는 것**과
+// 레포 전환이 도는 것을 보이는 최소 껍데기다.
+function shellPage({ user, repo, repos }) {
+  const list = repos
+    .map((r) => (r === repo ? `<strong>${r}</strong>` : `<a href="/r/${encodeURIComponent(r)}/">${r}</a>`))
+    .join(' · ')
+  return page(
+    `${repo} · CDP`,
+    `<h1>${repo}</h1>
+<p class="mut">레포 ${list}</p>
+<hr>
+<p class="mut">화면은 6.2 에서 붙습니다. 읽기 API 는 이미 돕니다 —</p>
+<p><code>/api/${repo}/status</code> · <code>/api/${repo}/docs</code> · <code>/api/${repo}/managed</code></p>
+<hr><p class="mut">${user} · <a href="/logout">로그아웃</a></p>`
+  )
 }

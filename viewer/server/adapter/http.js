@@ -9,6 +9,9 @@ import fsSync from 'node:fs'
 import path from 'node:path'
 import { exec } from 'node:child_process'
 import { SESSION_TOKEN, makeGuard, checkToken, resolveInside, isExecutable } from './security.js'
+// 읽기 라우트는 **관리 서비스와 공유한다**(MCP 설계서 §6.2). 두 곳에 각자
+// 쓰면 "로컬에서는 되는데 원격에서는 다르다" 가 생기고 화면에서만 드러난다.
+import { handleRead } from './read-api.js'
 import { hereDir } from '../runtime.js'
 
 const CLIENT_DIR = path.resolve(hereDir(import.meta.url), '../../../ops/out/web')
@@ -131,6 +134,16 @@ async function handleApi({ req, res, url, send, store, appState, clients, broadc
   const p = url.pathname.replace(/^\/api/, '')
   const method = req.method || 'GET'
 
+  // `keepAlive` 는 **로컬만의 것**이다 — 탭을 닫으면 서버가 죽는 성질이고
+  // 상주 서버에는 없다. 공유 라우트에 넣지 않고 여기서 덧붙인다.
+  if (p === '/repo' && method === 'GET') {
+    return send(res, 200, { ...store.repoInfo(), keepAlive: state.keepAlive() })
+  }
+
+  // **읽기가 먼저다.** 관리 서비스와 같은 답을 내야 하는 것들이고, 아래
+  // 로컬 전용 라우트는 이 PC 를 만지는 것들이다(§6.2).
+  if (await handleRead({ p, method, url, res, send, store })) return
+
   // ── SSE ────────────────────────────────────────────────────────────────
   if (p === '/events') {
     res.writeHead(200, {
@@ -153,10 +166,6 @@ async function handleApi({ req, res, url, send, store, appState, clients, broadc
     return send(res, 200, { ok: true })
   }
 
-  // 메서드를 명시한다. 안 그러면 아래 POST /repo 가 여기 먼저 잡힌다.
-  if (p === '/repo' && method === 'GET') {
-    return send(res, 200, { ...store.repoInfo(), keepAlive: state.keepAlive() })
-  }
 
   // 레포 경로 지정 — 화면(§26.1)에서 들어온다.
   // appState 만 바꾸면 스캔 대상이 안 바뀐다. 둘을 같이 옮긴다.
@@ -280,66 +289,6 @@ async function handleApi({ req, res, url, send, store, appState, clients, broadc
     return send(res, 200, await probe(target || store.root))
   }
 
-  if (p === '/docs') {
-    const list = store.listUnits()
-    const others = store.docs
-      .filter((d) => !d.isUnit)
-      .map((d) => ({ id: d.id, path: d.path, title: d.title, isUnit: false }))
-    return send(res, 200, { total: list.length, docs: list, others })
-  }
-
-  if (p.startsWith('/docs/')) {
-    const key = decodeURIComponent(p.slice('/docs/'.length))
-    const d = store.detail(key)
-    if (!d) return send(res, 404, { error: 'not-found', key })
-    return send(res, 200, d)
-  }
-
-  // 뻗어나가기 — 한 노드의 다음 레벨 하나. 화면 왼쪽 아래가 이것만 쓴다.
-  if (p === '/next') {
-    const kind = url.searchParams.get('kind')
-    const key = url.searchParams.get('key')
-    const r = store.nextNodes(kind, key)
-    if (!r) return send(res, 404, { error: 'not-found', kind, key })
-    return send(res, 200, r)
-  }
-
-  if (p === '/vocab') return send(res, 200, store.tree())
-
-  if (p === '/timeline') {
-    const coord = url.searchParams.get('coord')
-    if (!coord) return send(res, 400, { error: 'coord required' })
-    return send(res, 200, store.timeline(coord))
-  }
-
-  if (p === '/search') {
-    return send(res, 200, store.search(url.searchParams.get('q'), { force: url.searchParams.get('force') === '1' }))
-  }
-
-  if (p === '/check') return send(res, 200, store.check())
-
-  // 현황 — 화면과 `ctx brief` 가 **같은 계산**을 쓴다(core/repo.js repoStatus).
-  if (p === '/status') return send(res, 200, store.status())
-
-  if (p === '/managed') return send(res, 200, store.managedList())
-
-  // 좌표 하나의 전모 — 지금 상태(섹션 본문) + 그것을 바꾼 작업 목록.
-  // v0.3 의 중심 화면이 이것을 쓴다.
-  if (p === '/coord') {
-    const c = url.searchParams.get('coord')
-    if (!c) return send(res, 400, { error: 'coord 가 필요합니다' })
-    return send(res, 200, store.coordDetail(c))
-  }
-
-  // git — 작업환경 v1.1 §10~11.
-  //
-  // GET 은 읽기만 한다. `?fetch=1` 은 fetch 까지 하는데, fetch 는 작업 트리를
-  // 건드리지 않으므로 안전하다. **pull 과 push 는 POST 다** -- 작업 트리를
-  // 바꾸거나 남의 눈에 들어가는 연산이라 사람이 누른 것이어야 한다.
-  if (p === '/git' && method === 'GET') {
-    return send(res, 200, await store.gitStatus({ fetch: url.searchParams.get('fetch') === '1' }))
-  }
-
   // ── 동기화 — **진행이 서버에 있다** ─────────────────────────────────────
   //
   // 전에는 화면이 `git?fetch=1` -> `git/pull` -> `docs` 를 순서대로 불렀다.
@@ -401,10 +350,6 @@ async function handleApi({ req, res, url, send, store, appState, clients, broadc
   }
 
   // git 설정 — 읽기만. 어떻게 돼 있는지 화면이 말할 수 있어야 한다.
-  if (p === '/git/config' && method === 'GET') {
-    const { readConfig } = await import('../../../core/git.js')
-    return send(res, 200, await readConfig(store.root))
-  }
 
   // **앱이 git 설정을 쓰는 유일한 자리다.** 키 하나 · 값 하나 · 로컬만.
   // 훅이 없으면 커밋이 검사 없이 통과한다 — 조용한 실패라 손해가 가장 크다.
@@ -439,14 +384,6 @@ async function handleApi({ req, res, url, send, store, appState, clients, broadc
   }
 
   // 첨부·이미지 서빙 — 경로 봉인 통과분만(§7.2 위협 4)
-  if (p === '/file') {
-    const rel = url.searchParams.get('path')
-    const r = await resolveInside(store.root, rel || '')
-    if (!r.ok) return send(res, r.reason === 'outside' ? 403 : 404, { error: r.reason, resolved: r.resolved || null })
-    const ext = path.extname(r.abs).toLowerCase()
-    const buf = await fs.readFile(r.abs)
-    return send(res, 200, buf, { 'content-type': MIME[ext] || 'application/octet-stream' })
-  }
 
   // 외부 원본 존재 확인 — 프로토콜 §8.5 예외 조항
   if (p === '/probe-external') {

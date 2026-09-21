@@ -223,3 +223,85 @@ export async function audit(dataDir, line) {
   await fs.mkdir(path.dirname(file), { recursive: true }).catch(() => {})
   await fs.appendFile(file, new Date().toISOString() + ' · ' + line + '\n', 'utf8').catch(() => {})
 }
+
+// ── 세션 쿠키 (§6.4) ────────────────────────────────────────────────────────
+//
+// **서버가 세션을 저장하지 않는다.** 쿠키에 서명만 하고, 권한은 매 요청 명부에서
+// 읽는다. 그래서 —
+//
+//   · 세션 테이블이 없다. `POST /mcp` 의 stateless 와 같은 성질이라(§4.3)
+//     서버를 늘려도 로그인이 한쪽에 묶이지 않는다.
+//   · 폐기가 즉시 먹는다. 쿠키가 살아 있어도 명부에서 지웠거나 `active:false` 면
+//     다음 요청에서 끊긴다 — **권한을 쿠키에 담지 않기 때문이다.**
+//
+// 순수 JWT 와 다른 점이 둘째 줄이다. 담으면 편하지만 담는 순간 되돌릴 수 없다.
+
+const SESSION_HOURS = 12
+
+export async function loadSecret(dataDir) {
+  const file = path.join(dataDir, 'secret')
+  const cur = await fs.readFile(file).catch(() => null)
+  if (cur && cur.length >= 32) return cur
+  const next = crypto.randomBytes(32)
+  await fs.mkdir(dataDir, { recursive: true }).catch(() => {})
+  await fs.writeFile(file, next)
+  await fs.chmod(file, 0o600).catch(() => {})
+  return next
+}
+
+const b64u = (b) => Buffer.from(b).toString('base64url')
+
+export function signSession(secret, user, { now = Date.now(), hours = SESSION_HOURS } = {}) {
+  const payload = b64u(JSON.stringify({ user, exp: now + hours * 3600_000 }))
+  const mac = crypto.createHmac('sha256', secret).update(payload).digest('base64url')
+  return payload + '.' + mac
+}
+
+export function readSession(secret, cookie, now = Date.now()) {
+  if (!cookie || typeof cookie !== 'string') return null
+  const i = cookie.lastIndexOf('.')
+  if (i < 0) return null
+  const payload = cookie.slice(0, i)
+  const mac = crypto.createHmac('sha256', secret).update(payload).digest('base64url')
+  // 길이가 다르면 timingSafeEqual 이 던진다. 먼저 본다.
+  const got = Buffer.from(cookie.slice(i + 1))
+  const want = Buffer.from(mac)
+  if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) return null
+  try {
+    const j = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+    if (!j?.user || !j.exp || now > j.exp) return null
+    return { user: j.user, exp: j.exp }
+  } catch {
+    return null
+  }
+}
+
+// 쿠키를 들고 온 요청의 권한. **`decide` 의 3~5단계를 그대로 탄다**(§4.4) —
+// 토큰 조회와 만료(1·2)는 로그인 때 이미 했고, 명부 조회·`active`·권한은
+// 매 요청 다시 본다.
+export function decideSession(db, sess) {
+  if (!sess) return { ok: false, status: 401, code: 'E_AUTH', message: '세션이 없다' }
+  const u = (db.users || []).find((x) => x.name === sess.user)
+  if (!u) return { ok: false, status: 401, code: 'E_AUTH', message: '명부에 없는 사용자' }
+  if (u.active === false) return { ok: false, status: 401, code: 'E_AUTH', message: '사용 중지된 사용자' }
+  const repos = Array.isArray(u.repos) ? u.repos : []
+  const all = repos.includes('*')
+  return {
+    ok: true,
+    user: u.name,
+    label: u.label ?? null,
+    write: !!u.write,
+    allow: all ? null : (name) => repos.includes(name),
+    expiresInDays: null,
+  }
+}
+
+export function parseCookies(header) {
+  const out = {}
+  for (const part of String(header || '').split(';')) {
+    const i = part.indexOf('=')
+    if (i < 0) continue
+    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim())
+  }
+  return out
+}
