@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assembleKnowledgeRepo, bundleStamp, listPackages } from './assemble.mjs'
 
 // **`..` 가 두 번이다.** 이 파일은 `ops/lib/` 에 있으므로 한 번으로는
 // `ops/` 를 가리킨다 -- 그러면 `ops/package.json` 을 찾다가 죽는다.
@@ -77,12 +78,18 @@ function put(src, rel) {
 
 // ── 1) 만든다 ───────────────────────────────────────────────────────────
 log('버전 v' + VERSION)
-log('① 화면')
-run('npm', ['run', 'build'])
-log('② ctx 번들')
-run('npm', ['run', 'build:ctx'])
-log('③ 단일 실행 파일 (수 분)')
-run('npm', ['run', 'build:exe'])
+// `--no-build` — 이미 만든 ops/out/ 로 **조립만** 다시 한다. 조립 함수를 고쳤을 때
+// exe 를 다시 굽지 않고 결과를 대조하는 용도다(제품화 TODO 2.1).
+if (!process.argv.includes('--no-build')) {
+  log('① 화면')
+  run('npm', ['run', 'build'])
+  log('② ctx 번들')
+  run('npm', ['run', 'build:ctx'])
+  log('③ 단일 실행 파일 (수 분)')
+  run('npm', ['run', 'build:exe'])
+} else {
+  log('--no-build: ops/out 을 그대로 쓴다')
+}
 
 // ── 2) 버전 폴더로 묶는다 ───────────────────────────────────────────────
 //
@@ -116,66 +123,24 @@ const EXE = process.platform === 'win32' ? 'cdp.exe' : 'cdp'
 // 폴더 안에 두면 복사한 뒤에야 보인다 -- 순서가 거꾸로다.
 need('agent/install.md', '설치.md')
 
-const PKG_ROOT = path.join(ROOT, 'agent', 'packages')
-const packages = fs.existsSync(PKG_ROOT)
-  ? fs.readdirSync(PKG_ROOT, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
-  : []
+// **조립은 `assemble.mjs` 가 한다.** 서버 산출물(`release-server.mjs`)이 같은
+// 폴더를 `packages/<이름>/` 으로 담아야 해서 함수로 꺼냈다 — 두 곳에 두면
+// 갈라진다. 여기 있던 need() 열다섯 줄이 그대로 그 안에 있다.
+const packages = listPackages(ROOT)
 if (!packages.length) missing.push('agent/packages/<패키지>')
 
 for (const name of packages) {
-  const R = `knowledge-repo-${name}`
-
-  // 모든 패키지가 같은 것을 받는 층 — 도구 · 규약 · 매뉴얼 · 훅
-  need('agent/skills', `${R}/.claude/skills`)
-  // **CLAUDE.md 는 두 종류다.** 이 자리의 것은 지식 레포판이어야 한다.
-  need('agent/CLAUDE-지식레포.md', `${R}/CLAUDE.md`)
-  // 작업 레포용 규약은 **서식**이라 루트에 두지 않는다. 루트에 두면 규약이
-  // 두 개로 보이고 어느 쪽이 이 레포의 것인지 알 수 없다.
-  // `ctx setup <작업 레포>` 가 여기서 읽어 경로를 박아 넣는다.
-  need('agent/CLAUDE-프로젝트레포.md', `${R}/.claude/work-repo/CLAUDE.md`)
-  need('agent/TEMPLATE-work.md', `${R}/TEMPLATE-work.md`)
-  need('agent/hooks/pre-commit', `${R}/.githooks/pre-commit`)
-  need('agent/manual/user.md', `${R}/MANUAL.md`)
-  need('agent/manual/admin.md', `${R}/MANUAL-관리자.md`)
-  // **정본.** CDP 가 지금 무엇인지.
-  need('agent/manual/system.md', `${R}/MANUAL-시스템.md`)
-  need('ops/out/ctx/ctx.mjs', `${R}/bin/ctx.mjs`)
-  need('ops/out/ctx/ctx', `${R}/bin/ctx`)
-  need('ops/out/ctx/ctx.cmd', `${R}/bin/ctx.cmd`)
-  // **훅이 조용히 죽는 자리.** 이것이 없으면 core.autocrlf=true 인 PC 가
-  // clone 할 때 pre-commit 이 CRLF 로 와서 셔뱅 뒤에 캐리지리턴이 붙는다.
-  // 전에는 배포본에 아예 안 들어갔다 -- 설치 문서는 준다고 적어 두고서.
-  need('agent/gitattributes', `${R}/.gitattributes`)
-  need('agent/gitignore', `${R}/.gitignore`)
-
-  // **실행 파일도 폴더 안에 둔다.** 밖에 두면 받는 사람이 `mkdir tools` 하고
-  // 옮기는 두 줄을 더 해야 한다 -- "복사하면 쓸 수 있다" 가 아니게 된다.
-  // 레포의 `.gitignore` 가 `/tools/*.exe` 를 막으므로 커밋되지는 않는다.
-  need(`ops/out/exe/${EXE}`, `${R}/tools/${EXE}`)
-
-  // 이 패키지가 정하는 층 — docs/ 골격 · 등록부 · 어휘
-  need(`agent/packages/${name}`, R)
-
-
-  // 작업 기록이 들어갈 자리.
-  //
-  // **`.gitkeep` 이 있어야 한다.** 빈 디렉터리는 git 이 추적하지 않으므로,
-  // 표시가 없으면 관리자 PC 에만 있고 **clone 한 팀원에게는 없다** -- 배포본과
-  // 팀의 레포가 달라진다. `.md` 가 아닌 이름이라 작업 기록으로도 안 읽힌다.
-  fs.mkdirSync(path.join(OUT, R, 'work'), { recursive: true })
-  fs.writeFileSync(path.join(OUT, R, 'work', '.gitkeep'), '')
+  const r = assembleKnowledgeRepo({
+    root: ROOT,
+    name,
+    dest: path.join(OUT, `knowledge-repo-${name}`),
+    exe: path.join(ROOT, 'ops', 'out', 'exe', EXE),
+  })
+  missing.push(...r.missing)
 }
 
 // ── 3) 설치 안내 ────────────────────────────────────────────────────────
-const stamp = (() => {
-  try {
-    const t = fs.readFileSync(path.join(ROOT, 'ops', 'out', 'ctx', 'ctx.mjs'), 'utf8')
-    const m = t.match(/BUILT\s*=\s*['"]([^'"]+)['"]/)
-    return m && !m[1].startsWith('__') ? m[1] : '?'
-  } catch {
-    return '?'
-  }
-})()
+const stamp = bundleStamp(ROOT)
 
 fs.writeFileSync(
   path.join(OUT, 'README.md'),
