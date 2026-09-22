@@ -103,38 +103,68 @@ export default function WorkReposServer({ say }) {
 
 // **토큰을 보여 주지 않는다**(§6.7.3). 화면이 토큰을 내면 HTTP 발급 경로를
 // 만든 것과 같아진다 — 발급은 서버 셸에서만 한다(§4.4.1).
+//
+// **사람이 하는 일만 적는다.** 전에는 "작업 레포 루트에 푼다" 뒤에
+// "CLAUDE.md 가 이미 있으면 블록만 갈아 끼웁니다" 가 붙어 있었다 — 읽는
+// 사람에게는 **자기가 직접 갈아 끼우라는 말**로 들리고, 실제로 그때는
+// 푸는 순간 이미 덮인 뒤였다. 지금은 `install.mjs` 가 병합하므로, 화면은
+// 그것이 무엇을 지켜 주는지만 말한다.
 function HowTo({ row }) {
   if (!row) return null
   return (
     <div className="howto">
       <ol>
         <li>
-          꾸러미를 받아 <b>작업 레포 루트에 푼다.</b>
+          꾸러미를 받아 <b>아무 데나 푼다.</b>
           <div>
             <a className="btn" href={api.kitUrl(row.id)} download>
               <Icon name="copy" size={13} /> cdp-kit-{row.name}.zip 내려받기
             </a>
           </div>
           <Note>
-            <code>CLAUDE.md</code> 가 이미 있으면 <code>cdp:begin ~ cdp:end</code> 블록만 갈아 끼웁니다. 안에
-            <code> 설치.md</code> 가 들어 있습니다.
+            작업 레포가 아니어도 됩니다. 안의 것은 <code>kit/</code> 한 단 아래에 있어서,
+            푸는 것만으로는 작업 레포의 아무것도 바뀌지 않습니다.
+          </Note>
+        </li>
+        <li>
+          설치한다.
+          <Cmd>node install.mjs &lt;작업 레포 경로&gt;</Cmd>
+          <Note>
+            무엇이 바뀔지 먼저 보여 주고 묻습니다. 미리만 보려면 <code>--dry</code>. 여러 번 돌려도
+            됩니다 — 두 번째부터는 <b>이미 최신입니다</b> 로 끝납니다.
+            <br />
+            이미 있는 <code>CLAUDE.md</code> 는 <code>cdp:begin ~ cdp:end</code> 블록만 바뀌고, 이미 있는{' '}
+            <code>.mcp.json</code> 은 <code>cdp</code> 항목만 더해집니다 — <b>다른 MCP 서버와 직접 쓰신 내용은
+            그대로 남습니다.</b>
+            <br />
+            Node 가 없으면 꾸러미 안 <code>설치.md</code> 의 「Node 가 없으면」 대로 손으로 옮깁니다.
           </Note>
         </li>
         <li>
           토큰을 환경변수에 둔다.
           <Cmd>setx CDP_TOKEN &lt;관리자에게 받은 토큰&gt;</Cmd>
-          <Note>토큰은 관리자에게 직접 받습니다. 이 화면과 꾸러미에는 토큰이 없습니다.</Note>
+          <Note>
+            토큰은 관리자에게 직접 받습니다. 이 화면과 꾸러미에는 토큰이 없습니다.
+            macOS · Linux 는 <code>export CDP_TOKEN=…</code> 입니다.
+          </Note>
         </li>
-        <li>Claude Code 를 다시 켠다.</li>
+        <li>
+          Claude Code 를 다시 켠다.
+          <Note>
+            환경변수는 프로세스를 시작할 때 읽힙니다. <code>/mcp</code> 에 <code>cdp</code> 가 connected 면
+            된 것입니다.
+          </Note>
+        </li>
         <li>
           커밋한다.
           <Cmd>git add .mcp.json .claude CLAUDE.md</Cmd>
-          <Note>팀원은 여기서부터 pull 과 토큰만으로 끝납니다.</Note>
+          <Note>팀원은 여기서부터 pull 과 토큰만으로 끝납니다 — 꾸러미를 다시 받지 않습니다.</Note>
         </li>
       </ol>
       <Note>
-        <code>bin/ctx</code> 가 있으면 1번 대신 <Mono>{`ctx setup --server … --workrepo ${row.id}`}</Mono> 를
-        써도 됩니다. 그러면 병합과 대장 보고까지 한 번에 됩니다.
+        <code>bin/ctx</code> 가 있으면 1·2번 대신{' '}
+        <Mono>{`ctx setup --server … --workrepo ${row.id}`}</Mono> 를 써도 됩니다. 같은 함수를 부르므로
+        결과가 같습니다.
       </Note>
     </div>
   )
