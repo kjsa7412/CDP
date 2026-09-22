@@ -41,6 +41,11 @@ cdp-load table:rp_plnd_mst screen:PSC043
 
 ## 0. 최신인지 확인한다 — **받지는 않는다**
 
+> **모드 B 면 `받을 것` 이 늘 0 이다** — 서버 트리가 언제나 origin HEAD 라
+> 뒤처질 자리가 없다. 대신 `sync` 가 주는 `kit.hash` 를 본다: 이 작업 레포
+> `CLAUDE.md` 의 `cdp:kit` 값과 다르면 **여기 깔린 스킬이 낡은 것**이므로
+> 답에 적는다(꾸러미를 다시 받아 `node install.mjs` 를 한 번 더 돌린다).
+
 ```
 <repo>/bin/ctx sync
 ```

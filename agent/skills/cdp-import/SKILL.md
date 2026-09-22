@@ -59,6 +59,9 @@ description: 이미 작성된 문서(회의록·검토서·설계 메모·인수
 
 ## ① pull
 
+> **모드 B 면 이 절은 없다.** `save` 도구가 있으면 받을 것이 없다 — 서버 트리가
+> 그 레포의 유일한 작성자이고 언제나 origin HEAD 다. 다음 절로 간다.
+
 ```
 git -C <repo> pull --ff-only
 ```
@@ -230,6 +233,10 @@ $ ctx where screen:EXA021
 
 ## ⑥ 한 커밋
 
+> **모드 B 면 이 절을 건너뛰고 `save` 도구 한 번으로 끝낸다.** 커밋할 작업
+> 트리가 클라이언트에 없고 훅도 없다. 인자 모양과 `E_CONFLICT` 대처는
+> **`cdp-save` 의 ⑤B** 에 있다 — 여기서 되풀이하지 않는다.
+
 ```
 git -C <repo> add work/<id>.md docs/<...>.md _vocab.md
 git -C <repo> commit -m "<제목> 편입"
@@ -244,6 +251,9 @@ git 로그에서 가려낼 수 있다.
 ---
 
 # 실사용 예시 — 회의록 한 장
+
+> **아래는 모드 A 다** — `C:/cdp` 같은 로컬 지식 레포와 `bin/ctx` 가 있는 경우.
+> 모드 B 면 `pull` 과 커밋이 없고 그 자리에 `save` 한 번이 온다(`cdp-save` ⑤B).
 
 ## 원문
 
