@@ -112,7 +112,13 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 - [x] `--root` · `--repo`(반복) · 없으면 지금 해결 순서 그대로(§3.1)
 - [x] 레포 이름 충돌 → stderr 경고 후 뒤엣것 무시
 - [x] **stdout 은 규약 전용.** `console.log` 금지 · 로그는 전부 stderr(§2.8)
-- [ ] ⏸ `ctx setup` 이 `.mcp.json` 을 쓴다 · `mcpServers.cdp` 키만 병합 · `.gitignore` 안내(§3.2)
+- [x] `ctx setup` 이 `.mcp.json` 을 쓴다 · `mcpServers.cdp` 키만 병합 · `.gitignore` 안내(§3.2)
+      — **2026-09-22 에 닫았다.** 이것이 ⏸ 인 동안 모드 A 는 MCP 를 못 썼다:
+      도구 12종은 실측까지 끝나 있었는데 **작업 레포에 등록하는 줄이 없어서**
+      에이전트가 bash 로 `ctx` 를 직접 불렀다. 서버가 있어도 아무도 안 붙으면
+      없는 것과 같다. `mcpEntryLocal()` + `planSetup` 에서 계획에 넣는다.
+      실측: `ctx setup` 이 쓴 `.mcp.json` 을 호스트처럼 spawn → `initialize` ok ·
+      `tools/list` 12건 · `save` 없음(모드 A 맞다)
 - [ ] ⏸ `--also <경로>` — 지식 레포 둘 이상을 **한 항목**으로(§3.2)
 - [ ] ⏸ `ctx setup --desktop` — 기존 `claude_desktop_config.json` 의 다른 키 보존(§3.2)
 - [ ] ⏸ `inspect()` 에 `.mcp.json` 상태 · 관리 > 작업 레포 화면에 열 하나
@@ -123,6 +129,11 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 
 **끝났다고 보는 기준** — `/mcp` 에 `cdp` 가 connected · `tools/list` 12건 · `repos` 가
 목적한 레포를 다 낸다.
+
+> **경유지라고 미룬 것이 본선을 가렸다.** 0단계에서 모드 A 를 "산출물이 아니라
+> 경유지" 로 두고 배포물을 ⏸ 로 미뤘는데, 그 ⏸ 안에 **로컬이 MCP 를 쓰는 유일한
+> 길**이 들어 있었다. 원래 목표가 *bash 로 `ctx` 를 직접 부르던 것을 MCP-stdio 로
+> 바꾸는 것*이었으므로, 그것을 미룬 순간 목표가 미뤄진 것이었다.
 
 - [x] **실측.** 자식 프로세스 + 실제 stdio 파이프로 확인 — `tools/list` 12건 ·
       `--prompts auto` 가 `claude-code` 에만 숨김 · `always` 로 강제됨 · 이름 충돌 경고 ·

@@ -180,6 +180,32 @@ export async function planSetup(knowledgeRoot, workRoot, { server = null, repo =
     content: nextPtr,
   })
 
+  // ── .mcp.json — **모드 A 도 쓴다** ────────────────────────────────
+  //
+  // 모드 B 는 부르는 쪽(`ctx setup --server` · `install.mjs`)이 넣는다 --
+  // 거기서는 서버 주소를 알아야 해서다. 모드 A 는 지식 레포 경로만 있으면
+  // 되므로 여기서 만든다.
+  if (!server) {
+    const mcpPath = path.join(wk, '.mcp.json')
+    const hadMcp = await read(mcpPath)
+    let nextMcp = null
+    try {
+      nextMcp = mergeMcpJson(hadMcp, mcpEntryLocal(kn))
+    } catch (e) {
+      // 깨진 `.mcp.json` 은 덮지 않는다. 계획에서 빼고 경고로 낸다 --
+      // 여기서 던지면 skill 설치까지 통째로 막힌다.
+      warnings.push(e.message)
+    }
+    if (nextMcp) {
+      actions.push({
+        kind: 'mcp',
+        to: mcpPath,
+        op: hadMcp == null ? 'create' : hadMcp === nextMcp ? 'same' : 'update',
+        content: nextMcp,
+      })
+    }
+  }
+
   // ── .gitignore — 두 가지가 반대다 ─────────────────────────────────
   const gi = (await read(path.join(wk, '.gitignore'))) || ''
   const claudeBlocked = /^[.]claude\/[*]?\s*$/m.test(gi)
@@ -196,6 +222,16 @@ export async function planSetup(knowledgeRoot, workRoot, { server = null, repo =
     warnings.push(
       '.claude/cdp.json 은 **커밋하지 않습니다** — 지식 레포 경로는 사람마다 다릅니다.\n' +
         '.gitignore 에 `.claude/cdp.json` 을 넣으세요.'
+    )
+  }
+  // `.mcp.json` 도 같은 이유다 -- 모드 A 의 항목에는 **그 PC 의 지식 레포
+  // 절대경로**가 들어간다. 커밋하면 팀원마다 다른 값이 오간다.
+  // 모드 B 는 반대다: `{ server, repo }` 뿐이라 PC 와 무관하고 커밋한다.
+  if (!server && !/^[.]mcp[.]json\s*$/m.test(gi)) {
+    warnings.push(
+      '.mcp.json 은 **커밋하지 않습니다** — 이 모드의 항목에는 이 PC 의 지식 레포\n' +
+        '경로가 들어갑니다. .gitignore 에 `.mcp.json` 을 넣고, 팀원은 각자\n' +
+        '`ctx setup` 을 돌립니다. (서버 모드에서는 커밋합니다)'
     )
   }
   if (server && ptrIgnored) {
@@ -227,6 +263,25 @@ export function mergeMcpJson(existing, entry) {
   if (!j.mcpServers || typeof j.mcpServers !== 'object') j.mcpServers = {}
   j.mcpServers.cdp = entry
   return JSON.stringify(j, null, 2) + '\n'
+}
+
+// 모드 A — **stdio 로 `ctx mcp` 를 띄운다.**
+//
+// 이것이 빠져 있어서 로컬은 MCP 를 못 쓰고 에이전트가 bash 로 `ctx` 를 직접
+// 불렀다. 도구 12종은 2단계에서 실측까지 끝나 있었는데 **등록하는 줄이
+// 없었다** -- 서버가 있어도 아무도 붙지 않으면 없는 것과 같다.
+//
+// **껍데기를 부른다. `ctx.mjs` 를 직접 부르지 않는다.** `bin/ctx` 는 Node 가
+// 없으면 exe 로 넘기는 판단을 들고 있고(작업환경 §3.1), 그 판단이 여기서도
+// 그대로 필요하다 -- 폐쇄망 PC 가 이 모드의 대상이다.
+//
+// Windows 의 `.cmd` 는 셸이 있어야 돈다. 그래서 `cmd /c` 로 감싼다.
+export function mcpEntryLocal(knowledgeRoot, platform = process.platform) {
+  const root = path.resolve(knowledgeRoot)
+  if (platform === 'win32') {
+    return { type: 'stdio', command: 'cmd', args: ['/c', path.join(root, 'bin', 'ctx.cmd'), 'mcp'] }
+  }
+  return { type: 'stdio', command: path.join(root, 'bin', 'ctx'), args: ['mcp'] }
 }
 
 export function mcpEntryServer(server, repo) {

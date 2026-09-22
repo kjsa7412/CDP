@@ -775,12 +775,15 @@ async function cmdSetup(r, opt) {
   }
 
   const label = { create: '새로', update: '갱신', append: '블록 추가', remove: '제거', same: '같음' }
-  const show = (a) =>
-    a.kind === 'skill'
-      ? `  ${label[a.op].padEnd(9)} .claude${SEP}skills${SEP}${a.name}`
-      : a.kind === 'claude'
-        ? `  ${label[a.op].padEnd(9)} CLAUDE.md`
-        : `  ${label[a.op].padEnd(9)} .claude${SEP}cdp.json   지식 레포 = ${plan.knowledge}`
+  // **종류마다 한 줄씩 쓴다.** 전에는 skill·claude 가 아니면 전부 포인터로
+  // 찍어서, `.mcp.json` 이 `.claude/cdp.json` 인 척 두 번 나왔다.
+  const show = (a) => {
+    const op = label[a.op].padEnd(9)
+    if (a.kind === 'skill') return `  ${op} .claude${SEP}skills${SEP}${a.name}`
+    if (a.kind === 'claude') return `  ${op} CLAUDE.md`
+    if (a.kind === 'mcp') return `  ${op} .mcp.json          호스트가 ctx mcp 를 띄운다`
+    return `  ${op} .claude${SEP}cdp.json   지식 레포 = ${plan.knowledge}`
+  }
 
   if (opt.dry) {
     out(`ctx setup --dry: ${plan.work}`)
