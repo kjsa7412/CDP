@@ -1,0 +1,24 @@
+# CDP 서버 — compose 한 장. 서버 산출물 폴더(cdp-server-v<버전>/)에서:
+#
+#     docker compose -f deploy/docker-compose.yml up -d --build
+#     docker compose -f deploy/docker-compose.yml exec cdp node bin/ctx.mjs serve init --auth /opt/cdp/auth.json --data /opt/cdp/data --name <이름> --write
+#
+# auth.json 은 호스트 파일이다 — 컨테이너를 지워도 명부는 남는다. 없으면 빈 파일로 만들어 둔다.
+services:
+  cdp:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: cdp-server
+    container_name: cdp
+    restart: unless-stopped
+    ports:
+      - '7374:7374'
+    volumes:
+      - repos:/opt/cdp/repos
+      - data:/opt/cdp/data
+      - ./auth.json:/opt/cdp/auth.json
+
+volumes:
+  repos:
+  data:

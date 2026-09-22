@@ -1,15 +1,24 @@
-# deploy — 모드 B 서버 올리기
+# deploy — 모드 B 서버를 올리는 것
 
 설계 [`CDP_MCP_설계서 v1.1 §9.4`](../../docs/design/CDP_MCP_설계서_v1.0.md) ·
-확정값 [`MCP_0단계_결정`](../../docs/dev/MCP_0단계_결정.md)
+확정값 [`MCP_0단계_결정`](../../docs/dev/MCP_0단계_결정.md) ·
+근거 [`제품화 검토 §3.3`](../../docs/design/CDP_제품화_검토_v1.0.md)
 
-> **실제로 올릴 때는 [`설치절차.md`](설치절차.md) 를 따른다.** 순서와 확인이
-> 거기 있다. 이 문서는 참조 — 무엇을 왜 그렇게 했는지다.
->
-> 사내 배치 하나에 맞춘 실물이다. 다른 배치로 가면 §9.4 의 일반형
-> (LaunchAgent · Caddy · Cloudflare Tunnel)을 본다.
+> **실제로 올릴 때는 [`설치절차.md`](설치절차.md) 를 따른다.** 이 문서는 참조 —
+> 여기 있는 파일이 각각 무엇을 하고 **무엇을 하지 않는지**다.
 
----
+```
+cdp-serve.service   systemd 유닛 — install.sh 가 node 경로 · bind · port 를 박아 /etc/systemd/system 에 둔다
+install.sh          설치 — 설치절차 0 · 2 · 6장.  멱등.  방화벽은 안내만
+upgrade.sh          갱신 — 설치절차 10장 ①②③.  백업 · 교체 · 재시작 · 대조 · 실패면 되돌림
+Dockerfile          선택지 — systemd 없이 컨테이너로.  CI 확인용으로도
+docker-compose.yml  그 compose
+설치절차.md         사람이 따라가는 순서.  스크립트가 무엇을 하는지의 설명
+```
+
+**서버 산출물**(`npm run release:server` → `cdp-server-v<버전>.tar.gz`)에 이 폴더가
+`deploy/` 로 들어간다. 스크립트는 그 산출물 안에서 돈다 — `bin/` · `web/` · `packages/`
+가 형제라는 것을 전제한다.
 
 ## 확정된 배치
 
@@ -17,132 +26,72 @@
 |---|---|
 | 서버 | `10.10.20.188` · 사내 Linux |
 | 접속 | `http://10.10.20.188:7374` — **프록시 없음 · 평문** |
-| origin | `ssh://git@10.10.20.250:443/soln1/cdp.git` — 사내 GitLab · **SSH 443** |
-| push 자격 | **Deploy Key (SSH)** — 그 레포 push 만 |
-| 레포 | `gdi` 하나 (`<root>/gdi`) |
+| origin | `http://10.10.20.250:2900/soln1/cdp.git` — 사내 GitLab · HTTP · PAT |
+| 레포 | `gdi` (`<root>/gdi`) — 패키지로 더 세울 수 있다(`ctx repo new`) |
 
 ### 프록시가 없다는 것의 뜻
 
-§4.3 은 "TLS · 레이트리밋 · IP 제한은 프록시가 한다" 였다. **이 배치에는 프록시가
-없으므로 그 셋이 없다.** 받아들이고 가는 것이고, 대신 이렇게 좁힌다 —
+§4.3 은 "TLS · 레이트리밋 · IP 제한은 프록시가 한다" 였다. 이 배치에는 프록시가 없으므로
+그 셋이 없다. 받아들이고 가는 것이고, 대신 이렇게 좁힌다 —
 
 | | |
 |---|---|
 | 토큰 | 사내망을 **평문으로** 흐른다. 망을 믿는 것이 전제다 |
-| 바인드 | `0.0.0.0` 이 아니라 `10.10.20.188` 하나에만. 다른 인터페이스로는 안 뜬다 |
-| Origin | 루프백이 아닌 `Origin` 헤더는 403(§8). 브라우저에서 찌르는 길은 막혀 있다 |
-| 레이트리밋 | 없다. 사내 사용자 2~5명 규모라 두지 않는다 |
-| claude.ai 커넥터 | **불가능하다.** 공개 HTTPS 가 아니다 — §5.3 의 미검증 항목은 이 배치에서 해당 없음 |
+| 바인드 | `0.0.0.0` 이 아니라 `10.10.20.188` 하나에만 — `install.sh --bind` 가 그것을 요구한다 |
+| Origin | 같은 출처가 아닌 `Origin` 은 403(§8) |
+| 레이트리밋 | 없다. 사용자 2~5명 |
+| claude.ai 커넥터 | **불가.** 공개 HTTPS 가 아니다 |
 
----
+TLS 를 켜려면 Caddy 한 줄이다(§9.4) — `install.sh` 는 그것을 **하지 않는다.** 배치가 정한다.
 
-## 1. 준비 (한 번)
-
-```bash
-sudo useradd -r -m -d /opt/cdp -s /usr/sbin/nologin cdp
-sudo mkdir -p /opt/cdp/{bin,repos,data}
-sudo chown -R cdp:cdp /opt/cdp
-
-node --version        # 20 이상이어야 한다. cdp.exe 는 서버 모드를 지원하지 않는다
-git --version         # 서버가 clone · commit · push 를 직접 한다
-command -v node       # systemd 유닛의 ExecStart 와 같아야 한다
+```
+cdp.example.com { reverse_proxy 127.0.0.1:7374 }
 ```
 
-서버에 올리는 것은 **둘뿐**이다 — `npm run build:ctx` 가 만든 `ops/out/ctx/ctx.mjs`
-(MCP SDK · zod · core 가 다 들어 있다)와 `npm run build` 가 만든 `ops/out/web/`(화면).
-서버에 `node_modules` 는 필요 없다.
+## 스크립트가 하는 것과 하지 않는 것
 
-## 2. git 자격 — Deploy Key (SSH)
+| | 한다 | 하지 않는다 |
+|---|---|---|
+| `install.sh` | node ≥ 20 · git 확인 · 계정 · 폴더 · 파일 배치 · 유닛(node 경로 자동) · enable · healthz 확인 · 방화벽 **안내** | git 자격 · 레포 · 명부 · 토큰 · 방화벽 실행 |
+| `upgrade.sh` | 산출물 검증 · `.bak` · 교체 · restart · `built` 와 자산 해시 대조 · 실패 시 되돌림 | 명부 · 대장 · 레포 · git 자격 |
+| `ctx serve doctor` | node · git · `auth.json` 권한/형식 · 레포마다 `_vocab` · git · upstream · **origin 도달 · push 자격** · web · data · packages · 포트/healthz | 고치지 않는다 — 말만 한다. fail 이면 exit 1 |
+| `ctx serve init` | 첫 사용자 + 첫 토큰 (명부가 없을 때만) | 둘째 사람부터는 `user add` · `token` |
+| `ctx repo new` | 패키지 복사 · `git init` · `hooksPath` · 첫 커밋(훅) · `remote add` · `push -u` | origin 프로젝트를 만드는 것 — GitLab 웹에서 먼저 |
 
-서버가 origin 으로 push 할 자격이다. **커밋 `author` 와는 다른 것** — author 는
-CDP 토큰의 사용자로 서버가 채우므로(§4.5) 누가 정했는지는 사람별로 남고, 여기서
-정하는 것은 **누가 보냈나** 뿐이다.
+**발급은 여전히 서버 셸의 CLI 다**(§4.4.1). `init` 은 그 첫 번을 줄여 줄 뿐이고 HTTP 로
+발급하는 길은 없다.
 
-```bash
-sudo -u cdp -H mkdir -p /opt/cdp/.ssh && sudo -u cdp -H chmod 700 /opt/cdp/.ssh
-sudo -u cdp -H ssh-keygen -t ed25519 -N '' -f /opt/cdp/.ssh/id_ed25519
-sudo cat /opt/cdp/.ssh/id_ed25519.pub        # → GitLab Deploy Keys 에 붙여넣는다
-sudo -u cdp -H sh -c 'ssh-keyscan -p 443 -H 10.10.20.250 >> /opt/cdp/.ssh/known_hosts'
-```
-
-- **이 GitLab 은 12.9 미만**이라 PAT 에 `write_repository` 스코프가 없다. push 가
-  되는 스코프는 `api` 하나인데 그것은 **계정 전체**(모든 그룹·프로젝트 읽기·쓰기)를
-  연다 — 서버 평문 파일에 두기엔 너무 넓다.
-- **Deploy Key 는 그 레포에 push 하는 것 하나만** 할 수 있다. 사람 계정과 무관해서
-  담당자가 바뀌어도 미러가 멈추지 않고, SSH 라 자격이 평문으로 흐르지 않는다.
-- 등록할 때 **`Write access allowed` 체크**가 핵심이다. 안 누르면 clone 은 되고
-  push 만 막히는데, 그 증상은 `mirror: lag` 뿐이라 원인이 안 드러난다.
-- `ssh-keyscan` 을 빠뜨리면 systemd 밑에서 host key 확인 프롬프트를 답할 사람이
-  없어 `push` 가 영영 기다린다.
-- **SSH 포트는 443 이다**(22 아님). 프로젝트의 `Clone > Clone with SSH` 가 정본이다 —
-  22 번은 그 장비의 OS sshd 이고 `git` 계정이 없어 패스워드를 묻는다. 포트가
-  표준이 아니라 `git@host:path` 축약형이 안 먹고 `ssh://` 형태로 써야 한다.
-
-## 3. 레포
+## Docker — 선택지
 
 ```bash
-sudo -u cdp -H git clone ssh://git@10.10.20.250:443/soln1/cdp.git /opt/cdp/repos/gdi
+cd cdp-server-v0.9.0
+touch auth.json
+docker compose -f deploy/docker-compose.yml up -d --build
+docker compose -f deploy/docker-compose.yml exec cdp node bin/ctx.mjs serve init --auth /opt/cdp/auth.json --data /opt/cdp/data --name kjsa --write
 ```
 
-폴더명이 곧 레포 이름이다(§4.2). **`cdp` 가 아니라 `gdi` 로 받는다** — 로컬
-작업 트리의 폴더명(`C:\cdp`)과 다른 것이 정상이다.
+컨테이너 안에서 `--bind 0.0.0.0` 은 맞다 — 경계는 호스트의 `-p` 매핑이다. 기본 배치는
+systemd 다(검토 R10). Docker 는 사내 배치가 바뀌었을 때의 두 번째 길이고 CI 에서 서버
+산출물이 실제로 뜨는지 확인하는 자리다.
 
-> 서버 트리에서 **사람이 커밋하지 않는다.** 서버가 유일한 작성자다(§4.2).
-> 사람은 origin 을 읽기 전용으로 clone 해서 본다.
-
-## 4. 명부와 토큰
-
-```bash
-CTX="sudo -u cdp node /opt/cdp/bin/ctx.mjs serve"
-A=/opt/cdp/auth.json
-
-$CTX user add --auth $A --name kjsa --label "사경진 · 개발" --repos gdi --write --data /opt/cdp/data
-$CTX token   --auth $A --user kjsa --note "노트북" --data /opt/cdp/data    # 원문은 여기서 한 번만
-$CTX user list --auth $A --data /opt/cdp/data
-
-sudo chmod 600 $A
-```
-
-**발급 엔드포인트는 없다**(§4.4.1). 여기 셸이 있는 사람만 발급할 수 있고, 원문은
-받는 사람에게 직접 전한다 — 메신저·메일에 남기지 않는다(§4.4.2).
-
-## 5. systemd
-
-`cdp-serve.service` 를 `/etc/systemd/system/` 에 둔다.
-
-```bash
-sudo cp ops/deploy/cdp-serve.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now cdp-serve
-sudo systemctl status cdp-serve
-```
-
-확인 —
-
-```bash
-curl -s http://10.10.20.188:7374/healthz
-curl -s -H "Authorization: Bearer <토큰>" http://10.10.20.188:7374/repos
-```
-
-`/healthz` 는 인증 없이 열린다(§4.3). **레포 이름은 싣지 않는다** — 집계까지다.
-
-## 6. 운영 (§9.4)
-
-| | |
-|---|---|
-| 감시 | `GET /healthz` 를 ops 봇 목록에 추가. 레포별 지연은 감시용 토큰으로 `GET /repos` |
-| 로그 | `/opt/cdp/data/logs/serve.log` 3×1MB 회전 · `auth.log` 는 회전하지 않는다(이력) |
-| 백업 | `--mirror` + `/opt/cdp/repos` 디스크 스냅샷 |
-| 토큰 | 기본 90일. 분기마다 회전 — 새로 발급 → `CDP_TOKEN` 교체 → 옛것 `revoke` |
-| 갱신 | `bin/ctx.mjs` 교체 후 `systemctl restart cdp-serve` · `/healthz.built` 로 확인 |
-| 권한 | `auth.json` 0600 · `/opt/cdp/.ssh` 700 · 키 600 |
-
-## 7. 막혔을 때
+## 막혔을 때
 
 | 증상 | 볼 곳 |
 |---|---|
-| 시작하자마자 죽는다 | `journalctl -u cdp-serve -n 50` · `--auth` 경로 · Node 버전 · `ExecStart` 가 실제 node 경로인가(`203/EXEC`) |
-| `거부: --bind … 인증 없이 밖으로 열 수 없다` | `--auth` 가 빠졌다. 루프백 밖은 인증 없이 못 연다(§8) |
-| `mirror: lag` 가 안 풀린다 | 서버가 `10.10.20.250:2900` 에 닿는가 · Deploy Key 가 지워졌나 |
-| 401 인데 토큰은 맞다 | 만료 · 명부에서 지워짐 · `active:false`. `serve user list` 로 본다 |
-| 레포가 안 보인다 | 폴더에 `_vocab.md` 가 있는가 · 목록 갱신은 60초 주기 |
+| 시작하자마자 죽는다 | `journalctl -u cdp-serve -n 50` · `--auth` 경로 · Node 판 · `ExecStart` 의 node 경로 |
+| `거부: --bind … 인증 없이 밖으로 열 수 없다` | `--auth` 가 빠졌다(§8) |
+| `mirror: lag` 가 안 풀린다 | `doctor` — `레포 … push` 줄. 토큰 만료 · Deploy Key 삭제 · 보호 브랜치 |
+| 401 인데 토큰은 맞다 | 만료 · 명부에서 지워짐 · `active:false`. `serve user list` |
+| 레포가 안 보인다 | `_vocab.md` 가 있는가 · 목록 갱신은 60초 주기 |
+| `repo new` 가 첫 커밋에서 막힌다 | 패키지가 규약을 어겼다 — 개발 PC 에서 `ctx package check` |
+
+## 실측 — 2026-09-22
+
+WSL Ubuntu(systemd · node 20.20.2)에 tar 로 — `install.sh` 두 번(둘째는 전부 건너뜀) ·
+`serve init` · `repo new` · `doctor` fail 0 · `POST /repos` · `upgrade.sh` 같은 판 ✓ ·
+**깨진 번들을 주면 되돌리고 exit 1**(서비스는 옛 번들로 살아 있다). Docker — 이미지
+빌드 · `/healthz` · HEALTHCHECK healthy. 절차는 [`제품화 TODO` 9단계](../../docs/dev/제품화_TODO.md).
+
+시험 셸이 Git Bash 면 앞에 **`MSYS_NO_PATHCONV=1`** 을 둔다 — `/opt/cdp/auth.json` 같은
+인자를 `C:/Program Files/Git/opt/…` 로 바꿔 `wsl` · `docker exec` 에 넘긴다. 컨테이너 안
+`init` 이 그것 때문에 한 번 헛돌았다.
