@@ -1,0 +1,8 @@
+{
+  "name": "dpms",
+  "title": "공공 SI 전체 산출물 세트",
+  "version": "1.0.0",
+  "description": "분석 · 설계 · 구현 · 시험 · 이행에 사업관리까지 붙은 문서 40종. 서식이지 내용이 아니다.",
+  "source": "docs/attic/dpms-패키지/",
+  "updated": "2026-09-16"
+}

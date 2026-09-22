@@ -33,6 +33,23 @@ git init && git config core.hooksPath .githooks
 값을 넣으면 이 패키지를 고른 다른 프로젝트에 **남의 프로젝트 데이터가 따라
 들어온다.**
 
+## 매니페스트 — `_package.json`
+
+패키지마다 하나. **사람이 정하는 것만** 적는다 — `name`(폴더명과 같아야 한다) ·
+`title` · `version` · `description` · `source`(만든 기록이 어디 있나) · `updated`.
+문서 수 · 좌표 타입 · 등록부 패턴은 **폴더에서 센다** — 적어 두면 갈라진다.
+
+```
+ctx package list                패키지 · 판 · 문서 · 타입 · 패턴
+ctx package show dpms           등록부 · 타입 순서 · 문서 목록
+ctx package check dpms          부어서 ctx check — 등록부가 없는 문서를 가리키나 · 예시 어휘만 남았나
+ctx package new <이름> --from dpms
+```
+
+`check` 는 CI 가 패키지마다 돈다(`npm run check:packages`). 릴리스가 깨진 패키지를
+싸는 일이 없다. 매니페스트는 **받는 사람에게 가지 않는다** — 조립(`ops/lib/assemble.mjs`)이 뺀다.
+`convert/` 폴더도 같다 — 그 문서 종류의 변환기 자리. 원본 xlsx 가 없으면 돌지 않는다.
+
 ## 목록
 
 | 패키지 | 문서 | 어디서 왔나 |
@@ -41,6 +58,7 @@ git init && git config core.hooksPath .githooks
 
 ## 새 패키지를 만들려면
 
-기존 것을 복사해 고친다. **바뀌는 것은 문서 목록뿐**이고, 서식 규약과 좌표
-설계는 `docs/관리문서패키지/` 에서 공유한다 — 패키지마다 복사해 넣으면 두 벌이
-되고 두 벌은 갈라진다.
+`ctx package new <이름> --from dpms` 가 복사하고 매니페스트를 고쳐 준다. **바뀌는
+것은 문서 목록뿐**이고, 서식 규약과 좌표 설계는 `docs/관리문서패키지/` 에서 공유한다 —
+패키지마다 복사해 넣으면 두 벌이 되고 두 벌은 갈라진다. 두 번째 패키지는 **표본이
+둘이 될 때** 만든다(제품화 검토 R17).
