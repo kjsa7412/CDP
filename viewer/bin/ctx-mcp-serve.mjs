@@ -682,6 +682,7 @@ export async function runServe(opt = {}) {
         // 여기에 원문을 넣으면 §4.4.1 의 "발급 엔드포인트는 없다" 를 뒷문으로
         // 깨는 셈이 된다.
         const wid = url.searchParams.get('workrepo')
+        let entries = files
         if (wid && dataDir) {
           const db = await wr.load(dataDir)
           const row = db.repos.find((r) => r.id === wid)
@@ -689,18 +690,36 @@ export async function runServe(opt = {}) {
           const origin = publicOrigin(req, opt)
           const claudeTpl = files.find((f) => f.name === '.claude/work-repo/CLAUDE.md')
           const kit = (await kitHash(found.root)).hash
-          files.push({ name: '.mcp.json', data: mergeMcpJson(null, mcpEntryServer(origin, name)) })
-          files.push({
-            name: '.claude/cdp.json',
+
+          // **kit 을 한 단 내린다.** 전에는 이 전부가 zip 루트에 있어서,
+          // 작업 레포에 푸는 순간 `CLAUDE.md` 와 `.mcp.json` 이 덮였다 --
+          // 안내문이 그다음 줄에서 "이미 있으면 덮지 말라" 고 하는데 이미
+          // 늦은 것이었다. 한 단 내려 두면 푸는 것만으로는 아무것도 안 덮이고,
+          // 옮기는 일은 `설치.mjs` 가 병합해서 한다.
+          entries = files.map((f) => ({ name: 'kit/' + f.name, data: f.data }))
+          entries.push({ name: 'kit/.mcp.json', data: mergeMcpJson(null, mcpEntryServer(origin, name)) })
+          entries.push({
+            name: 'kit/.claude/cdp.json',
             data: JSON.stringify({ server: origin, repo: name }, null, 2) + NL,
           })
           if (claudeTpl) {
-            files.push({ name: 'CLAUDE.md', data: mergeClaude(null, claudeTpl.data.toString('utf8'), kit) })
+            entries.push({ name: 'kit/CLAUDE.md', data: mergeClaude(null, claudeTpl.data.toString('utf8'), kit) })
           }
-          files.push({ name: '설치.md', data: installNote({ origin, repo: name, row, kit }) })
+          entries.push({ name: '설치.md', data: installNote({ origin, repo: name, row, kit }) })
+
+          // 실행기. **설정 한 줄을 앞에 박아서** 사람이 URL 이나 id 를 옮겨
+          // 적지 않게 한다. 토큰은 넣지 않는다(§6.7.3) -- 꾸러미는 파일로
+          // 남고 사람 손을 거친다.
+          if (HAS_INSTALLER) {
+            const cfg =
+              'globalThis.__CDP_KIT__ = ' +
+              JSON.stringify({ server: origin, repo: name, workrepo: row.id, kit }) +
+              NL
+            entries.push({ name: 'install.mjs', data: cfg + INSTALLER_SRC })
+          }
         }
 
-        const buf = await zip(files)
+        const buf = await zip(entries)
         log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name, ms: Date.now() - t0, status: 200 })
         res.writeHead(200, {
           'content-type': 'application/zip',
@@ -1001,6 +1020,14 @@ async function lastUsed(dataDir) {
 // **`.claude/` 를 통째로 싸지 않는다.** 지식 레포의 `.claude` 에는 그 레포만의
 // 설정이 들어갈 수 있고, 그것은 작업 레포에 갈 것이 아니다 — `agent/README` 의
 // 판정 기준이 그대로다: **받는 사람에게 가는가.**
+// 꾸러미에 넣을 설치기 원문. **빌드가 채운다**(`ops/lib/build-ctx.mjs`) --
+// `viewer/bin/cdp-install.mjs` 를 `core/setup.js` 와 함께 번들한 텍스트다.
+// 번들하지 않고 소스로 돌릴 때는 자리표시자 그대로라, 그때는 넣지 않는다.
+const INSTALLER_SRC = '__CDP_INSTALLER_SRC__'
+// 자리표시자 그대로면 번들이 아니다 -- 그때는 `install.mjs` 를 넣지 않는다.
+// 넣으면 받는 사람이 돌지 않는 파일을 손에 쥔다.
+const HAS_INSTALLER = !INSTALLER_SRC.startsWith('__CDP_INSTALLER')
+
 async function collectKit(root) {
   const out = []
   const base = path.join(root, '.claude')
@@ -1128,21 +1155,40 @@ function installNote({ origin, repo, row, kit }) {
 
 이 꾸러미는 \`${repo}\` 지식 레포의 것이다. kit ${kit}
 
-## 1. 이 zip 을 작업 레포 루트에 푼다
+## 1. 이 zip 을 **아무 데나** 푼다
 
-들어가는 것 —
+작업 레포가 아니어도 된다. 안에 든 것은 —
 
-    .mcp.json              호스트가 읽는다 (토큰은 환경변수)
-    .claude/cdp.json       { server, repo }
-    .claude/skills/cdp-*   절차
-    CLAUDE.md              업무 맥락 블록
+    설치.md      이 파일
+    install.mjs  실행기
+    kit/         작업 레포에 들어갈 것들
 
-**\`CLAUDE.md\` 가 이미 있으면** 이 파일로 덮지 말고 \`<!-- cdp:begin -->\` 부터
-\`<!-- cdp:end -->\` 까지만 갈아 끼운다. 나머지는 프로젝트가 쓰던 것이다.
-(\`bin/ctx\` 가 있으면 \`ctx setup --server ${origin} --repo ${repo} <작업레포>\` 가
-그 병합을 대신한다.)
+**\`kit/\` 안의 것은 아직 아무 데도 안 갔다.** 옮기는 일은 아래가 한다.
 
-## 2. 토큰을 환경변수에 둔다
+## 2. 설치한다
+
+    node install.mjs <작업 레포 경로>
+
+무엇이 바뀔지 먼저 보여 주고 묻는다. 미리만 보려면 \`--dry\`, 묻지 않으려면 \`--yes\`.
+
+- \`CLAUDE.md\` 가 이미 있으면 \`<!-- cdp:begin -->\` ~ \`<!-- cdp:end -->\` **블록만** 갈아 끼운다
+- \`.mcp.json\` 이 이미 있으면 \`cdp\` 항목만 더한다 — **다른 MCP 서버는 그대로 둔다**
+- 작업 레포의 \`cdp-\` 아닌 skill 은 건드리지 않는다
+- \`CDP_TOKEN\` 이 있으면 설치 대장에 보고까지 한다
+
+### Node 가 없으면
+
+\`kit/\` 안의 것을 손으로 옮긴다. **덮어쓰기 전에 두 파일을 본다** —
+
+    kit/.claude/skills/cdp-*   →  <작업레포>/.claude/skills/     그대로 복사
+    kit/.claude/cdp.json       →  <작업레포>/.claude/cdp.json    그대로 복사
+    kit/.mcp.json              →  이미 있으면 mcpServers.cdp 항목만 더한다
+    kit/CLAUDE.md              →  이미 있으면 cdp:begin ~ cdp:end 블록만 갈아 끼운다
+
+\`bin/ctx\` 를 가진 사람은 이것도 된다 —
+\`ctx setup --server ${origin} --repo ${repo} --workrepo ${row.id} <작업레포>\`
+
+## 3. 토큰을 환경변수에 둔다
 
     # macOS · Linux
     export CDP_TOKEN=<관리자에게 받은 토큰>
@@ -1151,11 +1197,11 @@ function installNote({ origin, repo, row, kit }) {
 
 **이 꾸러미에 토큰은 없다.** 관리자에게 직접 받는다 — 메신저·메일에 남기지 않는다.
 
-## 3. Claude Code 를 다시 켠다
+## 4. Claude Code 를 다시 켠다
 
 환경변수는 프로세스 시작 때 읽힌다. \`/mcp\` 에 \`cdp\` 가 connected 면 된 것이다.
 
-## 4. 커밋한다
+## 5. 커밋한다
 
     git add .mcp.json .claude CLAUDE.md
     git commit -m "CDP 붙인다 — ${repo}"

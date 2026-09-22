@@ -78,6 +78,47 @@ if (r.status !== 0) process.exit(r.status || 1)
   fs.writeFileSync(outFile, src, 'utf8')
 }
 
+// ── 설치기 — 꾸러미 안에 들어가는 실행기(설계서 §6.7.3) ────────────────
+//
+// **서버가 이 텍스트를 들고 있어야 한다.** `/kit?workrepo=` 가 zip 에
+// `install.mjs` 로 넣는다. 따로 번들하는 이유는 하나다 -- 이 파일은
+// `core/setup.js` 를 부르는데, 그것을 손으로 베껴 두면 병합 규칙이 두 벌이
+// 되고 조금씩 어긋난다.
+const installerFile = path.join(path.dirname(outFile), 'install.mjs')
+{
+  const ri = spawnSync(
+    cmd,
+    [
+      ...head,
+      path.join(root, 'viewer', 'bin', 'cdp-install.mjs'),
+      '--bundle',
+      '--platform=node',
+      '--format=esm',
+      '--target=node18',
+      '--legal-comments=none',
+      '--banner:js=// 생성물 -- 손으로 고치지 마세요.\n',
+      '--outfile=' + installerFile,
+    ],
+    { stdio: 'inherit' }
+  )
+  if (ri.status !== 0) process.exit(ri.status || 1)
+  const src = fs.readFileSync(installerFile, 'utf8')
+
+  // **자리표시자를 통째로 바꾼다.** `--define` 은 못 쓴다 -- 명령줄에 수십
+  // KB 를 실을 수 없다. `__CTX_BUILT__` 와 같은 방식이다.
+  const bundled = fs.readFileSync(outFile, 'utf8')
+  // esbuild 는 따옴표를 자기 취향으로 바꾼다 -- 소스에 `'...'` 로 써도
+  // 번들에는 `"..."` 로 나온다. 둘 다 본다.
+  const marks = ["'__CDP_INSTALLER_SRC__'", '"__CDP_INSTALLER_SRC__"']
+  const mark = marks.find((m) => bundled.includes(m))
+  if (!mark) {
+    console.error('[build-ctx] 실패: 번들에 설치기 자리표시자가 없습니다.')
+    process.exit(1)
+  }
+  fs.writeFileSync(outFile, bundled.split(mark).join(JSON.stringify(src)), 'utf8')
+  console.log(`[build-ctx] 설치기 ${(src.length / 1024).toFixed(0)} KB 를 번들에 넣었습니다`)
+}
+
 const kb = (fs.statSync(outFile).size / 1024).toFixed(0)
 console.log(`[build-ctx] ${path.relative(root, outFile)}  ${kb} KB`)
 

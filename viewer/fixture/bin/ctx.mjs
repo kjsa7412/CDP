@@ -30681,7 +30681,7 @@ var init_ctx_mcp = __esm({
     init_repo();
     init_tools();
     init_tools();
-    BUILT = "2026-09-21 11:03";
+    BUILT = "2026-09-22 01:25";
     NL2 = String.fromCharCode(10);
     CARD = {
       match: "\uC774\uB984\xB7alias\xB7\uC790\uC720 \uD45C\uD604\uC744 \uC815\uBCF8 \uC88C\uD45C\uB85C \uB300\uC870\uD55C\uB2E4. \uD14C\uC774\uBE14\xB7\uD654\uBA74\xB7API\xB7\uD329\uD130\xB7\uC6D0\uCC9C\xB7\uC6A9\uC5B4\uB97C \uB9D0\uB85C \uAC00\uB9AC\uCF30\uC73C\uBA74 \uC88C\uD45C\uB97C \uC9D0\uC791\uD558\uC9C0 \uB9D0\uACE0 \uBA3C\uC800 \uC774\uAC83\uC73C\uB85C \uD655\uC815\uD55C\uB2E4. `\uBBF8\uB4F1\uC7AC` \uB294 \uC5B4\uD718\uC5D0 \uC5C6\uB2E4\uB294 \uB73B\uC774\uB2E4 \u2014 \uB2E4\uB978 \uC88C\uD45C\uB85C \uBC14\uAFB8\uC9C0 \uB9D0\uACE0 \uADF8\uB300\uB85C \uBCF4\uACE0\uD55C\uB2E4. \uD3D0\uAE30 \uC88C\uD45C\uBA74 \uD6C4\uC18D \uC88C\uD45C\uB97C \uC900\uB2E4. `repo` \uB97C \uC8FC\uC9C0 \uC54A\uC73C\uBA74 **\uB4E0 \uB808\uD3EC\uB97C \uC804\uBD80 \uB300\uC870**\uD558\uACE0 \uACB0\uACFC\uB9C8\uB2E4 `repo` \uB97C \uC801\uB294\uB2E4 \u2014 \uADF8 \uAC12\uC744 \uC774\uD6C4 \uB3C4\uAD6C\uC5D0 \uADF8\uB300\uB85C \uB118\uAE34\uB2E4. \uB450 \uB808\uD3EC\uC5D0 \uB2E4 \uC788\uC73C\uBA74 \uB458 \uB2E4 \uBCF4\uACE0\uD55C\uB2E4(\uACE0\uB974\uC9C0 \uC54A\uB294\uB2E4)",
@@ -39919,6 +39919,7 @@ async function runServe(opt = {}) {
           return json2(res, 404, { error: { code: "E_NOT_FOUND", message: "\uC774 \uB808\uD3EC\uC5D0 .claude/ kit \uC774 \uC5C6\uB2E4" } });
         }
         const wid = url2.searchParams.get("workrepo");
+        let entries = files;
         if (wid && dataDir) {
           const db = await load3(dataDir);
           const row = db.repos.find((r) => r.id === wid);
@@ -39926,17 +39927,22 @@ async function runServe(opt = {}) {
           const origin2 = publicOrigin(req, opt);
           const claudeTpl = files.find((f) => f.name === ".claude/work-repo/CLAUDE.md");
           const kit = (await kitHash(found.root)).hash;
-          files.push({ name: ".mcp.json", data: mergeMcpJson(null, mcpEntryServer(origin2, name)) });
-          files.push({
-            name: ".claude/cdp.json",
+          entries = files.map((f) => ({ name: "kit/" + f.name, data: f.data }));
+          entries.push({ name: "kit/.mcp.json", data: mergeMcpJson(null, mcpEntryServer(origin2, name)) });
+          entries.push({
+            name: "kit/.claude/cdp.json",
             data: JSON.stringify({ server: origin2, repo: name }, null, 2) + NL6
           });
           if (claudeTpl) {
-            files.push({ name: "CLAUDE.md", data: mergeClaude(null, claudeTpl.data.toString("utf8"), kit) });
+            entries.push({ name: "kit/CLAUDE.md", data: mergeClaude(null, claudeTpl.data.toString("utf8"), kit) });
           }
-          files.push({ name: "\uC124\uCE58.md", data: installNote({ origin: origin2, repo: name, row, kit }) });
+          entries.push({ name: "\uC124\uCE58.md", data: installNote({ origin: origin2, repo: name, row, kit }) });
+          if (HAS_INSTALLER) {
+            const cfg = "globalThis.__CDP_KIT__ = " + JSON.stringify({ server: origin2, repo: name, workrepo: row.id, kit }) + NL6;
+            entries.push({ name: "install.mjs", data: cfg + INSTALLER_SRC });
+          }
         }
-        const buf = await zip(files);
+        const buf = await zip(entries);
         log2.req({ ip, user: a.user, method: "GET", tool: "/kit", key: name, ms: Date.now() - t0, status: 200 });
         res.writeHead(200, {
           "content-type": "application/zip",
@@ -40254,21 +40260,40 @@ function installNote({ origin, repo, row, kit }) {
 
 \uC774 \uAFB8\uB7EC\uBBF8\uB294 \`${repo}\` \uC9C0\uC2DD \uB808\uD3EC\uC758 \uAC83\uC774\uB2E4. kit ${kit}
 
-## 1. \uC774 zip \uC744 \uC791\uC5C5 \uB808\uD3EC \uB8E8\uD2B8\uC5D0 \uD47C\uB2E4
+## 1. \uC774 zip \uC744 **\uC544\uBB34 \uB370\uB098** \uD47C\uB2E4
 
-\uB4E4\uC5B4\uAC00\uB294 \uAC83 \u2014
+\uC791\uC5C5 \uB808\uD3EC\uAC00 \uC544\uB2C8\uC5B4\uB3C4 \uB41C\uB2E4. \uC548\uC5D0 \uB4E0 \uAC83\uC740 \u2014
 
-    .mcp.json              \uD638\uC2A4\uD2B8\uAC00 \uC77D\uB294\uB2E4 (\uD1A0\uD070\uC740 \uD658\uACBD\uBCC0\uC218)
-    .claude/cdp.json       { server, repo }
-    .claude/skills/cdp-*   \uC808\uCC28
-    CLAUDE.md              \uC5C5\uBB34 \uB9E5\uB77D \uBE14\uB85D
+    \uC124\uCE58.md      \uC774 \uD30C\uC77C
+    install.mjs  \uC2E4\uD589\uAE30
+    kit/         \uC791\uC5C5 \uB808\uD3EC\uC5D0 \uB4E4\uC5B4\uAC08 \uAC83\uB4E4
 
-**\`CLAUDE.md\` \uAC00 \uC774\uBBF8 \uC788\uC73C\uBA74** \uC774 \uD30C\uC77C\uB85C \uB36E\uC9C0 \uB9D0\uACE0 \`<!-- cdp:begin -->\` \uBD80\uD130
-\`<!-- cdp:end -->\` \uAE4C\uC9C0\uB9CC \uAC08\uC544 \uB07C\uC6B4\uB2E4. \uB098\uBA38\uC9C0\uB294 \uD504\uB85C\uC81D\uD2B8\uAC00 \uC4F0\uB358 \uAC83\uC774\uB2E4.
-(\`bin/ctx\` \uAC00 \uC788\uC73C\uBA74 \`ctx setup --server ${origin} --repo ${repo} <\uC791\uC5C5\uB808\uD3EC>\` \uAC00
-\uADF8 \uBCD1\uD569\uC744 \uB300\uC2E0\uD55C\uB2E4.)
+**\`kit/\` \uC548\uC758 \uAC83\uC740 \uC544\uC9C1 \uC544\uBB34 \uB370\uB3C4 \uC548 \uAC14\uB2E4.** \uC62E\uAE30\uB294 \uC77C\uC740 \uC544\uB798\uAC00 \uD55C\uB2E4.
 
-## 2. \uD1A0\uD070\uC744 \uD658\uACBD\uBCC0\uC218\uC5D0 \uB454\uB2E4
+## 2. \uC124\uCE58\uD55C\uB2E4
+
+    node install.mjs <\uC791\uC5C5 \uB808\uD3EC \uACBD\uB85C>
+
+\uBB34\uC5C7\uC774 \uBC14\uB014\uC9C0 \uBA3C\uC800 \uBCF4\uC5EC \uC8FC\uACE0 \uBB3B\uB294\uB2E4. \uBBF8\uB9AC\uB9CC \uBCF4\uB824\uBA74 \`--dry\`, \uBB3B\uC9C0 \uC54A\uC73C\uB824\uBA74 \`--yes\`.
+
+- \`CLAUDE.md\` \uAC00 \uC774\uBBF8 \uC788\uC73C\uBA74 \`<!-- cdp:begin -->\` ~ \`<!-- cdp:end -->\` **\uBE14\uB85D\uB9CC** \uAC08\uC544 \uB07C\uC6B4\uB2E4
+- \`.mcp.json\` \uC774 \uC774\uBBF8 \uC788\uC73C\uBA74 \`cdp\` \uD56D\uBAA9\uB9CC \uB354\uD55C\uB2E4 \u2014 **\uB2E4\uB978 MCP \uC11C\uBC84\uB294 \uADF8\uB300\uB85C \uB454\uB2E4**
+- \uC791\uC5C5 \uB808\uD3EC\uC758 \`cdp-\` \uC544\uB2CC skill \uC740 \uAC74\uB4DC\uB9AC\uC9C0 \uC54A\uB294\uB2E4
+- \`CDP_TOKEN\` \uC774 \uC788\uC73C\uBA74 \uC124\uCE58 \uB300\uC7A5\uC5D0 \uBCF4\uACE0\uAE4C\uC9C0 \uD55C\uB2E4
+
+### Node \uAC00 \uC5C6\uC73C\uBA74
+
+\`kit/\` \uC548\uC758 \uAC83\uC744 \uC190\uC73C\uB85C \uC62E\uAE34\uB2E4. **\uB36E\uC5B4\uC4F0\uAE30 \uC804\uC5D0 \uB450 \uD30C\uC77C\uC744 \uBCF8\uB2E4** \u2014
+
+    kit/.claude/skills/cdp-*   \u2192  <\uC791\uC5C5\uB808\uD3EC>/.claude/skills/     \uADF8\uB300\uB85C \uBCF5\uC0AC
+    kit/.claude/cdp.json       \u2192  <\uC791\uC5C5\uB808\uD3EC>/.claude/cdp.json    \uADF8\uB300\uB85C \uBCF5\uC0AC
+    kit/.mcp.json              \u2192  \uC774\uBBF8 \uC788\uC73C\uBA74 mcpServers.cdp \uD56D\uBAA9\uB9CC \uB354\uD55C\uB2E4
+    kit/CLAUDE.md              \u2192  \uC774\uBBF8 \uC788\uC73C\uBA74 cdp:begin ~ cdp:end \uBE14\uB85D\uB9CC \uAC08\uC544 \uB07C\uC6B4\uB2E4
+
+\`bin/ctx\` \uB97C \uAC00\uC9C4 \uC0AC\uB78C\uC740 \uC774\uAC83\uB3C4 \uB41C\uB2E4 \u2014
+\`ctx setup --server ${origin} --repo ${repo} --workrepo ${row.id} <\uC791\uC5C5\uB808\uD3EC>\`
+
+## 3. \uD1A0\uD070\uC744 \uD658\uACBD\uBCC0\uC218\uC5D0 \uB454\uB2E4
 
     # macOS \xB7 Linux
     export CDP_TOKEN=<\uAD00\uB9AC\uC790\uC5D0\uAC8C \uBC1B\uC740 \uD1A0\uD070>
@@ -40277,11 +40302,11 @@ function installNote({ origin, repo, row, kit }) {
 
 **\uC774 \uAFB8\uB7EC\uBBF8\uC5D0 \uD1A0\uD070\uC740 \uC5C6\uB2E4.** \uAD00\uB9AC\uC790\uC5D0\uAC8C \uC9C1\uC811 \uBC1B\uB294\uB2E4 \u2014 \uBA54\uC2E0\uC800\xB7\uBA54\uC77C\uC5D0 \uB0A8\uAE30\uC9C0 \uC54A\uB294\uB2E4.
 
-## 3. Claude Code \uB97C \uB2E4\uC2DC \uCF20\uB2E4
+## 4. Claude Code \uB97C \uB2E4\uC2DC \uCF20\uB2E4
 
 \uD658\uACBD\uBCC0\uC218\uB294 \uD504\uB85C\uC138\uC2A4 \uC2DC\uC791 \uB54C \uC77D\uD78C\uB2E4. \`/mcp\` \uC5D0 \`cdp\` \uAC00 connected \uBA74 \uB41C \uAC83\uC774\uB2E4.
 
-## 4. \uCEE4\uBC0B\uD55C\uB2E4
+## 5. \uCEE4\uBC0B\uD55C\uB2E4
 
     git add .mcp.json .claude CLAUDE.md
     git commit -m "CDP \uBD99\uC778\uB2E4 \u2014 ${repo}"
@@ -40290,7 +40315,7 @@ function installNote({ origin, repo, row, kit }) {
 \uB2E4\uC2DC \uBC1B\uC744 \uD544\uC694\uAC00 \uC5C6\uB2E4.
 `;
 }
-var NL6, CTX, LOOPBACK, MAX_BODY, json2, out2, err2, pad;
+var NL6, CTX, LOOPBACK, MAX_BODY, json2, out2, err2, pad, INSTALLER_SRC, HAS_INSTALLER;
 var init_ctx_mcp_serve = __esm({
   "viewer/bin/ctx-mcp-serve.mjs"() {
     init_dist();
@@ -40319,6 +40344,8 @@ var init_ctx_mcp_serve = __esm({
       const w = [...String(s ?? "")].reduce((a, c) => a + (c.codePointAt(0) > 4352 ? 2 : 1), 0);
       return String(s ?? "") + " ".repeat(Math.max(0, n - w));
     };
+    INSTALLER_SRC = "// 생성물 -- 손으로 고치지 마세요.\n\n\n// viewer/bin/cdp-install.mjs\nimport fs2 from \"node:fs/promises\";\nimport path2 from \"node:path\";\nimport readline from \"node:readline\";\nimport { fileURLToPath } from \"node:url\";\n\n// core/setup.js\nimport fs from \"node:fs/promises\";\nimport path from \"node:path\";\nvar BEGIN = \"<!-- cdp:begin -- \\uC774 \\uBE14\\uB85D\\uC740 ctx setup \\uC774 \\uAD00\\uB9AC\\uD55C\\uB2E4. \\uC190\\uC73C\\uB85C \\uACE0\\uCE58\\uC9C0 \\uB9C8\\uB77C -->\";\nvar END = \"<!-- cdp:end -->\";\nvar PREFIX = \"cdp-\";\nasync function isDir(p) {\n  return fs.stat(p).then((s) => s.isDirectory()).catch(() => false);\n}\nasync function read(p) {\n  return fs.readFile(p, \"utf8\").catch(() => null);\n}\nasync function sameTree(a, b) {\n  const la = await fs.readdir(a, { withFileTypes: true }).catch(() => null);\n  const lb = await fs.readdir(b, { withFileTypes: true }).catch(() => null);\n  if (!la || !lb || la.length !== lb.length) return false;\n  const na = la.map((e) => e.name).sort();\n  const nb = lb.map((e) => e.name).sort();\n  if (na.join(\"|\") !== nb.join(\"|\")) return false;\n  for (const e of la) {\n    const pa = path.join(a, e.name);\n    const pb = path.join(b, e.name);\n    if (e.isDirectory()) {\n      if (!await sameTree(pa, pb)) return false;\n    } else {\n      const [x, y] = [await read(pa), await read(pb)];\n      if (x == null || x !== y) return false;\n    }\n  }\n  return true;\n}\nfunction blockOf(body, kit) {\n  const mark = kit ? `<!-- cdp:kit ${kit} -->\n` : \"\";\n  return `${BEGIN}\n${mark}${body.trim()}\n${END}\n`;\n}\nfunction mergeClaude(existing, body, kit = null) {\n  const block = blockOf(body, kit);\n  if (existing == null) return block;\n  const i = existing.indexOf(BEGIN);\n  const j = existing.indexOf(END);\n  if (i >= 0 && j > i) {\n    return existing.slice(0, i) + block.trimEnd() + existing.slice(j + END.length);\n  }\n  if (/^\\s*<!--[\\s\\S]{0,200}?CDP 작업 레포 설정/.test(existing)) return block;\n  return existing.replace(/\\s*$/, \"\") + \"\\n\\n\" + block;\n}\nasync function planSetup(knowledgeRoot, workRoot, { server = null, repo = null, kit = null } = {}) {\n  const kn = path.resolve(knowledgeRoot);\n  const wk = path.resolve(workRoot);\n  const bad = (reason) => ({ ok: false, reason, knowledge: kn, work: wk, actions: [], warnings: [] });\n  if (!await isDir(wk)) return bad(`\\uD3F4\\uB354\\uAC00 \\uC5C6\\uC2B5\\uB2C8\\uB2E4 \\u2014 ${wk}`);\n  if (kn === wk) return bad(\"\\uC9C0\\uC2DD \\uB808\\uD3EC \\uC790\\uC2E0\\uC5D0\\uB294 \\uC124\\uCE58\\uD558\\uC9C0 \\uC54A\\uC2B5\\uB2C8\\uB2E4. \\uCF54\\uB4DC\\uAC00 \\uC788\\uB294 \\uB808\\uD3EC\\uB97C \\uC9C0\\uC815\\uD558\\uC138\\uC694.\");\n  const isGit = await isDir(path.join(wk, \".git\")) || await read(path.join(wk, \".git\")) != null;\n  if (!isGit) return bad(`git \\uB808\\uD3EC\\uAC00 \\uC544\\uB2D9\\uB2C8\\uB2E4 \\u2014 ${wk}\n\\uC791\\uC5C5 \\uB808\\uD3EC(\\uCF54\\uB4DC\\uAC00 \\uC788\\uACE0 .git \\uC774 \\uC788\\uB294 \\uACF3)\\uB97C \\uC9C0\\uC815\\uD558\\uC138\\uC694.`);\n  const sSrc = path.join(kn, \".claude\", \"skills\");\n  if (!await isDir(sSrc)) return bad(`${sSrc} \\uAC00 \\uC5C6\\uC2B5\\uB2C8\\uB2E4. \\uC9C0\\uC2DD \\uB808\\uD3EC\\uC5D0 \\uBC30\\uD3EC\\uBCF8\\uC744 \\uBD80\\uC5C8\\uB294\\uC9C0 \\uD655\\uC778\\uD558\\uC138\\uC694.`);\n  const tpl = path.join(kn, \".claude\", \"work-repo\", \"CLAUDE.md\");\n  const body = await read(tpl);\n  if (body == null) return bad(`\\uC11C\\uC2DD\\uC774 \\uC5C6\\uC2B5\\uB2C8\\uB2E4 \\u2014 ${tpl}\n\\uBC30\\uD3EC\\uBCF8 repo-kit \\uC744 \\uB2E4\\uC2DC \\uBD80\\uC73C\\uBA74 \\uB4E4\\uC5B4\\uC635\\uB2C8\\uB2E4.`);\n  const actions = [];\n  const warnings = [];\n  const src = (await fs.readdir(sSrc, { withFileTypes: true })).filter((e) => e.isDirectory() && e.name.startsWith(PREFIX)).map((e) => e.name).sort();\n  const sDst = path.join(wk, \".claude\", \"skills\");\n  const cur = (await fs.readdir(sDst, { withFileTypes: true }).catch(() => [])).filter((e) => e.isDirectory()).map((e) => e.name);\n  for (const n of src) {\n    const from = path.join(sSrc, n);\n    const to = path.join(sDst, n);\n    const same = await isDir(to) && await sameTree(from, to);\n    actions.push({\n      kind: \"skill\",\n      name: n,\n      from,\n      to,\n      op: same ? \"same\" : await isDir(to) ? \"update\" : \"create\"\n    });\n  }\n  for (const n of cur) {\n    if (n.startsWith(PREFIX) && !src.includes(n)) {\n      actions.push({ kind: \"skill\", name: n, to: path.join(sDst, n), op: \"remove\" });\n    }\n  }\n  const kept = cur.filter((n) => !n.startsWith(PREFIX));\n  if (kept.length) warnings.push(`\\uC774 \\uB808\\uD3EC\\uC758 \\uB2E4\\uB978 skill \\uC740 \\uAC74\\uB4DC\\uB9AC\\uC9C0 \\uC54A\\uC2B5\\uB2C8\\uB2E4 \\u2014 ${kept.join(\" \\xB7 \")}`);\n  const claude = path.join(wk, \"CLAUDE.md\");\n  const had = await read(claude);\n  const next = mergeClaude(had, body, kit);\n  actions.push({\n    kind: \"claude\",\n    to: claude,\n    op: had == null ? \"create\" : had === next ? \"same\" : had.includes(BEGIN) ? \"update\" : \"append\",\n    content: next\n  });\n  const ptr = path.join(wk, \".claude\", \"cdp.json\");\n  const curPtr = await read(ptr);\n  const nextPtr = JSON.stringify(server ? { server, repo } : { knowledgeRepo: kn.split(path.sep).join(\"/\") }, null, 2) + \"\\n\";\n  actions.push({\n    kind: \"pointer\",\n    to: ptr,\n    op: curPtr == null ? \"create\" : curPtr === nextPtr ? \"same\" : \"update\",\n    content: nextPtr\n  });\n  const gi = await read(path.join(wk, \".gitignore\")) || \"\";\n  const claudeBlocked = /^[.]claude\\/[*]?\\s*$/m.test(gi);\n  const skillsFreed = /^![.]claude\\/skills/m.test(gi);\n  const ptrIgnored = claudeBlocked || /^[.]claude\\/cdp[.]json\\s*$/m.test(gi);\n  if (claudeBlocked && !skillsFreed) {\n    warnings.push(\n      \".gitignore \\uAC00 .claude \\uB97C \\uD1B5\\uC9F8\\uB85C \\uB9C9\\uACE0 \\uC788\\uC2B5\\uB2C8\\uB2E4. \\uC774\\uB300\\uB85C\\uBA74 skill \\uC774 **\\uC774 PC \\uC5D0\\uB9CC** \\uB0A8\\uACE0\\n\\uD300\\uC740 \\uBC1B\\uC9C0 \\uBABB\\uD569\\uB2C8\\uB2E4. `!.claude/skills/` \\uD55C \\uC904\\uC744 \\uB123\\uC73C\\uC138\\uC694.\"\n    );\n  }\n  if (!server && !ptrIgnored) {\n    warnings.push(\n      \".claude/cdp.json \\uC740 **\\uCEE4\\uBC0B\\uD558\\uC9C0 \\uC54A\\uC2B5\\uB2C8\\uB2E4** \\u2014 \\uC9C0\\uC2DD \\uB808\\uD3EC \\uACBD\\uB85C\\uB294 \\uC0AC\\uB78C\\uB9C8\\uB2E4 \\uB2E4\\uB985\\uB2C8\\uB2E4.\\n.gitignore \\uC5D0 `.claude/cdp.json` \\uC744 \\uB123\\uC73C\\uC138\\uC694.\"\n    );\n  }\n  if (server && ptrIgnored) {\n    warnings.push(\n      \".gitignore \\uAC00 .claude/cdp.json \\uC744 \\uB9C9\\uACE0 \\uC788\\uC2B5\\uB2C8\\uB2E4. \\uC11C\\uBC84 \\uBAA8\\uB4DC\\uC5D0\\uC11C\\uB294 **\\uCEE4\\uBC0B\\uD569\\uB2C8\\uB2E4** \\u2014 { server, repo } \\uB294 PC \\uC640 \\uBB34\\uAD00\\uD558\\uACE0, \\uCEE4\\uBC0B\\uD574 \\uB450\\uBA74 \\uD300\\uC6D0\\uC740 pull \\uACFC \\uD1A0\\uD070\\uB9CC\\uC73C\\uB85C \\uB05D\\uB0A9\\uB2C8\\uB2E4.\"\n    );\n  }\n  return { ok: true, knowledge: kn, work: wk, actions, warnings };\n}\nfunction mergeMcpJson(existing, entry) {\n  let j = {};\n  if (existing) {\n    try {\n      j = JSON.parse(existing);\n    } catch {\n      throw new Error(\".mcp.json \\uC774 JSON \\uC774 \\uC544\\uB2D9\\uB2C8\\uB2E4 \\u2014 \\uC190\\uC73C\\uB85C \\uACE0\\uCE5C \\uB4A4 \\uB2E4\\uC2DC \\uB3CC\\uB9AC\\uC138\\uC694\");\n    }\n  }\n  if (!j.mcpServers || typeof j.mcpServers !== \"object\") j.mcpServers = {};\n  j.mcpServers.cdp = entry;\n  return JSON.stringify(j, null, 2) + \"\\n\";\n}\nfunction mcpEntryServer(server, repo) {\n  return {\n    type: \"http\",\n    url: String(server).replace(/\\/+$/, \"\") + \"/mcp/\" + repo,\n    headers: { Authorization: \"Bearer ${CDP_TOKEN}\" }\n  };\n}\nasync function applySetup(plan) {\n  if (!plan?.ok) throw new Error(plan?.reason || \"plan \\uC774 \\uC5C6\\uC2B5\\uB2C8\\uB2E4\");\n  const done = [];\n  for (const a of plan.actions) {\n    if (a.op === \"same\") continue;\n    if (a.kind === \"skill\") {\n      if (a.op === \"remove\") {\n        await fs.rm(a.to, { recursive: true, force: true });\n      } else {\n        await fs.rm(a.to, { recursive: true, force: true });\n        await fs.mkdir(path.dirname(a.to), { recursive: true });\n        await fs.cp(a.from, a.to, { recursive: true });\n      }\n    } else {\n      await fs.mkdir(path.dirname(a.to), { recursive: true });\n      await fs.writeFile(a.to, a.content, \"utf8\");\n    }\n    done.push(a);\n  }\n  return done;\n}\n\n// viewer/bin/cdp-install.mjs\nvar NL = String.fromCharCode(10);\nvar out = (s = \"\") => process.stdout.write(s + NL);\nvar err = (s = \"\") => process.stderr.write(s + NL);\nvar CFG = globalThis.__CDP_KIT__ || null;\nasync function main(argv) {\n  const args = argv.filter((a) => !a.startsWith(\"--\"));\n  const dry = argv.includes(\"--dry\");\n  const yes = argv.includes(\"--yes\") || argv.includes(\"-y\");\n  if (!CFG?.server || !CFG?.repo) {\n    return bail(\n      \"\\uC774 \\uD30C\\uC77C \\uC548\\uC5D0 \\uC11C\\uBC84 \\uC815\\uBCF4\\uAC00 \\uC5C6\\uC2B5\\uB2C8\\uB2E4.\" + NL + \"\\uAD00\\uB9AC \\uD654\\uBA74\\uC758 [\\uC124\\uCE58 \\uBC29\\uBC95] \\uC5D0\\uC11C \\uBC1B\\uC740 \\uAFB8\\uB7EC\\uBBF8 \\uC548\\uC758 install.mjs \\uB97C \\uADF8\\uB300\\uB85C \\uC4F0\\uC138\\uC694.\"\n    );\n  }\n  const work = args[0];\n  if (!work) {\n    out(\"\\uC0AC\\uC6A9\\uBC95 \\u2014\");\n    out(\"  node install.mjs <\\uC791\\uC5C5 \\uB808\\uD3EC \\uACBD\\uB85C> [--dry] [--yes]\");\n    out(\"\");\n    out(\"  --dry   \\uBB34\\uC5C7\\uC774 \\uBC14\\uB014\\uC9C0\\uB9CC \\uBCF4\\uACE0 \\uC4F0\\uC9C0 \\uC54A\\uB294\\uB2E4\");\n    out(\"  --yes   \\uBB3B\\uC9C0 \\uC54A\\uB294\\uB2E4 (\\uC2A4\\uD06C\\uB9BD\\uD2B8\\uC5D0\\uC11C \\uBD80\\uB97C \\uB54C)\");\n    out(\"\");\n    out(`\\uC11C\\uBC84   ${CFG.server}`);\n    out(`\\uB808\\uD3EC   ${CFG.repo}`);\n    return 2;\n  }\n  const here = path2.dirname(fileURLToPath(import.meta.url));\n  const kitDir = path2.join(here, \"kit\");\n  if (!await isDir2(kitDir)) {\n    return bail(`kit \\uD3F4\\uB354\\uAC00 \\uC5C6\\uC2B5\\uB2C8\\uB2E4 \\u2014 ${kitDir}${NL}\\uAFB8\\uB7EC\\uBBF8\\uB97C \\uD1B5\\uC9F8\\uB85C \\uD47C \\uB4A4 \\uADF8 \\uC548\\uC5D0\\uC11C \\uC5EC\\uC138\\uC694.`);\n  }\n  out(`\\uC11C\\uBC84     ${CFG.server}`);\n  out(`\\uB808\\uD3EC     ${CFG.repo}`);\n  out(`\\uC791\\uC5C5 \\uB808\\uD3EC ${path2.resolve(work)}`);\n  out(\"\");\n  const plan = await planSetup(kitDir, work, { server: CFG.server, repo: CFG.repo, kit: CFG.kit || null });\n  if (!plan.ok) return bail(plan.reason);\n  const mcpPath = path2.join(path2.resolve(work), \".mcp.json\");\n  const had = await fs2.readFile(mcpPath, \"utf8\").catch(() => null);\n  let next;\n  try {\n    next = mergeMcpJson(had, mcpEntryServer(CFG.server, CFG.repo));\n  } catch (e) {\n    return bail(e.message);\n  }\n  plan.actions.push({\n    kind: \"mcp\",\n    to: mcpPath,\n    op: had == null ? \"create\" : had === next ? \"same\" : \"update\",\n    content: next\n  });\n  for (const a of plan.actions) {\n    out(`  ${a.op === \"same\" ? \" \" : \"*\"} ${a.op.padEnd(7)} ${a.kind.padEnd(8)} ${short(a.to, work)}`);\n  }\n  for (const w of plan.warnings) {\n    out(\"\");\n    out(\"[\\uC8FC\\uC758] \" + String(w).split(NL).join(NL + \"       \"));\n  }\n  const changes = plan.actions.filter((a) => a.op !== \"same\");\n  if (!changes.length) {\n    out(\"\");\n    out(\"\\uC774\\uBBF8 \\uCD5C\\uC2E0\\uC785\\uB2C8\\uB2E4.\");\n    return 0;\n  }\n  if (dry) {\n    out(\"\");\n    out(`--dry \\uC774\\uBBC0\\uB85C \\uC4F0\\uC9C0 \\uC54A\\uC558\\uC2B5\\uB2C8\\uB2E4. \\uBC14\\uB014 \\uAC83 ${changes.length}\\uAC74.`);\n    return 0;\n  }\n  if (!yes) {\n    out(\"\");\n    const ok = await confirm(`\\uC704 ${changes.length}\\uAC74\\uC744 \\uC801\\uC6A9\\uD560\\uAE4C\\uC694? [y/N] `);\n    if (!ok) {\n      out(\"\\uADF8\\uB9CC\\uB461\\uB2C8\\uB2E4. \\uC544\\uBB34\\uAC83\\uB3C4 \\uC4F0\\uC9C0 \\uC54A\\uC558\\uC2B5\\uB2C8\\uB2E4.\");\n      return 1;\n    }\n  }\n  await applySetup(plan);\n  out(\"\");\n  out(`${changes.length}\\uAC74 \\uC801\\uC6A9\\uD588\\uC2B5\\uB2C8\\uB2E4.${CFG.kit ? ` (kit ${CFG.kit})` : \"\"}`);\n  if (CFG.workrepo) {\n    const token = process.env.CDP_TOKEN;\n    if (!token) {\n      out(\"CDP_TOKEN \\uC774 \\uC5C6\\uC5B4 \\uB300\\uC7A5 \\uBCF4\\uACE0\\uB294 \\uAC74\\uB108\\uB701\\uB2C8\\uB2E4 \\u2014 \\uC124\\uCE58\\uB294 \\uB05D\\uB0AC\\uC2B5\\uB2C8\\uB2E4.\");\n    } else {\n      const r = await fetch(`${CFG.server}/workrepos/${encodeURIComponent(CFG.workrepo)}/applied`, {\n        method: \"POST\",\n        headers: { authorization: \"Bearer \" + token, \"content-type\": \"application/json\" },\n        body: JSON.stringify({ kit: CFG.kit || null })\n      }).catch(() => null);\n      out(r?.ok ? \"\\uB300\\uC7A5\\uC5D0 \\uBCF4\\uACE0\\uD588\\uC2B5\\uB2C8\\uB2E4.\" : \"\\uB300\\uC7A5 \\uBCF4\\uACE0\\uB294 \\uC2E4\\uD328\\uD588\\uC2B5\\uB2C8\\uB2E4 \\u2014 \\uC124\\uCE58\\uB294 \\uB05D\\uB0AC\\uC2B5\\uB2C8\\uB2E4 (\\uBCF4\\uACE0\\uB294 \\uCD94\\uC801\\uC6A9\\uC785\\uB2C8\\uB2E4)\");\n    }\n  }\n  out(\"\");\n  out(\"\\uB2E4\\uC74C \\u2014\");\n  out(\"  1. CDP_TOKEN \\uC744 \\uD658\\uACBD\\uBCC0\\uC218\\uC5D0 \\uB454\\uB2E4 (\\uAD00\\uB9AC\\uC790\\uC5D0\\uAC8C \\uC9C1\\uC811 \\uBC1B\\uB294\\uB2E4)\");\n  out(\"       macOS \\xB7 Linux   export CDP_TOKEN=<\\uD1A0\\uD070>\");\n  out(\"       Windows         setx CDP_TOKEN <\\uD1A0\\uD070>\");\n  out(\"  2. Claude Code \\uB97C \\uB2E4\\uC2DC \\uCF20\\uB2E4 (\\uD658\\uACBD\\uBCC0\\uC218\\uB294 \\uD504\\uB85C\\uC138\\uC2A4 \\uC2DC\\uC791 \\uB54C \\uC77D\\uD78C\\uB2E4)\");\n  out(\"  3. /mcp \\uC5D0 cdp \\uAC00 connected \\uC778\\uC9C0 \\uBCF8\\uB2E4\");\n  out(\"  4. git add .mcp.json .claude CLAUDE.md && git commit\");\n  out(\"     \\uD300\\uC6D0\\uC740 pull \\uACFC CDP_TOKEN \\uB9CC\\uC73C\\uB85C \\uB05D\\uB09C\\uB2E4 \\u2014 \\uAFB8\\uB7EC\\uBBF8\\uB97C \\uB2E4\\uC2DC \\uBC1B\\uC9C0 \\uC54A\\uB294\\uB2E4\");\n  return 0;\n}\nfunction confirm(q) {\n  if (!process.stdin.isTTY) {\n    err(\"\\uC785\\uB825\\uC744 \\uBC1B\\uC744 \\uC218 \\uC5C6\\uC2B5\\uB2C8\\uB2E4 \\u2014 \\uD655\\uC778\\uC774 \\uD544\\uC694\\uD558\\uBA74 --yes \\uB97C, \\uBBF8\\uB9AC \\uBCF4\\uB824\\uBA74 --dry \\uB97C \\uC8FC\\uC138\\uC694.\");\n    return Promise.resolve(false);\n  }\n  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });\n  return new Promise((res) => {\n    rl.question(q, (a) => {\n      rl.close();\n      res(/^y(es)?$/i.test(a.trim()));\n    });\n  });\n}\nasync function isDir2(p) {\n  return fs2.stat(p).then((s) => s.isDirectory()).catch(() => false);\n}\nfunction bail(msg) {\n  err(\"\\uC124\\uCE58: \" + msg);\n  return 2;\n}\nfunction short(p, work) {\n  const w = path2.resolve(work);\n  const r = path2.resolve(p);\n  return r.startsWith(w) ? r.slice(w.length + 1).split(path2.sep).join(\"/\") : r;\n}\nprocess.exitCode = await main(process.argv.slice(2));\nexport {\n  main\n};\n";
+    HAS_INSTALLER = !INSTALLER_SRC.startsWith("__CDP_INSTALLER");
   }
 });
 
@@ -40400,10 +40427,10 @@ async function runSync(root, { pull = true, onPhase = () => {
 
 // viewer/bin/ctx-cli.mjs
 init_tools();
-var BUILT2 = "2026-09-21 11:03";
+var BUILT2 = "2026-09-22 01:25";
 var BS2 = String.fromCharCode(92);
 var SEP = path15.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-21 11:03)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-22 01:25)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
