@@ -10,7 +10,9 @@
 | 전제 문서 | [`docs/design/`](docs/design) — 프로토콜 · 작업환경 · 수행 설계서 |
 | 용어 | [`docs/용어.md`](docs/용어.md) — `.mjs` · SEA · 번들 · exit 127. **고치는 사람의 말이다** |
 | 그림 | [`docs/그림/`](docs/그림) — 세 레포 · 설치 5단계 · `ctx setup` · 빌드 · 실행 |
-| 작업 메모 | `docs/dev/` — 개발 중 검토·정정 기록. **보존 대상이 아니다** |
+| **제품화** | [`docs/design/CDP_제품화_검토_v1.0.md`](docs/design/CDP_제품화_검토_v1.0.md) — 손을 타는 자리와 자동화 · [`docs/dev/제품화_TODO.md`](docs/dev/제품화_TODO.md) — 실행 항목 |
+| 바뀐 것 | [`CHANGELOG.md`](CHANGELOG.md) — 태그마다 한 절. 릴리스 노트가 여기서 나온다 |
+| `docs/` 의 판정 | [`docs/README.md`](docs/README.md) — **보존되는가.** 작업 메모(`dev/`)는 보존 대상이 아니다 |
 
 ```
 문서 내용은 PC 를 떠나지 않는다.  네트워크로 나가는 것은 git 원격뿐이고,
@@ -36,11 +38,15 @@ npm install && npm run build
 npm start
 ```
 
-**배포본을 만들려면 한 줄이다.**
+**배포본을 만들려면 한 줄이다.** 둘이다 — 팀원 PC 용과 서버용.
 
 ```bash
-npm run release          # → ops/release/v0.4.0/
+npm run release                 # → ops/release/v<버전>/          exe + 완성된 지식 레포 폴더
+npm run release:server          # → ops/out/server/cdp-server-v<버전>.tar.gz   bin · web · packages · deploy
 ```
+
+태그 `v*` 를 push 하면 **GitHub Actions 가 둘을 만들어 Release 에 붙인다**(`.github/workflows/release.yml`).
+태그와 `package.json` 버전이 다르면 실패한다.
 
 `ops\release.cmd` 를 더블클릭해도 된다. **그 폴더를 통째로 옮기면 CDP 를 쓸 수
 있다** — exe 와 **완성된 지식 레포 폴더**가 들어 있다. 설계서는 안 들어간다.
@@ -78,7 +84,12 @@ node viewer/server/index.js --repo <경로> --dev http://localhost:5173 --no-ope
 
 | | |
 |---|---|
-| **`npm run release`** | **원클릭.** 화면 → ctx → exe → `ops/release/v<버전>/` |
+| **`npm run release`** | **원클릭.** 화면 → ctx → exe → `ops/release/v<버전>/`. `-- --no-build` 는 조립만 |
+| **`npm run release:server`** | 서버 산출물 `cdp-server-v<버전>.tar.gz` — `install.sh` · `upgrade.sh` 가 이것을 받는다 |
+| **`npm test`** | 단위 테스트 (`node:test` · `test/`) |
+| **`npm run verify`** | 검증 하네스 — MCP 설계서 §10 + 제품화 70~74 를 한 자리에서 |
+| `npm run check:packages` | 패키지마다 부어서 `ctx check` (= `ctx package check --all`) |
+| `npm run seed:kit` | fixture 의 `.claude/` 를 `agent/` 에서 (Python 없이) |
 | `npm run dev` · `dev:server` | 화면 / 서버 개발 |
 | `npm start` | 서버 (빌드된 화면 · viewer/fixture) |
 | `npm run seed` | `viewer/fixture/` 재생성 |
@@ -88,6 +99,9 @@ node viewer/server/index.js --repo <경로> --dev http://localhost:5173 --no-ope
 | `npm run test:tray` | 트레이 자체 시험 (클릭 없이) |
 
 버전을 지정하려면 `npm run release -- 0.3.0`.
+
+**CI** — `.github/workflows/ci.yml` 이 push 마다 `build · build:ctx · test · check:packages · verify` 를
+돈다. 부르는 명령은 **전부 위 표의 스크립트**다 — CI 에만 있는 명령이 없다.
 
 ## 화면
 
@@ -246,7 +260,12 @@ ctx brief     두 줄 요약
 ctx search    말 → 좌표 후보 (match 가 미등재를 낼 때의 폴백)
 ctx sync      원격과의 차이 · 훅 설정 여부
 ctx version   이 번들이 언제 만들어졌나
-ctx setup     작업 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기)
+ctx setup     작업 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기 · --also · --desktop)
+ctx mcp       MCP 서버 (stdio) · ctx serve  MCP 서버 (HTTP) + 관리 서비스
+ctx package   패키지 — list · show · check(부어서 검사) · new
+ctx repo      지식 레포 — new <경로> --package <이름> [--origin --push] · list --root
+ctx import-dir  md 폴더를 work/ 로 들인다 (--dry 먼저)
+ctx serve doctor · init   서버 준비물 검사 · 첫 사용자와 토큰
 ```
 
 지식 레포는 `bin/ctx` 를 **자기 안에** 들고 있다(폐쇄망 자족). `node` 가 있으면
@@ -338,7 +357,7 @@ exe 로 실행하면 트레이 아이콘이 뜬다. 우클릭 메뉴 — 열기 
 
 ## 구조
 
-**상위 폴더는 다섯이다.**
+**상위 폴더는 다섯이다** (+ `test/` · `.github/`).
 
 ```
 core/                    **계산 — 정본.** 스캔 · 프론트매터 · 어휘 · 등록부
@@ -365,9 +384,14 @@ agent/                   **받는 사람에게 가는 것의 원본**
 
 ops/                     **명령** — 사람이 실행하는 것
   setup · dev · start · check · seed · release  (.cmd)
-  lib/                   그 명령이 부르는 구현. 직접 실행하지 않는다
-  out/                   중간 산출물 — web · ctx · exe   (추적 안 함)
+  lib/                   그 명령이 부르는 구현. 직접 실행하지 않는다 — assemble(조립 하나) · release · release-server
+  deploy/                서버 — install.sh · upgrade.sh · 유닛 · Dockerfile · 설치절차
+  verify/                검증 하네스
+  out/                   중간 산출물 — web · ctx · exe · server   (추적 안 함)
   release/v<버전>/        배포본                          (추적 안 함)
+
+test/                    단위 테스트 — core/ 의 순수 함수. `node:test` · 의존성 0
+.github/workflows/       ci.yml · release.yml
 
 docs/                    **우리만 보는 것**
   design/                설계서 — 보존 · CDP 개선 작업의 문서 더미

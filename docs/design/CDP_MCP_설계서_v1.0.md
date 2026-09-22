@@ -376,6 +376,9 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
 ```
 
 - 등록 = 폴더를 두는 것. `git clone <origin> <root>/<name>` 뒤 재시작 없이 다음 요청부터 인식(폴더 목록은 60초마다 갱신).
+  **다른 길 하나** (2026-09-22 · 제품화 R6) — `ctx repo new <root>/<name> --package <이름>` 이 패키지 폴더를 복사해
+  `git init` · `hooksPath` · 첫 커밋(훅) · `remote add` · `push` 까지 한다. 관리 서비스의 `POST /repos`(`write`)가 같은
+  함수(`core/reponew.js`)를 부른다. origin 이 없는 패키지도 이제 서버에 설 수 있다.
 - 서버가 **유일한 작성자**다. 서버 트리에서 사람이 커밋하지 않는다.
 - `--mirror`: 커밋 뒤 `git push origin HEAD` 를 비동기로. 실패는 로그 + `sync.mirror = lag`. 사람은 origin 을 **읽기 전용으로 clone** 해 폴더로 읽는다.
 - 레포마다 `.claude/skills/` · `CLAUDE.md` 등 kit 파일이 있어야 `prompts` 와 `GET /kit` 가 동작한다(모드 A 와 같은 레포 구성).
@@ -389,6 +392,8 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
 | `GET · DELETE /mcp` · `/mcp/<name>` | — | 405 |
 | `GET /healthz` | 없음 | `{ ok, built, repos: n, mirror: { ok: n, lag: n, off: n } }` — **이름을 싣지 않는다.** 인증 없는 자리라 집계까지다 |
 | `GET /repos` | Bearer | 그 사용자가 볼 수 있는 레포 목록 + 레포별 `mirror` · `head`. 어느 레포가 밀렸는지는 여기서 본다 |
+| `GET /packages` | 쿠키 · Bearer | 서버가 든 패키지(`--packages`) — 이름 · 판 · 문서 수. 권한과 무관(서식이라 숨길 것이 없다) |
+| `POST /repos` | 쿠키 · Bearer + **`write`** | `{ name, package, origin? }` — 패키지로 지식 레포를 세운다(§4.2 다른 길). `auth.log` 에 남는다 |
 | `GET /kit/<name>` | 쿠키 · Bearer | 그 레포의 kit(스킬 · CLAUDE 블록 · TEMPLATE) zip — `ctx setup --server` 가 받는다 |
 | `GET /kit/<name>?workrepo=<id>` | 쿠키 · Bearer | 위에 그 작업 레포용 `.mcp.json` · `cdp.json` · `설치.md` 를 더한 **설치 꾸러미**(§6.7.3). 서버가 그 자리에서 조립한다 |
 | `GET /workrepos` | 쿠키 · Bearer | 설치 대장 조회 + 그 사용자의 `write`(§6.7.2) |
@@ -972,7 +977,7 @@ cdp_s = base64url({ user, exp }) + "." + HMAC-SHA256(그 값, <data>/secret)
 | 메뉴 | 로컬 | 서버 | 왜 |
 |---|---|---|---|
 | 현황 | ○ | ○ | 레포가 쓸 만한 상태인가는 원격에서도 봐야 한다. 훅 · 설치 줄만 빠진다 |
-| 지식 레포 | ○ | **✗** | 로컬 경로를 고르는 화면이다. 서버의 등록은 폴더를 두는 것이다(§4.2) |
+| 지식 레포 | ○ | **○ (다른 화면)** | 로컬은 경로를 고른다. 서버는 **든 레포 목록 · 미러 상태 · 패키지에서 새 레포 세우기**(`POST /repos` · 2026-09-22 제품화 R7). 세우는 것은 `write` 만 |
 | 동기화 | ○ | **✗** | git 을 도는 것은 서버 자신이다 — `save` 가 커밋하고 `--mirror` 가 push 한다(§4.5). 사람이 브라우저에서 누를 자리가 아니고, `POST /git/pull` · `/git/push` · `/sync` 는 모드 B 에 **아예 없다** — 화면만 남으면 눌러서 404 를 본다. *밀렸나*는 현황의 **미러** 카드에 남는다 |
 | 작업 레포 | ○ | **○ (다른 화면)** | 로컬은 *이 PC 에 깐다*, 서버는 **설치 대장과 꾸러미 발급**(§6.7) |
 | 진단 · 정보 | ○ | **일부** | 서버의 경로 · 로그는 내지 않는다. `built` · 레포 수 · 스캔 시각까지 |

@@ -668,10 +668,10 @@ ops/        **명령** — 사람이 실행하는 `.cmd` 여섯
   lib/        그 명령이 부르는 구현. 직접 실행하지 않는다
   out/        중간 산출물  web · ctx · exe   (추적 안 함)
   release/    버전별 배포본                 (추적 안 함)
-docs/       **우리만 보는 것**
+docs/       **우리만 보는 것** — 판정 기준은 "보존되는가" (docs/README.md)
   design/     보존되는 설계서 · CDP 개선 작업의 문서 더미
-  dev/        개발 메모 · TODO · 시나리오 · 검토 기록
-  attic/      **한 번 돌고 끝난 것** — GDI 재구성 스크립트와 그 입력
+  dev/        개발 메모 · TODO · 검토 기록
+  attic/      **한 번 돌고 끝난 것** — GDI 재구성 · dpms 변환 · 이집이지 이관 · 시나리오 실측
 ```
 
 > **정정 (2026-09-08)** — 전에는 `agent/` 와 `repo-kit/` 이 따로 있었다.
@@ -707,6 +707,12 @@ docs/       **우리만 보는 것**
 > **2026-09-14 의 "넷으로 줄였다" 를 되돌리는 것이 아니다.** 그때 줄인 것은
 > *부산물과 사본*이 상위 자리를 차지하던 것이었고(`out/`·`release/`·
 > `sample-repo/`), `core/` 는 그 반대 — 이 시스템에서 **제일 위에 있는 것**이다.
+
+> **정정 (2026-09-22 · 제품화)** — 셋이 더 생겼다. `test/`(단위 테스트 · `node:test`) ·
+> `.github/workflows/`(CI · 릴리스) · `ops/deploy/`(서버 설치 스크립트). 그리고 `core/`
+> 에 셋 — `packages.js`(패키지) · `reponew.js`(지식 레포 세우기) · `importdir.js`(md 폴더
+> 들이기). 판정은 그대로 한 곳이다 — 셋 다 `loadRepo` · `runBuiltinCheck` 를 부른다.
+> 근거는 [`CDP_제품화_검토_v1.0`](CDP_제품화_검토_v1.0.md).
 
 **루트에는 도구가 요구하는 것과 제일 위에 있는 것만 남는다** —
 `package.json`·`package-lock.json` 은 npm 이, `.gitattributes`·`.gitignore` 는

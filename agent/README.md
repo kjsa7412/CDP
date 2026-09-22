@@ -17,7 +17,7 @@ manual/
   system.md               **정본** — CDP 가 지금 무엇인지
   user.md                 하루 쓰는 법
   admin.md                설치 · 어휘 운영 · 배포 · 장애
-packages/               프로젝트마다 골라서 붓는 문서 골격 · 등록부 · 어휘
+packages/               프로젝트마다 골라서 붓는 문서 골격 · 등록부 · 어휘 · `_package.json`(매니페스트 — 안 나간다)
 install.md              설치 시나리오 — 네 자리
 ```
 

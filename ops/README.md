@@ -15,7 +15,16 @@ ops/
   seed.cmd       viewer/fixture 재생성
   release.cmd    **배포본 만들기** → ops/release/v<버전>/
   lib/           위 명령이 부르는 구현 (직접 실행하지 않는다)
+    assemble.mjs        지식 레포 폴더를 **조립하는 함수 하나** — release 와 release-server 가 같이 쓴다
+    release.mjs         팀원 PC 배포본 (exe 포함)
+    release-server.mjs  서버 산출물 tar.gz (bin · web · packages · deploy)
+    seed-kit.mjs        fixture 의 .claude/ 를 agent/ 에서 (Python 없이)
+  deploy/        서버 — install.sh · upgrade.sh · cdp-serve.service · Dockerfile · 설치절차.md
+  verify/        검증 하네스 — npm run verify
 ```
+
+`npm test` · `npm run verify` · `npm run check:packages` · `npm run release:server` 는
+`.cmd` 껍데기가 없다 — 개발자와 CI 가 부르는 것이고 npm 을 안다.
 
 ## 더블클릭해도 되고 인자를 줘도 된다
 
@@ -35,6 +44,7 @@ ops\start.cmd C:\cdp       그 레포로 앱 실행
 out/web/    화면 (vite)          ← 여기, 즉 ops/out/
 out/ctx/    ctx 번들
 out/exe/    cdp.exe
+out/server/ cdp-server-v<버전>/ 와 그 tar.gz   ← 서버에 올리는 것
 release/v<버전>/   배포본 — **이 폴더를 통째로 옮기면 CDP 를 쓸 수 있다**
 ```
 
