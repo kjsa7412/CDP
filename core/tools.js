@@ -47,7 +47,13 @@ export function toError(e) {
 // `..` 하나가 레포 밖을 연다. 정규식이 통과시킨 뒤에도 부르는 쪽에서
 // `path.resolve` 후 root 접두 검사를 한 번 더 한다 -- 둘 중 하나가 아니라 둘 다.
 
-const RE_COORD = /^[a-z][a-z0-9_-]*:[^\s\x00-\x1f]{1,200}$/
+// **타입 문자 집합은 `core/vocab.js` 의 COORD 와 같아야 한다.** 전에는 ASCII
+// 소문자만 받았는데, 어휘는 한글 타입을 받는다(`테이블정의서:ex_plan_mst` —
+// dpms 패키지의 전부가 그렇다). 그래서 MCP 도구가 dpms 레포의 좌표를 전부
+// E_COORD 로 거절했다 — 제품화 TODO 5.4 하네스에서 잡았다.
+// ASCII 타입은 소문자만이다 — `C:/abs/path` 같은 절대경로가 좌표로 통과하면 안 된다
+// (하네스 2번). 한글 타입은 첫 글자가 한글이면 나머지에 영문 · 숫자가 와도 된다.
+const RE_COORD = /^(?:[a-z][a-z0-9_-]*|[가-힣][A-Za-z0-9가-힣_-]*):[^\s\x00-\x1f]{1,200}$/
 const RE_ID = /^\d{4}-\d{4}-[^/\\\x00-\x1f]{1,120}$/
 
 export function checkCoord(coord) {
@@ -384,7 +390,7 @@ export function toolCheck(r) {
 // 두 줄. 첫 줄은 절차, 둘째 줄은 **살아 있는 레포 상태**다.
 // `repoStatus` 도 같이 낸다 -- CLI 의 `--json` 이 지금 그것을 내고 있고,
 // 필드를 빼면 그쪽이 깨진다.
-export function toolBrief(r) {
+export function toolBrief(r, { built = null, now = Date.now() } = {}) {
   const st = repoStatus(r)
   const parts = [`작업 기록 ${st.works}`, `관리 문서 ${st.managedDocs}`]
   if (st.pendingDerive.length) parts.push(`파생 남음 ${st.pendingDerive.length}`)
@@ -393,13 +399,13 @@ export function toolBrief(r) {
     parts.push(`미결 ${st.legacyPending.length} — 이슈 대장으로 이관 (최장 ${st.legacyPending[0].days}일)`)
   }
   if (st.indexStale) parts.push('INDEX 불일치')
-  return {
-    lines: [
-      '[CDP] 절차: (1) 검토(대상 추출) -> (2) 맥락 주입(필요시) -> (3) 요청수행 / 작업 끝에 cdp-save',
-      '[CDP] 레포: ' + parts.join(' · '),
-    ],
-    ...st,
-  }
+  const lines = [
+    '[CDP] 절차: (1) 검토(대상 추출) -> (2) 맥락 주입(필요시) -> (3) 요청수행 / 작업 끝에 cdp-save',
+    '[CDP] 레포: ' + parts.join(' · '),
+  ]
+  const age = bundleAgeNotice(built, now)
+  if (age) lines.push(age)
+  return { lines, ...st }
 }
 
 // ── 응답 상한 (§8) ──────────────────────────────────────────────────────────
@@ -409,6 +415,21 @@ export function toolBrief(r) {
 // 정본이 아니고, 부르는 쪽은 잘렸다는 것을 모른 채 답한다.
 
 export const BODY_LIMIT = 512 * 1024
+
+// ── 번들 나이 (§3.0 · 하네스 20번) ──────────────────────────────────────────
+//
+// 번들이 낡으면 옛 판정을 낸다 — 그리고 조용하다. `brief` 가 그 사실을 한 줄로
+// 말한다. 90일은 토큰 만료와 같은 주기다. `built` 가 번들이 아니면(`__…`) 말이 없다.
+export const BUNDLE_MAX_DAYS = 90
+
+export function bundleAgeNotice(built, now = Date.now(), maxDays = BUNDLE_MAX_DAYS) {
+  if (!built || String(built).startsWith('__')) return null
+  const at = Date.parse(String(built).replace(' ', 'T') + (String(built).length <= 10 ? 'T00:00:00' : ':00'))
+  if (!Number.isFinite(at)) return null
+  const days = Math.floor((now - at) / 86400_000)
+  if (days < maxDays) return null
+  return `[CDP] 번들이 ${days}일 됐다 (${built}) — 새 판을 받는다. 낡은 번들은 옛 판정을 낸다 (ctx version)`
+}
 
 export function guardSize(obj, what) {
   const n = Buffer.byteLength(JSON.stringify(obj), 'utf8')

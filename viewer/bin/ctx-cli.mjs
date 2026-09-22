@@ -57,12 +57,19 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx serve --root <폴더>    MCP 서버로 선다 (HTTP). 상주 프로세스
   ctx serve user add|set|list --auth <f>    명부 — 권한은 여기 붙는다
   ctx serve token [list|revoke] --auth <f>  토큰 — 신원만 증명한다
+  ctx serve doctor --root … --auth … --data …   서버 준비물 검사 (fail 이면 exit 1)
+  ctx serve init --auth <f> --name <이름>       첫 사용자 + 토큰을 한 번에 (명부가 없을 때만)
+  ctx package list|show|check|new           패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로
+  ctx repo new <경로> --package <이름> [--origin <url>] [--push]   지식 레포를 세운다
+  ctx repo list --root <폴더>               서버 <root> 의 레포 목록
+  ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
                             ctx mcp 에서는 여러 번 줄 수 있다 (첫 번째가 기본 레포)
   --root <폴더>             ctx mcp -- 그 폴더의 하위를 전부 레포로 본다
   --prompts auto|always|never   MCP prompt 노출 (기본 auto)
-  --bind · --port · --auth · --data · --mirror   ctx serve 용
+  --bind · --port · --auth · --data · --mirror · --web · --packages   ctx serve 용
+  --packages <dir>          패키지 폴더 (기본: CDP_PACKAGES → 번들 옆 packages/ → 소스 agent/packages)
   --json                    기계 판독용 출력
 `
 
@@ -102,6 +109,20 @@ function parseArgs(argv) {
     else if (a === '--active') out.active = true
     else if (a === '--inactive') out.active = false
     else if (a === '--dry') out.dry = true
+    else if (a === '--packages') out.packages = argv[++i]
+    else if (a === '--package') out.package = argv[++i]
+    else if (a === '--origin') out.origin = argv[++i]
+    else if (a === '--push') out.push = true
+    else if (a === '--all') out.all = true
+    else if (a === '--from') out.from = argv[++i]
+    else if (a === '--title') out.title = argv[++i]
+    else if (a === '--description') out.description = argv[++i]
+    else if (a === '--author') out.author = argv[++i]
+    else if (a === '--keep-touches') out.keepTouches = true
+    else if (a === '--yes' || a === '-y') out.yes = true
+    else if (a === '--desktop') out.desktop = true
+    else if (a === '--also') (out.also ||= []).push(argv[++i])
+    else if (a === '--built-at') out.builtAt = argv[++i]
     else if (a === '-h' || a === '--help' || a === 'help') out.cmd = out.cmd || 'help'
     else if (!out.cmd) out.cmd = a
     else out.args.push(a)
@@ -680,11 +701,13 @@ async function cmdBrief(r, opt) {
   }
   if (st.indexStale) parts.push('INDEX 불일치')
 
+  // 번들 나이 — 하네스가 `--built-at` 으로 시각을 주입한다(20번). 실제로는 BUILT 다.
+  const built = opt.builtAt || BUILT
   if (opt.json) {
-    out(JSON.stringify(T.toolBrief(r), null, 2))
+    out(JSON.stringify(T.toolBrief(r, { built }), null, 2))
     return 0
   }
-  for (const l of T.toolBrief(r).lines) out(l)
+  for (const l of T.toolBrief(r, { built }).lines) out(l)
   return 0
 }
 
@@ -763,12 +786,39 @@ async function cmdSync(r, opt) {
 // 작동하지 않는다.
 async function cmdSetup(r, opt) {
   const target = opt.args[0]
+  // `--desktop` — Claude Desktop 설정에 이 지식 레포를 병합한다(§3.2). 작업 레포
+  // 없이도 된다 — Desktop 은 프로젝트 루트가 없다.
+  if (opt.desktop) {
+    const { desktopConfigPath, mergeDesktopConfig, mcpEntryLocal } = await import('../../core/setup.js')
+    const file = desktopConfigPath()
+    const had = await fs.readFile(file, 'utf8').catch(() => null)
+    const key = 'cdp-' + path.basename(r.root)
+    let next
+    try {
+      next = mergeDesktopConfig(had, key, mcpEntryLocal(r.root, process.platform, opt.also || []))
+    } catch (e) {
+      err('ctx setup --desktop: ' + e.message)
+      return 2
+    }
+    if (opt.dry) {
+      out(`ctx setup --desktop --dry: ${file}`)
+      out(`  mcpServers.${key} ${had == null ? '새로' : had === next ? '같음' : '갱신'}`)
+    } else if (had === next) {
+      out(`ctx setup --desktop: 이미 최신 — ${file}`)
+    } else {
+      await fs.mkdir(path.dirname(file), { recursive: true })
+      await fs.writeFile(file, next, 'utf8')
+      out(`ctx setup --desktop: ${file}`)
+      out(`  mcpServers.${key} ${had == null ? '새로' : '갱신'}  ← 다른 키는 그대로. Claude Desktop 을 다시 켠다`)
+    }
+    if (!target) return 0
+  }
   if (!target) {
-    err('ctx setup <작업 레포 경로>')
+    err('ctx setup <작업 레포 경로> [--also <지식 레포>]… [--desktop] [--dry]')
     err('  예:  ctx setup C:' + BS + 'gdi')
     return 2
   }
-  const plan = await planSetup(r.root, target)
+  const plan = await planSetup(r.root, target, { also: opt.also || [] })
   if (!plan.ok) {
     err('ctx: ' + plan.reason)
     return 2
@@ -824,7 +874,7 @@ export async function main(argv = process.argv.slice(2)) {
   // 그리고 이 아래로 내려가면 stdout 에 글이 나갈 수 있다 -- 규약이 깨진다.
   if (opt.cmd === 'mcp') {
     const { runStdio } = await import('./ctx-mcp.mjs')
-    return runStdio({ root: opt.root, repos: opt.repos, repo: opt.repo, prompts: opt.prompts, findRepo })
+    return runStdio({ root: opt.root, repos: opt.repos, repo: opt.repo, prompts: opt.prompts, findRepo, builtAt: opt.builtAt })
   }
   // `setup --server` 는 지식 레포 없이 돈다(§4.7). 서버에서 kit 을 받아
   // 임시 폴더에 풀고 그것을 지식 레포처럼 써서 기존 `planSetup` 을 그대로
@@ -833,7 +883,25 @@ export async function main(argv = process.argv.slice(2)) {
     const { runSetupServer } = await import('./ctx-setup-server.mjs')
     return runSetupServer(opt)
   }
+  // 패키지 · 레포 · 이관 — 지식 레포 **밖**에서 도는 명령이다. findRepo 를 타지 않는다.
+  if (opt.cmd === 'package') {
+    const { runPackage } = await import('./ctx-package.mjs')
+    return runPackage(opt)
+  }
+  if (opt.cmd === 'repo') {
+    const { runRepo } = await import('./ctx-repo.mjs')
+    return runRepo(opt)
+  }
+  if (opt.cmd === 'import-dir') {
+    const { runImportDir } = await import('./ctx-import.mjs')
+    return runImportDir(opt)
+  }
   if (opt.cmd === 'serve') {
+    // `serve doctor` · `serve init` — 준비물 검사와 첫 사용자. 서버를 띄우지 않는다.
+    if (opt.args[0] === 'doctor' || opt.args[0] === 'init') {
+      const { runDoctor, runInit } = await import('./ctx-serve-doctor.mjs')
+      return opt.args[0] === 'doctor' ? runDoctor(opt) : runInit(opt)
+    }
     // `serve user …` · `serve token …` 는 명부를 고치고 끝난다. 서버를 띄우지
     // 않으므로 여기서 갈라진다.
     if (opt.args[0] === 'user' || opt.args[0] === 'token') {

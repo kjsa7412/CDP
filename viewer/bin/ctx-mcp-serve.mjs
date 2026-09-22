@@ -23,6 +23,9 @@ import { Store } from '../../core/store.js'
 import { handleRead, MIME } from '../server/adapter/read-api.js'
 import { hereDir } from '../server/runtime.js'
 import { buildServer, makeRepoCache, mirrorOf, BUILT } from './ctx-mcp.mjs'
+import { newRepo, REPO_NAME_RE } from '../../core/reponew.js'
+import { listPackages as listPackageDirs } from '../../core/packages.js'
+import { resolvePackages, materializePackage } from './ctx-package.mjs'
 
 const NL = String.fromCharCode(10)
 
@@ -370,6 +373,9 @@ export async function runServe(opt = {}) {
 
   const store = makeStore(root, log)
   await store.refresh()
+  // 패키지 — `POST /repos` 가 여기서 복사한다(검토 §3.5). 없어도 서버는 돈다.
+  const pk = await resolvePackages({ explicit: opt.packages, binDir: hereDir(import.meta.url) })
+  log.line(pk ? `패키지: ${pk.dir} (${pk.how})` : '패키지: 없음 — 화면에서 레포를 세우려면 --packages')
   const authenticate = makeAuth({ authFile: opt.auth, log })
   // 서명 비밀. 갈면 전원 재로그인이다(§6.4).
   const secret = dataDir ? await auth.loadSecret(dataDir) : Buffer.from('dev-only-secret-not-persisted!!')
@@ -482,6 +488,7 @@ export async function runServe(opt = {}) {
         url.pathname === '/' ||
         url.pathname === '/me' ||
         url.pathname === '/repos' ||
+        url.pathname === '/packages' ||
         url.pathname.startsWith('/workrepos')
       // 화면 자산 — **인증 앞에서 낸다.**
       //
@@ -542,6 +549,72 @@ export async function runServe(opt = {}) {
         for (const r of mine) rows.push({ name: r.name, title: await titleOf(r.root) })
         log.req({ ip, user: a.user, method: 'GET', tool: '/me', ms: Date.now() - t0, status: 200 })
         return json(res, 200, { mode: 'server', user: a.user, label: a.label ?? null, write: !!a.write, repos: rows })
+      }
+
+      // GET /packages — 고를 수 있는 패키지. 권한과 무관하다 — 패키지는 서식이라
+      // 숨길 것이 없다(검토 §3.4). 목록 · 판 · 문서 수만 낸다.
+      if (url.pathname === '/packages' && req.method === 'GET') {
+        if (!pk) return json(res, 200, { dir: null, packages: [] })
+        const list = await listPackageDirs(pk.dir).catch(() => [])
+        log.req({ ip, user: a.user, method: 'GET', tool: '/packages', ms: Date.now() - t0, status: 200 })
+        return json(res, 200, {
+          dir: pk.dir,
+          packages: list.map((p) => ({
+            name: p.name,
+            title: p.manifest.title,
+            version: p.manifest.version,
+            description: p.manifest.description,
+            docs: p.docs,
+            types: p.types,
+            patterns: p.patterns,
+          })),
+        })
+      }
+
+      // POST /repos { name, package, origin? } — 지식 레포를 **세운다**(검토 §3.5 · R6).
+      //
+      // 등록 = 폴더를 두는 것(설계서 §4.2)은 그대로다. clone 이 한 길이고 이것이
+      // 다른 길이다. `write` 가 있어야 한다 — origin 에 커밋을 만드는 일이다.
+      // 판정은 `core/reponew.js` 하나 — CLI `ctx repo new` 와 같은 함수다.
+      if (url.pathname === '/repos' && req.method === 'POST') {
+        if (!a.write) {
+          log.req({ ip, user: a.user, method: 'POST', tool: '/repos', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+          return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '쓰기 권한이 없다 — 레포를 세우는 것은 write 인 사람만' } })
+        }
+        let body
+        try {
+          body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
+        } catch {
+          return json(res, 400, { error: { code: 'E_INPUT', message: '본문이 JSON 이 아니다' } })
+        }
+        const name = String(body.name || '').trim()
+        const pkgName = String(body.package || '').trim()
+        const origin = body.origin ? String(body.origin).trim() : null
+        if (!REPO_NAME_RE.test(name)) return json(res, 400, { error: { code: 'E_INPUT', message: '레포 이름 형식이 아니다 (영문·숫자·._-)' } })
+        if (!pk) return json(res, 400, { error: { code: 'E_INPUT', message: '서버에 패키지 폴더가 없다 — --packages' } })
+        if (!pkgName) return json(res, 400, { error: { code: 'E_INPUT', message: 'package 가 필요하다' } })
+        if ((await store.list()).some((r) => r.name === name) || (await fs.stat(path.join(root, name)).catch(() => null))) {
+          return json(res, 409, { error: { code: 'E_EXISTS', message: '그 이름의 레포가 이미 있다', detail: { name } } })
+        }
+        let mat
+        try {
+          mat = await materializePackage(pk, pkgName)
+        } catch (e) {
+          return json(res, e.code === 'E_NOT_FOUND' ? 404 : 400, { error: { code: e.code || 'E_INPUT', message: e.message } })
+        }
+        try {
+          const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: a.user })
+          await store.refresh()
+          await auth.audit(dataDir, `repo new · ${a.user} · ${name} · package=${pkgName}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
+          log.req({ ip, user: a.user, method: 'POST', tool: '/repos', key: name, ms: Date.now() - t0, status: 200 })
+          return json(res, 200, { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null })
+        } catch (e) {
+          const code = e?.code || 'E_REPO'
+          log.req({ ip, user: a.user, method: 'POST', tool: '/repos', key: name, ms: Date.now() - t0, status: 400, code })
+          return json(res, code === 'E_EXISTS' ? 409 : 400, { error: { code, message: e.message, detail: e.detail } })
+        } finally {
+          await mat.cleanup()
+        }
       }
 
       if (url.pathname === '/repos' && req.method === 'GET') {

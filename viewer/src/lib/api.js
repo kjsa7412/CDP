@@ -145,6 +145,10 @@ export const api = {
   // ── 설치 대장 (§6.7.2) — 서버 모드 전용. 로컬의 `/workrepos` 와 **다른
   // 것**이다: 로컬은 이 PC 에 깐 곳을, 서버는 등록과 추적을 든다(§6.2).
   registry: () => req('/workrepos', { absolute: true }),
+  // ── 지식 레포 (서버판 · 검토 §3.5) — 목록 · 패키지 · 세우기
+  repos: () => req('/repos', { absolute: true }),
+  packages: () => req('/packages', { absolute: true }),
+  repoNew: (body) => req('/repos', { absolute: true, method: 'POST', body: JSON.stringify(body) }),
   registryAdd: (body) => req('/workrepos', { absolute: true, method: 'POST', body: JSON.stringify(body) }),
   registryDel: (id) => req('/workrepos/' + encodeURIComponent(id), { absolute: true, method: 'DELETE' }),
   // 설치 꾸러미. **토큰은 들어 있지 않다**(§6.7.3) — 브라우저가 그냥 받는다.
