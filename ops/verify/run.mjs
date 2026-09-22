@@ -16,12 +16,16 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { seedKit } from '../lib/seed-kit.mjs'
 
 const run = promisify(execFile)
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../..')
 const TMP = path.join(ROOT, 'ops', 'out', 'verify')
 const SLOW = process.argv.includes('--slow')
+// 포트는 인자로 받는다 — CI 러너에서 7377 이 쓰이고 있을 수 있다.
+const PORT_ARG = process.argv.indexOf('--port')
+const PORT = PORT_ARG >= 0 ? Number(process.argv[PORT_ARG + 1]) || 7377 : 7377
 const NL = String.fromCharCode(10)
 
 const results = []
@@ -50,6 +54,9 @@ async function stage() {
   const src = path.join(ROOT, 'viewer', 'fixture')
   for (const n of ['alpha', 'beta']) {
     await fs.cp(src, path.join(TMP, 'repos', n), { recursive: true })
+    // **`.claude/` 는 추적하지 않는다** — fresh clone(CI)에는 없다. `GET /kit` 이
+    // 그것을 싸므로 여기서 `agent/` 에서 만든다. Python 을 타지 않는다.
+    await seedKit(path.join(TMP, 'repos', n), { root: ROOT })
   }
   // git 레포로 만든다 — save 가 커밋한다
   for (const n of ['alpha', 'beta']) {
@@ -177,7 +184,6 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
 const F = await stage()
-const PORT = 7377
 
 // ══ 공통 ═══════════════════════════════════════════════════════════════════
 
@@ -313,6 +319,18 @@ await check(19, 'git 원격 없는 레포에서 sync 가 죽지 않는다', asyn
   eq(d.mode, 'local', 'mode')
   must('remote' in d, 'remote 필드 없음')
   return `remote=${d.remote}`
+})
+
+await check(20, 'version.built 90일 경과 → brief 가 경고 줄을 낸다', async () => {
+  // 번들 시각을 주입한다 — 실제 번들이 낡을 때까지 기다릴 수 없다
+  const old = stdioClient(['--repo', path.join(F.repos, 'alpha'), '--built-at', '2026-01-01 00:00'])
+  await old.rpc('initialize', INIT())
+  const b = payload(await old.rpc('tools/call', { name: 'brief', arguments: {} }))
+  old.kill()
+  must(b.lines.some((l) => /번들이 \d+일 됐다/.test(l)), b.lines.join(' | '))
+  const cli = await ctx('--repo', path.join(F.repos, 'alpha'), 'brief', '--built-at', '2026-01-01 00:00')
+  must(/번들이 \d+일 됐다/.test(cli.stdout), 'CLI brief 에 줄이 없다')
+  return b.lines.at(-1).slice(0, 40) + '…'
 })
 
 await check(5, '--prompts auto 가 Claude Code 에만 숨긴다', async () => {
@@ -679,9 +697,16 @@ await check(52, '꾸러미를 빈 레포에 풀면 bin/ctx 없이 연결된다',
   const r = await H.call(`/kit/alpha?workrepo=${WRID}`, { headers: { authorization: 'Bearer ' + TK3 } })
   const files = await unzip(Buffer.from(await r.arrayBuffer()))
   const W2 = path.join(TMP, 'work2')
-  for (const f of files) {
-    if (f.name === '.claude/work-repo/CLAUDE.md') continue
-    const dst = path.join(W2, f.name)
+  // 꾸러미는 `kit/` 한 단 아래다(§6.7.3 · 08f5436) — 푸는 것만으로는 아무것도
+  // 안 덮이고, 옮기는 것은 `install.mjs` 가 한다. 여기서는 그 옮기기를 손으로
+  // 흉내낸다: `kit/` 아래만 작업 레포로. 안내문 · 실행기는 작업 레포에 안 간다.
+  const inKit = files.filter((f) => f.name.startsWith('kit/'))
+  must(inKit.length > 0, '꾸러미에 kit/ 이 없다 — 한 단 내리기(08f5436)가 풀렸다')
+  must(files.some((f) => f.name === '설치.md'), '꾸러미에 설치.md 가 없다')
+  for (const f of inKit) {
+    const rel = f.name.slice('kit/'.length)
+    if (rel === '.claude/work-repo/CLAUDE.md') continue
+    const dst = path.join(W2, rel)
     await fs.mkdir(path.dirname(dst), { recursive: true })
     await fs.writeFile(dst, f.data)
   }
@@ -841,6 +866,87 @@ if (SLOW) {
   skip(39, '재시작 없이 레포 추가 → 60초 안에 /repos', '--slow 로 돈다 (60초)')
 }
 
+// ══ 제품화 (검토 §3.4 · §3.5 · TODO 4 · 5) ═══════════════════════════════════
+//
+// 번호 70 이상은 설계서 §10 밖이다 — 제품화 TODO 의 "끝났다고 보는 기준"이다.
+
+await check(70, 'GET /packages 가 패키지를 낸다 (권한과 무관)', async () => {
+  const r = await H.call('/packages', { headers: { authorization: 'Bearer ' + TK3 } })
+  eq(r.status, 200, 'status')
+  const j = await r.json()
+  must(j.packages.some((p) => p.name === 'dpms'), 'dpms 가 없다 — ' + JSON.stringify(j).slice(0, 120))
+  const d = j.packages.find((p) => p.name === 'dpms')
+  must(d.docs >= 40 && d.patterns >= 10, `문서 ${d.docs} · 패턴 ${d.patterns}`)
+  return `${j.packages.length}개 · dpms v${d.version} · 문서 ${d.docs}`
+})
+
+// 읽기 전용 사용자 — write 없는 사람이 레포를 세울 수 없어야 한다
+await ctx('serve', 'user', 'add', '--auth', F.auth, '--name', 'ro', '--repos', 'alpha', '--data', F.data)
+const TR = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'ro', '--data', F.data)).stdout.trim()
+
+await check(71, 'POST /repos — write 없음 403 · 이름 형식 400 · 중복 409', async () => {
+  const post = (body, t) =>
+    H.call('/repos', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + t }, body: JSON.stringify(body) })
+  eq((await post({ name: 'x', package: 'dpms' }, TR)).status, 403, 'write 없음')
+  eq((await post({ name: '한글 이름', package: 'dpms' }, TK3)).status, 400, '이름 형식')
+  eq((await post({ name: 'alpha', package: 'dpms' }, TK3)).status, 409, '이미 있는 레포')
+  eq((await post({ name: 'zeta', package: '없는패키지' }, TK3)).status, 404, '없는 패키지')
+  return '403 · 400 · 409 · 404'
+})
+
+await check(72, 'POST /repos 가 패키지로 레포를 세우고 다음 요청부터 목록에 든다', async () => {
+  const r = await H.call('/repos', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TK3 },
+    body: JSON.stringify({ name: 'delta', package: 'dpms' }),
+  })
+  const j = await r.json()
+  eq(r.status, 200, JSON.stringify(j).slice(0, 200))
+  must(/^[0-9a-f]{7,}$/.test(j.commit || ''), '첫 커밋이 없다 — 훅이 막았나')
+  must(j.files > 40, `파일 ${j.files}`)
+  const list = await (await H.call('/repos', { headers: { authorization: 'Bearer ' + TK3 } })).json()
+  must(list.some((x) => x.name === 'delta'), '목록에 없다')
+  const tl = (await H.rpc('/mcp/delta', 'tools/list', {}, TK3)).j.result.tools.length
+  eq(tl, 13, '새 레포의 도구 수')
+  const b = payload((await H.rpc('/mcp/delta', 'tools/call', { name: 'brief', arguments: {} }, TK3)).j)
+  eq(b.works, 0, '작업 기록 0건')
+  must(b.managedDocs >= 40, `관리 문서 ${b.managedDocs}`)
+  const hp = (await run('git', ['-C', path.join(F.repos, 'delta'), 'config', '--get', 'core.hooksPath'])).stdout.trim()
+  eq(hp, '.githooks', '훅 경로')
+  return `commit ${j.commit} · 파일 ${j.files} · 도구 13 · 관리 문서 ${b.managedDocs}`
+})
+
+await check(73, '세운 레포에 save 가 한 번 성공한다 (등록부 · 어휘 · 훅이 살아 있다)', async () => {
+  const sec = payload((await H.rpc('/mcp/delta', 'tools/call', { name: 'section', arguments: { coord: '테이블정의서:ex_plan_mst' } }, TK3)).j)
+  must(sec.body != null, '예시 섹션을 못 읽었다 — ' + JSON.stringify(sec).slice(0, 160))
+  const ok = payload(
+    (
+      await H.rpc(
+        '/mcp/delta',
+        'tools/call',
+        {
+          name: 'save',
+          arguments: {
+            repo: 'delta',
+            work: { id: '2026-0922-제품화-검증', title: '제품화 검증', date: '2026-09-22 15:00', touches: ['테이블정의서:ex_plan_mst'], body: '세운 레포에 첫 기록.' },
+            sections: [{ coord: '테이블정의서:ex_plan_mst', applied: sec.applied, body: '**정의** 검증용.' }],
+          },
+        },
+        TK3
+      )
+    ).j
+  )
+  must(ok.commit, JSON.stringify(ok.error || ok).slice(0, 200))
+  return `commit ${ok.commit} · 섹션 ${ok.sections}`
+})
+
+await check(74, '패키지 검사 — ctx package check 가 dpms 를 ok 로 낸다', async () => {
+  const r = await ctx('package', 'check', 'dpms', '--json')
+  const j = JSON.parse(r.stdout)
+  must(j[0].ok, JSON.stringify(j[0].problems).slice(0, 200))
+  return `문서 ${j[0].docs} · 패턴 ${j[0].patterns} · 예시 ${j[0].examples}`
+})
+
 S.kill()
 
 // ── 못 도는 것 ──────────────────────────────────────────────────────────────
@@ -850,7 +956,6 @@ skip(14, 'Windows .mcp.json: cmd /c ctx.cmd mcp', '⏸ 0단계 — 모드 A 배�
 skip(15, 'ctx setup --dry 에 .mcp.json · inspect 최신', '⏸ 0단계 — 모드 A 배포물')
 skip(16, 'ctx setup --desktop 이 다른 키를 보존', '⏸ 0단계 — 모드 A 배포물')
 skip(18, '반입 묶음만으로 설치', '⏸ 0단계 — 일반망')
-skip(20, 'version.built 90일 경과 → brief 경고', '미구현 — 번들 시각이 있어야 돈다(릴리스 뒤)')
 skip(24, 'active:false 가 열린 화면도 끊는다', '6.1 에서 브라우저 실측 — 여기서는 25번이 같은 경로를 덮는다')
 skip(40, 'Desktop 의 load prompt · Claude Code 에선 안 보임', '5번이 노출 분기를 덮는다. 실제 Desktop 은 손으로')
 skip(44, 'claude.ai 커넥터에 정적 Bearer', '해당 없음 — 공개 HTTPS 가 아니다(0단계 결정)')
@@ -875,6 +980,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~74)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

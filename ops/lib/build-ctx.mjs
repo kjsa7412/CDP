@@ -48,7 +48,7 @@ const r = spawnSync(
     '--bundle',
     '--platform=node',
     '--format=esm',
-    '--target=node18',
+    '--target=node20',
     '--legal-comments=none',
     // **`require` 를 살려 둔다.**
     //
@@ -94,7 +94,7 @@ const installerFile = path.join(path.dirname(outFile), 'install.mjs')
       '--bundle',
       '--platform=node',
       '--format=esm',
-      '--target=node18',
+      '--target=node20',
       '--legal-comments=none',
       '--banner:js=// 생성물 -- 손으로 고치지 마세요.\n',
       '--outfile=' + installerFile,

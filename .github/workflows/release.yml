@@ -1,0 +1,106 @@
+# 릴리스 — 태그 v* 에서 산출물 둘을 만들어 GitHub Release 에 붙인다.
+#
+#   cdp-v<버전>-win.zip          팀원 PC · 폐쇄망 (exe + 완성된 지식 레포 폴더)   ← windows
+#   cdp-server-v<버전>.tar.gz    서버 (ctx.mjs · web · packages · deploy)       ← ubuntu
+#   SHA256SUMS                   반입 뒤 대조
+#
+# 태그와 package.json 의 버전이 다르면 **실패한다** — 태그 없는 0.8.0 이 다시
+# 생기지 않게. 로컬에서 같은 스크립트(release · release:server)가 돈다.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: 태그 = package.json
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::태그 v$TAG 와 package.json $PKG 가 다르다. 버전을 올리고 다시 태그한다." >&2
+            exit 1
+          fi
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: windows · release (exe)
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run release -- ${{ needs.version.outputs.version }}
+      - shell: pwsh
+        run: |
+          $v = "${{ needs.version.outputs.version }}"
+          Compress-Archive -Path "ops/release/v$v/*" -DestinationPath "cdp-v$v-win.zip"
+          Get-Item "cdp-v$v-win.zip" | Select-Object Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win
+          path: cdp-v*-win.zip
+
+  server:
+    name: ubuntu · release:server
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run release:server -- ${{ needs.version.outputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server
+          path: ops/out/server/cdp-server-v*.tar.gz
+
+  publish:
+    name: GitHub Release
+    needs: [version, windows, server]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - shell: bash
+        run: |
+          cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      # 릴리스 노트 = CHANGELOG.md 의 그 절. 없으면 태그 이름만.
+      - shell: bash
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          awk -v v="## v$V" '
+            $0 == v { on = 1; next }
+            on && /^## v/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md || true
+          [ -s notes.md ] || echo "CDP v$V" > notes.md
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          gh release create "v$V" dist/* --title "CDP v$V" --notes-file notes.md

@@ -61,6 +61,14 @@ export function parseRegistry(text) {
     const sec = unquote(cells[2])
 
     if (!pattern.includes(':')) continue // 머리행("좌표 패턴")에는 콜론이 없다
+    // **규칙 모양일 때만 규칙으로 읽는다.** 등록부 파일에는 설명 표도 있다 — dpms 의
+    // "CDP 16종 등록부에서 바뀐 것" 처럼 첫 칸에 좌표 타입(`배치:`)을 적은 비교표.
+    // 그 줄을 규칙으로 읽으면 "관리 문서 경로가 .md 가 아님" 이 났다 — 문서가 틀린 게
+    // 아니라 파서가 표를 가리지 못한 것이다(`ctx package check` 가 잡았다).
+    // 둘째 칸이 경로 모양(`/` · `.md`)이거나 셋째 칸이 섹션 표기일 때만 규칙이다 —
+    // 그래야 `docs/x.mdx` 같은 진짜 오타는 여전히 오류로 남는다.
+    const ruleLike = /[\/]|\.md$/i.test(doc) || /^(?:#{1,6}\s*\{값\}|[—–-])$/.test(sec) || !sec
+    if (!ruleLike) continue
     if (!doc || !/\.md$/i.test(doc)) {
       errors.push({ line: i + 1, message: `관리 문서 경로가 .md 가 아님: ${doc || '(빈칸)'}` })
       continue
@@ -131,6 +139,10 @@ export function parseManagedSections(text) {
     s.applied = null
     s.appliedLine = null
     for (let i = s.line + 1; i < Math.min(s.line + 4, s.end); i++) {
+      // **다음 제목을 넘어가지 않는다.** 전에는 세 줄을 무조건 봤는데, `# 제목`
+      // 바로 아래에 `## 첫 섹션` 이 오면 그 섹션의 applied 주석을 제목의 것으로
+      // 읽었다 — 문서마다 섹션 수가 하나씩 부풀었다(단위 테스트에서 잡았다).
+      if (/^#{1,6}\s/.test(lines[i])) break
       const m = lines[i].match(/<!--\s*applied\s*:\s*(.*?)\s*-->/i)
       if (m) {
         const v = m[1].trim()

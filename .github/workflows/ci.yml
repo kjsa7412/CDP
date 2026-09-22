@@ -1,0 +1,62 @@
+# CI — 로컬에서 도는 것과 **같은 명령**만 부른다.
+#
+# 여기에만 있는 명령이 있으면 "CI 에서는 되는데 내 PC 에서는 안 된다" 가 생긴다.
+# 전부 package.json 의 스크립트다 — 개발자는 같은 것을 npm run 으로 돌린다.
+#
+#   npm ci · build · build:ctx · test · check:packages · verify
+#
+# 서버가 Linux 라 본선은 ubuntu 다. windows 는 번들 · 단위 테스트까지만 —
+# exe 빌드는 릴리스(release.yml)에서 한다.
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: ubuntu · build · test · verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run build:ctx
+      - run: npm test
+      - run: npm run check:packages
+      # 하네스 — 설계서 §10 을 한 자리에서. fresh clone 이라 fixture 의 .claude/ 는
+      # 하네스가 agent/ 에서 만든다(ops/lib/seed-kit.mjs).
+      - run: npm run verify
+      # 취약점은 **경고**다. 실패로 두면 폐쇄망 반입 직전에 막힌다(검토 R16).
+      - run: npm audit --omit=dev
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-result
+          path: ops/out/verify/result.json
+          if-no-files-found: ignore
+
+  windows:
+    name: windows · bundle · test
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build:ctx
+      - run: npm test

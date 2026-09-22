@@ -1,7 +1,7 @@
 {
   "name": "cdp",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "description": "CDP 작업 환경 — 지식 레포 뷰어 + ctx 도구",
   "bin": {
@@ -17,7 +17,12 @@
     "build:ctx": "node ops/lib/build-ctx.mjs",
     "build:exe": "node ops/lib/build-exe.mjs",
     "release": "node ops/lib/release.mjs",
-    "test:tray": "node ops/lib/tray-selftest.mjs"
+    "test:tray": "node ops/lib/tray-selftest.mjs",
+    "test": "node --test test/",
+    "verify": "node ops/verify/run.mjs",
+    "check:packages": "node viewer/bin/ctx-cli.mjs package check --all",
+    "seed:kit": "node ops/lib/seed-kit.mjs",
+    "release:server": "node ops/lib/release-server.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
@@ -36,5 +41,8 @@
     "postject": "1.0.0-alpha.6",
     "rcedit": "^4.0.1",
     "vite": "^6.0.7"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
