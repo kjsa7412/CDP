@@ -149,6 +149,10 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
 터미널 출력은 CLI 실물이라 그대로 유효하다.
 
 - [x] 스킬 머리에 한 문장 — *"`ctx` 호출은 MCP 도구 `cdp:*` 가 있으면 그것으로, 없으면 `<repo>/bin/ctx …` 로. 둘은 같은 함수다"*(§3.3)
+- [x] **그것을 지식 레포에 붓는다** — `agent/skills/` 는 원본이고 서버가 내주는 것은
+      지식 레포의 `.claude/skills/` 다. 2026-09-22 까지 안 옮겨져 있어서, 모드 B 로
+      설치한 사람이 **`git -C <repo> pull` 부터 시작하는 옛 스킬**을 받았다 —
+      로컬 레포도 `bin/ctx` 도 없는 자리에서. 원본만 고치고 끝내면 이렇게 된다
 - [x] `cdp-load` §0 `sync` · §2 `where`→`section` · §5 `search`
 - [x] `cdp-work` ① · `cdp-save` ② · `cdp-import` ③ → `match`
 - [x] `cdp-save` ④ · `cdp-managed` → `derive` · `apply`
