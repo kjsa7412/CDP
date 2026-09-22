@@ -95,7 +95,7 @@ export function mergeClaude(existing, body, kit = null) {
 // `server` 를 주면 모드 B 다(§4.7). 포인터가 `{ server, repo }` 가 되고
 // **커밋한다** — 모드 A 가 커밋하지 않은 이유는 `knowledgeRepo` 가 PC 마다
 // 다른 절대경로여서였다. `{ server, repo }` 는 PC 와 무관하다.
-export async function planSetup(knowledgeRoot, workRoot, { server = null, repo = null, kit = null } = {}) {
+export async function planSetup(knowledgeRoot, workRoot, { server = null, repo = null, kit = null, also = [] } = {}) {
   const kn = path.resolve(knowledgeRoot)
   const wk = path.resolve(workRoot)
   const bad = (reason) => ({ ok: false, reason, knowledge: kn, work: wk, actions: [], warnings: [] })
@@ -189,8 +189,16 @@ export async function planSetup(knowledgeRoot, workRoot, { server = null, repo =
     const mcpPath = path.join(wk, '.mcp.json')
     const hadMcp = await read(mcpPath)
     let nextMcp = null
+    // `--also` — 지식 레포 둘 이상을 **한 항목**으로(§3.2). 항목을 늘리지 않는다 —
+    // 명함 12 × N 이 매 요청 실리는 자리다(§2.9). 지식 레포가 아닌 경로는 경고하고 뺀다.
+    const extra = []
+    for (const p of also || []) {
+      const abs = path.resolve(p)
+      if (await fs.access(path.join(abs, '_vocab.md')).then(() => true).catch(() => false)) extra.push(abs)
+      else warnings.push(`--also ${p} 는 지식 레포가 아니다 (_vocab.md 없음) — .mcp.json 에 넣지 않았다`)
+    }
     try {
-      nextMcp = mergeMcpJson(hadMcp, mcpEntryLocal(kn))
+      nextMcp = mergeMcpJson(hadMcp, mcpEntryLocal(kn, process.platform, extra))
     } catch (e) {
       // 깨진 `.mcp.json` 은 덮지 않는다. 계획에서 빼고 경고로 낸다 --
       // 여기서 던지면 skill 설치까지 통째로 막힌다.
@@ -276,12 +284,40 @@ export function mergeMcpJson(existing, entry) {
 // 그대로 필요하다 -- 폐쇄망 PC 가 이 모드의 대상이다.
 //
 // Windows 의 `.cmd` 는 셸이 있어야 돈다. 그래서 `cmd /c` 로 감싼다.
-export function mcpEntryLocal(knowledgeRoot, platform = process.platform) {
+export function mcpEntryLocal(knowledgeRoot, platform = process.platform, also = []) {
   const root = path.resolve(knowledgeRoot)
+  // 레포가 둘 이상이면 `--repo` 를 반복한다. **첫 번째가 기본 레포**다(§3.1) —
+  // 하나뿐일 때는 인자를 붙이지 않는다. `bin/ctx` 가 자기 위치로 레포를 찾는다.
+  const tail = also && also.length ? ['--repo', root, ...also.flatMap((p) => ['--repo', path.resolve(p)])] : []
   if (platform === 'win32') {
-    return { type: 'stdio', command: 'cmd', args: ['/c', path.join(root, 'bin', 'ctx.cmd'), 'mcp'] }
+    return { type: 'stdio', command: 'cmd', args: ['/c', path.join(root, 'bin', 'ctx.cmd'), 'mcp', ...tail] }
   }
-  return { type: 'stdio', command: path.join(root, 'bin', 'ctx'), args: ['mcp'] }
+  return { type: 'stdio', command: path.join(root, 'bin', 'ctx'), args: ['mcp', ...tail] }
+}
+
+// ── Claude Desktop (§3.2 `--desktop`) ─────────────────────────────────────
+//
+// Desktop 은 스킬을 깔 자리가 없어 prompt 로 간다(§2.5). 설정 파일 하나에
+// `mcpServers["cdp-<레포 폴더명>"]` 를 병합한다 — 다른 키는 보존한다.
+export function desktopConfigPath(platform = process.platform, env = process.env, home = null) {
+  const h = home || env.HOME || env.USERPROFILE || ''
+  if (platform === 'darwin') return path.join(h, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
+  if (platform === 'win32') return path.join(env.APPDATA || path.join(h, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json')
+  return path.join(env.XDG_CONFIG_HOME || path.join(h, '.config'), 'Claude', 'claude_desktop_config.json')
+}
+
+export function mergeDesktopConfig(existing, key, entry) {
+  let j = {}
+  if (existing) {
+    try {
+      j = JSON.parse(existing)
+    } catch {
+      throw new Error('claude_desktop_config.json 이 JSON 이 아닙니다 — 손으로 고친 뒤 다시 돌리세요')
+    }
+  }
+  if (!j.mcpServers || typeof j.mcpServers !== 'object') j.mcpServers = {}
+  j.mcpServers[key] = entry
+  return JSON.stringify(j, null, 2) + '\n'
 }
 
 export function mcpEntryServer(server, repo) {
@@ -348,11 +384,16 @@ export async function inspect(knowledgeRoot, workRoot) {
   const pointer = plan.actions.find((a) => a.kind === 'pointer')
   const fresh = skills.length > 0 && skills.every((a) => a.op === 'create') && pointer?.op === 'create'
 
+  // `.mcp.json` 의 상태를 따로 낸다 — "MCP 가 붙었나" 를 화면이 말할 수 있게(§3.2).
+  const mcp = plan.actions.find((a) => a.kind === 'mcp')
+  const mcpState = !mcp ? null : mcp.op === 'same' ? 'ok' : mcp.op === 'create' ? 'none' : 'update'
+
   return {
     path: wk,
     state: fresh ? 'none' : changes.length ? 'update' : 'ok',
     // 들어가 있는 skill 수 — 카드가 "skill 7종" 이라고 말할 근거
     skills: skills.filter((a) => a.op === 'same' || a.op === 'update').map((a) => a.name),
+    mcp: mcpState,
     changes,
     warnings: plan.warnings,
   }

@@ -117,7 +117,7 @@ export function makeRepoCache(root) {
 // saver    (repoName, input) => 결과   모드 B 만. 없으면 `save` 를 등록하지 않는다
 // notice   brief 에 한 줄 더 — 토큰 만료 임박 등(§4.4.2). 레포와 무관한 알림 자리
 
-export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null, notice = null, saver = null } = {}) {
+export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT } = {}) {
   if (!repos.length) throw new CtxError('E_REPO', '지식 레포가 하나도 없다', {})
 
   const caches = new Map()
@@ -177,7 +177,8 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
   tool('apply', { coord: z.string().max(240) }, (r, a) => T.toolApply(r, a))
   tool('check', {}, (r) => T.toolCheck(r))
   tool('brief', {}, (r) => {
-    const b = T.toolBrief(r)
+    // 번들 나이는 `toolBrief` 가 낸다 — CLI 와 같은 줄이다(§3.0 · 하네스 20번)
+    const b = T.toolBrief(r, { built })
     return notice ? { ...b, lines: [...b.lines, notice] } : b
   })
   tool('sync', {}, async (r) => syncOf(r, mode))
@@ -528,7 +529,7 @@ export async function runStdio(opt = {}) {
   }
 
   const prompts = opt.prompts || 'auto'
-  const server = buildServer({ repos, fallback: repos[0].name, mode: 'local', prompts })
+  const server = buildServer({ repos, fallback: repos[0].name, mode: 'local', prompts, built: opt.builtAt || BUILT })
 
   // §2.5 — `auto` 는 Claude Code 에 prompt 를 내놓지 않는다.
   //

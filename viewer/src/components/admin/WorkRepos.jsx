@@ -22,8 +22,11 @@ const STATE = {
 const OPLBL = { create: '새로', update: '갱신', append: '블록', remove: '제거' }
 
 function shortOf(c) {
-  return c.kind === 'skill' ? `.claude/skills/${c.name}` : c.kind === 'claude' ? 'CLAUDE.md' : '.claude/cdp.json'
+  return c.kind === 'skill' ? `.claude/skills/${c.name}` : c.kind === 'claude' ? 'CLAUDE.md' : c.kind === 'mcp' ? '.mcp.json' : '.claude/cdp.json'
 }
+
+// MCP 가 붙었나 — `.mcp.json` 의 `cdp` 항목이 이 지식 레포를 가리키는가(§3.2)
+const MCP = { ok: 'MCP 연결됨', update: 'MCP 갱신 필요', none: 'MCP 미연결' }
 
 export default function WorkRepos({ state, patch, say }) {
   const [data, setData] = useState(null)
@@ -141,6 +144,7 @@ export default function WorkRepos({ state, patch, say }) {
                     <span>
                       <Icon name="plug" size={12} /> skill {r.skills?.length || 0}종
                     </span>
+                    {r.mcp && <span className={r.mcp === 'ok' ? '' : 'awarn'}>{MCP[r.mcp]}</span>}
                     {r.lastApplied ? (
                       <span>
                         마지막 설치 {when(r.lastApplied.at)} · kit <Mono>{r.lastApplied.kit}</Mono>

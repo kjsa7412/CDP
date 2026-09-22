@@ -119,9 +119,9 @@ term · apply · brief · sync · setup` 이다. 도구 12종과 대조하면 �
       없는 것과 같다. `mcpEntryLocal()` + `planSetup` 에서 계획에 넣는다.
       실측: `ctx setup` 이 쓴 `.mcp.json` 을 호스트처럼 spawn → `initialize` ok ·
       `tools/list` 12건 · `save` 없음(모드 A 맞다)
-- [ ] ⏸ `--also <경로>` — 지식 레포 둘 이상을 **한 항목**으로(§3.2)
-- [ ] ⏸ `ctx setup --desktop` — 기존 `claude_desktop_config.json` 의 다른 키 보존(§3.2)
-- [ ] ⏸ `inspect()` 에 `.mcp.json` 상태 · 관리 > 작업 레포 화면에 열 하나
+- [x] `--also <경로>` — 지식 레포 둘 이상을 **한 항목**으로(§3.2). **2026-09-22 제품화 7단계**에서 닫았다
+- [x] `ctx setup --desktop` — 기존 `claude_desktop_config.json` 의 다른 키 보존(§3.2). 2026-09-22 제품화 7단계
+- [x] `inspect()` 에 `.mcp.json` 상태 · 관리 > 작업 레포 화면에 열 하나. 2026-09-22 제품화 7단계
 - [ ] ⏸ `cdp.exe` 로 stdio 가 열리는지 실측 — 안 되면 `mcp` 만 CONSOLE 빌드(§10)
 - [ ] ⏸ Windows `.mcp.json` — `cmd /c … ctx.cmd mcp`
 - [x] `--prompts auto` 판정 — `/claude[-_ ]?code/i` 로 거르고 **clientInfo 를 stderr 에 한 줄 남긴다**
@@ -285,8 +285,8 @@ work 파일 지워짐 · 관리 문서 그대로** · 동시 `save` 둘이 직�
 
 ## 5. 설치
 
-- [ ] `ctx setup --server <url> --repo <name>` — `.mcp.json`(HTTP · `${CDP_TOKEN}`) · `cdp.json` · kit(§4.7)
-- [ ] **`cdp.json` 을 커밋한다**(§4.7) — `{ server, repo }` 는 PC 독립적이라 모드 A 의 이유가 사라진다
+- [x] `ctx setup --server <url> --repo <name>` — `.mcp.json`(HTTP · `${CDP_TOKEN}`) · `cdp.json` · kit(§4.7) — 5단계 「끝났다고 보는 기준」이 실측이다
+- [x] **`cdp.json` 을 커밋한다**(§4.7) — `{ server, repo }` 는 PC 독립적이라 모드 A 의 이유가 사라진다
 - [x] `GET /kit/<name>` zip
 - [x] 스킬 본문에 한 줄 — *"`save` 도구가 있으면 서버 모드다: pull 하지 않고 커밋 대신 `save` 한 번"*(§4.8)
 - [x] 모드 B 스킬 분기 — `pull` 생략 · Write/Edit 대신 메모리 준비 · `E_CONFLICT` 면 다시 읽고 다시
@@ -422,7 +422,7 @@ work 파일 지워짐 · 관리 문서 그대로** · 동시 `save` 둘이 직�
 - [ ] ⏸ 인터넷이 끊긴 PC 에서 반입 묶음만으로 설치 → 연결까지 (`npm` · 다운로드 **0회**)
 - [ ] ⏸ Node 없는 PC — shim → `cdp.exe ctx mcp` 로 stdio 가 열린다
 - [ ] ⏸ git 원격이 없는 레포 — `sync` 가 `remote: null` 로 답하고 죽지 않는다
-- [ ] `version.built` 90일 경과 → `brief` 경고 줄  ← **이것만 살린다**(일반망에서도 번들은 낡는다)
+- [x] `version.built` 90일 경과 → `brief` 경고 줄 — 2026-09-22 제품화 7단계. 하네스 20번이 `--built-at` 으로 돈다
 
 ---
 
@@ -437,6 +437,9 @@ node ops/verify/run.mjs          # 빠른 것만 (약 30초)
 node ops/verify/run.mjs --slow   # 60초 갱신까지
 
 ✓ 51  ✗ 0  – 18   (§10 전체 69줄)
+
+# 2026-09-22 제품화 뒤 — 52번 수정 · 20번 살림 · 70~74 추가 · fresh clone 에서 돈다
+✓ 57  ✗ 0  – 17   (§10 전체 69줄 + 제품화 70~74)
 ```
 
 - [x] **명함 12개 토큰 비용 실측** — 명함 **1222자** · `instructions` 는 레포 2개 **447자** → 3개 **508자**(+61).
