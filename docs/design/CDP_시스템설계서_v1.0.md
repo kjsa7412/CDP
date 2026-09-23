@@ -714,9 +714,13 @@ docs/       **우리만 보는 것** — 판정 기준은 "보존되는가" (doc
 > 들이기). 판정은 그대로 한 곳이다 — 셋 다 `loadRepo` · `runBuiltinCheck` 를 부른다.
 > 근거는 [`CDP_제품화_검토_v1.0`](CDP_제품화_검토_v1.0.md).
 
+> **정정 (2026-09-23)** — 루트에 `manual/` 이 생겼다. 역할별 제품 설명서 세 권(사용자 ·
+> 관리자 · 개발자)의 **원천**이다. `agent/manual/` 은 지식 레포 안으로 들어가는 짧은 판으로
+> 그대로 두고, 두 벌이 어긋나면 `manual/` 이 맞다.
+
 **루트에는 도구가 요구하는 것과 제일 위에 있는 것만 남는다** —
 `package.json`·`package-lock.json` 은 npm 이, `.gitattributes`·`.gitignore` 는
-git 이 루트에서만 읽는다. 그 밖에 루트에 두는 것은 `README.md` 와 `core/` 뿐이다.
+git 이 루트에서만 읽는다. 그 밖에 루트에 두는 것은 `README.md` · `core/` · `manual/` 뿐이다.
 
 **`node_modules/` 만 예외다.** npm 은 `package.json` 옆에 만들고 node 는 파일
 위치에서 위로 올라가며 찾는다. `viewer/` 와 `ops/lib/` 가 둘 다 외부 의존을
