@@ -50,7 +50,7 @@ const hasGit = await run('git', ['--version']).then(() => true).catch(() => fals
 
 test('REPO_NAME_RE', () => {
   assert.ok(REPO_NAME_RE.test('gdi'))
-  assert.ok(REPO_NAME_RE.test('ezipez_cdp-2'))
+  assert.ok(REPO_NAME_RE.test('my_app-2'))
   assert.ok(!REPO_NAME_RE.test('한글'))
   assert.ok(!REPO_NAME_RE.test('a b'))
   assert.ok(!REPO_NAME_RE.test('.hidden'))

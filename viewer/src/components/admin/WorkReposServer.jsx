@@ -78,7 +78,7 @@ export default function WorkReposServer({ say }) {
       <Card title="등록" hint="담당자는 명부에 있어야 합니다">
         <div className="wr-form">
           <input
-            placeholder="작업 레포 이름 (예: ezipez-web)"
+            placeholder="작업 레포 이름 (예: my-app)"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
