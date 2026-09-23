@@ -24,6 +24,8 @@
 //
 // 남는 값이 없으므로 규칙은 "값이 있으면 오류" 하나다. 다만 미결·제안은
 // 갈 곳을 알려 줘야 하므로 메시지를 따로 낸다.
+import { normValue } from './managed.js'
+
 const AGENDA = new Set(['미결', '제안'])
 const REQUIRED = ['id', 'title', 'date', 'author']
 
@@ -232,6 +234,30 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
         detail: x.reason === 'doc' ? `${x.doc} 문서가 없음` : `${x.doc} 에 \`${x.anchor}\` 섹션이 없음`,
       }))
     )
+
+    // **같은 좌표의 섹션이 한 문서에 둘** — 뒤의 것은 도달할 수 없다(`buildManagedIndex` 는
+    // 앞의 것을 쓴다). 헤딩이 두 번 들어간 save 가 이렇게 만들었고(2026-09-23 실사용), 그때
+    // 파생 판정도 where 도 앞의 빈 섹션을 보며 "ok" 라 했다 — 좌표 하나에 정본 섹션 하나
+    // (불변조건 2)가 깨진 채 확신 있게 틀린 답을 내는 자리라 error 다. 등록부의 앵커 레벨에
+    // 있는 헤딩만 본다 — `###` 소제목이 섹션마다 반복되는 것은 정상이다.
+    const dups = []
+    const rules = managedIndex.registry?.rules || []
+    for (const d of managedIndex.docs || []) {
+      const levels = new Set(rules.filter((r) => r.doc === d.path && !r.whole).map((r) => r.level))
+      if (!levels.size) continue
+      const seen = new Map()
+      for (const s of d.managedSections || []) {
+        if (!levels.has(s.level)) continue
+        const k = s.level + normValue(s.value)
+        if (seen.has(k)) {
+          dups.push({
+            path: d.path,
+            detail: `${d.path} \`${'#'.repeat(s.level)} ${s.value}\` 이 ${seen.get(k) + 1}행과 ${s.line + 1}행에 둘 — 뒤의 것은 보이지 않는다`,
+          })
+        } else seen.set(k, s.line)
+      }
+    }
+    push('error', 'dup-anchor', '같은 좌표의 섹션이 한 문서에 둘 — 뒤의 것은 보이지 않는다', dups)
   }
 
   // 등록부의 applied 가 없는 작업 기록을 가리킨다 — 이름을 잘못 적었거나

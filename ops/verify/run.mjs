@@ -961,6 +961,63 @@ await check(74, '패키지 검사 — ctx package check --all 이 모든 패키�
   return `${j.length}개 ok — ` + j.map((p) => `${p.name}(문서 ${p.docs} · 패턴 ${p.patterns})`).join(' · ')
 })
 
+// 헤딩이 든 body — 2026-09-23 실측. `section` 의 `body` 를 그대로 고쳐 save 에 보내니 헤딩이
+// 두 번 들어가 섹션이 비었는데 save · check · where 어디서도 소리가 안 났다. 지금은 셋 —
+// `section` 이 `content` 를 주고, save 가 헤딩 든 body 를 E_INPUT 으로 막고, check 가 같은 좌표
+// 섹션 둘을 오류로 낸다.
+await check(76, 'save — sections[].body 에 헤딩 줄이 있으면 E_INPUT · section 은 content(헤딩 · applied 없는 본문)를 준다', async () => {
+  // TK 는 앞 검사들이 만료 · 폐기를 시험하며 건드렸을 수 있다 — 70번대가 쓰는 TK3(write) 로 간다
+  const sec = payload((await H.rpc('/mcp/alpha', 'tools/call', { name: 'section', arguments: { coord: 'api:/adapter/a10/expense-slip' } }, TK3)).j)
+  must(typeof sec.content === 'string' && sec.content.length > 0, 'content 가 없다 — ' + JSON.stringify(sec).slice(0, 140))
+  must(!/^#/.test(sec.content) && !/applied\s*:/.test(sec.content), 'content 에 헤딩이나 applied 가 있다')
+  must(/^#/.test(sec.body), 'body 는 헤딩부터여야 한다')
+  const d = payload(
+    (
+      await H.rpc(
+        '/mcp/alpha',
+        'tools/call',
+        {
+          name: 'save',
+          arguments: {
+            repo: 'alpha',
+            work: { id: '2026-0923-검증-헤딩', title: '헤딩 든 body', date: '2026-09-23 10:00', touches: ['api:/adapter/a10/expense-slip'], body: '본문' },
+            // 실사용 때의 모양 — applied 주석은 뺐는데 헤딩은 남긴 body. applied 가 남아 있으면
+            // 2단계의 applied 거절이 먼저 나서 헤딩 거절을 못 본다.
+            sections: [
+              { coord: 'api:/adapter/a10/expense-slip', applied: sec.applied, body: sec.body.split(NL).filter((l) => !/<!--\s*applied\s*:/i.test(l)).join(NL) },
+            ],
+          },
+        },
+        TK3
+      )
+    ).j
+  )
+  eq(d.error?.code, 'E_INPUT', '헤딩 거절 — ' + JSON.stringify(d).slice(0, 140))
+  must(/헤딩/.test(d.error.message), d.error.message)
+  // 거절된 save 가 아무것도 쓰지 않았나 — save 가 만지는 자리(docs · work · 어휘)만 본다.
+  // 앞 검사들이 .claude/ 를 건드려 둘 수 있어 트리 전체를 보면 남의 흔적에 걸린다.
+  const st = (await run('git', ['-C', path.join(F.repos, 'alpha'), 'status', '--porcelain', '--', 'docs', 'work', '_vocab.md'])).stdout.trim()
+  eq(st, '', 'save 가 쓴 것이 남았다')
+  return `content ${sec.content.length}자 · E_INPUT · docs/work 깨끗`
+})
+
+await check(77, 'check — 같은 좌표 섹션이 한 문서에 둘이면 dup-anchor 오류 (조용히 지나가지 않는다)', async () => {
+  const R = path.join(F.repos, 'beta')
+  const w = JSON.parse((await ctx('--repo', R, 'where', 'api:/adapter/a10/expense-slip', '--json')).stdout)
+  const doc = path.join(R, w.section.doc)
+  const orig = await fs.readFile(doc, 'utf8')
+  try {
+    await fs.writeFile(doc, orig.replace(/\s*$/, '') + NL + NL + w.section.anchor + NL + '<!-- applied: null -->' + NL + '중복 시험' + NL, 'utf8')
+    const r = await ctx('--repo', R, 'check', '--json').catch((e) => e)
+    const j = JSON.parse(r.stdout)
+    const f = (j.findings || []).find((x) => x.kind === 'dup-anchor')
+    must(f && f.sev === 'error', 'dup-anchor 가 없다 — ' + JSON.stringify((j.findings || []).map((x) => x.kind)))
+    return `${f.items.length}건 · ${String(f.items[0].detail).slice(0, 70)}`
+  } finally {
+    await fs.writeFile(doc, orig, 'utf8')
+  }
+})
+
 await check(14, '모드 A `.mcp.json` — Windows 는 cmd /c ctx.cmd mcp', async () => {
   const { mcpEntryLocal } = await import(pathToFileURL(path.join(ROOT, 'core/setup.js')).href)
   const w = mcpEntryLocal('C:/cdp', 'win32')
@@ -1066,6 +1123,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~75)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

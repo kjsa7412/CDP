@@ -268,6 +268,22 @@ async function run(root, input, { user, write, mirror, now }) {
       if (!byDoc.has(hit.doc)) {
         byDoc.set(hit.doc, await fs.readFile(path.join(root, hit.doc), 'utf8').catch(() => ''))
       }
+      // **본문에 섹션 레벨 이하의 헤딩 줄이 있으면 거절한다.** `section` 이 준 `body` 는
+      // 헤딩부터 실린 원문이라 그것을 그대로 고쳐 보내기 쉬운데, 서버가 헤딩을 또 붙이면
+      // 파서가 둘째 헤딩을 새 섹션 시작으로 읽어 이 좌표의 섹션은 두 줄만 남고 빈다 —
+      // 그리고 save 는 성공하고 check 도 where 도 조용했다(2026-09-23 실측). applied 주석은
+      // 2단계에서 막는데 헤딩은 안 막았다. 같은 자리다. 보낼 것은 `section` 의 `content` 다.
+      {
+        const splitRe = new RegExp('^#{1,' + hit.level + '}\\s')
+        const at = s.body.split(NL).findIndex((l) => splitRe.test(l))
+        if (at >= 0) {
+          throw new CtxError(
+            'E_INPUT',
+            `sections[].body 에 헤딩 줄(${s.body.split(NL)[at].trim().slice(0, 60)})이 있다 — 섹션을 쪼갠다. 헤딩과 applied 는 서버가 붙인다: section 의 content 를 고쳐 보낸다`,
+            { coord: s.coord, line: at + 1 }
+          )
+        }
+      }
       const res = replaceSection(byDoc.get(hit.doc), {
         value: hit.value,
         level: hit.level,

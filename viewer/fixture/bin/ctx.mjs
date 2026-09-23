@@ -4285,6 +4285,24 @@ function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, secti
         detail: x.reason === "doc" ? `${x.doc} \uBB38\uC11C\uAC00 \uC5C6\uC74C` : `${x.doc} \uC5D0 \`${x.anchor}\` \uC139\uC158\uC774 \uC5C6\uC74C`
       }))
     );
+    const dups = [];
+    const rules = managedIndex.registry?.rules || [];
+    for (const d of managedIndex.docs || []) {
+      const levels = new Set(rules.filter((r) => r.doc === d.path && !r.whole).map((r) => r.level));
+      if (!levels.size) continue;
+      const seen = /* @__PURE__ */ new Map();
+      for (const s of d.managedSections || []) {
+        if (!levels.has(s.level)) continue;
+        const k = s.level + normValue(s.value);
+        if (seen.has(k)) {
+          dups.push({
+            path: d.path,
+            detail: `${d.path} \`${"#".repeat(s.level)} ${s.value}\` \uC774 ${seen.get(k) + 1}\uD589\uACFC ${s.line + 1}\uD589\uC5D0 \uB458 \u2014 \uB4A4\uC758 \uAC83\uC740 \uBCF4\uC774\uC9C0 \uC54A\uB294\uB2E4`
+          });
+        } else seen.set(k, s.line);
+      }
+    }
+    push2("error", "dup-anchor", "\uAC19\uC740 \uC88C\uD45C\uC758 \uC139\uC158\uC774 \uD55C \uBB38\uC11C\uC5D0 \uB458 \u2014 \uB4A4\uC758 \uAC83\uC740 \uBCF4\uC774\uC9C0 \uC54A\uB294\uB2E4", dups);
   }
   if (sections) {
     push2(
@@ -4349,6 +4367,7 @@ function vocabHelpers() {
 var AGENDA, REQUIRED;
 var init_check = __esm({
   "core/check.js"() {
+    init_managed();
     AGENDA = /* @__PURE__ */ new Set(["\uBBF8\uACB0", "\uC81C\uC548"]);
     REQUIRED = ["id", "title", "date", "author"];
   }
@@ -4771,6 +4790,10 @@ function sliceSection(r, coord) {
   const s = hit.section;
   const lines = (r.bodies.get(hit.doc) || "").split(NL);
   const seg = s.whole ? lines : lines.slice(s.line, s.end);
+  let inner = s.whole ? lines.slice() : lines.slice(s.line + 1, s.end);
+  inner = inner.filter((l, i) => !(i < 3 && /<!--\s*applied\s*:/i.test(l)));
+  while (inner.length && !inner[0].trim()) inner.shift();
+  while (inner.length && !inner[inner.length - 1].trim()) inner.pop();
   return {
     coord,
     doc: hit.doc,
@@ -4781,7 +4804,8 @@ function sliceSection(r, coord) {
     applied: s.applied ?? null,
     lines: seg.length,
     chars: seg.reduce((a, l) => a + l.trim().length, 0),
-    body: seg.join(NL)
+    body: seg.join(NL),
+    content: inner.join(NL)
   };
 }
 function sectionState(sec) {
@@ -4870,7 +4894,8 @@ function toolSection(r, { coord } = {}) {
     end: cut.end,
     applied: cut.applied,
     heading: cut.heading,
-    body: cut.body
+    body: cut.body,
+    content: cut.content
   };
 }
 function toolWork(r, { id } = {}) {
@@ -29026,12 +29051,12 @@ var init_ctx_mcp = __esm({
     init_repo();
     init_tools();
     init_tools();
-    BUILT = "2026-09-23 06:54";
+    BUILT = "2026-09-23 09:54";
     NL2 = String.fromCharCode(10);
     CARD = {
       match: "\uC774\uB984\xB7alias\xB7\uC790\uC720 \uD45C\uD604\uC744 \uC815\uBCF8 \uC88C\uD45C\uB85C \uB300\uC870\uD55C\uB2E4. \uD14C\uC774\uBE14\xB7\uD654\uBA74\xB7API\xB7\uD329\uD130\xB7\uC6D0\uCC9C\xB7\uC6A9\uC5B4\uB97C \uB9D0\uB85C \uAC00\uB9AC\uCF30\uC73C\uBA74 \uC88C\uD45C\uB97C \uC9D0\uC791\uD558\uC9C0 \uB9D0\uACE0 \uBA3C\uC800 \uC774\uAC83\uC73C\uB85C \uD655\uC815\uD55C\uB2E4. `\uBBF8\uB4F1\uC7AC` \uB294 \uC5B4\uD718\uC5D0 \uC5C6\uB2E4\uB294 \uB73B\uC774\uB2E4 \u2014 \uB2E4\uB978 \uC88C\uD45C\uB85C \uBC14\uAFB8\uC9C0 \uB9D0\uACE0 \uADF8\uB300\uB85C \uBCF4\uACE0\uD55C\uB2E4. \uD3D0\uAE30 \uC88C\uD45C\uBA74 \uD6C4\uC18D \uC88C\uD45C\uB97C \uC900\uB2E4. `repo` \uB97C \uC8FC\uC9C0 \uC54A\uC73C\uBA74 **\uB4E0 \uB808\uD3EC\uB97C \uC804\uBD80 \uB300\uC870**\uD558\uACE0 \uACB0\uACFC\uB9C8\uB2E4 `repo` \uB97C \uC801\uB294\uB2E4 \u2014 \uADF8 \uAC12\uC744 \uC774\uD6C4 \uB3C4\uAD6C\uC5D0 \uADF8\uB300\uB85C \uB118\uAE34\uB2E4. \uB450 \uB808\uD3EC\uC5D0 \uB2E4 \uC788\uC73C\uBA74 \uB458 \uB2E4 \uBCF4\uACE0\uD55C\uB2E4(\uACE0\uB974\uC9C0 \uC54A\uB294\uB2E4)",
       where: '\uC88C\uD45C\uC758 \uC9C0\uAE08 \uC0C1\uD0DC\uAC00 \uC5B4\uB290 \uAD00\uB9AC \uBB38\uC11C \uC5B4\uB290 \uC139\uC158\uC5D0 \uC788\uB098, \uB9C8\uC9C0\uB9C9\uC73C\uB85C \uBC18\uC601\uB41C \uC791\uC5C5, \uADF8 \uC88C\uD45C\uB97C \uAC74\uB4DC\uB9B0 \uC791\uC5C5\uB4E4. "\uC9C0\uAE08 \uC5B4\uB5BB\uAC8C \uB3FC \uC788\uB098"\uB294 \uC774\uAC83. alias \uB97C \uC8FC\uBA74 \uC815\uBCF8\uC73C\uB85C \uBC14\uAFB8\uACE0 `normalized` \uC5D0 \uC801\uB294\uB2E4. `state` \uAC00 `derive-pending` \uC774\uBA74 \uADF8 \uC139\uC158\uC740 \uC544\uC9C1 \uCD5C\uC2E0\uC774 \uC544\uB2C8\uB2E4 \u2014 \uB2F5\uC5D0 \uADF8 \uC0AC\uC2E4\uC744 \uC801\uB294\uB2E4. \uB4F1\uB85D\uBD80\uC5D0 \uC5C6\uB294 \uD0C0\uC785\uC740 \uAD00\uB9AC \uBB38\uC11C\uAC00 \uC5C6\uB294 \uAC83\uC774 \uC815\uC0C1\uC774\uACE0 \uC791\uC5C5 \uAE30\uB85D\uC774 \uC720\uC77C\uD55C \uADFC\uAC70\uB2E4',
-      section: "\uAD00\uB9AC \uBB38\uC11C\uC5D0\uC11C \uADF8 \uC88C\uD45C\uC758 \uC139\uC158 \uBCF8\uBB38\uB9CC \uB3CC\uB824\uC900\uB2E4. \uBB38\uC11C \uC804\uCCB4\uB97C \uC77D\uC9C0 \uC54A\uB294\uB2E4. \uC139\uC158\uC774 \uC5C6\uC73C\uBA74 `body: null` \uB85C \uC54C\uB9B0\uB2E4",
+      section: "\uAD00\uB9AC \uBB38\uC11C\uC5D0\uC11C \uADF8 \uC88C\uD45C\uC758 \uC139\uC158 \uBCF8\uBB38\uB9CC \uB3CC\uB824\uC900\uB2E4. \uBB38\uC11C \uC804\uCCB4\uB97C \uC77D\uC9C0 \uC54A\uB294\uB2E4. \uC139\uC158\uC774 \uC5C6\uC73C\uBA74 `body: null` \uB85C \uC54C\uB9B0\uB2E4. `content` \uAC00 \uD5E4\uB529 \uC904\uACFC applied \uC8FC\uC11D\uC744 \uBE80 \uBCF8\uBB38\uC774\uB2E4 \u2014 `save` \uC758 `sections[].body` \uC5D0\uB294 \uC774\uAC83\uC744 \uACE0\uCCD0 \uB123\uB294\uB2E4(\uD5E4\uB529\uC744 \uB123\uC73C\uBA74 E_INPUT). `body` \uB294 \uD5E4\uB529\uBD80\uD130 \uC2E4\uB9B0 \uC6D0\uBB38",
       work: '\uC791\uC5C5 \uAE30\uB85D \uBCF8\uBB38. "\uC65C \uADF8\uB807\uAC8C \uC815\uD588\uB098"\uB294 \uAD00\uB9AC \uBB38\uC11C\uAC00 \uC544\uB2C8\uB77C \uC5EC\uAE30 \uC788\uB2E4. \uD55C \uAE30\uB85D\uC5D0 \uC88C\uD45C\uAC00 \uC5EC\uB7FF\uC774\uACE0 \uC88C\uD45C\uB9C8\uB2E4 \uADF8 \uB4A4 \uC0AC\uC815\uC774 \uB2E4\uB974\uB2E4 \u2014 \uBB38\uC11C \uB2E8\uC704\uB85C "\uB36E\uC600\uB2E4"\uACE0 \uD310\uC815\uD558\uC9C0 \uB9D0\uACE0 \uC88C\uD45C\uBCC4\uB85C `where` \uB97C \uBCF8\uB2E4',
       search: "\uB9D0 \u2192 \uC88C\uD45C \uD6C4\uBCF4. `match` \uAC00 \uBBF8\uB4F1\uC7AC\uB97C \uB0C8\uC744 \uB54C\uC758 \uD3F4\uBC31. \uBCF8\uBB38\uC740 \uC2E3\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uD6C4\uBCF4\uB97C \uACE0\uB978 \uB4A4 `section` \uC73C\uB85C \uC77D\uB294\uB2E4. \uC720\uC0AC\uB3C4 \uAC80\uC0C9\uC774 \uC544\uB2C8\uB2E4: \uAC78\uB9AC\uC9C0 \uC54A\uC73C\uBA74 \uC5C6\uB294 \uAC83\uC774\uB2E4",
       derive: "\uD30C\uC0DD\uC774 \uB0A8\uC740 \uC139\uC158\uACFC \uAE68\uC9C4 \uC139\uC158. \uC774\uAC83\uC774 \uBE44\uC5B4\uC57C \uCEE4\uBC0B\uB41C\uB2E4. \uCE58\uC6B0\uB294 \uAC83\uC740 `cdp-managed` \uC808\uCC28",
@@ -31106,6 +31131,17 @@ async function run2(root, input, { user, write, mirror, now }) {
       if (!hit) throw new CtxError("E_INPUT", "\uB4F1\uB85D\uBD80\uC5D0 \uAC78\uB9AC\uC9C0 \uC54A\uB294 \uC88C\uD45C\uB2E4 \u2014 \uAD00\uB9AC \uBB38\uC11C\uAC00 \uC5C6\uB2E4", { coord: s.coord });
       if (!byDoc.has(hit.doc)) {
         byDoc.set(hit.doc, await fs14.readFile(path15.join(root, hit.doc), "utf8").catch(() => ""));
+      }
+      {
+        const splitRe = new RegExp("^#{1," + hit.level + "}\\s");
+        const at = s.body.split(NL10).findIndex((l) => splitRe.test(l));
+        if (at >= 0) {
+          throw new CtxError(
+            "E_INPUT",
+            `sections[].body \uC5D0 \uD5E4\uB529 \uC904(${s.body.split(NL10)[at].trim().slice(0, 60)})\uC774 \uC788\uB2E4 \u2014 \uC139\uC158\uC744 \uCABC\uAC20\uB2E4. \uD5E4\uB529\uACFC applied \uB294 \uC11C\uBC84\uAC00 \uBD99\uC778\uB2E4: section \uC758 content \uB97C \uACE0\uCCD0 \uBCF4\uB0B8\uB2E4`,
+            { coord: s.coord, line: at + 1 }
+          );
+        }
       }
       const res2 = replaceSection(byDoc.get(hit.doc), {
         value: hit.value,
@@ -40273,10 +40309,10 @@ async function runSync(root, { pull = true, onPhase = () => {
 
 // viewer/bin/ctx-cli.mjs
 init_tools();
-var BUILT2 = "2026-09-23 06:54";
+var BUILT2 = "2026-09-23 09:54";
 var BS2 = String.fromCharCode(92);
 var SEP = path22.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-23 06:54)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-23 09:54)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131

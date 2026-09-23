@@ -100,6 +100,15 @@ export function sliceSection(r, coord) {
   const s = hit.section
   const lines = (r.bodies.get(hit.doc) || '').split(NL)
   const seg = s.whole ? lines : lines.slice(s.line, s.end)
+  // **`content` — 헤딩 줄과 applied 주석을 뺀 본문.** `save` 의 `sections[].body` 에
+  // 넣을 것이 이것이다. `body` 는 헤딩부터 실은 원문이라, 그것을 그대로 고쳐 보내면
+  // 서버가 헤딩을 또 붙여 파서가 둘째 헤딩을 새 섹션으로 읽는다 — 그 좌표의 섹션이
+  // 두 줄만 남고 비는데 save · check · where 어디서도 소리가 안 났다(2026-09-23 실측).
+  // 읽은 모양과 쓸 모양이 다르면 부르는 쪽이 그 차이를 외워야 한다. 여기서 맞춘다.
+  let inner = s.whole ? lines.slice() : lines.slice(s.line + 1, s.end)
+  inner = inner.filter((l, i) => !(i < 3 && /<!--\s*applied\s*:/i.test(l)))
+  while (inner.length && !inner[0].trim()) inner.shift()
+  while (inner.length && !inner[inner.length - 1].trim()) inner.pop()
   return {
     coord,
     doc: hit.doc,
@@ -111,6 +120,7 @@ export function sliceSection(r, coord) {
     lines: seg.length,
     chars: seg.reduce((a, l) => a + l.trim().length, 0),
     body: seg.join(NL),
+    content: inner.join(NL),
   }
 }
 
@@ -234,6 +244,7 @@ export function toolSection(r, { coord } = {}) {
     applied: cut.applied,
     heading: cut.heading,
     body: cut.body,
+    content: cut.content,
   }
 }
 

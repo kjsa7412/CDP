@@ -413,6 +413,7 @@ skill 을 건너뛰고 문서를 고쳤다면 git 훅이 커밋 시점에 잡는
 | **error** | `dangling-anchor` | 등록부가 가리키는 섹션이 없음 |
 | **error** | `orphan-applied` | `applied` 가 없는 작업 기록을 가리킴 |
 | **error** | `derive-missing` | **관리 문서 파생 누락** |
+| **error** | `dup-anchor` | 같은 좌표의 섹션이 한 문서에 둘 — 뒤의 것은 보이지 않는다 (헤딩이 두 번 들어간 save 가 만든다) |
 | **error** | `agenda-status` | `status: 미결·제안` — 아젠다다 |
 | **error** | `status-value` | `status` 에 쓸 수 있는 값이 없다 |
 | **error** | `broken-supersedes` | `supersedes` 대상 문서 없음 |
