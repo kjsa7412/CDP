@@ -14,13 +14,10 @@ description: 관리 문서(테이블정의서·화면설계서·코드정의서 
 ⑥ 한 커밋      작업 기록 1 + 관리 문서 N.  push 는 하지 않는다
 ```
 
-> **`ctx` 호출은 MCP 도구 `cdp:*` 가 있으면 그것으로, 없으면 `<repo>/bin/ctx …` 로.
-> 둘은 같은 함수다** — 결과가 바이트까지 같다(MCP 설계서 §3.3 · §10). 아래 예시는
-> CLI 로 적혀 있고, 도구가 있으면 같은 이름의 도구를 부른다.
->
-> | 이름이 다른 것 | 도구 |
-> |---|---|
-> | `ctx where <좌표>` 뒤에 섹션을 Read | `where` → **`section`**. 파일을 열지 않는다 |
+> **본문의 호출은 MCP 도구다.** `cdp` 서버가 붙어 있으면 `match(...)` 처럼
+> 그대로 부른다 — 모드 A(stdio)든 모드 B(HTTP)든 같다. 도구가 없는 자리
+> (커밋 훅 · 사람이 터미널에서 칠 때)는 맨 끝 **「도구가 없을 때」** 를 본다.
+> 둘은 같은 함수라 결과가 바이트까지 같다(MCP 설계서 §3.3 · §10).
 >
 > **`save` 도구가 있으면 서버 모드다**(§4.8). 그때는 쓰기 경로가 바뀐다 —
 >
@@ -73,7 +70,7 @@ git -C <repo> pull --ff-only
 ## ② 현재 상태를 읽는다
 
 ```
-<repo>/bin/ctx where <좌표>
+where("<좌표>")
 ```
 
 섹션 본문과 `applied`, 그리고 **파생이 남아 있는지**를 본다.
@@ -218,7 +215,7 @@ git -C <repo> commit -m "<제목>"
 $ git -C C:/cdp pull --ff-only
 Already up to date.
 
-$ C:/cdp/bin/ctx where screen:EXD020
+where("screen:EXD020")
 screen:EXD020
   문서   docs/화면설계서.md
   섹션   ## EXD020
@@ -239,7 +236,7 @@ screen:EXD020
 값인지 본다.
 
 ```
-$ C:/cdp/bin/ctx where screen:EXD020        ← 작업 목록에서 20MB 를 적은 기록을 찾는다
+where("screen:EXD020")
     2026-09-21  2026-0921-B-용량
 ```
 
@@ -330,7 +327,7 @@ $ git -C C:/cdp commit -m "EXD020 첨부 용량 10MB — 문서 반영"
 ### 확인
 
 ```
-$ C:/cdp/bin/ctx where screen:EXA021
+where("screen:EXA021")
 ```
 
 섹션에 이렇게 적혀 있다.
@@ -400,3 +397,29 @@ $ C:/cdp/bin/ctx where screen:EXA021
 ```
 docs/회의록.md 는 등록부에 없는 문서(날짜축)라 작업 기록 없이 고쳤습니다.
 ```
+
+---
+
+## 도구가 없을 때
+
+**에이전트는 이 절을 쓸 일이 없다.** `cdp` 서버가 붙어 있으면 본문 그대로 부른다.
+여기는 **커밋 훅**과 **사람이 터미널에서 칠 때**를 위한 것이다.
+
+`<repo>` 는 지식 레포 경로, `ctx` 는 `<repo>/bin/ctx` — **Node 가 없어도 돈다**
+(없으면 `cdp.exe` 로 넘어간다 · 작업환경 §3.1).
+
+| 본문 | 터미널 |
+|---|---|
+| `match(["a","b"])` | `ctx match "a" "b"` |
+| `where("screen:PSC043")` | `ctx where screen:PSC043` |
+| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `derive()` | `ctx derive` |
+| `check()` | `ctx check` |
+| `sync()` | `ctx sync` |
+| `search("말")` | `ctx search "말"` |
+
+**`cdp` 가 안 붙어 있으면 그것부터 고친다.** `ctx setup <작업레포>` 가
+`.mcp.json` 을 쓰고, Claude Code 를 다시 켜면 `/mcp` 에 `cdp` 가 뜬다.
+붙지 않은 채로 bash 로 `ctx` 를 부르는 것은 **되기는 하지만 정상이 아니다** —
+그 상태에서는 도구 명함이 없어서 무엇을 언제 부를지가 이 문서에만 있다.

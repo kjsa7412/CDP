@@ -15,7 +15,7 @@ import { promisify } from 'node:util'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { seedKit } from '../lib/seed-kit.mjs'
 
 const run = promisify(execFile)
@@ -947,13 +947,85 @@ await check(74, '패키지 검사 — ctx package check 가 dpms 를 ok 로 낸�
   return `문서 ${j[0].docs} · 패턴 ${j[0].patterns} · 예시 ${j[0].examples}`
 })
 
+await check(14, '모드 A `.mcp.json` — Windows 는 cmd /c ctx.cmd mcp', async () => {
+  const { mcpEntryLocal } = await import(pathToFileURL(path.join(ROOT, 'core/setup.js')).href)
+  const w = mcpEntryLocal('C:/cdp', 'win32')
+  eq(w.type, 'stdio', 'type')
+  eq(w.command, 'cmd', 'command')
+  must(w.args[0] === '/c' && /ctx\.cmd$/.test(w.args[1]) && w.args[2] === 'mcp', JSON.stringify(w.args))
+  const u = mcpEntryLocal('/home/kjsa/cdp', 'linux')
+  must(/\/bin\/ctx$/.test(u.command.split(path.sep).join('/')), u.command)
+  eq(u.args, ['mcp'], 'args')
+  return 'win: cmd /c … ctx.cmd mcp · posix: bin/ctx mcp'
+})
+
+await check(15, 'ctx setup 이 .mcp.json 을 쓰고 그것으로 도구 12건이 열린다', async () => {
+  // **모드 A 가 MCP 로 붙는 유일한 길이다.** 이것이 없으면 에이전트가 bash 로
+  // `ctx` 를 직접 부른다 — 서버가 있어도 아무도 안 붙으면 없는 것과 같다.
+  const K = path.join(TMP, 'repos', 'alpha')
+  const W2 = path.join(TMP, 'work-local')
+  await fs.mkdir(path.join(W2, '.git'), { recursive: true })
+  await fs.writeFile(path.join(W2, '.git', 'HEAD'), 'ref: refs/heads/main' + NL)
+
+  const dry = await ctx('setup', '--repo', K, W2, '--dry')
+  must(/\.mcp\.json/.test(dry.stdout), '--dry 에 .mcp.json 이 없다')
+
+  await ctx('setup', '--repo', K, W2)
+  const j = JSON.parse(await fs.readFile(path.join(W2, '.mcp.json'), 'utf8'))
+  const e = j.mcpServers.cdp
+  eq(e.type, 'stdio', 'type')
+  must(!('url' in e), '모드 A 인데 url 이 있다')
+
+  // 껍데기 대신 번들을 직접 띄운다 — 픽스처에는 bin/ 셔임이 없다.
+  const c = stdioClient(['--repo', K])
+  try {
+    await c.rpc('initialize', INIT())
+    const tools = (await c.rpc('tools/list')).result.tools
+    must(tools.length === 12, `도구 ${tools.length}건`)
+    must(!tools.some((t) => t.name === 'save'), '모드 A 에 save 가 있다')
+    return `.mcp.json stdio · 도구 ${tools.length}건 · save 없음`
+  } finally {
+    c.kill()
+  }
+})
+
+await check(75, '스킬 본문이 부르는 이름이 전부 실제 도구다', async () => {
+  // 스킬은 에이전트 행동을 직접 바꾼다. **없는 이름을 적어도 아무도 모른다** —
+  // 실제로 `ctx term` 이 `match` 에 흡수된 뒤에도 예시에 남아 있었다.
+  const { buildServer } = await import(pathToFileURL(path.join(ROOT, 'viewer/bin/ctx-mcp.mjs')).href)
+  const srv = buildServer({
+    repos: [{ name: 'alpha', root: path.join(TMP, 'repos', 'alpha') }],
+    fallback: 'alpha',
+    mode: 'server',
+    prompts: 'never',
+    saver: () => ({}),
+  })
+  const known = new Set(Object.keys(srv._registeredTools || {}))
+  must(known.size >= 13, `도구 목록을 못 읽었다 (${known.size})`)
+
+  const dir = path.join(ROOT, 'agent', 'skills')
+  const bad = []
+  for (const n of await fs.readdir(dir)) {
+    if (n === 'cdp-push') continue // 코드 레포용 — 지식 도구를 부르지 않는다
+    const text = await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8')
+    const cut = text.indexOf('## 도구가 없을 때')
+    must(cut > 0, `${n}: 「도구가 없을 때」 절이 없다`)
+    const body = text.slice(0, cut)
+    for (const m of body.matchAll(/^\s*([a-z][a-z_]{2,15})\(/gm)) {
+      if (!known.has(m[1])) bad.push(`${n}:${m[1]}`)
+    }
+    for (const m of body.matchAll(/(bin\/ctx|C:\/cdp\/bin)/g)) bad.push(`${n}:${m[1]}`)
+  }
+  must(bad.length === 0, bad.slice(0, 6).join(' · '))
+  return `6종 · 도구 ${known.size}종과 대조 · 잔재 0`
+})
+
 S.kill()
 
 // ── 못 도는 것 ──────────────────────────────────────────────────────────────
 
 skip(13, 'Node 없는 PC: cdp.exe 로 stdio', '⏸ 0단계 — 일반망이라 exe 경로를 안 쓴다')
-skip(14, 'Windows .mcp.json: cmd /c ctx.cmd mcp', '⏸ 0단계 — 모드 A 배포물')
-skip(15, 'ctx setup --dry 에 .mcp.json · inspect 최신', '⏸ 0단계 — 모드 A 배포물')
+skip(15.1, 'inspect() 가 .mcp.json 상태를 낸다', '⏸ 0단계 — 화면 쪽. 14·15 가 파일 자체는 덮는다')
 skip(16, 'ctx setup --desktop 이 다른 키를 보존', '⏸ 0단계 — 모드 A 배포물')
 skip(18, '반입 묶음만으로 설치', '⏸ 0단계 — 일반망')
 skip(24, 'active:false 가 열린 화면도 끊는다', '6.1 에서 브라우저 실측 — 여기서는 25번이 같은 경로를 덮는다')
@@ -980,6 +1052,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~74)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~75)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

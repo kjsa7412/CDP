@@ -20,15 +20,12 @@ description: 파생이 남은 관리 문서 섹션을 채운다. 파생 누락�
 ④ 커밋      좌표 단위로 나눈다
 ```
 
-이하 `<repo>` 는 지식 레포 경로. `ctx` 는 `<repo>/bin/ctx` — Node 없어도 돈다.
+이하 `<repo>` 는 지식 레포 경로(모드 A 의 git 명령에만 쓴다).
 
-> **`ctx` 호출은 MCP 도구 `cdp:*` 가 있으면 그것으로, 없으면 `<repo>/bin/ctx …` 로.
-> 둘은 같은 함수다** — 결과가 바이트까지 같다(MCP 설계서 §3.3 · §10). 아래 예시는
-> CLI 로 적혀 있고, 도구가 있으면 같은 이름의 도구를 부른다.
->
-> | 이름이 다른 것 | 도구 |
-> |---|---|
-> | `ctx where <좌표>` 뒤에 섹션을 Read | `where` → **`section`**. 파일을 열지 않는다 |
+> **본문의 호출은 MCP 도구다.** `cdp` 서버가 붙어 있으면 `match(...)` 처럼
+> 그대로 부른다 — 모드 A(stdio)든 모드 B(HTTP)든 같다. 도구가 없는 자리
+> (커밋 훅 · 사람이 터미널에서 칠 때)는 맨 끝 **「도구가 없을 때」** 를 본다.
+> 둘은 같은 함수라 결과가 바이트까지 같다(MCP 설계서 §3.3 · §10).
 >
 > **`save` 도구가 있으면 서버 모드다**(§4.8). 그때는 쓰기 경로가 바뀐다 —
 >
@@ -60,7 +57,7 @@ git -C <repo> pull --ff-only
 ## ① 목록
 
 ```
-ctx derive
+derive()
 ```
 ```
 파생 남은 섹션 2곳
@@ -131,7 +128,7 @@ ctx derive
 ### 초안 받기
 
 ```
-ctx apply table:ps_ext_emp_mst
+apply("table:ps_ext_emp_mst")
 ```
 
 새 `applied` 값과 붙일 변경 줄, 그리고 **반영해야 할 작업 기록 목록**을 준다.
@@ -139,7 +136,7 @@ ctx apply table:ps_ext_emp_mst
 ### 작업 기록을 읽는다
 
 ```
-ctx where table:ps_ext_emp_mst
+where("table:ps_ext_emp_mst")
 ```
 
 `applied` 이후의 기록을 **오래된 것부터** 읽는다. 순서가 중요하다 —
@@ -247,8 +244,8 @@ git -C <repo> commit -m "테이블정의서 ps_ext_emp_mst 섹션 반영 (2026-0
 ### 확인
 
 ```
-ctx derive
-ctx check
+derive()
+check()
 ```
 
 목록에서 빠졌는지 보고, `check` 가 통과하는지 본다. **push 는 하지 않는다.**
@@ -263,7 +260,7 @@ ctx check
 추측으로 채우지 마라. **근거 없는 문서가 정본 자리에 앉는다.**
 
 ```
-ctx derive --json    # pendingDerive[].total 이 그 좌표의 작업 기록 수다
+derive()             # pendingDerive[].total 이 그 좌표의 작업 기록 수다
 ```
 
 
@@ -279,7 +276,7 @@ $ git commit -m "출장사진 테이블"
    screen:EXD020  docs/화면설계서.md · applied 2026-0908-… 뒤 후속 1건 — `ctx apply screen:EXD020`
    table:rp_trip_photo_list  docs/테이블정의서.md · applied 없음 · 작업 1건
 
-ctx check: 오류 2건. 커밋할 수 없습니다.
+  오류 2건 — 이대로는 커밋되지 않는다
 [pre-commit] 커밋을 중단했습니다.
 ```
 
@@ -296,7 +293,7 @@ Already up to date.
 ## ① 무엇이 남았나
 
 ```
-$ C:/cdp/bin/ctx derive
+derive()
 파생 남은 섹션 2곳
 
   screen:EXD020                    작업 6건     화면설계서
@@ -324,7 +321,7 @@ $ C:/cdp/bin/ctx derive
 ## ③ 근거를 읽는다
 
 ```
-$ C:/cdp/bin/ctx apply table:rp_trip_photo_list
+apply("table:rp_trip_photo_list")
 ```
 
 작업 기록을 연다 — `work/2026-0923-출장사진-테이블.md`
@@ -377,8 +374,8 @@ $ C:/cdp/bin/ctx apply table:rp_trip_photo_list
 ## ⑤ 확인하고 커밋
 
 ```
-$ C:/cdp/bin/ctx derive
-ctx derive: 파생 남은 섹션 없음
+derive()
+  파생 남은 섹션 없음
 
 $ git commit -m "출장사진 테이블 파생"
 [main daa075c] 출장사진 테이블 파생
@@ -434,3 +431,29 @@ table:ps_ext_emp_mst 는 남이 바꾼 것이라 컬럼 의미를 그 기록만 
 
 사람이 섹션을 열어 보면 5초다 — 두 기록의 내용이 다 반영돼 있으면 넘어가고,
 빠진 것이 있으면 지금 채운다.
+
+---
+
+## 도구가 없을 때
+
+**에이전트는 이 절을 쓸 일이 없다.** `cdp` 서버가 붙어 있으면 본문 그대로 부른다.
+여기는 **커밋 훅**과 **사람이 터미널에서 칠 때**를 위한 것이다.
+
+`<repo>` 는 지식 레포 경로, `ctx` 는 `<repo>/bin/ctx` — **Node 가 없어도 돈다**
+(없으면 `cdp.exe` 로 넘어간다 · 작업환경 §3.1).
+
+| 본문 | 터미널 |
+|---|---|
+| `match(["a","b"])` | `ctx match "a" "b"` |
+| `where("screen:PSC043")` | `ctx where screen:PSC043` |
+| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `derive()` | `ctx derive` |
+| `check()` | `ctx check` |
+| `sync()` | `ctx sync` |
+| `search("말")` | `ctx search "말"` |
+
+**`cdp` 가 안 붙어 있으면 그것부터 고친다.** `ctx setup <작업레포>` 가
+`.mcp.json` 을 쓰고, Claude Code 를 다시 켜면 `/mcp` 에 `cdp` 가 뜬다.
+붙지 않은 채로 bash 로 `ctx` 를 부르는 것은 **되기는 하지만 정상이 아니다** —
+그 상태에서는 도구 명함이 없어서 무엇을 언제 부를지가 이 문서에만 있다.

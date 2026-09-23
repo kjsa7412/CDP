@@ -17,14 +17,10 @@ cdp-load table:rp_plnd_mst screen:PSC043
 
 이하에서 `<repo>` 는 지식 레포 경로다.
 
-> **`ctx` 호출은 MCP 도구 `cdp:*` 가 있으면 그것으로, 없으면 `<repo>/bin/ctx …` 로.
-> 둘은 같은 함수다** — 결과가 바이트까지 같다(MCP 설계서 §3.3 · §10). 아래 예시는
-> CLI 로 적혀 있고, 도구가 있으면 같은 이름의 도구를 부른다.
->
-> | 이름이 다른 것 | 도구 |
-> |---|---|
-> | `ctx where <좌표>` 뒤에 섹션을 Read | `where` → **`section`**. 파일을 열지 않는다 |
-> | `ctx term <이름>` | **`match`** 에 흡수됐다 |
+> **본문의 호출은 MCP 도구다.** `cdp` 서버가 붙어 있으면 `match(...)` 처럼
+> 그대로 부른다 — 모드 A(stdio)든 모드 B(HTTP)든 같다. 도구가 없는 자리
+> (커밋 훅 · 사람이 터미널에서 칠 때)는 맨 끝 **「도구가 없을 때」** 를 본다.
+> 둘은 같은 함수라 결과가 바이트까지 같다(MCP 설계서 §3.3 · §10).
 >
 > **`save` 도구가 있으면 서버 모드다**(§4.8). 그때는 쓰기 경로가 바뀐다 —
 >
@@ -47,7 +43,7 @@ cdp-load table:rp_plnd_mst screen:PSC043
 > 답에 적는다(꾸러미를 다시 받아 `node install.mjs` 를 한 번 더 돌린다).
 
 ```
-<repo>/bin/ctx sync
+sync()
 ```
 
 | | |
@@ -103,7 +99,7 @@ cdp-load table:rp_plnd_mst screen:PSC043
 **`ctx where <좌표>` 가 등록부 조회와 반영 확인을 한 번에 한다.** 이것을 먼저 쓴다.
 
 ```
-<repo>/bin/ctx where screen:PSC043
+where("screen:PSC043")
 ```
 ```
 screen:PSC043
@@ -205,7 +201,7 @@ id 나열은 수십 토큰이고, 얻는 것은 "더 있다"를 알고 필요하
 `[정본]` · `[범위]` 는 `ctx where` 가 그대로 준다. 좌표 여럿을 한 번에 넘길 수 있다.
 
 ```
-<repo>/bin/ctx where table:rp_plnd_mst screen:PSC043
+where("table:rp_plnd_mst")
 ```
 
 | 줄 | 언제 |
@@ -254,14 +250,14 @@ id 나열은 수십 토큰이고, 얻는 것은 "더 있다"를 알고 필요하
 ### 0. 최신 확인
 
 ```
-$ C:/cdp/bin/ctx sync
+sync()
 차이    받을 것 0건 · 보낼 것 2건        ← 받을 것이 없다. 그대로 간다
 ```
 
 ### 1~3. 주입
 
 ```
-$ C:/cdp/bin/ctx where table:rp_plnd_mst
+where("table:rp_plnd_mst")
 table:rp_plnd_mst
   문서   docs/테이블정의서.md
   섹션   ## rp_plnd_mst
@@ -290,7 +286,7 @@ table:rp_plnd_mst
 > 계획서마스터 상태 좀 보여 줘
 
 ```
-$ C:/cdp/bin/ctx match "계획서마스터"
+match(["계획서마스터"])
 계획서마스터  ->  table:rp_plnd_mst  (alias · _vocab.md:27)
 ```
 
@@ -306,7 +302,7 @@ $ C:/cdp/bin/ctx match "계획서마스터"
 ## 예시 3 — 파생이 남아 있을 때 (**가장 중요**)
 
 ```
-$ C:/cdp/bin/ctx where table:ps_ext_emp_mst
+where("table:ps_ext_emp_mst")
 table:ps_ext_emp_mst
   문서   docs/테이블정의서.md
   섹션   ## ps_ext_emp_mst
@@ -336,8 +332,8 @@ table:ps_ext_emp_mst
 > `table:rp_trip_photo_list` 어떻게 돼 있어?
 
 ```
-$ C:/cdp/bin/ctx term rp_trip_photo_list
-"rp_trip_photo_list": _vocab.md 에 없습니다.
+match(["rp_trip_photo_list"])
+  rp_trip_photo_list  ->  (미등재)  _vocab.md 에 없습니다
 ```
 
 ```
@@ -350,7 +346,7 @@ $ C:/cdp/bin/ctx term rp_trip_photo_list
 **`ctx where` 로 확인하지 마라.** 등재되지 않은 좌표에도 답을 준다 —
 
 ```
-$ C:/cdp/bin/ctx where table:rp_trip_photo_list
+where("table:rp_trip_photo_list")
   문서   docs/테이블정의서.md
   섹션   ## rp_trip_photo_list       ← 등록부 패턴으로 **계산한 자리**다
   작업   0건                          ← 등재됐다는 뜻이 아니다
@@ -361,14 +357,40 @@ $ C:/cdp/bin/ctx where table:rp_trip_photo_list
 ## 예시 5 — 받을 것이 있을 때
 
 ```
-$ C:/cdp/bin/ctx sync
+sync()
 차이    받을 것 3건 · 보낼 것 0건
 ```
 
 ```
 ⚠ 받을 것이 3건 있습니다. 지금 주입하는 섹션이 최신이 아닐 수 있습니다.
-   먼저 받을까요?   (git -C C:/cdp pull --ff-only)
+   먼저 받을까요?   (`git -C <repo> pull --ff-only` · 모드 A)
 ```
 
 **pull 을 강제하지 않는다.** 사용자가 안 받겠다고 하면 주입은 하되 그
 사실을 적는다.
+
+---
+
+## 도구가 없을 때
+
+**에이전트는 이 절을 쓸 일이 없다.** `cdp` 서버가 붙어 있으면 본문 그대로 부른다.
+여기는 **커밋 훅**과 **사람이 터미널에서 칠 때**를 위한 것이다.
+
+`<repo>` 는 지식 레포 경로, `ctx` 는 `<repo>/bin/ctx` — **Node 가 없어도 돈다**
+(없으면 `cdp.exe` 로 넘어간다 · 작업환경 §3.1).
+
+| 본문 | 터미널 |
+|---|---|
+| `match(["a","b"])` | `ctx match "a" "b"` |
+| `where("screen:PSC043")` | `ctx where screen:PSC043` |
+| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `derive()` | `ctx derive` |
+| `check()` | `ctx check` |
+| `sync()` | `ctx sync` |
+| `search("말")` | `ctx search "말"` |
+
+**`cdp` 가 안 붙어 있으면 그것부터 고친다.** `ctx setup <작업레포>` 가
+`.mcp.json` 을 쓰고, Claude Code 를 다시 켜면 `/mcp` 에 `cdp` 가 뜬다.
+붙지 않은 채로 bash 로 `ctx` 를 부르는 것은 **되기는 하지만 정상이 아니다** —
+그 상태에서는 도구 명함이 없어서 무엇을 언제 부를지가 이 문서에만 있다.

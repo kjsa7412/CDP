@@ -23,15 +23,10 @@ description: **이 세션에서 한 작업**이 끝났을 때 지식 레포에 �
 **요청 하나가 작업 하나가 아니다.** 요청 세 개가 한 작업일 수 있고, 그때 기록은 하나다.
 요청마다 기록하면 이력이 파편화되고, 같은 좌표에 남은 기록들이 서로의 후속이 된다.
 
-이하 `<repo>` 는 지식 레포 경로. `ctx` 는 `<repo>/bin/ctx` — **Node 가 없어도 돈다.**
-
-> **`ctx` 호출은 MCP 도구 `cdp:*` 가 있으면 그것으로, 없으면 `<repo>/bin/ctx …` 로.
-> 둘은 같은 함수다** — 결과가 바이트까지 같다(MCP 설계서 §3.3 · §10). 아래 예시는
-> CLI 로 적혀 있고, 도구가 있으면 같은 이름의 도구를 부른다.
->
-> | 이름이 다른 것 | 도구 |
-> |---|---|
-> | `ctx where <좌표>` 뒤에 섹션을 Read | `where` → **`section`**. 파일을 열지 않는다 |
+> **본문의 호출은 MCP 도구다.** `cdp` 서버가 붙어 있으면 `match(...)` 처럼
+> 그대로 부른다 — 모드 A(stdio)든 모드 B(HTTP)든 같다. 도구가 없는 자리
+> (커밋 훅 · 사람이 터미널에서 칠 때)는 맨 끝 **「도구가 없을 때」** 를 본다.
+> 둘은 같은 함수라 결과가 바이트까지 같다(MCP 설계서 §3.3 · §10).
 >
 > **`save` 도구가 있으면 서버 모드다**(§4.8). 그때는 쓰기 경로가 바뀐다 —
 >
@@ -103,7 +98,7 @@ git -C <repo> pull --ff-only
 ### 정규화
 
 ```
-ctx match "면접심사의견등록" "업무구분코드" "서류심사"
+match(["면접심사의견등록", "업무구분코드", "서류심사"])
 ```
 
 - `(미등재)` 로 나오면 **③에 그대로 적고 ④에서 어휘에 등재한다.** 등재하지 않으면
@@ -220,10 +215,10 @@ supersedes: 2026-0902-업무이력-오기재
 **등록부가 답한다. 어느 문서를 고칠지 생각하지 마라.**
 
 ```
-ctx where screen:PSC043
-ctx where table:ps_ext_emp_mst
-ctx where code:PS130
-ctx where module:grid-common     → 등록부에 없음. 파생 없음 (정상)
+where("screen:PSC043")
+where("table:ps_ext_emp_mst")
+where("code:PS130")
+where("module:grid-common")
 ```
 
 `module:` 과 `domain:` 은 관리 문서가 없다. 작업 기록에만 남고 **그것이 정상이다.**
@@ -231,7 +226,7 @@ ctx where module:grid-common     → 등록부에 없음. 파생 없음 (정상)
 ### 초안 받기
 
 ```
-ctx apply table:ps_ext_emp_mst
+apply("table:ps_ext_emp_mst")
 ```
 ```
 # docs/테이블정의서.md  ## ps_ext_emp_mst
@@ -543,7 +538,8 @@ save({
 
 # 실사용 예시 — 처음부터 끝까지
 
-> **아래는 모드 A 다** — `C:/cdp` 라는 로컬 지식 레포와 `bin/ctx` 가 있는 경우.
+> **아래는 모드 A 다** — 이 PC 에 지식 레포(`C:/cdp`)가 있고 **git 으로 커밋**하는 경우.
+> 도구 호출은 두 모드가 같고, 다른 것은 시작의 `pull` 과 끝의 커밋뿐이다.
 > 모드 B 의 대조는 맨 끝 [「같은 작업을 모드 B 로」](#같은-작업을-모드-b-로) 에 있다.
 
 ## 상황
@@ -566,7 +562,7 @@ Already up to date.
 이번 작업에서 건드린 것을 훑는다.
 
 ```
-$ C:/cdp/bin/ctx match "출장복명작성" "출장사진목록" "운행일지"
+match(["출장복명작성", "출장사진목록", "운행일지"])
 출장복명작성   ->  screen:EXD020          (alias · _vocab.md:118)
 출장사진목록   ->  (미등재)  _vocab.md 에 없습니다
 운행일지       ->  (미등재)  _vocab.md 에 없습니다
@@ -658,7 +654,7 @@ tags: [출장]
 ### 섹션 두 곳
 
 ```
-$ C:/cdp/bin/ctx apply screen:EXD020
+apply("screen:EXD020")
 ```
 
 `docs/화면설계서.md`
@@ -722,10 +718,10 @@ $ C:/cdp/bin/ctx apply screen:EXD020
 ### 확인
 
 ```
-$ C:/cdp/bin/ctx derive
-ctx derive: 파생 남은 섹션 없음
+derive()
+  파생 남은 섹션 없음
 
-$ C:/cdp/bin/ctx where issue:ISS-015
+where("issue:ISS-015")
 작업 1건  2026-0908-출장복명-사진첨부
 ```
 
@@ -819,3 +815,29 @@ save({ repo: "gdi", work: {...}, sections: [{ coord: "screen:EXD020",
 | `agenda-status` | 결정이 안 났다 → 이슈 대장으로 |
 
 **`--no-verify` 로 넘기지 마라.** 한 번 통하는 것을 보면 다음에 급할 때 쓴다.
+
+---
+
+## 도구가 없을 때
+
+**에이전트는 이 절을 쓸 일이 없다.** `cdp` 서버가 붙어 있으면 본문 그대로 부른다.
+여기는 **커밋 훅**과 **사람이 터미널에서 칠 때**를 위한 것이다.
+
+`<repo>` 는 지식 레포 경로, `ctx` 는 `<repo>/bin/ctx` — **Node 가 없어도 돈다**
+(없으면 `cdp.exe` 로 넘어간다 · 작업환경 §3.1).
+
+| 본문 | 터미널 |
+|---|---|
+| `match(["a","b"])` | `ctx match "a" "b"` |
+| `where("screen:PSC043")` | `ctx where screen:PSC043` |
+| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `derive()` | `ctx derive` |
+| `check()` | `ctx check` |
+| `sync()` | `ctx sync` |
+| `search("말")` | `ctx search "말"` |
+
+**`cdp` 가 안 붙어 있으면 그것부터 고친다.** `ctx setup <작업레포>` 가
+`.mcp.json` 을 쓰고, Claude Code 를 다시 켜면 `/mcp` 에 `cdp` 가 뜬다.
+붙지 않은 채로 bash 로 `ctx` 를 부르는 것은 **되기는 하지만 정상이 아니다** —
+그 상태에서는 도구 명함이 없어서 무엇을 언제 부를지가 이 문서에만 있다.
