@@ -989,6 +989,9 @@ export async function runAuthCmd(opt) {
     if (Array.isArray(opt.repos) && opt.repos.length) return opt.repos
     return undefined
   }
+  // 만료도 같다 — 안 주면 undefined 로 넘긴다. 그래야 `issue()` 가 **역할로** 기본을
+  // 정한다(admin 30일 · 나머지 90일). 여기서 90 을 채우면 관리자도 90 이 된다.
+  const expiresOpt = () => (opt.expires === undefined ? undefined : opt.expires === 'never' ? 'never' : Number(opt.expires))
 
   const done = async (line) => {
     await auth.store(file, db)
@@ -1001,9 +1004,9 @@ export async function runAuthCmd(opt) {
       if (sub === 'add') {
         const name = need(opt, 'name', '이름')
         if (!name) return 2
-        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos: reposOpt() ?? [], write: !!opt.write })
-        out(`명부에 넣었다: ${u.name} · repos ${u.repos.join(',') || '(없음)'} · write ${u.write}`)
-        return done(`user add · ${u.name} · repos=${u.repos.join(',')} · write=${u.write}`)
+        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos: reposOpt() ?? [], role: opt.role ?? null, write: !!opt.write })
+        out(`명부에 넣었다: ${u.name} · repos ${u.repos.join(',') || '(없음)'} · role ${u.role}`)
+        return done(`user add · ${u.name} · repos=${u.repos.join(',')} · role=${u.role}`)
       }
       if (sub === 'set') {
         const name = need(opt, 'name', '이름')
@@ -1012,28 +1015,30 @@ export async function runAuthCmd(opt) {
         if (opt.label !== undefined) patch.label = opt.label
         const r = reposOpt()
         if (r !== undefined) patch.repos = r
-        if (opt.write !== undefined) patch.write = opt.write
+        if (opt.role !== undefined) patch.role = opt.role
+        else if (opt.write !== undefined) patch.write = opt.write
         if (opt.active !== undefined) patch.active = opt.active
+        // 셸에는 actor 가 없다 — 자기 해제 가드는 화면의 것이고, 마지막 admin 가드만 여기서도 선다.
         const u = auth.userSet(db, name, patch)
-        out(`고쳤다: ${u.name} · active ${u.active} · repos ${(u.repos || []).join(',')} · write ${u.write}`)
+        out(`고쳤다: ${u.name} · active ${u.active} · repos ${(u.repos || []).join(',')} · role ${u.role}`)
         return done(`user set · ${u.name} · ${JSON.stringify(patch)}`)
       }
       if (sub === 'list' || sub === undefined) {
         const rows = auth.userList(db, { repo: opt.repoFilter || null })
         const used = await lastUsed(dataDir)
-        for (const r of rows) r.lastUsed = used.get(r.name) ?? null
+        for (const r of rows) r.lastUsed = used.byUser.get(r.name) ?? null
         if (opt.json) {
           out(JSON.stringify(rows, null, 2))
           return 0
         }
         if (opt.repoFilter) out(`${opt.repoFilter} 를 볼 수 있는 사람 ${rows.length}명`)
-        out(`${pad('이름', 14)}${pad('상태', 8)}${pad('레포', 20)}${pad('쓰기', 6)}${pad('토큰', 8)}${pad('마지막 사용', 14)}설명`)
+        out(`${pad('이름', 14)}${pad('상태', 8)}${pad('레포', 20)}${pad('역할', 8)}${pad('토큰', 8)}${pad('마지막 사용', 14)}설명`)
         for (const r of rows) {
           out(
             pad(r.name, 14) +
               pad(r.active ? '활성' : '중지', 8) +
               pad((r.repos || []).join(',') || '-', 20) +
-              pad(r.write ? 'write' : '-', 6) +
+              pad(r.role, 8) +
               pad(`${r.liveTokens}/${r.tokens}`, 8) +
               pad(r.lastUsed ? r.lastUsed.slice(0, 10) : '-', 14) +
               (r.label || '')
@@ -1048,11 +1053,13 @@ export async function runAuthCmd(opt) {
     if (group === 'token') {
       if (sub === 'list') {
         const rows = auth.tokenList(db)
+        const used = await lastUsed(dataDir)
+        for (const t of rows) t.lastUsed = used.byToken.get(t.id) ?? null
         if (opt.json) {
           out(JSON.stringify(rows, null, 2))
           return 0
         }
-        out(`${pad('id', 10)}${pad('user', 14)}${pad('발급', 12)}${pad('만료', 12)}${pad('남음', 8)}메모`)
+        out(`${pad('id', 10)}${pad('user', 14)}${pad('발급', 12)}${pad('만료', 12)}${pad('남음', 8)}${pad('상태', 18)}메모`)
         for (const t of rows) {
           out(
             pad(t.id, 10) +
@@ -1060,6 +1067,7 @@ export async function runAuthCmd(opt) {
               pad(t.issued || '-', 12) +
               pad(t.expires || '-', 12) +
               pad(t.daysLeft === null ? '무기한' : `${t.daysLeft}일`, 8) +
+              pad(t.status === 'revoked' ? `폐기 ${t.revokedAt || ''}${t.revokedBy ? ' ' + t.revokedBy : ''}`.trim() : '활성', 18) +
               (t.note || '')
           )
         }
@@ -1069,25 +1077,46 @@ export async function runAuthCmd(opt) {
         const name = need(opt, 'name', '이름 (--name)')
         if (!name) return 2
         const n = auth.revoke(db, { user: name, id: opt.id || null })
-        out(`지웠다: ${n}개. **다음 요청부터** 막힌다 — 서버에 세션이 없으므로 지울 다른 곳이 없다`)
-        return done(`token revoke · ${name} · ${n}개`)
+        out(`폐기했다: ${n}개. 줄은 남는다(status: revoked) — **다음 요청부터** 막힌다. 서버에 세션이 없으므로 지울 다른 곳이 없다`)
+        return done(`token revoke · ${name} · ${n}개${opt.id ? ' · ' + String(opt.id).slice(0, 8) : ''}`)
+      }
+      // 재발급 — 폐기 + 발급이 한 동작이다(검토 v0.1 §3.4). 잃은 토큰은 복구가 아니라 새것이다.
+      if (sub === 'reissue') {
+        const id = need(opt, 'id', '토큰 id (--id 앞 8자)')
+        if (!id) return 2
+        const { raw, rec, old } = auth.reissue(db, { id, note: opt.note, expiresDays: expiresOpt() })
+        await auth.store(file, db)
+        await auth.audit(dataDir, `token revoke · ${old.user} · 1개 · ${old.id} · reissue`)
+        await auth.audit(dataDir, `token issue · ${old.user} · ${rec.id} · expires=${rec.expires} · reissue of ${old.id}`)
+        out(raw)
+        err('')
+        err(`위 한 줄이 새 토큰 원문이다. 다시 볼 수 없다 — 본인에게 직접 전한다. 옛 토큰 ${old.id} 는 폐기됐다.`)
+        err(`id ${rec.id} · 사용자 ${old.user} · 만료 ${rec.expires}`)
+        return 0
+      }
+      if (sub === 'set') {
+        const id = need(opt, 'id', '토큰 id (--id 앞 8자)')
+        if (!id) return 2
+        if (opt.note === undefined && opt.expires === undefined) {
+          err('ctx serve token set: --note 또는 --expires 를 준다')
+          return 2
+        }
+        const t = auth.tokenSet(db, { id, note: opt.note, expires: opt.expires })
+        out(`고쳤다: ${t.id} · ${t.user} · 만료 ${t.expires} · 메모 ${t.note || '-'}`)
+        return done(`token set · ${t.user} · ${t.id} · ${JSON.stringify({ note: opt.note, expires: opt.expires })}`)
       }
       // 발급
       const user = need(opt, 'user', '사용자 (--user)')
       if (!user) return 2
-      const { raw, rec } = auth.issue(db, {
-        user,
-        expiresDays: opt.expires === 'never' ? 'never' : Number(opt.expires || auth.DEFAULT_EXPIRES_DAYS),
-        note: opt.note ?? null,
-      })
+      const { raw, rec } = auth.issue(db, { user, expiresDays: expiresOpt(), note: opt.note ?? null })
       await auth.store(file, db)
-      await auth.audit(dataDir, `token issue · ${user} · ${rec.sha256.slice(0, 8)} · expires=${rec.expires}`)
+      await auth.audit(dataDir, `token issue · ${user} · ${rec.id} · expires=${rec.expires}`)
       // **원문은 여기서 한 번만 나온다.** 파일에는 해시만 남는다.
       out(raw)
       err('')
       err(`위 한 줄이 토큰 원문이다. 다시 볼 수 없다 — 본인에게 직접 전한다(§4.4.2).`)
       err(`메신저·메일·이슈·위키에 평문으로 남기지 않는다. 남겼으면 유출로 보고 revoke 후 재발급한다.`)
-      err(`id ${rec.sha256.slice(0, 8)} · 사용자 ${user} · 만료 ${rec.expires}`)
+      err(`id ${rec.id} · 사용자 ${user} · 만료 ${rec.expires}`)
       return 0
     }
   } catch (e) {
@@ -1102,9 +1131,13 @@ export async function runAuthCmd(opt) {
 // **마지막 사용은 `serve.log` 에서 집계한다.** `auth.json` 에 적지 않는다 --
 // 매 요청 명부 파일을 쓰면 레포 뮤텍스와 같은 경합이 생기고(§2.6), 그것도
 // 읽기 요청 하나마다다. 안 쓰는 토큰을 걷어내는 용도라 하루 단위면 충분하다.
+//
+// 사용자별 · 토큰별 둘을 낸다. 토큰 id 는 줄 **끝** 열이다(2026-09-23 부터) —
+// 앞 열은 그대로라 옛 로그도 사용자별은 읽힌다.
 async function lastUsed(dataDir) {
-  const out = new Map()
-  if (!dataDir) return out
+  const byUser = new Map()
+  const byToken = new Map()
+  if (!dataDir) return { byUser, byToken }
   for (const name of ['serve.log.3', 'serve.log.2', 'serve.log.1', 'serve.log']) {
     const body = await fs.readFile(path.join(dataDir, 'logs', name), 'utf8').catch(() => null)
     if (!body) continue
@@ -1113,10 +1146,12 @@ async function lastUsed(dataDir) {
       if (f.length < 3 || !f[0].startsWith('20')) continue
       const user = f[1].trim()
       if (!user || user === '-') continue
-      out.set(user, f[0])
+      byUser.set(user, f[0])
+      const last = f[f.length - 1].trim()
+      if (/^[0-9a-f]{8}$/.test(last)) byToken.set(last, f[0])
     }
   }
-  return out
+  return { byUser, byToken }
 }
 
 // kit 에 담는 것 — `.claude/skills/cdp-*` 와 `.claude/work-repo/CLAUDE.md`.

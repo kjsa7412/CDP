@@ -1,14 +1,18 @@
 // ctx serve doctor · init — 서버 준비물을 명령 하나로. 검토 §3.3 · 제품화 TODO 3.3 · 3.4.
 //
-//   ctx serve doctor --root <폴더> --auth <f> --data <d> [--web <dir>] [--bind <IP>] [--port <n>] [--packages <dir>] [--json]
-//   ctx serve init   --auth <f> --data <d> --name <이름> [--label …] [--repos *] [--write]
+//   ctx serve doctor --root <폴더> --auth <f> --data <d> [--web <dir>] [--manual <dir>] [--bind <IP>] [--port <n>] [--packages <dir>] [--json]
+//   ctx serve init   --auth <f> --data <d> --name <이름> [--label …] [--repos *]
 //
 // `doctor` 는 설치절차 0장(준비물)과 4장 끝(push --dry-run)과 6장 확인을 한
 // 자리에서 본다. 줄마다 ok · warn · fail. **fail 이 하나라도 있으면 exit 1**,
 // warn 만이면 0 — 경고로 설치를 막지 않는다.
 //
+// **`doctorRows` 와 출력이 갈려 있다.** 콘솔의 `/admin/doctor` 가 같은 줄을
+// 낸다(제품관리서비스 검토 §4.7) — 두 곳이 같은 함수를 부르므로 화면과 셸의
+// 진단이 갈라지지 않는다.
+//
 // `init` 은 5장 ②③(첫 사용자 + 토큰)을 한 번에. 이미 명부가 있으면 거절한다 —
-// 덮지 않는다. 발급은 여전히 서버 셸의 CLI 다(§4.4.1).
+// 덮지 않는다. 첫 사용자는 **admin** 이다. 브라우저 `/setup` 이 같은 일을 한다.
 
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -16,6 +20,7 @@ import path from 'node:path'
 import * as auth from '../../core/auth.js'
 import { listRepos } from '../../core/reponew.js'
 import { resolvePackages } from './ctx-package.mjs'
+import { hereDir } from '../server/runtime.js'
 
 const NL = String.fromCharCode(10)
 const out = (s = '') => process.stdout.write(s + NL)
@@ -29,12 +34,25 @@ function git(cwd, args, timeout = 10000) {
   })
 }
 
-export async function runDoctor(opt) {
+// 설명서 폴더 — `--manual` → 번들 옆 `manual/`(서버 산출물) → 소스 루트의 `manual/`.
+// 설명서가 한 권이라도 있는 첫 폴더다. 없으면 null — 서버는 그대로 돈다(설명서 페이지만 빈다).
+export async function resolveManualDir({ explicit = null, binDir = hereDir(import.meta.url) } = {}) {
+  const cands = [explicit, path.resolve(binDir, '..', 'manual'), path.resolve(binDir, '..', '..', 'manual')].filter(Boolean)
+  for (const dir of cands) {
+    const names = await fs.readdir(dir).catch(() => null)
+    if (names && names.some((n) => /_설명서\.md$/.test(n))) return { dir: path.resolve(dir), books: names.filter((n) => /_설명서\.md$/.test(n)).sort() }
+  }
+  return null
+}
+
+export async function doctorRows(opt) {
   const rows = []
   const add = (state, what, note = '') => rows.push({ state, what, note })
   const ok = (w, n) => add('ok', w, n)
   const warn = (w, n) => add('warn', w, n)
   const fail = (w, n) => add('fail', w, n)
+  const bind = opt.bind || '127.0.0.1'
+  const port = Number(opt.port) || 7374
 
   // ── 런타임
   const major = Number(process.versions.node.split('.')[0])
@@ -49,18 +67,30 @@ export async function runDoctor(opt) {
     fail('--auth', '없다. 루프백 밖에 인증 없이 열 수 없다')
   } else {
     const st = await fs.stat(opt.auth).catch(() => null)
-    if (!st) warn('auth.json', `${opt.auth} 가 아직 없다 — ctx serve init 으로 만든다`)
-    else {
+    if (!st) {
+      warn('auth.json', `${opt.auth} 가 아직 없다 — 브라우저 /setup 또는 ctx serve init 으로 만든다`)
+    } else {
       if (process.platform !== 'win32' && st.mode & 0o077) fail('auth.json 권한', `0${(st.mode & 0o777).toString(8)} — 600 이어야 한다`)
       else ok('auth.json', opt.auth)
       try {
         const db = await auth.load(opt.auth)
-        const writers = db.users.filter((u) => u.write && u.active !== false)
-        if (!db.users.length) warn('명부', '사용자가 없다 — ctx serve init')
-        else ok('명부', `사용자 ${db.users.length} · write ${writers.length} · 토큰 ${db.tokens.length}`)
-        if (db.users.length && !writers.length) warn('write', 'save 를 할 수 있는 사람이 없다')
-        const soon = auth.tokenList(db).filter((t) => t.daysLeft !== null && t.daysLeft <= 7)
+        const active = db.users.filter((u) => u.active !== false)
+        const admins = auth.admins(db)
+        const writers = active.filter((u) => auth.roleOf(u) === 'writer')
+        const live = db.tokens.filter((t) => t.status !== 'revoked')
+        if (!db.users.length) warn('명부', '사용자가 없다 — 브라우저 /setup 또는 ctx serve init')
+        else ok('명부', `사용자 ${db.users.length} · admin ${admins.length} · writer ${writers.length} · 토큰 ${live.length}${db.tokens.length !== live.length ? ` (폐기 ${db.tokens.length - live.length})` : ''}`)
+        // **관리자가 없으면 콘솔에 아무도 못 들어간다.** v1.1 명부를 그대로 올린 서버가 이 상태다.
+        if (db.users.length && !admins.length) warn('관리자', '없다 — ctx serve user set --name <이름> --role admin (콘솔은 admin 만 들어간다)')
+        if (db.users.length && !admins.length && !writers.length) warn('write', 'save 를 할 수 있는 사람이 없다')
+        const list = auth.tokenList(db)
+        const soon = list.filter((t) => t.status === 'active' && t.daysLeft !== null && t.daysLeft <= 7)
         if (soon.length) warn('토큰 만료', soon.map((t) => `${t.user}(${t.id}) ${t.daysLeft}일`).join(' · '))
+        // 관리자 토큰은 짧아야 한다(30일). 90일 · 무기한이면 말한다.
+        const adminNames = new Set(admins.map((a) => a.name))
+        // 남은 일수는 그날 끝까지라 올림이다 — 갓 발급한 30일 토큰이 31 로 센다. 하루를 봐준다.
+        const longAdmin = list.filter((t) => t.status === 'active' && adminNames.has(t.user) && (t.daysLeft === null || t.daysLeft > auth.ADMIN_EXPIRES_DAYS + 1))
+        if (longAdmin.length) warn('관리자 토큰', longAdmin.map((t) => `${t.user}(${t.id}) ${t.daysLeft === null ? '무기한' : t.daysLeft + '일'}`).join(' · ') + ` — 관리자 토큰은 ${auth.ADMIN_EXPIRES_DAYS}일 안으로 둔다`)
       } catch (e) {
         fail('auth.json 형식', e.message)
       }
@@ -79,13 +109,19 @@ export async function runDoctor(opt) {
     } catch (e) {
       fail('--data', `${opt.data} 에 쓸 수 없다 — ${e.message}`)
     }
+    // 부트스트랩 코드 — 명부가 비어 있을 때만 있다. 있으면 다음 할 일이 그것이다.
+    const boot = await fs.readFile(path.join(opt.data, 'bootstrap.code'), 'utf8').catch(() => null)
+    if (boot) warn('첫 관리자', `아직 없다 — 브라우저 http://${bind}:${port}/setup 에 부트스트랩 코드(${path.join(opt.data, 'bootstrap.code')})를 넣는다`)
   }
 
-  // ── 화면
+  // ── 화면 · 설명서
   if (opt.web) {
     if (await fs.access(path.join(opt.web, 'index.html')).then(() => true).catch(() => false)) ok('--web', opt.web)
     else fail('--web', `${opt.web}/index.html 이 없다 — npm run build`)
   } else warn('--web', '없다 — 화면 없이 MCP 와 읽기 API 만 돈다')
+  const man = await resolveManualDir({ explicit: opt.manual })
+  if (man) ok('manual', `${man.dir} · 설명서 ${man.books.length}권`)
+  else warn('manual', '없다 — 설명서 페이지가 빈다. 산출물의 manual/ 을 두거나 --manual')
 
   // ── 패키지
   const pk = await resolvePackages({ explicit: opt.packages })
@@ -101,7 +137,7 @@ export async function runDoctor(opt) {
     if (!repos) fail('--root', `${opt.root} 를 읽을 수 없다`)
     else {
       const real = repos.filter((r) => r.vocab)
-      if (!real.length) warn('레포', `${opt.root} 에 지식 레포가 없다 (_vocab.md 있는 폴더) — ctx repo new 또는 git clone`)
+      if (!real.length) warn('레포', `${opt.root} 에 지식 레포가 없다 (_vocab.md 있는 폴더) — 콘솔 > 지식 레포 · ctx repo new · git clone`)
       for (const r of repos) {
         if (!r.vocab) {
           warn(`레포 ${r.name}`, '_vocab.md 가 없어 레포로 인식되지 않는다')
@@ -135,40 +171,46 @@ export async function runDoctor(opt) {
     if (/glpat-/.test(cred + alt)) warn('git 자격', '평문 PAT 가 있다 — 스코프가 api 면 계정 전체를 연다. Deploy Key 로 좁힐 수 있으면 좁힌다(설치절차 10장)')
   } catch {}
 
-  // ── 포트 — 이미 떠 있으면 /healthz 를 본다
-  const bind = opt.bind || '127.0.0.1'
-  const port = Number(opt.port) || 7374
-  try {
-    const ac = new AbortController()
-    const t = setTimeout(() => ac.abort(), 3000)
-    const r = await fetch(`http://${bind === '0.0.0.0' ? '127.0.0.1' : bind}:${port}/healthz`, { signal: ac.signal })
-    clearTimeout(t)
-    if (r.ok) {
-      const j = await r.json().catch(() => ({}))
-      ok('서버', `${bind}:${port} 응답 · built ${j.built} · 레포 ${j.repos} · 미러 ok ${j.mirror?.ok} lag ${j.mirror?.lag} off ${j.mirror?.off}`)
-    } else warn('서버', `${bind}:${port} 가 ${r.status} 로 답한다 — 다른 무엇이 그 포트에 있다`)
-  } catch {
-    ok('포트', `${bind}:${port} 비어 있다 (서버가 아직 안 떴다)`)
+  // ── 포트 — 이미 떠 있으면 /healthz 를 본다. 서버 안에서 부를 때는 자기 자신이라 건너뛴다
+  if (!opt.inProcess) {
+    try {
+      const ac = new AbortController()
+      const t = setTimeout(() => ac.abort(), 3000)
+      const r = await fetch(`http://${bind === '0.0.0.0' ? '127.0.0.1' : bind}:${port}/healthz`, { signal: ac.signal })
+      clearTimeout(t)
+      if (r.ok) {
+        const j = await r.json().catch(() => ({}))
+        ok('서버', `${bind}:${port} 응답 · built ${j.built} · 레포 ${j.repos} · 미러 ok ${j.mirror?.ok} lag ${j.mirror?.lag} off ${j.mirror?.off}`)
+      } else warn('서버', `${bind}:${port} 가 ${r.status} 로 답한다 — 다른 무엇이 그 포트에 있다`)
+    } catch {
+      ok('포트', `${bind}:${port} 비어 있다 (서버가 아직 안 떴다)`)
+    }
   }
 
   const fails = rows.filter((r) => r.state === 'fail').length
   const warns = rows.filter((r) => r.state === 'warn').length
+  return { ok: fails === 0, fails, warns, rows }
+}
+
+export async function runDoctor(opt) {
+  const res = await doctorRows(opt)
   if (opt.json) {
-    out(JSON.stringify({ ok: fails === 0, fails, warns, rows }, null, 2))
-    return fails ? 1 : 0
+    out(JSON.stringify(res, null, 2))
+    return res.fails ? 1 : 0
   }
   const mark = { ok: 'ok  ', warn: 'warn', fail: 'FAIL' }
-  const w = Math.max(...rows.map((r) => [...r.what].reduce((a, c) => a + (c.codePointAt(0) > 0x1100 ? 2 : 1), 0)), 8)
-  const pad = (s) => s + ' '.repeat(Math.max(0, w - [...s].reduce((a, c) => a + (c.codePointAt(0) > 0x1100 ? 2 : 1), 0)))
-  for (const r of rows) out(` ${mark[r.state]}  ${pad(r.what)}  ${r.note}`)
+  const width = (s) => [...s].reduce((a, c) => a + (c.codePointAt(0) > 0x1100 ? 2 : 1), 0)
+  const w = Math.max(...res.rows.map((r) => width(r.what)), 8)
+  const pad = (s) => s + ' '.repeat(Math.max(0, w - width(s)))
+  for (const r of res.rows) out(` ${mark[r.state]}  ${pad(r.what)}  ${r.note}`)
   out('')
-  out(`doctor: fail ${fails} · warn ${warns} · ok ${rows.length - fails - warns}`)
-  return fails ? 1 : 0
+  out(`doctor: fail ${res.fails} · warn ${res.warns} · ok ${res.rows.length - res.fails - res.warns}`)
+  return res.fails ? 1 : 0
 }
 
 export async function runInit(opt) {
   if (!opt.auth) return bail('--auth <auth.json> 이 필요하다')
-  if (!opt.name) return bail('--name <이름> 이 필요하다 — 첫 사용자. 커밋의 author 로 남는다')
+  if (!opt.name) return bail('--name <이름> 이 필요하다 — 첫 관리자. 커밋의 author 로 남는다')
   const dataDir = opt.data ? path.resolve(opt.data) : null
   let db
   try {
@@ -181,22 +223,24 @@ export async function runInit(opt) {
   }
   const repos = opt.repos2 !== undefined ? opt.repos2 : '*'
   try {
-    const u = auth.userAdd(db, { name: opt.name, label: opt.label ?? null, repos, write: opt.write !== false })
+    // 첫 사용자는 **admin** 이다 — 다음 관리자는 이 사람이 콘솔에서 지정한다(D3).
+    const u = auth.userAdd(db, { name: opt.name, label: opt.label ?? null, repos, role: 'admin' })
     const { raw, rec } = auth.issue(db, {
       user: u.name,
-      expiresDays: opt.expires === 'never' ? 'never' : Number(opt.expires || auth.DEFAULT_EXPIRES_DAYS),
+      expiresDays: opt.expires === undefined ? undefined : opt.expires === 'never' ? 'never' : Number(opt.expires),
       note: opt.note ?? '첫 토큰 (init)',
     })
     await auth.store(opt.auth, db)
-    await auth.audit(dataDir, `init · user add · ${u.name} · repos=${u.repos.join(',')} · write=${u.write}`)
-    await auth.audit(dataDir, `init · token issue · ${u.name} · ${rec.sha256.slice(0, 8)} · expires=${rec.expires}`)
+    await auth.clearBootstrap(dataDir)
+    await auth.audit(dataDir, `init · user add · ${u.name} · repos=${u.repos.join(',')} · role=${u.role}`)
+    await auth.audit(dataDir, `init · token issue · ${u.name} · ${rec.id} · expires=${rec.expires}`)
     // **원문은 여기서 한 번만 나온다.** stdout 에 그 한 줄 · 나머지는 stderr.
     out(raw)
     err('')
-    err(`명부를 만들었다: ${opt.auth} — 사용자 ${u.name} · repos ${u.repos.join(',')} · write ${u.write}`)
+    err(`명부를 만들었다: ${opt.auth} — 사용자 ${u.name} · repos ${u.repos.join(',')} · role ${u.role}`)
     err('위 한 줄이 토큰 원문이다. 다시 볼 수 없다 — 본인이 CDP_TOKEN 에 넣는다.')
-    err(`id ${rec.sha256.slice(0, 8)} · 만료 ${rec.expires}`)
-    err('다음 사람은 serve user add → serve token 으로. 이 명령은 첫 번만이다.')
+    err(`id ${rec.id} · 만료 ${rec.expires} (관리자 토큰은 ${auth.ADMIN_EXPIRES_DAYS}일)`)
+    err('다음 사람은 브라우저 콘솔(/console) 또는 serve user add → serve token 으로. 이 명령은 첫 번만이다.')
     return 0
   } catch (e) {
     return bail(e.message)

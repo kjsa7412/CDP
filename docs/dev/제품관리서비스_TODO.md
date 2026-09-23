@@ -19,7 +19,7 @@
 |---|---|
 | 검토 문서 | **완료** |
 | 0 전제 | **완료** — 검토 §5 D1~D14 |
-| ① 명부 v1.2 · 역할 · 부트스트랩 · CLI · 테스트 | 미착수 |
+| ① 명부 v1.2 · 역할 · 부트스트랩 · CLI · 테스트 | **완료** — 테스트 86 / 86 · 하네스 ✓ 62 ✗ 0 |
 | ② 서버 — 사이트 라우트 · 산출물 · 설치 스크립트 | 미착수 |
 | ③ 서버 — `/admin/*` · 재인증 · 감사 · 속도 제한 · CIDR · 하네스 | 미착수 |
 | ④ · ⑤ 앞 — **목업 검토** (운영자 지시 2026-09-23) | **목업 완료 · 검토 대기** — [`제품관리서비스_목업/index.html`](제품관리서비스_목업/index.html) 13 화면 · 모달 6 · 다크 · 900px |
@@ -58,37 +58,37 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 ### 1.1 `core/auth.js`
 
-- [ ] `ROLES = ['viewer','writer','admin']` · `roleOf(u)` — `role` 이 유효하면 그것, 아니면 `write` 로 접는다(`true` → writer · 없으면 viewer)
-- [ ] `load()` 가 사용자마다 `role` 을 채우고 토큰마다 `id`(sha256 앞 8자) · `status`(없으면 `active`)를 채운다. **v1.1 파일이 그대로 읽힌다.** `store()` 는 `version: '1.2'` 를 쓴다
-- [ ] `userAdd({ name, label, repos, role, write })` — `role` 우선 · `write` 는 옛 이름. 유효하지 않은 역할은 `E_INPUT`
-- [ ] `userSet(db, name, patch, { actor })` — `role` · `write`(→ role) · `active`. **가드 둘** — 마지막 활성 admin 을 내리거나 끄면 `E_LAST_ADMIN` · `actor === name` 인데 `role` 또는 `active` 를 바꾸면 `E_SELF`
-- [ ] `decide` · `decideSession` 이 `role · admin · write(= role ≠ viewer)` 를 낸다 · `status: revoked` 토큰은 "폐기된 토큰" 으로 거절
-- [ ] `issue()` — 기본 만료를 **그 사람의 역할**로(admin `ADMIN_EXPIRES_DAYS = 30` · 나머지 90) · 레코드에 `id` · `status: 'active'`
-- [ ] `revoke(db, { user, id, by, now })` — 지우지 않고 `status · revokedAt · revokedBy`. 활성인 것만 센다 · 0 이면 `E_NOT_FOUND`
-- [ ] `reissue(db, { id, by, now })` → `{ raw, rec, old }` — 폐기 + 발급 한 번 · 메모는 옛 메모 + ` 재발급`
-- [ ] `tokenSet(db, { id, note, expires })` — `expires` 는 `YYYY-MM-DD` · 일수 · `never`
-- [ ] `tokenList(db, now)` 에 `status · revokedAt · revokedBy` · `userList` 에 `role · admin`
-- [ ] `admins(db)` — 활성 admin 목록
-- [ ] 부트스트랩 — `ensureBootstrap(dataDir, db)`(명부가 비면 `<data>/bootstrap.code` 0600 을 만들거나 읽어 돌려주고, 있으면 파일을 지우고 null) · `verifyBootstrap(dataDir, code)`(길이 비교 뒤 `timingSafeEqual`) · `clearBootstrap(dataDir)`
-- [ ] 재인증 쿠키 — `signSession(secret, user, { hours })` 로 15분(`minutes` 인자) · `readSession` 그대로
+- [x] `ROLES = ['viewer','writer','admin']` · `roleOf(u)` — `role` 이 유효하면 그것, 아니면 `write` 로 접는다(`true` → writer · 없으면 viewer)
+- [x] `load()` 가 사용자마다 `role` 을 채우고 토큰마다 `id`(sha256 앞 8자) · `status`(없으면 `active`)를 채운다. **v1.1 파일이 그대로 읽힌다.** `store()` 는 `version: '1.2'` 를 쓴다
+- [x] `userAdd({ name, label, repos, role, write })` — `role` 우선 · `write` 는 옛 이름. 유효하지 않은 역할은 `E_INPUT`
+- [x] `userSet(db, name, patch, { actor })` — `role` · `write`(→ role) · `active`. **가드 둘** — 마지막 활성 admin 을 내리거나 끄면 `E_LAST_ADMIN` · `actor === name` 인데 `role` 또는 `active` 를 바꾸면 `E_SELF`
+- [x] `decide` · `decideSession` 이 `role · admin · write(= role ≠ viewer)` 를 낸다 · `status: revoked` 토큰은 "폐기된 토큰" 으로 거절
+- [x] `issue()` — 기본 만료를 **그 사람의 역할**로(admin `ADMIN_EXPIRES_DAYS = 30` · 나머지 90) · 레코드에 `id` · `status: 'active'`
+- [x] `revoke(db, { user, id, by, now })` — 지우지 않고 `status · revokedAt · revokedBy`. 활성인 것만 센다 · 0 이면 `E_NOT_FOUND`
+- [x] `reissue(db, { id, by, now })` → `{ raw, rec, old }` — 폐기 + 발급 한 번 · 메모는 옛 메모 + ` 재발급`
+- [x] `tokenSet(db, { id, note, expires })` — `expires` 는 `YYYY-MM-DD` · 일수 · `never`
+- [x] `tokenList(db, now)` 에 `status · revokedAt · revokedBy` · `userList` 에 `role · admin`
+- [x] `admins(db)` — 활성 admin 목록
+- [x] 부트스트랩 — `ensureBootstrap(dataDir, db)`(명부가 비면 `<data>/bootstrap.code` 0600 을 만들거나 읽어 돌려주고, 있으면 파일을 지우고 null) · `verifyBootstrap(dataDir, code)`(길이 비교 뒤 `timingSafeEqual`) · `clearBootstrap(dataDir)`
+- [x] 재인증 쿠키 — `signSession(secret, user, { hours })` 로 15분(`minutes` 인자) · `readSession` 그대로
 
 ### 1.2 `core/net.js`
 
-- [ ] `parseCidrs('10.10.20.0/24, 127.0.0.1')` · `ipInCidrs(ip, cidrs)` — IPv4 · `::ffff:` 접두 제거 · IPv6 은 `::1` 과 정확 일치만
-- [ ] `makeLimiter({ limit, windowMs, now })` — IP 마다 미끄러지는 창 · `hit(ip) → { ok, remaining }` · 시계는 인자로
+- [x] `parseCidrs('10.10.20.0/24, 127.0.0.1')` · `ipInCidrs(ip, cidrs)` — IPv4 · `::ffff:` 접두 제거 · IPv6 은 `::1` 과 정확 일치만
+- [x] `makeLimiter({ limit, windowMs, now })` — IP 마다 미끄러지는 창 · `hit(ip) → { ok, remaining }` · 시계는 인자로
 
 ### 1.3 CLI — `ctx-cli.mjs` · `ctx-mcp-serve.mjs`(runAuthCmd) · `ctx-serve-doctor.mjs`
 
-- [ ] `--role <r>` 파싱 · `user add --role` · `user set --role`(가드 메시지 그대로 출력 · exit 2)
-- [ ] `token reissue --id` · `token set --id --note|--expires` · `token revoke --name [--id]` 가 상태를 바꾼다 · `token list` 에 상태 열
-- [ ] `serve init` 의 첫 사용자가 `admin`
-- [ ] `doctor` — `관리자 N`(0 이면 warn) · 30일 넘게 남은 admin 토큰 warn · `bootstrap.code` 가 있으면 한 줄 · `--manual` 폴더(없으면 warn)
-- [ ] `runDoctor` 를 **`doctorRows(opt) → rows`** 와 출력으로 가른다 — 서버가 같은 함수를 부른다
+- [x] `--role <r>` 파싱 · `user add --role` · `user set --role`(가드 메시지 그대로 출력 · exit 2)
+- [x] `token reissue --id` · `token set --id --note|--expires` · `token revoke --name [--id]` 가 상태를 바꾼다 · `token list` 에 상태 열
+- [x] `serve init` 의 첫 사용자가 `admin`
+- [x] `doctor` — `관리자 N`(0 이면 warn) · 30일 넘게 남은 admin 토큰 warn · `bootstrap.code` 가 있으면 한 줄 · `--manual` 폴더(없으면 warn)
+- [x] `runDoctor` 를 **`doctorRows(opt) → rows`** 와 출력으로 가른다 — 서버가 같은 함수를 부른다
 
 ### 1.4 테스트
 
-- [ ] `test/auth.test.mjs` — 역할 정규화(v1.1 → writer) · `userAdd --role` · 마지막 admin 가드 · 자기 해제 거절 · `revoke` 가 상태를 바꾸고 `decide` 가 거절 · `reissue` 왕복 · admin 기본 30일 · `tokenSet` · 부트스트랩 만들기 · 검증 · 명부가 생기면 지운다
-- [ ] `test/net.test.mjs` — CIDR 안 · 밖 · `::ffff:` · 잘못된 CIDR · 속도 제한 창(20 → 21번째 거절 · 창이 지나면 다시)
+- [x] `test/auth.test.mjs` — 역할 정규화(v1.1 → writer) · `userAdd --role` · 마지막 admin 가드 · 자기 해제 거절 · `revoke` 가 상태를 바꾸고 `decide` 가 거절 · `reissue` 왕복 · admin 기본 30일 · `tokenSet` · 부트스트랩 만들기 · 검증 · 명부가 생기면 지운다
+- [x] `test/net.test.mjs` — CIDR 안 · 밖 · `::ffff:` · 잘못된 CIDR · 속도 제한 창(20 → 21번째 거절 · 창이 지나면 다시)
 
 **끝났다고 보는 기준** — `npm test` 초록 · 기존 70건 그대로 통과(`write` 를 넘기던 테스트가 `role` 로 바뀐 것 외에 동작 변화 없음) ·
 `ctx serve user set --role viewer` 로 마지막 admin 을 내리면 exit 2 와 문장.
@@ -245,7 +245,7 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 | 단계 | 무엇 |
 |---|---|
-| (아직 없음) | |
+| ① | 명부 v1.2 — `role` 을 저장하고 `write` 는 읽을 때만 접는다(v1.1 파일 그대로 읽힘 · 저장하면 `version: 1.2`). 폐기는 `status: revoked` 로 남고 `decide` 가 "폐기된 토큰" 으로 거절. `reissue` · `tokenSet` · 가드 둘(`E_LAST_ADMIN` · `E_SELF`) · 부트스트랩 셋 · `signSession` 에 `kind: sudo` · `doctorRows` 분리(관리자 수 · 관리자 토큰 30일 · 부트스트랩 코드 · manual) · CLI `--role` · `token reissue/set` · `serve.log` 토큰별 마지막 사용. 테스트 70 → 86(auth 14 · net 3) · 하네스 ✓ 62 ✗ 0. **잡은 것** — 갓 발급한 30일 토큰이 올림으로 31 로 세어 doctor 가 "30일보다 멀다" 를 냈다(하루를 봐준다) · `token revoke` 가 줄을 지워 이력이 사라지던 것 |
 
 ---
 

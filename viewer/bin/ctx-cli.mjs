@@ -54,11 +54,11 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx setup --server <url> --repo <이름> <작업 레포>
                             모드 B — 지식 레포 없이 서버에서 kit 을 받아 넣는다
   ctx mcp                   MCP 서버로 선다 (stdio). 호스트가 띄운다 -- 직접 칠 일은 없다
-  ctx serve --root <폴더>    MCP 서버로 선다 (HTTP). 상주 프로세스
-  ctx serve user add|set|list --auth <f>    명부 — 권한은 여기 붙는다
-  ctx serve token [list|revoke] --auth <f>  토큰 — 신원만 증명한다
+  ctx serve --root <폴더>    MCP 서버 + 관리 서비스 (HTTP). 상주 프로세스
+  ctx serve user add|set|list --auth <f> [--role viewer|writer|admin]   명부 — 권한은 여기 붙는다
+  ctx serve token [list|reissue|set|revoke] --auth <f>   토큰 — 신원만 증명한다. 폐기는 상태로 남는다
   ctx serve doctor --root … --auth … --data …   서버 준비물 검사 (fail 이면 exit 1)
-  ctx serve init --auth <f> --name <이름>       첫 사용자 + 토큰을 한 번에 (명부가 없을 때만)
+  ctx serve init --auth <f> --name <이름>       첫 관리자 + 토큰을 한 번에 (명부가 없을 때만 · 브라우저 /setup 과 같은 일)
   ctx package list|show|check|new|rename    패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로 · 이름 바꿈
   ctx repo new <경로> --package <이름> [--origin <url>] [--push]   지식 레포를 세운다
   ctx repo list --root <폴더>               서버 <root> 의 레포 목록
@@ -69,6 +69,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   --root <폴더>             ctx mcp -- 그 폴더의 하위를 전부 레포로 본다
   --prompts auto|always|never   MCP prompt 노출 (기본 auto)
   --bind · --port · --auth · --data · --mirror · --web · --packages   ctx serve 용
+  --manual <dir> · --private-pages · --admin-from <cidr,…>            ctx serve 용 — 설명서 폴더 · 소개/설명서에 로그인 요구 · 관리 API 대역
   --packages <dir>          패키지 폴더 (기본: CDP_PACKAGES → 번들 옆 packages/ → 소스 agent/packages)
   --json                    기계 판독용 출력
 `
@@ -103,6 +104,10 @@ function parseArgs(argv) {
     else if (a === '--id') out.id = argv[++i]
     else if (a === '--expires') out.expires = argv[++i]
     else if (a === '--repos') out.repos2 = argv[++i]
+    else if (a === '--role') out.role = argv[++i]
+    else if (a === '--manual') out.manual = argv[++i]
+    else if (a === '--private-pages') out.privatePages = true
+    else if (a === '--admin-from') out.adminFrom = argv[++i]
     else if (a === '--of-repo') out.repoFilter = argv[++i]
     else if (a === '--write') out.write = true
     else if (a === '--no-write') out.write = false
