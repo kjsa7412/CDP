@@ -23,6 +23,7 @@ WORKDIR /opt/cdp
 COPY bin ./bin
 COPY web ./web
 COPY packages ./packages
+COPY manual ./manual
 
 RUN useradd -r -d /opt/cdp -s /usr/sbin/nologin cdp \
  && mkdir -p repos data \

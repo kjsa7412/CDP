@@ -5,8 +5,8 @@
 #   (산출물 폴더를 이미 풀어 두었으면 그 폴더 경로도 받는다)
 #
 #   1  tar 를 임시 폴더에 푼다.  bin/ctx.mjs · web/index.html 이 없으면 멈춘다
-#   2  되돌릴 것을 챙긴다 — bin/ctx.mjs.bak · web.bak · packages.bak (한 세대만)
-#   3  ctx.mjs 교체 · web/ 은 **비우고** 넣는다 · packages/ 도 · chown
+#   2  되돌릴 것을 챙긴다 — bin/ctx.mjs.bak · web.bak · packages.bak · manual.bak (한 세대만)
+#   3  ctx.mjs 교체 · web/ 은 **비우고** 넣는다 · packages/ · manual/ 도 · chown
 #   4  restart · /healthz 의 built 가 새 번들 시각인지 · index 의 자산 해시가 tar 의 것과 같은지
 #   5  다르면 .bak 으로 되돌리고 exit 1
 #
@@ -50,17 +50,19 @@ OLD_BUILT="$("$NODE_BIN" "$PREFIX/bin/ctx.mjs" version | head -1 || echo '?')"
 say "지금 $OLD_BUILT → 새것 $NEW_BUILT · 화면 ${NEW_ASSET:-?}"
 
 # ── 2 되돌릴 것 (한 세대)
-rm -rf "$PREFIX/web.bak" "$PREFIX/packages.bak"
+rm -rf "$PREFIX/web.bak" "$PREFIX/packages.bak" "$PREFIX/manual.bak"
 cp "$PREFIX/bin/ctx.mjs" "$PREFIX/bin/ctx.mjs.bak"
 [ -d "$PREFIX/web" ] && cp -r "$PREFIX/web" "$PREFIX/web.bak"
 [ -d "$PREFIX/packages" ] && cp -r "$PREFIX/packages" "$PREFIX/packages.bak"
+[ -d "$PREFIX/manual" ] && cp -r "$PREFIX/manual" "$PREFIX/manual.bak"
 
 restore() {
   say "되돌린다 (rolling back)"
   cp "$PREFIX/bin/ctx.mjs.bak" "$PREFIX/bin/ctx.mjs"
   if [ -d "$PREFIX/web.bak" ]; then rm -rf "$PREFIX/web"; mv "$PREFIX/web.bak" "$PREFIX/web"; fi
   if [ -d "$PREFIX/packages.bak" ]; then rm -rf "$PREFIX/packages"; mv "$PREFIX/packages.bak" "$PREFIX/packages"; fi
-  chown -R "$SVC_USER:$SVC_USER" "$PREFIX/bin" "$PREFIX/web" "$PREFIX/packages" 2>/dev/null || true
+  if [ -d "$PREFIX/manual.bak" ]; then rm -rf "$PREFIX/manual"; mv "$PREFIX/manual.bak" "$PREFIX/manual"; fi
+  chown -R "$SVC_USER:$SVC_USER" "$PREFIX/bin" "$PREFIX/web" "$PREFIX/packages" "$PREFIX/manual" 2>/dev/null || true
   if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then systemctl restart cdp-serve || true; fi
 }
 
@@ -68,9 +70,10 @@ restore() {
 cp "$NEW"/bin/ctx.mjs "$NEW"/bin/ctx "$NEW"/bin/ctx.cmd "$PREFIX/bin/" 2>/dev/null || cp "$NEW/bin/ctx.mjs" "$PREFIX/bin/"
 rm -rf "$PREFIX/web" && mkdir -p "$PREFIX/web" && cp -r "$NEW"/web/. "$PREFIX/web/"
 if [ -d "$NEW/packages" ]; then rm -rf "$PREFIX/packages" && mkdir -p "$PREFIX/packages" && cp -r "$NEW"/packages/. "$PREFIX/packages/"; fi
+if [ -d "$NEW/manual" ]; then rm -rf "$PREFIX/manual" && mkdir -p "$PREFIX/manual" && cp -r "$NEW"/manual/. "$PREFIX/manual/"; fi
 if [ -d "$NEW/deploy" ]; then mkdir -p "$PREFIX/deploy" && cp "$NEW"/deploy/*.sh "$NEW"/deploy/cdp-serve.service "$PREFIX/deploy/" 2>/dev/null || true; fi
 chmod 755 "$PREFIX/bin/ctx" 2>/dev/null || true
-chown -R "$SVC_USER:$SVC_USER" "$PREFIX/bin" "$PREFIX/web" "$PREFIX/packages" "$PREFIX/deploy" 2>/dev/null || true
+chown -R "$SVC_USER:$SVC_USER" "$PREFIX/bin" "$PREFIX/web" "$PREFIX/packages" "$PREFIX/manual" "$PREFIX/deploy" 2>/dev/null || true
 
 # ── 4 재시작 · 확인
 if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] && systemctl list-unit-files cdp-serve.service >/dev/null 2>&1; then
@@ -101,4 +104,4 @@ if [ -n "$NEW_ASSET" ] && [ "$GOT_ASSET" != "$NEW_ASSET" ]; then
   die "화면 자산이 다르다 ($GOT_ASSET ≠ $NEW_ASSET) — 되돌렸다 (web assets mismatch; rolled back)"
 fi
 say "화면 자산 $GOT_ASSET ✓"
-say "끝났다 (done). 브라우저는 강제 새로고침(Ctrl+Shift+R). 되돌릴 것: $PREFIX/bin/ctx.mjs.bak · web.bak · packages.bak (한 세대)"
+say "끝났다 (done). 브라우저는 강제 새로고침(Ctrl+Shift+R). 되돌릴 것: $PREFIX/bin/ctx.mjs.bak · web.bak · packages.bak · manual.bak (한 세대)"

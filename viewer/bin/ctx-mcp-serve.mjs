@@ -23,9 +23,12 @@ import { Store } from '../../core/store.js'
 import { handleRead, MIME } from '../server/adapter/read-api.js'
 import { hereDir } from '../server/runtime.js'
 import { buildServer, makeRepoCache, mirrorOf, BUILT } from './ctx-mcp.mjs'
-import { newRepo, REPO_NAME_RE } from '../../core/reponew.js'
+import { newRepo, cloneRepo, REPO_NAME_RE } from '../../core/reponew.js'
 import { listPackages as listPackageDirs } from '../../core/packages.js'
 import { resolvePackages, materializePackage } from './ctx-package.mjs'
+import { parseCidrs, ipInCidrs, makeLimiter } from '../../core/net.js'
+import { appVersion } from '../../core/appinfo.js'
+import { doctorRows, resolveManualDir } from './ctx-serve-doctor.mjs'
 
 const NL = String.fromCharCode(10)
 
@@ -87,6 +90,9 @@ function makeLog(dataDir) {
           (o.ms ?? '-') + 'ms',
           o.code || String(o.status || '-'),
           o.ip || '-',
+          // 토큰 id(앞 8자) — **끝 열**이다(2026-09-23). 토큰별 마지막 사용을 세는 유일한 근거.
+          // 앞 열은 그대로라 옛 로그도 사용자별은 읽힌다(`lastUsed`).
+          o.tid || '-',
         ].join(' · ')
       ),
   }
@@ -205,9 +211,12 @@ async function titleOf(root) {
 const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|::1|\[::1\])$/i
 
 function makeAuth({ authFile, log }) {
+  // 개발용 — 명부가 없으면 전부 통과시킨다(루프백만). 관리자는 아니다 — 콘솔은 명부가 있어야 뜬다.
   if (!authFile) {
     log.line('경고: --auth 가 없다. 인증 없이 돈다 (개발용). 루프백에서만 허용한다')
-    return async () => ({ ok: true, user: '(dev)', allow: null, write: false, expiresInDays: null })
+    const dev = () => ({ ok: true, user: '(dev)', label: null, role: 'viewer', admin: false, write: false, allow: null, expiresInDays: null })
+    const empty = auth.emptyDb()
+    return { bearer: async () => dev(), browser: async () => dev(), login: async () => dev(), db: () => empty, reload: async () => {}, file: null }
   }
 
   let db = auth.emptyDb()
@@ -219,7 +228,7 @@ function makeAuth({ authFile, log }) {
     try {
       db = await auth.load(authFile)
       sig = now
-      log.line(`명부: 사용자 ${db.users.length}명 · 토큰 ${db.tokens.length}개`)
+      log.line(`명부: 사용자 ${db.users.length}명 · 관리자 ${auth.admins(db).length}명 · 토큰 ${db.tokens.length}개`)
     } catch (e) {
       log.line('명부를 읽을 수 없다: ' + (e?.message || e))
     }
@@ -248,6 +257,11 @@ function makeAuth({ authFile, log }) {
       await reload()
       return auth.decide(db, token)
     },
+    // 콘솔(`/admin/*` · `/setup`)이 명부를 **고친다.** 같은 객체를 고치고 저장하면 mtime 이
+    // 바뀌어 다음 `reload()` 가 다시 읽는다 — 두 벌이 생기지 않는다.
+    db: () => db,
+    reload,
+    file: authFile,
   }
 }
 
@@ -297,11 +311,21 @@ function loginPage({ next = '/', failed = false } = {}) {
 </form>`
 }
 
-function setCookie(res, value, { maxAge = 12 * 3600, secure = false } = {}) {
-  const parts = [`cdp_s=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`]
+function cookieStr(name, value, { maxAge = 12 * 3600, secure = false } = {}) {
+  const parts = [`${name}=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`]
   // 평문 HTTP 배치에서는 Secure 를 붙이면 쿠키가 아예 안 간다(§9.4).
   if (secure) parts.push('Secure')
-  res.setHeader('set-cookie', parts.join('; '))
+  return parts.join('; ')
+}
+function setCookie(res, value, opts = {}) {
+  res.setHeader('set-cookie', cookieStr('cdp_s', value, opts))
+}
+// 재인증 쿠키 — 15분 · `kind: sudo`(검토 §4.3 · D5). 세션 쿠키와 이름도 서명도 다르다.
+function setSudoCookie(res, value, opts = {}) {
+  res.setHeader('set-cookie', cookieStr('cdp_su', value, { ...opts, maxAge: auth.SUDO_MINUTES * 60 }))
+}
+function clearCookies(res, { secure = false } = {}) {
+  res.setHeader('set-cookie', [cookieStr('cdp_s', '', { maxAge: 0, secure }), cookieStr('cdp_su', '', { maxAge: 0, secure })])
 }
 
 // ── HTTP ────────────────────────────────────────────────────────────────────
@@ -397,6 +421,99 @@ export async function runServe(opt = {}) {
   if (!dataDir) log.line('경고: --data 가 없어 세션 비밀이 프로세스마다 바뀐다 (개발용)')
   const secureCookie = String(opt.server || '').startsWith('https://')
 
+  // ── 제품 관리 서비스(검토 §4.1) — 사이트 · 콘솔이 같은 프로세스에 얹힌다 ──────────
+  const VERSION = appVersion(hereDir(import.meta.url)) || null
+  const startedAt = Date.now()
+  // 소개 · 설명서 — 기본 공개(D2). `--private-pages` 면 세션을 요구한다.
+  const privatePages = !!opt.privatePages
+  // 관리 API 대역 — 소켓 주소로 판정한다. X-Forwarded-For 는 보지 않는다(core/net.js).
+  let adminFrom = []
+  try {
+    adminFrom = parseCidrs(opt.adminFrom)
+  } catch (e) {
+    log.line('거부: --admin-from — ' + e.message)
+    return 2
+  }
+  if (adminFrom.length) log.line(`관리 API 대역: ${adminFrom.map((c) => c.text).join(' · ')} (소켓 주소 기준)`)
+  // 자격을 받는 POST 셋(/login · /setup · /admin/sudo) — IP 당 분당 20.
+  const limiter = makeLimiter({ limit: 20, windowMs: 60_000 })
+  // 설명서 — 산출물의 manual/. 없어도 서버는 돈다(설명서 페이지만 빈다).
+  const man = await resolveManualDir({ explicit: opt.manual, binDir: hereDir(import.meta.url) })
+  const manualDir = man?.dir || null
+  log.line(man ? `설명서: ${man.dir} · ${man.books.length}권` : '설명서: 없음 — 산출물의 manual/ 을 두거나 --manual')
+  const manuals = await manualIndex(manualDir)
+  const webOk = await fs.access(path.join(webDir, 'index.html')).then(() => true).catch(() => false)
+  // 첫 관리자 — 명부가 비어 있으면 일회용 코드를 만들고 한 줄 남긴다(D3). 코드를 읽으려면
+  // 서버의 파일이나 로그를 볼 수 있어야 한다 — 그것이 "부트스트랩은 셸을 가진 사람" 이다.
+  if (opt.auth && dataDir) {
+    await authenticate.reload()
+    const code = await auth.ensureBootstrap(dataDir, authenticate.db())
+    if (code) log.line(`첫 관리자가 없다 — 브라우저 http://${bind}:${port}/setup 에 이 코드를 넣는다: ${code}  (${path.join(dataDir, 'bootstrap.code')})`)
+  }
+  // `/admin/doctor` 캐시 — 레포마다 ls-remote · push --dry-run 을 치는 검사라 60초는 같은 답을 낸다.
+  let doctorCache = { at: 0, res: null, pending: null }
+  const runDoctorCached = async (fresh = false) => {
+    if (!fresh && doctorCache.res && Date.now() - doctorCache.at < 60_000) return { at: doctorCache.at, ...doctorCache.res }
+    if (!doctorCache.pending) {
+      doctorCache.pending = doctorRows({ root, auth: opt.auth, data: dataDir, web: opt.web ? webDir : null, manual: manualDir, packages: pk?.dir || null, bind, port, inProcess: true })
+        .then((r) => {
+          doctorCache = { at: Date.now(), res: r, pending: null }
+          return r
+        })
+        .catch((e) => {
+          doctorCache.pending = null
+          throw e
+        })
+    }
+    const r = await doctorCache.pending
+    return { at: doctorCache.at, ...r }
+  }
+
+  // 지식 레포를 둔다 — `POST /repos`(writer) 와 콘솔 `POST /admin/repos`(admin) 가 **같은 것**을 부른다.
+  // 등록 = 폴더를 두는 것(§4.2). 길이 둘 — 패키지에서 세우기 · origin 에서 clone(검토 D9).
+  // 판정은 `core/reponew.js` 하나 — CLI `ctx repo new` 와 같은 함수다.
+  const buildRepo = async ({ name, pkgName = '', origin = null, clone = null, actor }) => {
+    if (!REPO_NAME_RE.test(name)) return { status: 400, body: { error: { code: 'E_INPUT', message: '레포 이름 형식이 아니다 (영문·숫자·._-)' } } }
+    if ((await store.list()).some((r) => r.name === name) || (await fs.stat(path.join(root, name)).catch(() => null))) {
+      return { status: 409, body: { error: { code: 'E_EXISTS', message: '그 이름의 레포가 이미 있다', detail: { name } } } }
+    }
+    if (clone) {
+      try {
+        const r = await cloneRepo({ url: clone, dest: path.join(root, name) })
+        await store.refresh()
+        await auth.audit(dataDir, `repo clone · ${actor} · ${name} · origin=${clone}`)
+        return { status: 200, body: { name, commit: r.commit, origin: clone, cloned: true } }
+      } catch (e) {
+        const code = e?.code || 'E_GIT'
+        return { status: code === 'E_EXISTS' ? 409 : 400, body: { error: { code, message: e.message, detail: e.detail } } }
+      }
+    }
+    if (!pk) return { status: 400, body: { error: { code: 'E_INPUT', message: '서버에 패키지 폴더가 없다 — --packages' } } }
+    if (!pkgName) return { status: 400, body: { error: { code: 'E_INPUT', message: 'package 가 필요하다' } } }
+    let mat
+    try {
+      mat = await materializePackage(pk, pkgName)
+    } catch (e) {
+      // 패키지가 여럿이면 이름을 알아야 고른다 — 없는 이름을 줬을 때 있는 것을 같이 낸다
+      const names = e.code === 'E_NOT_FOUND' ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => p.name) : []
+      return {
+        status: e.code === 'E_NOT_FOUND' ? 404 : 400,
+        body: { error: { code: e.code || 'E_INPUT', message: e.message + (names.length ? ' — 있는 패키지: ' + names.join(' · ') : ''), detail: names.length ? { packages: names } : undefined } },
+      }
+    }
+    try {
+      const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor })
+      await store.refresh()
+      await auth.audit(dataDir, `repo new · ${actor} · ${name} · package=${pkgName}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
+      return { status: 200, body: { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null } }
+    } catch (e) {
+      const code = e?.code || 'E_REPO'
+      return { status: code === 'E_EXISTS' ? 409 : 400, body: { error: { code, message: e.message, detail: e.detail } } }
+    } finally {
+      await mat.cleanup()
+    }
+  }
+
   // 요청마다 서버를 새로 만든다(stateless). 레포 캐시는 store 가 들고 있으므로
   // 여기서 만드는 것은 **등록표뿐**이다 -- 레포를 다시 읽지 않는다.
   const handler = createMcpHandler(
@@ -490,7 +607,168 @@ export async function runServe(opt = {}) {
         return json(res, 200, { ok: true, built: BUILT, repos: list.length, mirror })
       }
 
-      // 브라우저 경로(`/api` · `/r`)는 쿠키를, 나머지는 Bearer 를 본다(§6.4).
+      // ── 사이트(검토 §4.2) — 소개 · 설명서 · 로그인 · 마법사는 인증 **앞**에 온다.
+      //
+      // 토큰을 받기 전의 사용자가 읽는 페이지다(D2). `--private-pages` 면 세션을 요구한다.
+      // 어느 경우에도 레포 **이름**과 사람 이름은 여기서 나가지 않는다 — `/healthz` 와 같은 규칙.
+      const pageAuth = () => authenticate.browser(req.headers, secret)
+      const toLogin = () => {
+        res.writeHead(302, { location: '/login?next=' + encodeURIComponent(url.pathname + url.search) })
+        return res.end()
+      }
+
+      if (url.pathname === '/site/info' && req.method === 'GET') {
+        const list = await store.list()
+        const mirror = { ok: 0, lag: 0, off: 0 }
+        for (const r of list) mirror[mirrorOf(await git.status(r.root).catch(() => null))]++
+        const who = await pageAuth()
+        const db = authenticate.db()
+        return json(res, 200, {
+          version: VERSION,
+          built: BUILT,
+          repos: list.length,
+          mirror,
+          setupNeeded: !!opt.auth && !!dataDir && db.users.length === 0,
+          privatePages,
+          manuals: manuals.list(),
+          user: who.ok ? who.user : null,
+          role: who.ok ? who.role : null,
+          admin: who.ok ? !!who.admin : false,
+        })
+      }
+      // 설명서 원문 — `manual/` 의 책 · 설치절차 · 그림만. 목록 밖은 **없는 것**이다(경로 순회가 여기서 끝난다).
+      if (url.pathname.startsWith('/site/manual/') && req.method === 'GET') {
+        if (privatePages) {
+          const who = await pageAuth()
+          if (!who.ok) return json(res, 401, { error: { code: 'E_AUTH', message: '로그인이 필요하다' } })
+        }
+        let rel = ''
+        try {
+          rel = decodeURIComponent(url.pathname.slice('/site/manual/'.length))
+        } catch {}
+        const file = manuals.resolve(rel)
+        const buf = file ? await fs.readFile(file).catch(() => null) : null
+        if (!buf) {
+          log.req({ ip, method: 'GET', tool: '/site/manual', key: rel.slice(0, 60), ms: Date.now() - t0, status: 404 })
+          return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 설명서가 없다' } })
+        }
+        res.writeHead(200, {
+          'content-type': MIME[path.extname(file).toLowerCase()] || 'text/plain; charset=utf-8',
+          'x-content-type-options': 'nosniff',
+          'cache-control': 'no-store',
+        })
+        return res.end(buf)
+      }
+
+      // 페이지 — 전부 같은 `index.html` 이다. 라우팅은 화면이 한다(D12).
+      const isPublicPage = url.pathname === '/' || url.pathname === '/manual' || url.pathname.startsWith('/manual/') || url.pathname === '/setup'
+      if (isPublicPage && req.method === 'GET') {
+        if (privatePages && url.pathname !== '/setup') {
+          const who = await pageAuth()
+          if (!who.ok) return toLogin()
+        }
+        return serveWeb({ req, res, url, webDir, log })
+      }
+      // 콘솔 — 세션이 있어야 화면을 낸다. admin 인지는 화면과 API 가 본다(D4 — 403).
+      if ((url.pathname === '/console' || url.pathname.startsWith('/console/')) && req.method === 'GET') {
+        const who = await pageAuth()
+        if (!who.ok) return toLogin()
+        return serveWeb({ req, res, url, webDir, log })
+      }
+
+      // ── 설치 마법사 — 첫 관리자(검토 §4.6 · D3). 명부가 비어 있을 때만, 부트스트랩 코드로.
+      if (url.pathname === '/setup' && req.method === 'POST') {
+        if (!opt.auth || !dataDir) return json(res, 400, { error: { code: 'E_INPUT', message: '--auth 와 --data 가 있어야 첫 관리자를 만들 수 있다' } })
+        const lim = limiter.hit(req.socket.remoteAddress)
+        if (!lim.ok) {
+          log.req({ ip, method: 'POST', tool: '/setup', ms: Date.now() - t0, status: 429, code: 'E_RATE' })
+          return json(res, 429, { error: { code: 'E_RATE', message: '시도가 너무 잦다 — 잠시 뒤에 다시' } })
+        }
+        let body
+        try {
+          body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
+        } catch {
+          return json(res, 400, { error: { code: 'E_INPUT', message: '본문이 JSON 이 아니다' } })
+        }
+        await authenticate.reload()
+        const db = authenticate.db()
+        if (db.users.length) return json(res, 409, { error: { code: 'E_EXISTS', message: '이미 설정된 서버다 — 로그인한다' } })
+        if (!(await auth.verifyBootstrap(dataDir, body.code))) {
+          log.req({ ip, method: 'POST', tool: '/setup', ms: Date.now() - t0, status: 401, code: 'E_AUTH' })
+          return json(res, 401, { error: { code: 'E_AUTH', message: '코드를 확인하세요' } })
+        }
+        const name = String(body.name || '').trim()
+        const label = body.label ? String(body.label).trim().slice(0, 80) : null
+        try {
+          const u = auth.userAdd(db, { name, label, repos: ['*'], role: 'admin' })
+          const { raw, rec } = auth.issue(db, { user: u.name, note: '첫 토큰 (setup)' })
+          await auth.store(authenticate.file, db)
+          await auth.clearBootstrap(dataDir)
+          await auth.audit(dataDir, `setup · user add · ${u.name} · repos=* · role=admin · ip=${ip}`)
+          await auth.audit(dataDir, `setup · token issue · ${u.name} · ${rec.id} · expires=${rec.expires}`)
+          log.req({ ip, user: u.name, method: 'POST', tool: '/setup', ms: Date.now() - t0, status: 200 })
+          // 브라우저는 이 자리에서 로그인된다 — 원문을 한 번 더 넣게 하지 않는다.
+          setCookie(res, auth.signSession(secret, u.name), { secure: secureCookie })
+          return json(res, 200, { user: u.name, raw, id: rec.id, expires: rec.expires })
+        } catch (e) {
+          return json(res, 400, { error: { code: e?.code || 'E_INPUT', message: e.message, detail: e.detail } })
+        }
+      }
+
+      // ── 로그인 (§6.6.1) — form 과 JSON 둘. 화면(SPA)이 JSON 으로 부르고 옛 HTML 은 form 으로.
+      if (url.pathname === '/login') {
+        if (req.method === 'GET') {
+          if (webOk) return serveWeb({ req, res, url, webDir, log })
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+          return res.end(loginPage({ next: safeNext(url.searchParams.get('next'), '/r') }))
+        }
+        if (req.method === 'POST') {
+          const isJson = String(req.headers['content-type'] || '').includes('application/json')
+          const raw = (await readBody(req, 64 * 1024)) || Buffer.alloc(0)
+          let token = ''
+          let next = '/r'
+          if (isJson) {
+            try {
+              const j = JSON.parse(raw.toString('utf8') || '{}')
+              token = String(j.token || '').trim()
+              next = safeNext(j.next, '/r')
+            } catch {
+              return json(res, 400, { error: { code: 'E_INPUT', message: '본문이 JSON 이 아니다' } })
+            }
+          } else {
+            const form = new URLSearchParams(raw.toString('utf8'))
+            token = (form.get('token') || '').trim()
+            next = safeNext(form.get('next'), '/r')
+          }
+          // 속도 — 실패를 판정하기 전에 막는다. 사람에게는 넉넉하고 사전 대입에는 모자란다.
+          const lim = limiter.hit(req.socket.remoteAddress)
+          if (!lim.ok) {
+            log.req({ ip, method: 'POST', tool: '/login', ms: Date.now() - t0, status: 429, code: 'E_RATE' })
+            if (isJson) return json(res, 429, { error: { code: 'E_RATE', message: '시도가 너무 잦다 — 잠시 뒤에 다시' } })
+            res.writeHead(429, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+            return res.end(loginPage({ next, failed: true }))
+          }
+          const d = await authenticate.login(token)
+          log.req({ ip, method: 'POST', tool: '/login', key: d.ok ? d.user : '-', ms: Date.now() - t0, status: d.ok ? (isJson ? 200 : 302) : 401, code: d.ok ? null : d.message, tid: d.tokenId })
+          if (!d.ok) {
+            // **실패 메시지는 하나다** — 만료 · 명부에 없음 · 폐기를 가르면 명부를 흘린다. 구분은 로그에만.
+            if (isJson) return json(res, 401, { error: { code: 'E_AUTH', message: '토큰을 확인하세요' } })
+            res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+            return res.end(loginPage({ next, failed: true }))
+          }
+          setCookie(res, auth.signSession(secret, d.user), { secure: secureCookie })
+          if (isJson) return json(res, 200, { ok: true, user: d.user, role: d.role, next })
+          res.writeHead(302, { location: next })
+          return res.end()
+        }
+      }
+      if (url.pathname === '/logout') {
+        clearCookies(res, { secure: secureCookie })
+        res.writeHead(302, { location: '/' })
+        return res.end()
+      }
+
+      // 브라우저 경로(`/api` · `/r` · `/admin` …)는 쿠키를, 나머지는 Bearer 를 본다(§6.4).
       //
       // **`/kit` 도 여기 있다.** 화면의 내려받기는 `<a href download>` 라
       // `Authorization` 을 달 수 없고 쿠키만 간다 -- Bearer 전용으로 두면
@@ -498,49 +776,14 @@ export async function runServe(opt = {}) {
       // `browser()` 는 Bearer 도 받아 주므로 `ctx setup` 쪽은 그대로다.
       const isBrowserPath =
         url.pathname.startsWith('/api/') ||
+        url.pathname === '/r' ||
         url.pathname.startsWith('/r/') ||
         url.pathname.startsWith('/kit/') ||
-        url.pathname === '/' ||
+        url.pathname.startsWith('/admin/') ||
         url.pathname === '/me' ||
         url.pathname === '/repos' ||
         url.pathname === '/packages' ||
         url.pathname.startsWith('/workrepos')
-      // 화면 자산 — **인증 앞에서 낸다.**
-      //
-      // 로그인 화면을 그리려면 그 전에 받아야 하고, 담긴 것은 빌드 산출물뿐이라
-      // 숨길 것이 없다. 인증 뒤에 두면 401 이 나서 화면이 아예 안 뜬다 —
-      // 실측으로 잡았다.
-      if (/^\/(assets\/|favicon|[^/]+\.(?:js|css|svg|png|ico|woff2?)$)/.test(url.pathname)) {
-        return serveWeb({ req, res, url, webDir, log })
-      }
-
-      // ── 로그인 (§6.6.1) — 인증 앞에 온다
-      if (url.pathname === '/login') {
-        if (req.method === 'GET') {
-          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-          return res.end(loginPage({ next: url.searchParams.get('next') || '/' }))
-        }
-        if (req.method === 'POST') {
-          const body = (await readBody(req, 64 * 1024)) || Buffer.alloc(0)
-          const form = new URLSearchParams(body.toString('utf8'))
-          const token = (form.get('token') || '').trim()
-          const next = safeNext(form.get('next'))
-          const d = await authenticate.login(token)
-          log.req({ ip, method: 'POST', tool: '/login', key: d.ok ? d.user : '-', ms: Date.now() - t0, status: d.ok ? 302 : 401, code: d.ok ? null : d.message })
-          if (!d.ok) {
-            res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-            return res.end(loginPage({ next, failed: true }))
-          }
-          setCookie(res, auth.signSession(secret, d.user), { secure: secureCookie })
-          res.writeHead(302, { location: next })
-          return res.end()
-        }
-      }
-      if (url.pathname === '/logout') {
-        setCookie(res, '', { maxAge: 0, secure: secureCookie })
-        res.writeHead(302, { location: '/login' })
-        return res.end()
-      }
 
       const a = isBrowserPath
         ? await authenticate.browser(req.headers, secret)
@@ -549,21 +792,301 @@ export async function runServe(opt = {}) {
         log.req({ ip, method: req.method, key: url.pathname, ms: Date.now() - t0, status: a.status, code: a.code, tool: a.message })
         // 화면 경로면 로그인으로 보낸다. **보던 곳을 들고 간다**(§6.6.1) —
         // 돌아왔을 때 처음부터 다시 찾게 하지 않는다.
-        if (url.pathname.startsWith('/r/') || url.pathname === '/') {
-          res.writeHead(302, { location: '/login?next=' + encodeURIComponent(url.pathname + url.search) })
-          return res.end()
-        }
+        if (req.method === 'GET' && (url.pathname === '/r' || url.pathname.startsWith('/r/'))) return toLogin()
         return json(res, a.status, { error: { code: a.code, message: a.message } })
       }
 
       // GET /me — 화면 껍데기가 한 번에 필요한 것. 누구인가 · 무엇을 볼 수
-      // 있는가. **모드는 묻지 않는다** — 화면이 `/r/` 로 서빙됐으면 서버 모드다.
+      // 있는가 · 역할 · 재인증이 살아 있나. **모드는 묻지 않는다** — 화면이 `/r/` 로 서빙됐으면 서버 모드다.
       if (url.pathname === '/me' && req.method === 'GET') {
         const mine = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
         const rows = []
         for (const r of mine) rows.push({ name: r.name, title: await titleOf(r.root) })
-        log.req({ ip, user: a.user, method: 'GET', tool: '/me', ms: Date.now() - t0, status: 200 })
-        return json(res, 200, { mode: 'server', user: a.user, label: a.label ?? null, write: !!a.write, repos: rows })
+        const su = auth.readSession(secret, auth.parseCookies(req.headers.cookie)['cdp_su'], Date.now(), { kind: 'sudo' })
+        log.req({ ip, user: a.user, method: 'GET', tool: '/me', ms: Date.now() - t0, status: 200, tid: a.tokenId })
+        return json(res, 200, {
+          mode: 'server',
+          user: a.user,
+          label: a.label ?? null,
+          role: a.role,
+          admin: !!a.admin,
+          write: !!a.write,
+          sudo: !!(su && su.user === a.user),
+          expiresInDays: a.expiresInDays ?? null,
+          version: VERSION,
+          repos: rows,
+        })
+      }
+
+      // ── 콘솔 API `/admin/*` (검토 §4.2 · §4.3) ──────────────────────────────────
+      //
+      // 판정 순서 — 세션(위에서 401) → admin(403 · D4) → 대역(403) → 쓰기면 재인증(401 E_REAUTH · D5).
+      // 모든 쓰기가 `auth.log` 에 `admin <행위> · <행위자> · <대상> · <바뀐 값>` 으로 남는다 —
+      // CLI 와 같은 파일, 같은 모양. 토큰은 앞 8자만.
+      if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
+        const sub = url.pathname.slice('/admin'.length) || '/'
+        const denied = (status, code, message) => {
+          log.req({ ip, user: a.user, method: req.method, tool: '/admin', key: sub, ms: Date.now() - t0, status, code, tid: a.tokenId })
+          return json(res, status, { error: { code, message } })
+        }
+        if (!a.admin) return denied(403, 'E_FORBIDDEN', '관리자만 들어갈 수 있다 — 콘솔은 admin 의 것이다')
+        if (adminFrom.length && !ipInCidrs(req.socket.remoteAddress, adminFrom)) return denied(403, 'E_FORBIDDEN', '관리 API 는 허용된 대역에서만 열린다')
+        if (!authenticate.file || !dataDir) return denied(501, 'E_REPO', '--auth 와 --data 가 있어야 콘솔이 돈다')
+        const readJson = async () => {
+          try {
+            return JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
+          } catch {
+            return null
+          }
+        }
+        const okLog = (tool, key, status = 200) => log.req({ ip, user: a.user, method: req.method, tool: '/admin' + tool, key, ms: Date.now() - t0, status, tid: a.tokenId })
+
+        // 재인증 — 자기 토큰 원문을 한 번 더. 15분 쿠키(sudo 와 같은 모양). 세션이 탈취돼도 이 15분 밖에서는 명부가 바뀌지 않는다.
+        if (sub === '/sudo' && req.method === 'POST') {
+          const lim = limiter.hit(req.socket.remoteAddress)
+          if (!lim.ok) return denied(429, 'E_RATE', '시도가 너무 잦다 — 잠시 뒤에 다시')
+          const body = await readJson()
+          if (!body) return denied(400, 'E_INPUT', '본문이 JSON 이 아니다')
+          const d = await authenticate.login(String(body.token || '').trim())
+          if (!d.ok || d.user !== a.user) {
+            await auth.audit(dataDir, `admin sudo fail · ${a.user} · ip=${ip}`)
+            return denied(401, 'E_AUTH', '토큰을 확인하세요')
+          }
+          setSudoCookie(res, auth.signSession(secret, a.user, { minutes: auth.SUDO_MINUTES, kind: 'sudo' }), { secure: secureCookie })
+          await auth.audit(dataDir, `admin sudo · ${a.user} · ${auth.SUDO_MINUTES}분 · ip=${ip}`)
+          okLog('/sudo', a.user)
+          return json(res, 200, { ok: true, minutes: auth.SUDO_MINUTES })
+        }
+        if (req.method !== 'GET') {
+          const su = auth.readSession(secret, auth.parseCookies(req.headers.cookie)['cdp_su'], Date.now(), { kind: 'sudo' })
+          if (!su || su.user !== a.user) return denied(401, 'E_REAUTH', '관리자 확인이 필요하다 — 내 토큰을 한 번 더 넣는다')
+        }
+
+        await authenticate.reload()
+        const db = authenticate.db()
+        const commit = async (line) => {
+          await auth.store(authenticate.file, db)
+          await auth.audit(dataDir, 'admin ' + line)
+        }
+        const fail = (e) => {
+          const code = e?.code || 'E_INPUT'
+          const status = code === 'E_NOT_FOUND' ? 404 : code === 'E_EXISTS' || code === 'E_LAST_ADMIN' ? 409 : 400
+          log.req({ ip, user: a.user, method: req.method, tool: '/admin', key: sub, ms: Date.now() - t0, status, code, tid: a.tokenId })
+          return json(res, status, { error: { code, message: e.message, detail: e.detail } })
+        }
+        const visibleTo = (name) => db.users.filter((u) => u.active !== false && (u.repos || []).some((r) => r === '*' || r === name)).map((u) => u.name)
+
+        try {
+          // 현황 — 카드 넷의 숫자와 경고 목록. 한 번의 왕복이다.
+          if (sub === '/overview' && req.method === 'GET') {
+            const list = await store.list()
+            const mirror = { ok: 0, lag: 0, off: 0 }
+            const lag = []
+            const kits = {}
+            for (const r of list) {
+              const st = await git.status(r.root).catch(() => null)
+              const m = mirrorOf(st)
+              mirror[m]++
+              if (m === 'lag') lag.push({ name: r.name, ahead: st?.ahead ?? null })
+              kits[r.name] = (await kitHash(r.root).catch(() => ({ hash: null }))).hash
+            }
+            const users = auth.userList(db)
+            const admins = auth.admins(db)
+            const tokens = auth.tokenList(db)
+            const active = tokens.filter((t) => t.status === 'active')
+            const soon = active.filter((t) => t.daysLeft !== null && t.daysLeft <= 7)
+            const wrows = wr.list(await wr.load(dataDir), { kits })
+            const byState = { 최신: 0, 낡음: 0, 미설치: 0 }
+            for (const w of wrows) byState[w.state] = (byState[w.state] || 0) + 1
+            const alerts = []
+            if (!admins.length) alerts.push({ level: 'bad', text: '관리자가 없다 — 셸에서 ctx serve user set --name <이름> --role admin', to: 'users' })
+            if (soon.length) alerts.push({ level: 'warn', text: `7일 안에 만료되는 토큰 ${soon.length} — ${soon.map((t) => `${t.user}(${t.id} · ${t.daysLeft}일)`).join(' · ')}`, to: 'tokens' })
+            if (lag.length) alerts.push({ level: 'warn', text: `미러가 밀린 레포 ${lag.length} — ${lag.map((l) => `${l.name} ${l.ahead ?? '?'}건`).join(' · ')}`, to: 'repos' })
+            if (doctorCache.res?.fails) alerts.push({ level: 'bad', text: `진단 fail ${doctorCache.res.fails} — ${doctorCache.res.rows.filter((r) => r.state === 'fail').map((r) => r.what).join(' · ')}`, to: 'server' })
+            if (!list.length) alerts.push({ level: 'warn', text: '지식 레포가 없다 — 지식 레포에서 세우거나 origin 에서 받아 온다', to: 'repos' })
+            const audit = await tailLog(dataDir, 'auth.log', 5)
+            okLog('/overview', '-')
+            return json(res, 200, {
+              version: VERSION,
+              built: BUILT,
+              startedAt,
+              node: process.version,
+              repos: { count: list.length, mirror, lag },
+              users: { count: users.length, active: users.filter((u) => u.active).length, admins: admins.length },
+              tokens: { active: active.length, soon: soon.length, revoked: tokens.length - active.length },
+              workrepos: { count: wrows.length, ...byState },
+              packages: pk ? (await listPackageDirs(pk.dir).catch(() => [])).length : 0,
+              doctor: doctorCache.res ? { at: doctorCache.at, ok: doctorCache.res.ok, fails: doctorCache.res.fails, warns: doctorCache.res.warns, oks: doctorCache.res.rows.length - doctorCache.res.fails - doctorCache.res.warns } : null,
+              alerts,
+              audit: audit.lines.reverse(),
+            })
+          }
+
+          // ── 사용자
+          if (sub === '/users' && req.method === 'GET') {
+            const used = await lastUsed(dataDir)
+            const rows = auth.userList(db).map((u) => ({ ...u, lastUsed: used.byUser.get(u.name) ?? null }))
+            okLog('/users', '-')
+            return json(res, 200, { users: rows, repos: (await store.list()).map((r) => r.name), me: a.user })
+          }
+          if (sub === '/users' && req.method === 'POST') {
+            const body = await readJson()
+            if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
+            const u = auth.userAdd(db, { name: String(body.name || '').trim(), label: body.label ? String(body.label).trim().slice(0, 80) : null, repos: body.repos ?? [], role: body.role ?? 'viewer' })
+            await commit(`user add · ${a.user} · ${u.name} · repos=${u.repos.join(',')} · role=${u.role}${u.label ? ' · label=' + u.label : ''}`)
+            okLog('/users', u.name)
+            return json(res, 200, auth.userList(db).find((x) => x.name === u.name))
+          }
+          const um = /^\/users\/([^/]+)$/.exec(sub)
+          if (um && req.method === 'PATCH') {
+            const name = decodeURIComponent(um[1])
+            const body = await readJson()
+            if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
+            const patch = {}
+            for (const k of ['label', 'role', 'repos', 'active']) if (body[k] !== undefined) patch[k] = body[k]
+            if (patch.label !== undefined) patch.label = patch.label ? String(patch.label).trim().slice(0, 80) : null
+            const u = auth.userSet(db, name, patch, { actor: a.user })
+            await commit(`user set · ${a.user} · ${name} · ${JSON.stringify(patch)}`)
+            okLog('/users', name)
+            return json(res, 200, auth.userList(db).find((x) => x.name === u.name))
+          }
+
+          // ── 토큰 — 원문은 발급 · 재발급 응답에 **한 번**. 목록에는 앞 8자만.
+          if (sub === '/tokens' && req.method === 'GET') {
+            const used = await lastUsed(dataDir)
+            const rows = auth.tokenList(db).map((t) => ({ ...t, lastUsed: used.byToken.get(t.id) ?? used.byUser.get(t.user) ?? null }))
+            okLog('/tokens', '-')
+            return json(res, 200, { tokens: rows, users: db.users.filter((u) => u.active !== false).map((u) => ({ name: u.name, label: u.label ?? null, role: auth.roleOf(u) })) })
+          }
+          if (sub === '/tokens' && req.method === 'POST') {
+            const body = await readJson()
+            if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
+            const days = body.expiresDays === undefined || body.expiresDays === null || body.expiresDays === '' ? undefined : body.expiresDays
+            const { raw, rec } = auth.issue(db, { user: String(body.user || '').trim(), note: body.note ? String(body.note).trim().slice(0, 80) : null, expiresDays: days })
+            await commit(`token issue · ${a.user} · ${rec.user} · ${rec.id} · expires=${rec.expires}${rec.note ? ' · note=' + rec.note : ''}`)
+            okLog('/tokens', rec.id)
+            return json(res, 200, { raw, id: rec.id, user: rec.user, expires: rec.expires, note: rec.note })
+          }
+          const tm = /^\/tokens\/([0-9a-f]{8})(?:\/(reissue|revoke))?$/.exec(sub)
+          if (tm && tm[2] === 'reissue' && req.method === 'POST') {
+            const body = (await readJson()) || {}
+            const days = body.expiresDays === undefined || body.expiresDays === null || body.expiresDays === '' ? undefined : body.expiresDays
+            const { raw, rec, old } = auth.reissue(db, { id: tm[1], by: a.user, expiresDays: days })
+            await commit(`token reissue · ${a.user} · ${old.user} · ${old.id} → ${rec.id} · expires=${rec.expires}`)
+            okLog('/tokens/reissue', rec.id)
+            return json(res, 200, { raw, id: rec.id, user: rec.user, expires: rec.expires, note: rec.note, old: old.id })
+          }
+          if (tm && tm[2] === 'revoke' && req.method === 'POST') {
+            const t = db.tokens.find((x) => x.sha256.startsWith(tm[1]))
+            if (!t) return fail(new auth.AuthError('E_NOT_FOUND', '그 id 의 토큰이 없다', { id: tm[1] }))
+            auth.revoke(db, { id: tm[1], by: a.user })
+            await commit(`token revoke · ${a.user} · ${t.user} · ${tm[1]}`)
+            okLog('/tokens/revoke', tm[1])
+            return json(res, 200, { ok: true, id: tm[1], user: t.user })
+          }
+          if (tm && !tm[2] && req.method === 'PATCH') {
+            const body = await readJson()
+            if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
+            const t = auth.tokenSet(db, { id: tm[1], note: body.note !== undefined ? String(body.note).trim().slice(0, 80) : undefined, expires: body.expires })
+            await commit(`token set · ${a.user} · ${t.user} · ${t.id} · ${JSON.stringify({ note: body.note, expires: body.expires })}`)
+            okLog('/tokens', tm[1])
+            return json(res, 200, auth.tokenList(db).find((x) => x.id === t.id))
+          }
+
+          // ── 지식 레포 — 서버의 레포 **전부**(관리자에게만 · 검토 v0.1 D6) · 볼 수 있는 사람
+          if (sub === '/repos' && req.method === 'GET') {
+            const rows = []
+            for (const r of await store.list()) {
+              const st = await git.status(r.root).catch(() => null)
+              let info = {}
+              try {
+                info = (await store.view(r.name))?.repoInfo?.() || {}
+              } catch {}
+              rows.push({
+                name: r.name,
+                title: await titleOf(r.root),
+                head: st?.head ?? null,
+                branch: st?.branch ?? null,
+                ahead: st?.ahead ?? 0,
+                mirror: mirrorOf(st),
+                docs: info.docs ?? null,
+                coords: info.coords ?? null,
+                users: visibleTo(r.name),
+              })
+            }
+            okLog('/repos', '-')
+            return json(res, 200, { repos: rows, packages: pk ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => ({ name: p.name, title: p.manifest?.title ?? null, version: p.manifest?.version ?? null, description: p.manifest?.description ?? null, docs: p.docs })) : [], users: db.users.filter((u) => u.active !== false).map((u) => ({ name: u.name, label: u.label ?? null, all: (u.repos || []).includes('*') })) })
+          }
+          if (sub === '/repos' && req.method === 'POST') {
+            const body = await readJson()
+            if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
+            const name = String(body.name || '').trim()
+            const out = await buildRepo({ name, pkgName: String(body.package || '').trim(), origin: body.origin ? String(body.origin).trim() : null, clone: body.clone ? String(body.clone).trim() : null, actor: a.user })
+            if (out.status === 200 && Array.isArray(body.grant) && body.grant.length) {
+              // 세우면서 접근을 준다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다(검토 v0.1 §3.2).
+              const granted = []
+              for (const n of body.grant) {
+                const u = db.users.find((x) => x.name === n)
+                if (!u || (u.repos || []).includes('*') || (u.repos || []).includes(name)) continue
+                auth.userSet(db, n, { repos: [...(u.repos || []), name] })
+                granted.push(n)
+              }
+              if (granted.length) await commit(`repo grant · ${a.user} · ${name} · users=${granted.join(',')}`)
+              out.body.granted = granted
+            }
+            okLog('/repos', name, out.status)
+            return json(res, out.status, out.body)
+          }
+
+          // ── 작업 레포 — 대장 전부(레포 무관). 등록 · 꾸러미는 그 레포의 관리 화면에서(§4.7).
+          if (sub === '/workrepos' && req.method === 'GET') {
+            const kits = {}
+            for (const r of await store.list()) kits[r.name] = (await kitHash(r.root).catch(() => ({ hash: null }))).hash
+            okLog('/workrepos', '-')
+            return json(res, 200, { repos: wr.list(await wr.load(dataDir), { kits }) })
+          }
+
+          // ── 서버 — 진단 · 설정값 · 로그. 전부 읽기다(D7 · D8).
+          if (sub === '/doctor' && req.method === 'GET') {
+            const r = await runDoctorCached(url.searchParams.get('fresh') === '1')
+            okLog('/doctor', r.fails ? 'fail ' + r.fails : 'ok')
+            return json(res, 200, r)
+          }
+          if (sub === '/server' && req.method === 'GET') {
+            okLog('/server', '-')
+            return json(res, 200, {
+              version: VERSION,
+              built: BUILT,
+              node: process.version,
+              pid: process.pid,
+              startedAt,
+              bind,
+              port,
+              root,
+              auth: authenticate.file,
+              data: dataDir,
+              web: webDir,
+              webOk,
+              packages: pk?.dir || null,
+              manual: manualDir,
+              mirror: !!opt.mirror,
+              publicUrl: opt.publicUrl || null,
+              adminFrom: adminFrom.map((c) => c.text),
+              privatePages,
+              packagesList: pk ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => ({ name: p.name, title: p.manifest?.title ?? null, version: p.manifest?.version ?? null, docs: p.docs, types: p.types, patterns: p.patterns })) : [],
+              manuals: manuals.list(),
+            })
+          }
+          if ((sub === '/audit' || sub === '/log') && req.method === 'GET') {
+            const n = Math.min(2000, Math.max(1, Number(url.searchParams.get('limit')) || 200))
+            const r = await tailLog(dataDir, sub === '/audit' ? 'auth.log' : 'serve.log', n)
+            okLog(sub, String(n))
+            return json(res, 200, { lines: r.lines.reverse(), total: r.total })
+          }
+        } catch (e) {
+          return fail(e)
+        }
+        return denied(404, 'E_NOT_FOUND', '없는 관리 경로')
       }
 
       // GET /packages — 고를 수 있는 패키지. 권한과 무관하다 — 패키지는 서식이라
@@ -590,7 +1113,7 @@ export async function runServe(opt = {}) {
       //
       // 등록 = 폴더를 두는 것(설계서 §4.2)은 그대로다. clone 이 한 길이고 이것이
       // 다른 길이다. `write` 가 있어야 한다 — origin 에 커밋을 만드는 일이다.
-      // 판정은 `core/reponew.js` 하나 — CLI `ctx repo new` 와 같은 함수다.
+      // 실물은 `buildRepo` — 콘솔의 `POST /admin/repos` 와 같은 함수다.
       if (url.pathname === '/repos' && req.method === 'POST') {
         if (!a.write) {
           log.req({ ip, user: a.user, method: 'POST', tool: '/repos', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
@@ -603,41 +1126,9 @@ export async function runServe(opt = {}) {
           return json(res, 400, { error: { code: 'E_INPUT', message: '본문이 JSON 이 아니다' } })
         }
         const name = String(body.name || '').trim()
-        const pkgName = String(body.package || '').trim()
-        const origin = body.origin ? String(body.origin).trim() : null
-        if (!REPO_NAME_RE.test(name)) return json(res, 400, { error: { code: 'E_INPUT', message: '레포 이름 형식이 아니다 (영문·숫자·._-)' } })
-        if (!pk) return json(res, 400, { error: { code: 'E_INPUT', message: '서버에 패키지 폴더가 없다 — --packages' } })
-        if (!pkgName) return json(res, 400, { error: { code: 'E_INPUT', message: 'package 가 필요하다' } })
-        if ((await store.list()).some((r) => r.name === name) || (await fs.stat(path.join(root, name)).catch(() => null))) {
-          return json(res, 409, { error: { code: 'E_EXISTS', message: '그 이름의 레포가 이미 있다', detail: { name } } })
-        }
-        let mat
-        try {
-          mat = await materializePackage(pk, pkgName)
-        } catch (e) {
-          // 패키지가 여럿이면 이름을 알아야 고른다 — 없는 이름을 줬을 때 있는 것을 같이 낸다
-          const names = e.code === 'E_NOT_FOUND' ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => p.name) : []
-          return json(res, e.code === 'E_NOT_FOUND' ? 404 : 400, {
-            error: {
-              code: e.code || 'E_INPUT',
-              message: e.message + (names.length ? ' — 있는 패키지: ' + names.join(' · ') : ''),
-              detail: names.length ? { packages: names } : undefined,
-            },
-          })
-        }
-        try {
-          const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: a.user })
-          await store.refresh()
-          await auth.audit(dataDir, `repo new · ${a.user} · ${name} · package=${pkgName}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
-          log.req({ ip, user: a.user, method: 'POST', tool: '/repos', key: name, ms: Date.now() - t0, status: 200 })
-          return json(res, 200, { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null })
-        } catch (e) {
-          const code = e?.code || 'E_REPO'
-          log.req({ ip, user: a.user, method: 'POST', tool: '/repos', key: name, ms: Date.now() - t0, status: 400, code })
-          return json(res, code === 'E_EXISTS' ? 409 : 400, { error: { code, message: e.message, detail: e.detail } })
-        } finally {
-          await mat.cleanup()
-        }
+        const out = await buildRepo({ name, pkgName: String(body.package || '').trim(), origin: body.origin ? String(body.origin).trim() : null, actor: a.user })
+        log.req({ ip, user: a.user, method: 'POST', tool: '/repos', key: name, ms: Date.now() - t0, status: out.status, code: out.body?.error?.code, tid: a.tokenId })
+        return json(res, out.status, out.body)
       }
 
       if (url.pathname === '/repos' && req.method === 'GET') {
@@ -888,22 +1379,31 @@ export async function runServe(opt = {}) {
         return res.end()
       }
 
-      // `GET /` → 기본 레포로. 볼 수 있는 레포가 없으면 그렇게 말하고 멈춘다
-      // (§6.6.1) — 토큰은 맞으므로 401 로 돌려보내지 않는다.
-      if (url.pathname === '/' || /^\/r(\/.*)?$/.test(url.pathname)) {
+      // `/r` → 볼 수 있는 첫 레포로. 없으면 화면이 빈 상태를 그린다(관리자면 콘솔로 가는 길) —
+      // 토큰은 맞으므로 401 로 돌려보내지 않는다(§6.6.1).
+      if (url.pathname === '/r' || url.pathname === '/r/') {
         const mine = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
-        if (!mine.length) {
-          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-          return res.end(emptyPage(a.user))
+        if (mine.length) {
+          res.writeHead(302, { location: '/r/' + encodeURIComponent(mine[0].name) + '/' })
+          return res.end()
         }
+        return serveWeb({ req, res, url, webDir, log })
+      }
+      if (url.pathname.startsWith('/r/')) {
+        const mine = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
         const m = /^\/r\/([^/]+)/.exec(url.pathname)
-        if (!m) {
-          res.writeHead(302, { location: '/r/' + encodeURIComponent(mine[0].name) + '/' })
-          return res.end()
-        }
-        if (!mine.some((r) => r.name === decodeURIComponent(m[1]))) {
-          res.writeHead(302, { location: '/r/' + encodeURIComponent(mine[0].name) + '/' })
-          return res.end()
+        let name = ''
+        try {
+          name = decodeURIComponent(m[1])
+        } catch {}
+        if (!mine.some((r) => r.name === name)) {
+          // 방금 세운 레포일 수 있다 — 모르는 이름이면 폴더를 다시 훑는다
+          await store.ensure(name)
+          const again = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
+          if (!again.some((r) => r.name === name)) {
+            res.writeHead(302, { location: again.length ? '/r/' + encodeURIComponent(again[0].name) + '/' : '/r' })
+            return res.end()
+          }
         }
         // 화면 — 빌드된 SPA 를 낸다. **같은 번들이 로컬에서도 돈다**(§6.8) —
         // 경로가 `/r/` 로 시작하면 서버 모드라고 화면이 스스로 안다.
@@ -1128,6 +1628,18 @@ export async function runAuthCmd(opt) {
   return 2
 }
 
+// 로그 꼬리 — 회전분(.3 .2 .1)까지 이어 붙여 마지막 n 줄. 콘솔의 감사 · 로그 페이지가 쓴다.
+// `auth.log` 는 회전하지 않는다(이력) — 그래도 같은 함수로 읽는다.
+async function tailLog(dataDir, base, n = 200) {
+  if (!dataDir) return { lines: [], total: 0 }
+  let all = []
+  for (const suf of ['.3', '.2', '.1', '']) {
+    const body = await fs.readFile(path.join(dataDir, 'logs', base + suf), 'utf8').catch(() => null)
+    if (body) all = all.concat(body.split(NL).filter(Boolean))
+  }
+  return { lines: all.slice(-n), total: all.length }
+}
+
 // **마지막 사용은 `serve.log` 에서 집계한다.** `auth.json` 에 적지 않는다 --
 // 매 요청 명부 파일을 쓰면 레포 뮤텍스와 같은 경합이 생기고(§2.6), 그것도
 // 읽기 요청 하나마다다. 안 쓰는 토큰을 걷어내는 용도라 하루 단위면 충분하다.
@@ -1195,9 +1707,9 @@ async function walk(dir, rel, out) {
 
 // 로그인 뒤 돌아갈 곳. **밖으로 보내지 않는다** — `//evil.example` 같은 값이
 // 오면 열린 리다이렉트가 된다.
-function safeNext(v) {
-  const t = String(v || '/')
-  return /^\/(?!\/)/.test(t) ? t : '/'
+function safeNext(v, dflt = '/') {
+  const t = String(v || dflt)
+  return /^\/(?!\/)/.test(t) ? t : dflt
 }
 
 function page(title, body) {
@@ -1212,27 +1724,50 @@ main{max-width:620px;margin:0 auto}h1{font-size:19px;margin:0 0 6px}
 hr{border:0;border-top:1px solid var(--line);margin:22px 0}</style><main>${body}</main>`
 }
 
-function emptyPage(user) {
-  return page('CDP', `<h1>볼 수 있는 지식 레포가 없습니다</h1>
-<p class="mut">계정 <code>${user}</code> 에 아직 레포 권한이 없습니다. 관리자에게 문의하세요.</p>
-<hr><p class="mut"><a href="/logout">로그아웃</a></p>`)
+// 설명서 색인 — 산출물의 `manual/`(검토 §4.5). 책은 `*_설명서.md`, 넷째는 `deploy/설치절차.md`,
+// 그림은 `manual/그림/*.svg`(소스에서는 `docs/그림`). **목록 밖은 없는 것이다** — `/site/manual/<이름>`
+// 이 여기서만 파일을 찾으므로 경로 순회가 성립하지 않는다.
+async function manualIndex(manualDir) {
+  const items = []
+  let figDir = null
+  let figures = []
+  if (manualDir) {
+    for (const n of (await fs.readdir(manualDir).catch(() => [])).sort()) {
+      if (!/_설명서\.md$/.test(n)) continue
+      items.push({ id: n.replace(/\.md$/, ''), title: await titleOfMd(path.join(manualDir, n)), file: path.join(manualDir, n) })
+    }
+    for (const cand of [path.resolve(manualDir, '..', 'deploy', '설치절차.md'), path.resolve(manualDir, '..', 'ops', 'deploy', '설치절차.md')]) {
+      if (await fs.access(cand).then(() => true).catch(() => false)) {
+        items.push({ id: '설치절차', title: await titleOfMd(cand), file: cand })
+        break
+      }
+    }
+    for (const cand of [path.join(manualDir, '그림'), path.resolve(manualDir, '..', 'docs', '그림')]) {
+      const names = await fs.readdir(cand).catch(() => null)
+      if (names) {
+        figDir = cand
+        figures = names.filter((n) => /\.svg$/i.test(n))
+        break
+      }
+    }
+  }
+  return {
+    list: () => items.map(({ id, title }) => ({ id, title })),
+    resolve: (rel) => {
+      const id = String(rel || '').replace(/\.md$/, '')
+      const hit = items.find((x) => x.id === id)
+      if (hit) return hit.file
+      const g = /^그림\/([^/]+\.svg)$/i.exec(String(rel || ''))
+      if (g && figDir && figures.includes(g[1])) return path.join(figDir, g[1])
+      return null
+    },
+  }
 }
 
-// 6.2 에서 React 화면이 이 자리를 가져간다. 지금은 **서버가 붙었다는 것**과
-// 레포 전환이 도는 것을 보이는 최소 껍데기다.
-function shellPage({ user, repo, repos }) {
-  const list = repos
-    .map((r) => (r === repo ? `<strong>${r}</strong>` : `<a href="/r/${encodeURIComponent(r)}/">${r}</a>`))
-    .join(' · ')
-  return page(
-    `${repo} · CDP`,
-    `<h1>${repo}</h1>
-<p class="mut">레포 ${list}</p>
-<hr>
-<p class="mut">화면은 6.2 에서 붙습니다. 읽기 API 는 이미 돕니다 —</p>
-<p><code>/api/${repo}/status</code> · <code>/api/${repo}/docs</code> · <code>/api/${repo}/managed</code></p>
-<hr><p class="mut">${user} · <a href="/logout">로그아웃</a></p>`
-  )
+async function titleOfMd(file) {
+  const body = await fs.readFile(file, 'utf8').catch(() => '')
+  const h = body.split(NL).find((l) => l.startsWith('# '))
+  return h ? h.slice(2).trim().replace(/[*`]/g, '') : path.basename(file, '.md')
 }
 
 // SPA 정적 서빙.
@@ -1249,7 +1784,7 @@ async function serveWeb({ req, res, url, webDir, log }) {
     res.writeHead(403).end()
     return
   }
-  const buf = await fs.readFile(abs).catch(() => null)
+  let buf = await fs.readFile(abs).catch(() => null)
   if (!buf) {
     if (asset) {
       res.writeHead(404).end()
@@ -1261,6 +1796,9 @@ async function serveWeb({ req, res, url, webDir, log }) {
 서버의 <code>--web</code> 로 가리키거나 그 자리에 두세요.</p>
 <hr><p class="mut">읽기 API 와 MCP 는 화면 없이도 돕니다.</p>`))
   }
+  // **같은 번들이 로컬 뷰어에서도 돈다**(§6.8). `/r/` 밖의 경로(`/` · `/manual` · `/console`)에서
+  // 화면이 자기가 서버에서 왔는지 알 길이 없어 한 줄을 심는다 — 왕복 없이 첫 렌더에서 갈린다.
+  if (rel === '/index.html') buf = Buffer.from(buf.toString('utf8').replace('</head>', '<script>window.__CDP_SERVER__=true</script></head>'), 'utf8')
   res.writeHead(200, {
     'content-type': MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream',
     'cache-control': rel === '/index.html' ? 'no-store' : 'public, max-age=31536000, immutable',

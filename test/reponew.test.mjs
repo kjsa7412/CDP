@@ -12,7 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { newRepo, listRepos, REPO_NAME_RE } from '../core/reponew.js'
+import { newRepo, cloneRepo, listRepos, REPO_NAME_RE } from '../core/reponew.js'
 
 const run = promisify(execFile)
 const HOOK = `#!/bin/sh
@@ -134,6 +134,39 @@ test('newRepo — origin 이 있으면 remote add · push 는 파일 원격으�
     const list = await listRepos(path.join(d, 'out'))
     assert.ok(list[0].upstream, 'upstream 이 잡혔다')
     assert.equal(list[0].ahead, 0)
+  } finally {
+    await fs.rm(d, { recursive: true, force: true })
+  }
+})
+
+test('cloneRepo — origin 에서 받아 온다 · hooksPath · 자리에 무엇이 있으면 E_EXISTS · 지식 레포가 아니면 지운다 · 주소 형식', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-cl-'))
+  try {
+    const src = await completedFolder(d)
+    await run('git', ['-C', src, 'init', '-q'])
+    await run('git', ['-C', src, 'add', '-A'])
+    await run('git', ['-C', src, '-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-qm', 'seed'])
+    const dest = path.join(d, 'root', 'k1')
+    const r = await cloneRepo({ url: src, dest })
+    assert.ok(r.commit, 'head')
+    assert.equal(r.origin, src)
+    assert.equal(await fs.readFile(path.join(dest, '_vocab.md'), 'utf8'), '# 어휘\n\n## table\n')
+    assert.equal((await run('git', ['-C', dest, 'config', '--get', 'core.hooksPath'])).stdout.trim(), '.githooks')
+    // 이미 있는 자리
+    await assert.rejects(cloneRepo({ url: src, dest }), /이미 무엇이/)
+    // 지식 레포가 아닌 것 — _vocab.md 없는 git 레포. clone 은 되지만 지운다
+    const plain = path.join(d, 'plain')
+    await fs.mkdir(plain)
+    await fs.writeFile(path.join(plain, 'a.txt'), 'x')
+    await run('git', ['-C', plain, 'init', '-q'])
+    await run('git', ['-C', plain, 'add', '-A'])
+    await run('git', ['-C', plain, '-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-qm', 'seed'])
+    await assert.rejects(cloneRepo({ url: plain, dest: path.join(d, 'root', 'k2') }), /지식 레포가 아니다/)
+    assert.equal(await fs.stat(path.join(d, 'root', 'k2')).catch(() => null), null, '지웠다')
+    // 주소 형식 · 없는 원격
+    await assert.rejects(cloneRepo({ url: 'not a url', dest: path.join(d, 'root', 'k3') }), /형식/)
+    await assert.rejects(cloneRepo({ url: path.join(d, 'nowhere'), dest: path.join(d, 'root', 'k4') }), /clone 실패/)
+    assert.equal(await fs.stat(path.join(d, 'root', 'k4')).catch(() => null), null, '실패해도 폴더를 남기지 않는다')
   } finally {
     await fs.rm(d, { recursive: true, force: true })
   }

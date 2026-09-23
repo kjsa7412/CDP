@@ -838,7 +838,7 @@ await check(48, '다른 오리진에서 온 요청은 Origin 검사로 끊긴다
   return '403 · 루프백 200'
 })
 
-await check(62, 'repos 가 빈 사용자는 "볼 수 있는 레포가 없다"', async () => {
+await check(62, 'repos 가 빈 사용자 — 로그인은 되고 /r 은 첫 레포로 보내지 않고 빈 상태 화면을 낸다', async () => {
   await ctx('serve', 'user', 'add', '--auth', F.auth, '--name', 'nobody', '--data', F.data)
   const tn = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'nobody', '--data', F.data)).stdout.trim()
   const r = await fetch(`http://127.0.0.1:${PORT}/login`, {
@@ -848,10 +848,16 @@ await check(62, 'repos 가 빈 사용자는 "볼 수 있는 레포가 없다"', 
     redirect: 'manual',
   })
   eq(r.status, 302, '로그인은 된다')
+  eq(r.headers.get('location'), '/r', '기본 next 는 /r')
   const c = /cdp_s=[^;]*/.exec(r.headers.get('set-cookie'))[0]
-  const page = await (await fetch(`http://127.0.0.1:${PORT}/`, { headers: { cookie: c }, redirect: 'manual' })).text()
-  must(page.includes('볼 수 있는 지식 레포가 없습니다'), '멈추지 않았다')
-  return '로그인 O · 멈춤 화면'
+  // `/r` — 갈 레포가 없으니 302 가 아니라 화면(빈 상태)이다. 화면이 /me 로 그린다(제품관리서비스 검토 §4.2)
+  const page = await fetch(`http://127.0.0.1:${PORT}/r`, { headers: { cookie: c }, redirect: 'manual' })
+  eq(page.status, 200, '/r 이 200')
+  must((await page.text()).includes('window.__CDP_SERVER__'), 'SPA 를 낸다')
+  const me = await (await fetch(`http://127.0.0.1:${PORT}/me`, { headers: { cookie: c } })).json()
+  eq(me.repos.length, 0, '볼 수 있는 레포 0')
+  eq(me.role, 'viewer', 'role')
+  return '로그인 O · /r 200 · repos 0'
 })
 
 await check(59, 'MCP 와 관리 서비스가 같은 레포를 두 번 읽지 않는다', async () => {
@@ -1091,6 +1097,265 @@ await check(75, '스킬 본문이 부르는 이름이 전부 실제 도구다', 
   return `6종 · 도구 ${known.size}종과 대조 · 잔재 0`
 })
 
+// ══ 제품 관리 서비스 — 사이트 · 마법사 (TODO ②) ═══════════════════════════════
+
+await check(78, '/site/info — 공개 · 레포 이름 없음 · setupNeeded false · 설명서 목록', async () => {
+  const H0 = http(`http://127.0.0.1:${PORT}`) // 쿠키 없는 새 클라이언트
+  const r = await H0.call('/site/info')
+  eq(r.status, 200, 'status')
+  const t = await r.text()
+  for (const n of ['alpha', 'beta']) must(!t.includes(n), `${n} 이 노출됐다`)
+  const j = JSON.parse(t)
+  must(typeof j.repos === 'number', 'repos 가 숫자가 아니다')
+  eq(j.setupNeeded, false, 'setupNeeded')
+  must(Array.isArray(j.manuals) && j.manuals.length >= 3, `설명서 ${j.manuals?.length}`)
+  must(j.version, 'version 없음')
+  eq(j.user, null, '세션 없이 user 가 있다')
+  // 세션이 있으면 user · role 만 더 온다
+  const me = JSON.parse(await (await H.call('/site/info')).text())
+  must(me.user, '세션이 있는데 user 가 없다')
+  return `repos ${j.repos} · 설명서 ${j.manuals.length} · v${j.version} · 세션 user ${me.user}`
+})
+
+await check(79, '/site/manual — 세 권 200 · 설치절차 200 · 경로 밖 404 · 목록 밖 404 · 소개 그림', async () => {
+  const H0 = http(`http://127.0.0.1:${PORT}`)
+  const a = await H0.call('/site/manual/사용자_설명서.md')
+  eq(a.status, 200, '사용자 설명서')
+  must((await a.text()).startsWith('# CDP 사용자 설명서'), '본문')
+  eq((await H0.call('/site/manual/설치절차.md')).status, 200, '설치절차')
+  eq((await H0.call('/site/manual/..%2Fauth.json')).status, 404, '경로 밖')
+  eq((await H0.call('/site/manual/README.md')).status, 404, '목록 밖')
+  const g = await H0.call('/site/manual/그림/1_세_레포_구조.svg')
+  eq(g.status, 200, '그림')
+  must((g.headers.get('content-type') || '').includes('svg'), 'svg MIME')
+  // `/` · `/manual` · `/setup` · `/login` 은 세션 없이 화면(index.html) 을 낸다 — 표식이 심겨 있다
+  const page = await H0.call('/manual/사용자_설명서')
+  eq(page.status, 200, '/manual 페이지')
+  must((await page.text()).includes('window.__CDP_SERVER__=true'), '서버 표식')
+  // `/console` 은 세션이 없으면 로그인으로
+  const con = await H0.call('/console')
+  eq(con.status, 302, '/console 302')
+  must((con.headers.get('location') || '').startsWith('/login?next='), 'next 를 든다')
+  return '200 · 200 · 404 · 404 · svg · 표식 · /console→login'
+})
+
+await check(80, '명부가 비면 bootstrap.code · /setup 이 첫 관리자를 만든다 · 코드는 한 번 · 둘째는 409', async () => {
+  const D2 = path.join(TMP, 'data2')
+  const A2 = path.join(TMP, 'auth2.json')
+  await fs.mkdir(D2, { recursive: true })
+  const S2 = serve(['--root', F.repos, '--port', String(PORT + 1), '--auth', A2, '--data', D2, '--web', path.join(ROOT, 'ops/out/web')])
+  try {
+    await wait(2500)
+    const code = (await fs.readFile(path.join(D2, 'bootstrap.code'), 'utf8')).trim()
+    must(code.length >= 24, '코드 파일')
+    must(/첫 관리자가 없다/.test(S2.err()), 'stderr 한 줄')
+    const H2 = http(`http://127.0.0.1:${PORT + 1}`)
+    eq((await (await H2.call('/site/info')).json()).setupNeeded, true, 'setupNeeded')
+    const post = (b) => H2.call('/setup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })
+    eq((await post({ code: 'wrong', name: 'root' })).status, 401, '틀린 코드')
+    eq((await post({ code, name: '한글' })).status, 400, '이름 형식')
+    const ok = await post({ code, name: 'root', label: '첫 관리자' })
+    eq(ok.status, 200, '맞는 코드')
+    const j = await ok.json()
+    must(j.raw && j.raw.length > 30, '원문')
+    must((ok.headers.get('set-cookie') || '').includes('cdp_s='), '세션 쿠키')
+    must((await fs.stat(path.join(D2, 'bootstrap.code')).catch(() => null)) === null, '코드 파일이 남았다')
+    eq((await post({ code, name: 'again' })).status, 409, '둘째 setup')
+    const me = await (await http(`http://127.0.0.1:${PORT + 1}`).call('/me', { headers: { authorization: 'Bearer ' + j.raw } })).json()
+    eq(me.role, 'admin', 'role')
+    eq(me.admin, true, 'admin')
+    eq((await (await http(`http://127.0.0.1:${PORT + 1}`).call('/site/info')).json()).setupNeeded, false, 'setupNeeded 뒤')
+    const log = await fs.readFile(path.join(D2, 'logs', 'auth.log'), 'utf8')
+    must(/setup · user add · root · repos=\* · role=admin/.test(log), 'auth.log')
+    must(!log.includes(j.raw), '원문이 샜다')
+    return `코드 ${code.length}자 · 401 · 400 · 200 · 409 · admin · 30일 ${j.expires}`
+  } finally {
+    S2.kill()
+  }
+})
+
+// ══ 제품 관리 서비스 — 콘솔 API (TODO ③) ═══════════════════════════════════
+
+// 관리자 — 지금까지 kjsa 는 writer(--write) 였다. 콘솔은 admin 만 들어간다(D4).
+await ctx('serve', 'user', 'set', '--auth', F.auth, '--name', 'kjsa', '--role', 'admin', '--data', F.data)
+// 앞 검사들이 TK 를 폐기했다(37) — 살아 있는 토큰을 새로 받는다
+const TKA = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'kjsa', '--note', '콘솔 검증', '--data', F.data)).stdout.trim()
+const TQA = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'qa', '--note', '콘솔 검증', '--data', F.data)).stdout.trim()
+await wait(80)
+const ADM = (token, extra = {}) => ({ headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json', ...(extra.cookie ? { cookie: extra.cookie } : {}) } })
+const A = (p, opt = {}) => fetch(`http://127.0.0.1:${PORT}${p}`, { redirect: 'manual', ...opt })
+const jbody = (b) => ({ body: JSON.stringify(b) })
+let SU = null // 재인증 쿠키
+
+await check(81, '/admin/users — 세션 없음 401 · viewer 403 · admin 200 · 해시 없음', async () => {
+  eq((await A('/admin/users')).status, 401, '세션 없음')
+  eq((await A('/admin/users', ADM(TQA))).status, 403, 'viewer')
+  const r = await A('/admin/users', ADM(TKA))
+  eq(r.status, 200, 'admin')
+  const j = await r.json()
+  must(Array.isArray(j.users) && j.users.some((u) => u.name === 'kjsa' && u.role === 'admin'), '목록')
+  must(!JSON.stringify(j).includes('sha256'), '해시가 새지 않는다')
+  return `401 · 403 · 200 · 사용자 ${j.users.length}`
+})
+
+await check(82, '/admin 쓰기 — 재인증 없음 E_REAUTH · sudo(틀린 · 남의 토큰 401) · 추가 · 중복 409 · 자기 해제 E_SELF · auth.log', async () => {
+  const r0 = await A('/admin/users', { method: 'POST', ...ADM(TKA), ...jbody({ name: 'con1', role: 'writer', repos: ['alpha'] }) })
+  eq(r0.status, 401, '재인증 없음')
+  eq((await r0.json()).error.code, 'E_REAUTH', 'E_REAUTH')
+  eq((await A('/admin/sudo', { method: 'POST', ...ADM(TKA), ...jbody({ token: 'wrong' }) })).status, 401, '틀린 토큰')
+  eq((await A('/admin/sudo', { method: 'POST', ...ADM(TKA), ...jbody({ token: TQA }) })).status, 401, '남의 토큰')
+  const su = await A('/admin/sudo', { method: 'POST', ...ADM(TKA), ...jbody({ token: TKA }) })
+  eq(su.status, 200, 'sudo')
+  SU = /cdp_su=[^;]*/.exec(su.headers.get('set-cookie') || '')?.[0]
+  must(SU, 'cdp_su 쿠키')
+  const r1 = await A('/admin/users', { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({ name: 'con1', label: '콘솔 추가', role: 'writer', repos: ['alpha'] }) })
+  eq(r1.status, 200, '추가')
+  eq((await r1.json()).role, 'writer', 'role')
+  eq((await A('/admin/users', { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({ name: 'con1' }) })).status, 409, '중복')
+  const self = await A('/admin/users/kjsa', { method: 'PATCH', ...ADM(TKA, { cookie: SU }), ...jbody({ role: 'writer' }) })
+  eq(self.status, 400, '자기 해제')
+  eq((await self.json()).error.code, 'E_SELF', 'E_SELF')
+  const p = await A('/admin/users/con1', { method: 'PATCH', ...ADM(TKA, { cookie: SU }), ...jbody({ repos: ['alpha', 'beta'], label: '콘솔 · 고침' }) })
+  eq(p.status, 200, 'PATCH')
+  eq((await p.json()).repos, ['alpha', 'beta'], 'repos')
+  const log = await fs.readFile(path.join(F.data, 'logs', 'auth.log'), 'utf8')
+  const lines = log.trim().split(NL)
+  must(/admin user set · kjsa · con1 · /.test(lines[lines.length - 1]), '마지막 줄이 직전 행위: ' + lines[lines.length - 1])
+  must(/admin sudo · kjsa/.test(log), 'sudo 기록')
+  // 세션 쿠키를 재인증 자리에 내밀어도 통하지 않는다 — kind 가 다르다
+  const c = H.cookie()
+  if (c) {
+    const bad = await A('/admin/users', { method: 'POST', ...ADM(TKA, { cookie: c.replace('cdp_s=', 'cdp_su=') }), ...jbody({ name: 'con2' }) })
+    eq(bad.status, 401, '세션 쿠키로 재인증 흉내')
+  }
+  return 'E_REAUTH · 401 · 401 · sudo · 추가 · 409 · E_SELF · PATCH · auth.log'
+})
+
+await check(83, '/admin/tokens — 원문 1회 · 목록에 원문 없음 · reissue 뒤 옛 401 새 200 · 폐기 행이 남는다 · PATCH · revoke', async () => {
+  const iss = await A('/admin/tokens', { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({ user: 'con1', note: '콘솔' }) })
+  eq(iss.status, 200, '발급')
+  const t1 = await iss.json()
+  must(t1.raw && t1.id, '원문 · id')
+  eq((await A('/me', { headers: { authorization: 'Bearer ' + t1.raw } })).status, 200, '새 토큰이 산다')
+  const list = await (await A('/admin/tokens', ADM(TKA))).json()
+  must(!JSON.stringify(list).includes(t1.raw), '목록에 원문')
+  must(list.tokens.some((t) => t.id === t1.id && t.status === 'active'), '행')
+  const re = await A(`/admin/tokens/${t1.id}/reissue`, { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({}) })
+  eq(re.status, 200, '재발급')
+  const t2 = await re.json()
+  eq(t2.old, t1.id, 'old')
+  eq((await A('/me', { headers: { authorization: 'Bearer ' + t1.raw } })).status, 401, '옛 토큰 401')
+  eq((await A('/me', { headers: { authorization: 'Bearer ' + t2.raw } })).status, 200, '새 토큰 200')
+  const list2 = await (await A('/admin/tokens', ADM(TKA))).json()
+  const oldRow = list2.tokens.find((t) => t.id === t1.id)
+  eq(oldRow.status, 'revoked', '폐기 행이 남는다')
+  eq(oldRow.revokedBy, 'kjsa', 'revokedBy')
+  const pt = await A(`/admin/tokens/${t2.id}`, { method: 'PATCH', ...ADM(TKA, { cookie: SU }), ...jbody({ note: '콘솔 · 메모', expires: 10 }) })
+  eq(pt.status, 200, 'PATCH')
+  eq((await pt.json()).note, '콘솔 · 메모', 'note')
+  const rv = await A(`/admin/tokens/${t2.id}/revoke`, { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({}) })
+  eq(rv.status, 200, '폐기')
+  eq((await A('/me', { headers: { authorization: 'Bearer ' + t2.raw } })).status, 401, '폐기 뒤 401')
+  eq((await A(`/admin/tokens/${t2.id}/reissue`, { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({}) })).status, 404, '폐기된 것은 재발급 못 한다')
+  return `발급 ${t1.id} → 재발급 ${t2.id} · 원문 0 · 폐기 행 · 404`
+})
+
+await check(84, '기본 만료 — admin 30일 · 나머지 90일 · 명시하면 그대로', async () => {
+  const day = 86400_000
+  const near = (exp, days) => Math.abs(Date.parse(exp) - (Date.now() + days * day)) < 2 * day
+  const issue = async (b) => (await A('/admin/tokens', { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody(b) })).json()
+  const a1 = await issue({ user: 'kjsa', note: '검증 30' })
+  must(near(a1.expires, 30), 'admin 30 — ' + a1.expires)
+  const v1 = await issue({ user: 'qa', note: '검증 90' })
+  must(near(v1.expires, 90), 'viewer 90 — ' + v1.expires)
+  const e1 = await issue({ user: 'qa', expiresDays: 7 })
+  must(near(e1.expires, 7), '명시 7 — ' + e1.expires)
+  for (const t of [a1, v1, e1]) await A(`/admin/tokens/${t.id}/revoke`, { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({}) })
+  return `${a1.expires} · ${v1.expires} · ${e1.expires}`
+})
+
+await check(86, '/admin/doctor(캐시) · /admin/server · /admin/repos · /admin/workrepos · /admin/audit · /admin/log · /admin/overview — 모양', async () => {
+  const d = await (await A('/admin/doctor', ADM(TKA))).json()
+  must(Array.isArray(d.rows) && d.rows.every((r) => ['ok', 'warn', 'fail'].includes(r.state) && r.what), 'doctor 줄')
+  must(d.rows.some((r) => r.what === '명부'), '명부 줄')
+  const d2 = await (await A('/admin/doctor', ADM(TKA))).json()
+  eq(d2.at, d.at, '60초 캐시')
+  const sv = await (await A('/admin/server', ADM(TKA))).json()
+  must(sv.version && sv.bind && sv.port === PORT && sv.root, 'server 값')
+  const rp = await (await A('/admin/repos', ADM(TKA))).json()
+  must(rp.repos.some((r) => r.name === 'alpha' && Array.isArray(r.users) && r.users.includes('qa')), '레포 전부 · 볼 수 있는 사람')
+  const wrr = await (await A('/admin/workrepos', ADM(TKA))).json()
+  must(Array.isArray(wrr.repos) && wrr.repos.every((w) => w.state), '대장 전부')
+  const au = await (await A('/admin/audit?limit=5', ADM(TKA))).json()
+  eq(au.lines.length, 5, '감사 5줄')
+  must(au.total > 5, 'total')
+  const lg = await (await A('/admin/log?limit=3', ADM(TKA))).json()
+  eq(lg.lines.length, 3, '로그 3줄')
+  const ov = await (await A('/admin/overview', ADM(TKA))).json()
+  must(ov.users.admins >= 1 && typeof ov.repos.count === 'number' && Array.isArray(ov.alerts), 'overview')
+  return `doctor ${d.rows.length}줄(fail ${d.fails}) · server v${sv.version} · repos ${rp.repos.length} · alerts ${ov.alerts.length}`
+})
+
+await check(87, 'POST /admin/repos — clone 으로 붙인다 · grant 로 접근을 준다 · 중복 409 · 지식 레포가 아니면 지운다', async () => {
+  // 원격 = 서버 안의 alpha 폴더(파일 경로). 실제 clone 이 돈다
+  const r = await A('/admin/repos', { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({ name: 'gamma', clone: path.join(F.repos, 'alpha'), grant: ['qa'] }) })
+  eq(r.status, 200, 'clone')
+  const j = await r.json()
+  must(j.cloned && j.commit, 'commit')
+  eq(j.granted, ['qa'], 'granted')
+  const rp = await (await A('/admin/repos', ADM(TKA))).json()
+  must(rp.repos.some((x) => x.name === 'gamma' && x.users.includes('qa')), 'qa 가 gamma 를 본다')
+  const mine = await (await A('/repos', { headers: { authorization: 'Bearer ' + TQA } })).json()
+  must(mine.some((x) => x.name === 'gamma'), 'qa 의 /repos 에 gamma')
+  eq((await A('/admin/repos', { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({ name: 'gamma', clone: path.join(F.repos, 'alpha') }) })).status, 409, '중복')
+  const bad = await A('/admin/repos', { method: 'POST', ...ADM(TKA, { cookie: SU }), ...jbody({ name: 'notrepo', clone: path.join(ROOT, 'ops') }) })
+  must(bad.status >= 400, '지식 레포가 아니면 실패')
+  must((await fs.stat(path.join(F.repos, 'notrepo')).catch(() => null)) === null, '지웠다')
+  return `gamma ${j.commit} · grant qa · 409 · 지움`
+})
+
+await check(88, 'v1.1 명부(write:true) 를 서버가 읽으면 writer · admin 으로 올려도 --admin-from 밖이면 403', async () => {
+  const A3 = path.join(TMP, 'auth3.json')
+  const D3 = path.join(TMP, 'data3')
+  const rawOld = 'oldtoken-' + Date.now()
+  const { sha256 } = await import(pathToFileURL(path.join(ROOT, 'core/auth.js')).href)
+  await fs.writeFile(
+    A3,
+    JSON.stringify({ users: [{ name: 'old', active: true, repos: ['*'], write: true }], tokens: [{ sha256: sha256(rawOld), user: 'old', issued: '2026-09-01', expires: 'never' }] })
+  )
+  const S3 = serve(['--root', F.repos, '--port', String(PORT + 2), '--auth', A3, '--data', D3, '--admin-from', '10.0.0.0/8'])
+  try {
+    await wait(2500)
+    const base = `http://127.0.0.1:${PORT + 2}`
+    const me = await (await fetch(`${base}/me`, { headers: { authorization: 'Bearer ' + rawOld } })).json()
+    eq(me.role, 'writer', 'write:true → writer')
+    eq(me.admin, false, 'admin 아님')
+    eq((await fetch(`${base}/admin/users`, { headers: { authorization: 'Bearer ' + rawOld } })).status, 403, 'writer 403')
+    await ctx('serve', 'user', 'set', '--auth', A3, '--name', 'old', '--role', 'admin')
+    await wait(80)
+    eq((await fetch(`${base}/admin/users`, { headers: { authorization: 'Bearer ' + rawOld } })).status, 403, 'CIDR 밖')
+    eq((await fetch(`${base}/site/info`)).status, 200, '/site/info 는 공개')
+    eq((await fetch(`${base}/me`, { headers: { authorization: 'Bearer ' + rawOld } })).status, 200, '/me 는 대역과 무관')
+    return 'writer · 403 · admin 뒤 CIDR 403 · info 200'
+  } finally {
+    S3.kill()
+  }
+})
+
+await check(85, '/login 속도 제한 — 21번째 안에 429 (마지막에 돈다 — 이 뒤로 로그인 없음)', async () => {
+  let got = null
+  for (let i = 1; i <= 21; i++) {
+    const r = await fetch(`http://127.0.0.1:${PORT}/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: 'nope' }), redirect: 'manual' })
+    if (r.status === 429) {
+      got = i
+      break
+    }
+    must(r.status === 401, `${i}번째 ${r.status}`)
+  }
+  must(got !== null, '429 가 오지 않았다')
+  return `${got}번째에서 429`
+})
+
 S.kill()
 
 // ── 못 도는 것 ──────────────────────────────────────────────────────────────
@@ -1123,6 +1388,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

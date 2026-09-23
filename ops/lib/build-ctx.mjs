@@ -78,6 +78,14 @@ if (r.status !== 0) process.exit(r.status || 1)
   fs.writeFileSync(outFile, src, 'utf8')
 }
 
+// 판 — `core/appinfo.js` 의 `__CDP_VERSION__` 을 package.json 의 version 으로. 전에는 exe 빌드만
+// 찍어서 서버(관리 서비스)가 자기가 몇 판인지 말할 수 없었다(제품관리서비스 TODO ②).
+{
+  const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version
+  const src = fs.readFileSync(outFile, 'utf8').split('__CDP_VERSION__').join(version)
+  fs.writeFileSync(outFile, src, 'utf8')
+}
+
 // ── 설치기 — 꾸러미 안에 들어가는 실행기(설계서 §6.7.3) ────────────────
 //
 // **서버가 이 텍스트를 들고 있어야 한다.** `/kit?workrepo=` 가 zip 에

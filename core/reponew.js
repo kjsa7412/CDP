@@ -128,6 +128,31 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
   }
 }
 
+// origin 에서 받아 온다 — 등록의 **다른 길**(제품관리서비스 검토 D9). `git clone` 뒤 지식 레포인지
+// (`_vocab.md`) 본다. 아니면 지운다 — 남의 레포를 <root> 에 두지 않는다. 훅 경로도 건다(로컬형 clone
+// 과 같은 세 줄). 콘솔 `POST /admin/repos { clone }` 가 부른다.
+export async function cloneRepo({ url, dest, timeout = 120000 }) {
+  const dst = path.resolve(dest)
+  if (!url || !/^(https?:\/\/|ssh:\/\/|git@|file:\/\/|[A-Za-z]:[\\/]|\/)/.test(String(url))) {
+    throw new CtxError('E_INPUT', 'origin 주소 형식이 아니다', { url })
+  }
+  const st = await fs.stat(dst).catch(() => null)
+  if (st && (!st.isDirectory() || (await fs.readdir(dst)).length)) throw new CtxError('E_EXISTS', '그 자리에 이미 무엇이 있다', { dest: dst })
+  await fs.mkdir(path.dirname(dst), { recursive: true })
+  const r = await git(path.dirname(dst), ['clone', '-q', String(url), dst], { timeout })
+  if (!r.ok) {
+    await fs.rm(dst, { recursive: true, force: true }).catch(() => {})
+    throw new CtxError('E_GIT', 'clone 실패 — ' + ((r.err || r.out).split('\n').find((l) => l.trim()) || '거부'), { url })
+  }
+  if (!(await fs.access(path.join(dst, '_vocab.md')).then(() => true).catch(() => false))) {
+    await fs.rm(dst, { recursive: true, force: true }).catch(() => {})
+    throw new CtxError('E_CHECK', 'clone 은 됐지만 지식 레포가 아니다(_vocab.md 없음) — 지웠다', { url })
+  }
+  await git(dst, ['config', 'core.hooksPath', '.githooks'])
+  const head = await git(dst, ['rev-parse', '--short', 'HEAD'])
+  return { dest: dst, commit: head.out || null, origin: String(url) }
+}
+
 // 서버 `<root>` 의 레포 목록 — 이름 · 판정 파일 · head. `doctor` 와 `ctx repo list` 가 쓴다.
 export async function listRepos(root) {
   const out = []

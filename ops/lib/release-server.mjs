@@ -11,6 +11,7 @@
 //     bin/ctx.mjs  bin/ctx  bin/ctx.cmd     서버 본체 (MCP · 관리 서비스 · ctx)
 //     web/                                  관리 서비스 화면
 //     packages/<이름>/                      완성된 지식 레포 폴더 (exe 없음) — ctx repo new 가 쓴다
+//     manual/                               설명서 세 권 + 그림 — 서버가 /manual 로 낸다
 //     deploy/                               유닛 · install.sh · upgrade.sh · Dockerfile · compose
 //     README.md                             버전 · 번들 시각 · 시작 한 줄
 //
@@ -71,6 +72,9 @@ need('ops/deploy/Dockerfile', 'deploy/Dockerfile')
 need('ops/deploy/docker-compose.yml', 'deploy/docker-compose.yml')
 need('ops/deploy/README.md', 'deploy/README.md')
 need('ops/deploy/설치절차.md', 'deploy/설치절차.md')
+// 설명서 — 서버가 `/manual` 로 낸다(제품관리서비스 검토 §4.5). 그림 셋은 소개 페이지의 것.
+need('manual', 'manual')
+for (const f of ['1_세_레포_구조.svg', '2_설치_5단계.svg', '7_MCP_두_모드.svg']) need(`docs/그림/${f}`, `manual/그림/${f}`)
 
 const packages = listPackages(ROOT)
 if (!packages.length) missing.push('agent/packages/<패키지>')
@@ -111,6 +115,7 @@ fs.writeFileSync(
 bin/ctx.mjs       서버 본체 — MCP(stdio · http) · 관리 서비스 · ctx.  Node 20 으로 돈다
 web/              관리 서비스 화면
 packages/<이름>/  완성된 지식 레포 폴더.  \`ctx repo new\` 가 여기서 복사한다 — ${packages.join(' · ')}
+manual/           설명서 세 권 + 그림.  서버가 /manual 로 낸다
 deploy/           systemd 유닛 · install.sh · upgrade.sh · Dockerfile
 \`\`\`
 
@@ -120,8 +125,8 @@ deploy/           systemd 유닛 · install.sh · upgrade.sh · Dockerfile
 sudo bash deploy/install.sh --bind <이 서버 IP>
 \`\`\`
 
-그 뒤 git 자격(3장) · 레포(\`ctx repo new\` 또는 clone) · 명부(\`ctx serve init\`)는
-\`deploy/설치절차.md\` 를 따른다.
+끝에 찍히는 **부트스트랩 코드**로 브라우저 \`http://<IP>:7374/setup\` 에서 첫 관리자를 만들고,
+레포 · 사용자 · 토큰은 콘솔(\`/console\`)에서 한다. git 자격(3장)만 셸이다 — \`deploy/설치절차.md\`.
 
 ## 갱신
 

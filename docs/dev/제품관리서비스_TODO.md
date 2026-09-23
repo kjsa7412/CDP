@@ -20,8 +20,8 @@
 | 검토 문서 | **완료** |
 | 0 전제 | **완료** — 검토 §5 D1~D14 |
 | ① 명부 v1.2 · 역할 · 부트스트랩 · CLI · 테스트 | **완료** — 테스트 86 / 86 · 하네스 ✓ 62 ✗ 0 |
-| ② 서버 — 사이트 라우트 · 산출물 · 설치 스크립트 | 미착수 |
-| ③ 서버 — `/admin/*` · 재인증 · 감사 · 속도 제한 · CIDR · 하네스 | 미착수 |
+| ② 서버 — 사이트 라우트 · 산출물 · 설치 스크립트 | **완료** — 하네스 78 · 79 · 80 ✓ |
+| ③ 서버 — `/admin/*` · 재인증 · 감사 · 속도 제한 · CIDR · 하네스 | **완료** — 하네스 81~88 ✓ · 전체 ✓ 73 ✗ 0 – 16 |
 | ④ · ⑤ 앞 — **목업 검토** (운영자 지시 2026-09-23) | **목업 완료 · 검토 대기** — [`제품관리서비스_목업/index.html`](제품관리서비스_목업/index.html) 13 화면 · 모달 6 · 다크 · 900px |
 | ④ 화면 — 라우터 · 소개 · 설명서 · 로그인 · 마법사 | 미착수 — 목업 검토 뒤 |
 | ⑤ 화면 — 콘솔 일곱 페이지 · 레포 화면의 상단 | 미착수 — 목업 검토 뒤 |
@@ -99,33 +99,33 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 ### 2.1 라우트 (`ctx-mcp-serve.mjs`)
 
-- [ ] 인자 — `--manual <dir>`(기본 `<bin>/../manual`) · `--private-pages` · `--admin-from <cidr,…>`
-- [ ] `serveWeb` 이 `index.html` 을 낼 때 `</head>` 앞에 `<script>window.__CDP_SERVER__=true</script>` 를 심는다
-- [ ] `GET /site/info` — `{ version, built, repos: n, mirror, setupNeeded, privatePages, manuals: [{ id, title }], user, role }` · 레포 이름 없음
-- [ ] `GET /site/manual/<파일>` — `manual/` 의 `*.md` · `그림/*.svg` · `deploy/설치절차.md`. 목록 밖 · `..` 는 404. `--private-pages` 면 세션 필요
-- [ ] `GET /` · `/manual*` → SPA(공개 · `--private-pages` 면 세션 → 없으면 `/login?next=`)
-- [ ] `GET /setup` → SPA · `POST /setup { code, name, label }` — 명부 있으면 409 · 코드 틀리면 401(속도 제한) · 맞으면 admin + 토큰 · 코드 파일 삭제 · 쿠키 · `{ user, raw, id, expires }` · `auth.log` 두 줄
-- [ ] `GET /login` → SPA(`web/` 없으면 옛 HTML) · `POST /login` — form 은 302 · JSON 은 `{ ok, next }` / 401 `{ error }` · 속도 제한
-- [ ] `GET /logout` → `/`
-- [ ] `GET /r` — 볼 수 있는 레포가 있으면 첫 레포로 302 · 없으면 SPA(빈 상태 화면)
-- [ ] `GET /me` 에 `role · admin · sudo · expiresInDays`
-- [ ] `GET /console*` → SPA(세션 없으면 `/login?next=`)
-- [ ] 서버 시작 때 `ensureBootstrap` — 명부가 비면 stderr 한 줄(`/setup` 주소 · 코드)
-- [ ] `serve.log` 줄 끝에 토큰 id 열 하나(`lastUsed` 가 토큰별로도 집계되게) — 앞 열은 그대로
+- [x] 인자 — `--manual <dir>`(기본 `<bin>/../manual`) · `--private-pages` · `--admin-from <cidr,…>`
+- [x] `serveWeb` 이 `index.html` 을 낼 때 `</head>` 앞에 `<script>window.__CDP_SERVER__=true</script>` 를 심는다
+- [x] `GET /site/info` — `{ version, built, repos: n, mirror, setupNeeded, privatePages, manuals: [{ id, title }], user, role }` · 레포 이름 없음
+- [x] `GET /site/manual/<파일>` — `manual/` 의 `*.md` · `그림/*.svg` · `deploy/설치절차.md`. 목록 밖 · `..` 는 404. `--private-pages` 면 세션 필요
+- [x] `GET /` · `/manual*` → SPA(공개 · `--private-pages` 면 세션 → 없으면 `/login?next=`)
+- [x] `GET /setup` → SPA · `POST /setup { code, name, label }` — 명부 있으면 409 · 코드 틀리면 401(속도 제한) · 맞으면 admin + 토큰 · 코드 파일 삭제 · 쿠키 · `{ user, raw, id, expires }` · `auth.log` 두 줄
+- [x] `GET /login` → SPA(`web/` 없으면 옛 HTML) · `POST /login` — form 은 302 · JSON 은 `{ ok, next }` / 401 `{ error }` · 속도 제한
+- [x] `GET /logout` → `/`
+- [x] `GET /r` — 볼 수 있는 레포가 있으면 첫 레포로 302 · 없으면 SPA(빈 상태 화면)
+- [x] `GET /me` 에 `role · admin · sudo · expiresInDays`
+- [x] `GET /console*` → SPA(세션 없으면 `/login?next=`)
+- [x] 서버 시작 때 `ensureBootstrap` — 명부가 비면 stderr 한 줄(`/setup` 주소 · 코드)
+- [x] `serve.log` 줄 끝에 토큰 id 열 하나(`lastUsed` 가 토큰별로도 집계되게) — 앞 열은 그대로
 
 ### 2.2 판 · 산출물 · 설치
 
-- [ ] `build-ctx.mjs` — 번들의 `__CDP_VERSION__` 을 `package.json` 의 `version` 으로 찍는다 → `appVersion()` 이 번들에서 판을 낸다
-- [ ] `release-server.mjs` — `manual/*.md` → `manual/` · `docs/그림/{1_세_레포_구조,2_설치_5단계,7_MCP_두_모드}.svg` → `manual/그림/` · README 한 줄
-- [ ] `install.sh` — `manual` 폴더 · 배치 · `/healthz` 뒤 `bootstrap.code` 가 있으면 **`/setup` 주소와 코드**를 찍는다 · 「다음 할 일」 을 3장(git 자격)과 브라우저 둘로
-- [ ] `upgrade.sh` — `manual/` 도 갈아 끼운다(`manual.bak` 한 세대)
-- [ ] `Dockerfile` — `COPY manual ./manual`
+- [x] `build-ctx.mjs` — 번들의 `__CDP_VERSION__` 을 `package.json` 의 `version` 으로 찍는다 → `appVersion()` 이 번들에서 판을 낸다
+- [x] `release-server.mjs` — `manual/*.md` → `manual/` · `docs/그림/{1_세_레포_구조,2_설치_5단계,7_MCP_두_모드}.svg` → `manual/그림/` · README 한 줄
+- [x] `install.sh` — `manual` 폴더 · 배치 · `/healthz` 뒤 `bootstrap.code` 가 있으면 **`/setup` 주소와 코드**를 찍는다 · 「다음 할 일」 을 3장(git 자격)과 브라우저 둘로
+- [x] `upgrade.sh` — `manual/` 도 갈아 끼운다(`manual.bak` 한 세대)
+- [x] `Dockerfile` — `COPY manual ./manual`
 
 ### 2.3 하네스
 
-- [ ] 78 `/site/info` — 200 · `repos` 가 숫자 · 본문에 레포 이름 없음 · `setupNeeded: false`
-- [ ] 79 `/site/manual/사용자_설명서.md` 200 · `/site/manual/../auth.json` 404 · 목록 밖 404
-- [ ] 80 명부를 비운 두 번째 서버 — `bootstrap.code` 생성 · 틀린 코드 401 · 맞는 코드 → admin · 원문 1회 · 파일 삭제 · 둘째 `/setup` 409
+- [x] 78 `/site/info` — 200 · `repos` 가 숫자 · 본문에 레포 이름 없음 · `setupNeeded: false`
+- [x] 79 `/site/manual/사용자_설명서.md` 200 · `/site/manual/../auth.json` 404 · 목록 밖 404
+- [x] 80 명부를 비운 두 번째 서버 — `bootstrap.code` 생성 · 틀린 코드 401 · 맞는 코드 → admin · 원문 1회 · 파일 삭제 · 둘째 `/setup` 409
 
 **끝났다고 보는 기준** — `npm run verify` 에 78~80 ✓ · 서버 산출물을 풀어 `manual/사용자_설명서.md` 와 `manual/그림/` 이 있고
 `node bin/ctx.mjs version` 첫 줄에 판이 붙는다.
@@ -136,33 +136,33 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 ### 3.1 공통
 
-- [ ] `/admin/*` 판정 순서 — 세션(401) → admin(403 `E_FORBIDDEN`) → CIDR(403) → 쓰기면 `cdp_su`(401 `E_REAUTH`)
-- [ ] `POST /admin/sudo { token }` — `decide` 로 판정 · 같은 사용자여야 한다 · 15분 `cdp_su` · 속도 제한
-- [ ] 쓰기마다 `auth.audit` — `admin <행위> · <행위자> · <대상> · <바뀐 값>` (토큰은 앞 8자)
-- [ ] 속도 제한 — `POST /login` · `/setup` · `/admin/sudo` IP 당 분당 20 → 429 `E_RATE`
+- [x] `/admin/*` 판정 순서 — 세션(401) → admin(403 `E_FORBIDDEN`) → CIDR(403) → 쓰기면 `cdp_su`(401 `E_REAUTH`)
+- [x] `POST /admin/sudo { token }` — `decide` 로 판정 · 같은 사용자여야 한다 · 15분 `cdp_su` · 속도 제한
+- [x] 쓰기마다 `auth.audit` — `admin <행위> · <행위자> · <대상> · <바뀐 값>` (토큰은 앞 8자)
+- [x] 속도 제한 — `POST /login` · `/setup` · `/admin/sudo` IP 당 분당 20 → 429 `E_RATE`
 
 ### 3.2 엔드포인트
 
-- [ ] `GET /admin/overview` — 사용자 · 관리자 · 토큰(활성 · 7일 내 · 폐기) · 레포(수 · 미러) · 작업 레포 상태 수 · 마지막 doctor 요약 · 경고 목록
-- [ ] `GET /admin/users` · `POST /admin/users` · `PATCH /admin/users/<name>`(`E_LAST_ADMIN` 409 · `E_SELF` 400)
-- [ ] `GET /admin/tokens` · `POST /admin/tokens` · `POST /admin/tokens/<id>/reissue` · `POST /admin/tokens/<id>/revoke` · `PATCH /admin/tokens/<id>`
-- [ ] `GET /admin/repos`(전부 · 볼 수 있는 사람) · `POST /admin/repos`(세우기 · clone · `grant`)
-- [ ] `core/reponew.js` — `cloneRepo({ url, dest })` — `git clone` 120초 · 끝에 `_vocab.md` 없으면 폴더를 지우고 `E_CHECK` · `hooksPath`
-- [ ] `GET /admin/workrepos` — 대장 전부 + 상태
-- [ ] `GET /admin/doctor[?fresh=1]` — `doctorRows` · 60초 캐시 · `{ at, ok, fails, warns, rows }`
-- [ ] `GET /admin/server` — 설정값 · 판 · 빌드 · node · pid · 기동 시각
-- [ ] `GET /admin/audit?limit=` · `GET /admin/log?limit=` — 마지막 N 줄(회전분 포함)
+- [x] `GET /admin/overview` — 사용자 · 관리자 · 토큰(활성 · 7일 내 · 폐기) · 레포(수 · 미러) · 작업 레포 상태 수 · 마지막 doctor 요약 · 경고 목록
+- [x] `GET /admin/users` · `POST /admin/users` · `PATCH /admin/users/<name>`(`E_LAST_ADMIN` 409 · `E_SELF` 400)
+- [x] `GET /admin/tokens` · `POST /admin/tokens` · `POST /admin/tokens/<id>/reissue` · `POST /admin/tokens/<id>/revoke` · `PATCH /admin/tokens/<id>`
+- [x] `GET /admin/repos`(전부 · 볼 수 있는 사람) · `POST /admin/repos`(세우기 · clone · `grant`)
+- [x] `core/reponew.js` — `cloneRepo({ url, dest })` — `git clone` 120초 · 끝에 `_vocab.md` 없으면 폴더를 지우고 `E_CHECK` · `hooksPath`
+- [x] `GET /admin/workrepos` — 대장 전부 + 상태
+- [x] `GET /admin/doctor[?fresh=1]` — `doctorRows` · 60초 캐시 · `{ at, ok, fails, warns, rows }`
+- [x] `GET /admin/server` — 설정값 · 판 · 빌드 · node · pid · 기동 시각
+- [x] `GET /admin/audit?limit=` · `GET /admin/log?limit=` — 마지막 N 줄(회전분 포함)
 
 ### 3.3 하네스
 
-- [ ] 81 `/admin/users` — 세션 없음 401 · viewer 403 · admin 200
-- [ ] 82 쓰기 — 재인증 없음 401 `E_REAUTH` → `/admin/sudo`(틀린 토큰 401 · 남의 토큰 401) → 200 · 마지막 admin 내리기 409 · 자기 해제 400 · `auth.log` 마지막 줄에 행위자 · 대상
-- [ ] 83 토큰 — 발급 응답에 원문 · 목록에 원문 없음 · reissue 뒤 옛 토큰 401 · 새 토큰 200 · 옛 행이 `revoked` 로 남는다
-- [ ] 84 admin 기본 30일 · viewer 90일
-- [ ] 85 `/login` 21번째 실패 429
-- [ ] 86 `/admin/doctor` 줄마다 `state · what` · `/admin/server` 에 `version`
-- [ ] 87 v1.1 명부(`write:true`)를 서버가 읽으면 `/me.role === 'writer'`
-- [ ] 88 `--admin-from 10.0.0.0/8` 로 띄운 서버에 루프백 admin → 403 · `/site/info` 는 200
+- [x] 81 `/admin/users` — 세션 없음 401 · viewer 403 · admin 200
+- [x] 82 쓰기 — 재인증 없음 401 `E_REAUTH` → `/admin/sudo`(틀린 토큰 401 · 남의 토큰 401) → 200 · 마지막 admin 내리기 409 · 자기 해제 400 · `auth.log` 마지막 줄에 행위자 · 대상
+- [x] 83 토큰 — 발급 응답에 원문 · 목록에 원문 없음 · reissue 뒤 옛 토큰 401 · 새 토큰 200 · 옛 행이 `revoked` 로 남는다
+- [x] 84 admin 기본 30일 · viewer 90일
+- [x] 85 `/login` 21번째 실패 429
+- [x] 86 `/admin/doctor` 줄마다 `state · what` · `/admin/server` 에 `version`
+- [x] 87 v1.1 명부(`write:true`)를 서버가 읽으면 `/me.role === 'writer'`
+- [x] 88 `--admin-from 10.0.0.0/8` 로 띄운 서버에 루프백 admin → 403 · `/site/info` 는 200
 
 **끝났다고 보는 기준** — `npm run verify` ✗ 0 · 81~88 ✓.
 
@@ -245,6 +245,8 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 | 단계 | 무엇 |
 |---|---|
+| ② | 사이트 라우트 — `/site/info`(집계 · 레포 이름 없음 · 세션이 있으면 user · role) · `/site/manual/<파일>`(색인 밖은 404 — 경로 순회가 여기서 끝난다) · `/` `/manual*` `/setup` 은 공개 SPA · `/console*` 은 세션 → SPA · `POST /setup`(코드 · 명부 비었을 때만 · 원문 1회 · 쿠키 · 코드 파일 삭제) · `/login` form + JSON · 속도 제한 · `/logout` → `/` · `/r` 빈 상태 · `/me` 에 role · admin · sudo · index.html 에 `window.__CDP_SERVER__` 표식 · `serve.log` 끝 열에 토큰 id. `build-ctx` 가 `__CDP_VERSION__` 을 찍어 서버가 판을 안다(v0.9.0 실측). 산출물 `manual/` + 그림 셋 · `install.sh` 가 끝에 `/setup` 주소와 코드 · `upgrade.sh` `manual.bak` · Dockerfile. **잡은 것** — 하네스 62 가 옛 계약(`GET /` 빈 상태 HTML)을 봤다 → `/r` 200 + `/me.repos` 0 으로 · `--auth` 없는 개발 모드가 `authenticate.browser` 가 없어 죽던 것(객체로) |
+| ③ | `/admin/*` 열여덟 — sudo(15분 `cdp_su` · `kind: sudo` · 세션 쿠키로 흉내 불가) · overview · users · tokens(issue · reissue · revoke · PATCH) · repos(전부 · 세우기 · clone · grant) · workrepos · doctor(60초 캐시) · server · audit · log. 판정 401 → 403(admin · CIDR) → 401 `E_REAUTH`. `buildRepo` 하나를 `POST /repos` 와 `POST /admin/repos` 가 같이 쓴다 · `core/reponew.js` `cloneRepo`(지식 레포 아니면 지운다 · 테스트 87). 하네스 81~88(62 재계약 포함) ✓ · 전체 ✓ 73 ✗ 0 – 16. **잡은 것** — 하네스 앞 검사(37)가 TK 를 폐기해 두어 콘솔 검사가 전부 401 — 살아 있는 토큰을 새로 받는다 |
 | ① | 명부 v1.2 — `role` 을 저장하고 `write` 는 읽을 때만 접는다(v1.1 파일 그대로 읽힘 · 저장하면 `version: 1.2`). 폐기는 `status: revoked` 로 남고 `decide` 가 "폐기된 토큰" 으로 거절. `reissue` · `tokenSet` · 가드 둘(`E_LAST_ADMIN` · `E_SELF`) · 부트스트랩 셋 · `signSession` 에 `kind: sudo` · `doctorRows` 분리(관리자 수 · 관리자 토큰 30일 · 부트스트랩 코드 · manual) · CLI `--role` · `token reissue/set` · `serve.log` 토큰별 마지막 사용. 테스트 70 → 86(auth 14 · net 3) · 하네스 ✓ 62 ✗ 0. **잡은 것** — 갓 발급한 30일 토큰이 올림으로 31 로 세어 doctor 가 "30일보다 멀다" 를 냈다(하루를 봐준다) · `token revoke` 가 줄을 지워 이력이 사라지던 것 |
 
 ---
