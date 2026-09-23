@@ -108,7 +108,7 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
     return cs.join('|') + '#' + (docs || []).map((d) => (d.touches || []).join(',')).join(';') + '#' + hideIso
   }, [tree, docs, hideIso])
 
-  const g = useMemo(() => build(tree, docs, hideIso), [key])
+  const g = useMemo(() => cachedBuild(key, () => build(tree, docs, hideIso)), [key])
 
   useEffect(() => {
     if (!g || !cvRef.current) return
@@ -776,6 +776,17 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
       </div>
     </div>
   )
+}
+
+// 배치는 **컴포넌트 밖에 기억한다.**
+//
+// 그래프는 화면이라 문서로 갔다 오면 컴포넌트가 새로 뜬다. 그때마다 배치를
+// 다시 풀었다 — 좌표 300개면 O(N²)·140틱, 0.4~0.9초가 그래프를 누를 때마다
+// 멎었다. 같은 레포 상태(key)면 같은 배치다(난수도 씨앗이 고정이다).
+let lastBuild = { key: null, g: null }
+function cachedBuild(key, make) {
+  if (lastBuild.key !== key) lastBuild = { key, g: make() }
+  return lastBuild.g
 }
 
 function build(tree, docs, hideIso = false) {

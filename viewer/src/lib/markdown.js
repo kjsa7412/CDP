@@ -102,14 +102,32 @@ md.renderer.rules.fence = (tokens, idx) => {
   )}</code></pre><button class="codeblock__copy" data-copy>복사</button></div>`
 }
 
+// 렌더 결과를 **원문 그대로를 키로** 기억한다.
+//
+// 표 수백 개짜리 관리 문서 하나에 렌더 + 살균이 0.3초다(살균이 그 대부분).
+// 뒤로 가기 · 그래프에서 돌아오기 · 같은 문서 다시 열기가 매번 그 값을 냈다.
+// 원문이 키이므로 디스크에서 바뀐 문서는 저절로 새로 렌더된다.
+const CACHE_MAX = 8
+const cache = new Map()
+
 export function renderMarkdown(text) {
+  const src = text || ''
+  const hit = cache.get(src)
+  if (hit) {
+    cache.delete(src)
+    cache.set(src, hit) // 가장 최근으로
+    return hit
+  }
   const env = {}
-  const raw = md.render(text || '', env)
+  const raw = md.render(src, env)
   const html = DOMPurify.sanitize(raw, {
     ADD_ATTR: ['target', 'data-lang', 'data-copy', 'data-coord', 'data-alias', 'aria-hidden'],
     FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form'],
   })
-  return { html, toc: env.toc || [] }
+  const out = { html, toc: env.toc || [] }
+  cache.set(src, out)
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value)
+  return out
 }
 
 // 렌더 후처리 — 코드 하이라이팅, 내 좌표 강조, 좌표 링크화, 상대 링크 가로채기.
@@ -188,13 +206,13 @@ export async function enhance(root, { myCoords = [], coordIndex = null, coordLin
 // 산문을 링크로 도배하면 읽기가 망가진다.
 function linkCoords(root, index) {
   const skip = new Set(['CODE', 'PRE', 'A', 'H1', 'H2', 'H3', 'H4'])
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+  // 요소도 같이 걷는다 — 건너뛸 요소에서 **가지째** 돌아선다.
+  //
+  // 전에는 글자 노드마다 부모를 뿌리까지 거슬러 올라가 확인했다. 표 수백 개짜리
+  // 문서는 글자 노드가 3만 개를 넘고, 그 확인이 문서를 여는 시간의 한 몫이었다.
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode(n) {
-      let p = n.parentElement
-      while (p && p !== root) {
-        if (skip.has(p.tagName)) return NodeFilter.FILTER_REJECT
-        p = p.parentElement
-      }
+      if (n.nodeType === 1) return skip.has(n.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP
       return n.nodeValue && n.nodeValue.trim().length > 1 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
     },
   })

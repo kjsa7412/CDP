@@ -17,6 +17,7 @@
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import os from 'node:os'
 
 // git 을 호출한다. 실패를 예외로 만들지 않는다 — remote 가 없거나 git 이
 // 없는 것은 **정상 상태**이고, 그때마다 예외가 나면 호출부가 전부 try 로 덮인다.
@@ -48,49 +49,80 @@ export async function gitAvailable() {
 }
 
 // 읽기 전용 상태. 화면 상단과 `ctx sync` 가 같은 것을 쓴다.
+//
+// **git 을 한 번만 띄운다.** `status --porcelain=v2 --branch` 한 줄이 브랜치 ·
+// upstream · 앞섬/뒤처짐 · HEAD · 변경 수를 다 낸다.
+//
+// 전에는 같은 것을 프로세스 대여섯 개로 물었다(rev-parse 셋 · status · config ·
+// rev-list). Windows 에서 프로세스를 띄우는 일은 **node 의 이벤트 루프를 붙잡고
+// 한다** — 실측 한 개에 80ms 남짓, 대여섯 개면 0.5초 동안 서버가 아무 요청도 못
+// 받았다. 그리고 이 함수는 파일이 바뀔 때마다(재스캔) · 창에 포커스가 올 때마다
+// 불린다. 화면이 "눌렀는데 한참 있다가 열린다" 로 느끼던 자리다.
 export async function status(root) {
   if (!(await isRepo(root))) return { repo: false }
 
-  const [branch, upstream, dirty, hooks] = await Promise.all([
-    run(root, ['rev-parse', '--abbrev-ref', 'HEAD']),
-    run(root, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']),
-    run(root, ['status', '--porcelain']),
-    run(root, ['config', '--get', 'core.hooksPath']),
-  ])
+  const [s, hooksPath] = await Promise.all([run(root, ['status', '--porcelain=v2', '--branch']), readHooksPath(root)])
+  const head = {}
+  let dirty = 0
+  if (s.ok) {
+    for (const line of s.out.split('\n')) {
+      if (!line) continue
+      const m = /^# branch\.(\S+) (.*)$/.exec(line)
+      if (m) head[m[1]] = m[2]
+      else if (!line.startsWith('#')) dirty++
+    }
+  }
+  // 커밋이 하나도 없는 새 레포는 oid 가 `(initial)` 이다. 오류가 아니다
+  const hasCommits = s.ok && !!head.oid && head.oid !== '(initial)'
 
   const st = {
     repo: true,
-    branch: branch.ok ? branch.out : null,
-    upstream: upstream.ok ? upstream.out : null,
+    // 떨어진 HEAD 는 `HEAD` 라고 부른다(`rev-parse --abbrev-ref` 가 그렇게 불렀다)
+    branch: !hasCommits ? null : head.head === '(detached)' ? 'HEAD' : head.head || null,
+    upstream: head.upstream || null,
     // 훅은 clone 을 따라오지 않는다. 미설정이면 `cdp-save` 가 커밋해도
     // 검사가 **조용히 통과한다** -- 그래서 상태로 노출한다(§17).
-    hooksPath: hooks.ok && hooks.out ? hooks.out : null,
-    dirty: dirty.ok ? dirty.out.split('\n').filter(Boolean).length : 0,
+    hooksPath,
+    dirty,
     ahead: 0,
     behind: 0,
     oldestUnpushed: null,
+    hasCommits,
+    // `head` 는 **커밋 sha** 다. 브랜치 이름이 아니다 — `sync` 도구(§2.2)와
+    // `GET /repos`(§4.3)가 "지금 어디까지 실려 있나" 를 이것으로 답한다.
+    head: hasCommits ? head.oid.slice(0, 7) : null,
   }
 
-  // 커밋이 하나도 없는 새 레포에서는 rev-list 가 실패한다. 오류가 아니다.
-  const head = await run(root, ['rev-parse', '--verify', 'HEAD'])
-  st.hasCommits = head.ok
-  // `head` 는 **커밋 sha** 다. 브랜치 이름이 아니다 — `sync` 도구(§2.2)와
-  // `GET /repos`(§4.3)가 "지금 어디까지 실려 있나" 를 이것으로 답한다.
-  st.head = head.ok ? head.out.slice(0, 7) : null
-
-  if (st.upstream && st.hasCommits) {
-    const counts = await run(root, ['rev-list', '--left-right', '--count', `${st.upstream}...HEAD`])
-    if (counts.ok) {
-      const [behind, ahead] = counts.out.split(/\s+/).map((n) => Number(n) || 0)
-      st.behind = behind
-      st.ahead = ahead
-    }
+  // `branch.ab` 는 upstream 이 살아 있을 때만 나온다
+  const ab = /^\+(\d+) -(\d+)$/.exec(head.ab || '')
+  if (st.upstream && hasCommits && ab) {
+    st.ahead = Number(ab[1])
+    st.behind = Number(ab[2])
     if (st.ahead > 0) {
       const oldest = await run(root, ['log', '--reverse', '--format=%cI', `${st.upstream}..HEAD`])
       if (oldest.ok && oldest.out) st.oldestUnpushed = oldest.out.split('\n')[0]
     }
   }
   return st
+}
+
+// `core.hooksPath` — **설정 파일이 바뀌었을 때만** git 에 묻는다.
+//
+// 실효값(local → global)을 알려면 git 을 띄워야 하는데, 값은 거의 안 바뀐다.
+// 두 설정 파일의 수정 시각을 열쇠로 기억한다 — 터미널에서 `git config` 를 해도
+// 파일 시각이 바뀌므로 다음 호출이 새로 읽는다. `.git` 이 파일인 레포
+// (worktree · submodule)는 시각을 못 읽으므로 기억하지 않고 매번 묻는다.
+const hooksMemo = new Map()
+async function readHooksPath(root) {
+  const mt = async (p) => (await fs.stat(p).catch(() => null))?.mtimeMs ?? null
+  const local = await mt(path.join(root, '.git', 'config'))
+  const key = local == null ? null : `${local}|${await mt(path.join(os.homedir(), '.gitconfig'))}`
+  const hit = key && hooksMemo.get(root)
+  if (hit && hit.key === key) return hit.value
+  const r = await run(root, ['config', '--get', 'core.hooksPath'])
+  const value = r.ok && r.out ? r.out : null
+  if (key) hooksMemo.set(root, { key, value })
+  return value
 }
 
 // 설정 읽기 — **화면이 "어떻게 돼 있나" 를 말할 수 있어야 한다.**

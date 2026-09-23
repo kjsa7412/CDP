@@ -18,6 +18,9 @@ const SEARCH_LIMIT = 40
 // 좌표에서 문서를 끌고 올 때 쓰는 좌표 수. 한 글자 질의가 좌표 200개에 걸리면
 // 그 200개의 작업을 전부 끌고 오게 된다
 const SEARCH_SEEDS = 8
+// 방금 fetch 했으면 이만큼은 다시 하지 않는다. 화면의 주기 fetch 는 5분이고,
+// 사람이 누르는 동기화(`/sync`)는 이것을 거치지 않는다
+const FETCH_FRESH_MS = 60_000
 
 export class Store {
   constructor({ root, settings = {}, onEvent = () => {}, hostWarning = false }) {
@@ -43,6 +46,7 @@ export class Store {
     if (!next || next === this.root) return this.repoInfo()
     await this.stopWatch()
     this.root = next
+    this._fetchedAt = 0
     this.cache.clear()
     this.docs = []
     this.bodies = new Map()
@@ -60,8 +64,12 @@ export class Store {
     this.units = this.works // v0.2 호출부 호환
     this.stats = r.stats
 
-    // 검색 색인과 백링크는 앱에만 필요하다 (CLI 는 한 번 읽고 끝난다)
-    this.mini = buildIndex(this.docs, this.bodies)
+    // 백링크는 앱에만 필요하다 (CLI 는 한 번 읽고 끝난다).
+    //
+    // **전문 색인은 여기서 짓지 않는다.** load() 는 파일이 하나 바뀔 때마다
+    // 불리는데, 전문 검색은 이름에서 못 찾았을 때만 도는 폴백이다. 매번 지으면
+    // 그동안 이벤트 루프가 멈추고 화면의 모든 요청이 기다린다 — 쓸 때 짓는다.
+    this._mini = null
     this.backlinks = buildBacklinks(this.works, this.bodies)
 
     // git 상태는 검사에도 쓰이므로 로드 때 한 번 읽는다. fetch 는 하지 않는다 --
@@ -83,9 +91,31 @@ export class Store {
   // 조용히 하면 사용자가 편집 중인 파일과 충돌한다. 앱 시작과 주기적으로는
   // fetch 만 하고, 차이를 보여주고 사람이 누른다.
   async gitStatus({ fetch = false } = {}) {
-    if (fetch) await git.fetch(this.root).catch(() => {})
+    if (fetch) await this.fetchOnce()
     const st = await git.status(this.root).catch(() => ({ repo: false }))
     return { ...st, unpushed: git.unpushedWarning(st) }
+  }
+
+  // fetch 는 **한 번에 하나만**, 그리고 방금 했으면 다시 하지 않는다.
+  //
+  // 화면은 창에 포커스가 올 때마다 fetch 를 청한다. 원격이 안 닿으면 한 번에
+  // 21초(TCP 연결 제한)가 걸리는데, 그동안 창을 몇 번 오가면 git 프로세스가
+  // 겹겹이 뜨고 요청마다 브라우저 연결을 하나씩 물고 있었다 — 연결은 호스트당
+  // 여섯 개뿐이고 하나는 SSE 가 쓴다. 다 차면 문서 하나 여는 요청도 줄을 선다.
+  //
+  // 돌고 있으면 **기다리지 않는다.** 로컬 상태만 돌려주고, fetch 결과는 먼저
+  // 청한 쪽이 받는다.
+  fetchOnce() {
+    if (this._fetching) return null
+    if (Date.now() - (this._fetchedAt || 0) < FETCH_FRESH_MS) return null
+    this._fetching = git
+      .fetch(this.root)
+      .catch(() => {})
+      .finally(() => {
+        this._fetching = null
+        this._fetchedAt = Date.now()
+      })
+    return this._fetching
   }
 
   async gitPull() {
@@ -759,7 +789,8 @@ export class Store {
     const named = coordRows.length + works.size + managed.size
     const needFullText = force || named === 0
     if (needFullText) {
-      for (const r of fullText(this.mini, q)) {
+      this._mini ||= buildIndex(this.docs, this.bodies)
+      for (const r of fullText(this._mini, q)) {
         const d = this.byPath.get(r.path)
         if (!d) continue
         const score = Math.round(r.score * 100) / 100

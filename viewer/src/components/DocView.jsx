@@ -115,11 +115,18 @@ export default function DocView({
     // 목차가 본문 위 sticky 레일이던 시절에는 그 높이만큼 띄워야 제목이 안
     // 가렸다. 지금은 옆으로 나갔으므로 숨 쉴 자리만 남긴다.
     const gap = 12
-    const top = el.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - gap
-    pane.scrollTop = Math.max(0, top)
+    const go = () => {
+      const top = el.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - gap
+      pane.scrollTop = Math.max(0, top)
+    }
+    go()
+    // 화면 밖의 표는 어림 높이로 서 있다가 화면에 오면 그려진다(doc.css).
+    // 옮긴 자리 근처의 표가 그려지며 제목이 밀릴 수 있어 한 번 더 맞춘다
+    let raf = requestAnimationFrame(() => (raf = requestAnimationFrame(go)))
     el.classList.add('doc__at')
     const t = setTimeout(() => el.classList.remove('doc__at'), 2000)
     return () => {
+      cancelAnimationFrame(raf)
       clearTimeout(t)
       el.classList.remove('doc__at')
     }
@@ -149,17 +156,24 @@ export default function DocView({
     const el = scrollRef.current
     if (!el || !doc) return
     let t
-    const onScroll = () => {
+    let raf = 0
+    // 한 프레임에 한 번 — 스크롤 이벤트는 프레임보다 자주 온다
+    const measure = () => {
+      raf = 0
       const max = el.scrollHeight - el.clientHeight
       const ratio = max > 0 ? el.scrollTop / max : 0
       setProgress(Math.round(ratio * 100))
       clearTimeout(t)
       t = setTimeout(() => onScrollSave(doc.id, ratio), 400)
     }
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure)
+    }
     el.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
+    measure()
     return () => {
       clearTimeout(t)
+      cancelAnimationFrame(raf)
       el.removeEventListener('scroll', onScroll)
     }
   }, [doc?.id])

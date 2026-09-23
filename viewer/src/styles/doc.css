@@ -254,6 +254,19 @@
 .doc > *:first-child {
   margin-top: 0;
 }
+/* **화면 밖의 표와 코드는 그리지 않는다.**
+ *
+ * 테이블정의서는 표가 수백 개다(섹션 292 · 노드 4만 6천 실측). 그대로 두면
+ * 레이아웃이 한 번 돌 때마다 그 표를 전부 다시 잰다 — 문서를 여는 데 1~2초,
+ * 목차를 접고 펴는 데 0.2초가 그 자리에서 멎었다. 화면 근처에 온 것만 잰다.
+ *
+ * 제목은 빼 둔다. 목차의 현재 섹션과 섹션 이동이 제목의 자리를 읽는다.
+ * `auto` 가 한 번 그린 크기를 기억하므로 지나간 자리는 다시 흔들리지 않는다. */
+.doc > .tablewrap,
+.doc > .codeblock {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 400px;
+}
 
 .doc h1 {
   margin: var(--sp-8) 0 var(--sp-4);
@@ -735,6 +748,11 @@
   }
   .tablewrap {
     overflow: visible;
+  }
+  /* 종이는 화면 밖이 없다 — 건너뛴 표가 빈 칸으로 찍히면 안 된다 */
+  .doc > .tablewrap,
+  .doc > .codeblock {
+    content-visibility: visible;
   }
   .doc thead th,
   .doc tbody td:first-child {

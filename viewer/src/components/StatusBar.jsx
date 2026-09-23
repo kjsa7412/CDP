@@ -49,7 +49,15 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
 
     local().then(() => remote())
     const t = setInterval(remote, 5 * 60 * 1000)
-    const onFocus = () => local().then(() => remote())
+    // 창을 오갈 때마다 묻지 않는다 — 에디터와 뷰어를 번갈아 보는 것이 이 도구의
+    // 일상이라 포커스는 몇 초에 한 번씩 온다. 그때마다 서버가 git 을 띄웠다.
+    // 방금 물었으면 넘긴다(fetch 쪽은 서버가 한 번 더 거른다 — store.fetchOnce)
+    let lastAt = Date.now()
+    const onFocus = () => {
+      if (Date.now() - lastAt < 15_000) return
+      lastAt = Date.now()
+      local().then(() => remote())
+    }
     window.addEventListener('focus', onFocus)
     return () => {
       dead = true
