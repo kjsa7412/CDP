@@ -12,15 +12,17 @@ agent/packages/    프로젝트마다 고른다               docs/ · _managed.
 
 ```
 xcopy /E /I <배포본>\knowledge-repo-<고른 것> C:\cdp
+copy <배포본>\cdp.exe C:\cdp\tools\
 cd /d C:\cdp
 git init && git config core.hooksPath .githooks
 ```
 
-**세 줄이다.** `ctx init --package` 같은 명령을 만들지 않는다 — 설치가 이미
+**네 줄이다.** `ctx init --package` 같은 명령을 만들지 않는다 — 설치가 이미
 복사이고, 방식이 둘이면 어느 것이 맞는지 묻게 된다.
 
 복사한 순간 그 폴더가 지식 레포다 — `ctx` 는 `_vocab.md` 로 알아보고,
-그 파일이 폴더 안에 이미 있다. `tools/cdp.exe` 도 함께 온다.
+그 파일이 폴더 안에 이미 있다. `cdp.exe` 는 배포본 루트에 **하나**다(패키지가 여럿이어도) —
+`tools\` 에 복사한다.
 
 ## 무엇이 들어 있나 — 서식이지 내용이 아니다
 

@@ -129,15 +129,14 @@ need('agent/install.md', '설치.md')
 const packages = listPackages(ROOT)
 if (!packages.length) missing.push('agent/packages/<패키지>')
 
+// **exe 는 배포본 루트에 한 번만.** 폴더마다 tools/ 에 넣으면 패키지 수만큼(68MB×N)
+// 커진다 — 셋에서 213MB 였다. 받는 사람이 복사한 레포의 tools/ 에 한 번 복사한다
+// (설치.md ③). 조립은 그 자리를 빈 tools/ 로 남긴다.
 for (const name of packages) {
-  const r = assembleKnowledgeRepo({
-    root: ROOT,
-    name,
-    dest: path.join(OUT, `knowledge-repo-${name}`),
-    exe: path.join(ROOT, 'ops', 'out', 'exe', EXE),
-  })
+  const r = assembleKnowledgeRepo({ root: ROOT, name, dest: path.join(OUT, `knowledge-repo-${name}`), exe: null })
   missing.push(...r.missing)
 }
+need(path.join('ops', 'out', 'exe', EXE), EXE)
 
 // ── 3) 설치 안내 ────────────────────────────────────────────────────────
 const stamp = bundleStamp(ROOT)
@@ -174,11 +173,12 @@ fs.writeFileSync(
 **이 폴더를 통째로 옮기면 CDP 를 쓸 수 있다.**
 
 \`\`\`
-knowledge-repo-<이름>/   **복사하면 그게 지식 레포다.** 패키지마다 하나씩
+cdp.exe                 앱 + ctx 가 한 파일 (~68MB). **패키지가 여럿이어도 하나** — 복사한 레포의 tools/ 에 넣는다
+knowledge-repo-<이름>/   **복사하면 그게 지식 레포다.** 패키지마다 하나씩 (exe 는 없다)
   docs/                관리 문서 골격 — 이 패키지가 정한다
   _vocab.md            좌표 어휘 · _managed.md  등록부
-  bin/                 ctx 실행기 (Node 없어도 돈다)
-  tools/cdp.exe        앱 + ctx 가 한 파일 (~68MB). 더블클릭하면 이 레포가 열린다
+  bin/                 ctx 실행기 (Node 없어도 돈다 — tools/ 의 exe 로 넘어간다)
+  tools/               **비어 있다.** 위 cdp.exe 를 여기 복사한다. 더블클릭하면 이 레포가 열린다
   .githooks/           pre-commit — 유일한 결정론적 보증
   .claude/skills       절차 (work · load · save · managed · import · edit · push)
   .gitattributes       **줄바꿈 고정.** 없으면 훅이 조용히 죽는다
@@ -206,12 +206,14 @@ ${pkgRows.join('\n')}
 
 \`\`\`
 xcopy /E /I knowledge-repo-<고른 것> C:\\cdp
+copy cdp.exe C:\\cdp\\tools\\
 cd /d C:\\cdp
 git init && git config core.hooksPath .githooks
 \`\`\`
 
-**세 줄이 전부다.** 전에는 \`repo-kit\` 과 \`packages\` 를 차례로 붓고 exe 를
-따로 옮겨야 했다 — 그 이름은 만든 쪽 개념이지 받는 쪽의 것이 아니었다.
+**네 줄이다.** 전에는 \`repo-kit\` 과 \`packages\` 를 차례로 부어야 했다 — 그 이름은
+만든 쪽 개념이지 받는 쪽의 것이 아니었다. exe 는 한때 폴더마다 넣었는데 패키지가
+늘자 배포본이 그 수만큼(68MB×N) 커져서 **루트에 하나만** 두고 복사하게 했다.
 
 \`tools\\cdp.exe\` 를 더블클릭하면 이 레포가 열린다. Node 가 없는 PC 에서는
 \`bin/ctx\` 가 이 exe 로 넘어간다 — 없으면 훅이 검사를 건너뛴다. 레포의
@@ -242,8 +244,8 @@ tools\\cdp.exe ctx setup C:\\gdi
 파일 두 개만 옮기면 된다.
 
 \`\`\`
-① 이 폴더 (또는 cdp.exe + repo-kit/)
-② git bundle create knowledge.bundle --all     ← 지식 레포
+① 이 폴더 (또는 cdp.exe + knowledge-repo-<고른 것>/ 둘만)
+② git bundle create knowledge.bundle --all     ← 지식 레포가 이미 있다면
 \`\`\`
 
 **CDN·인터넷을 타는 것이 하나도 없다.** 화면의 폰트까지 base64 로 인라인돼
@@ -256,7 +258,7 @@ cdp.exe ctx version      → ${stamp}
 cd <지식 레포> && bin/ctx check
 \`\`\`
 
-세 곳(\`cdp.exe\` · \`repo-kit/bin\` · 레포의 \`bin\`)의 \`ctx version\` 이
+세 곳(배포본의 \`cdp.exe\` · 레포의 \`tools\\cdp.exe\` · 레포의 \`bin\\ctx\`)의 \`ctx version\` 이
 **같아야 한다.** 다르면 그 레포만 옛 답을 낸다.
 `,
   'utf8'

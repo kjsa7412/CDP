@@ -152,7 +152,7 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 ### ⑤ 훅을 넣는다
 
 배포본의 `knowledge-repo-<이름>/` 을 통째로 복사하면 훅·스킬·규약·매뉴얼·
-`bin/ctx`·`tools/cdp.exe` 와 문서 골격·등록부·어휘가 **한 번에** 들어온다.
+`bin/ctx` 와 문서 골격·등록부·어휘가 **한 번에** 들어온다. exe 는 ⑥에서 넣는다.
 
 ```
 xcopy /E /I <배포본>\knowledge-repo-dpms C:\cdp
@@ -163,9 +163,15 @@ git init && git config core.hooksPath .githooks
 **훅은 clone 을 따라오지 않는다.** 마지막 줄을 팀원도 각자 한 번 돌려야 한다
 (⑤ 팀원 PC).
 
-### ⑥ exe 는 이미 레포 안에 있다
+### ⑥ exe 를 `tools/` 에 넣는다
 
-`tools/cdp.exe` 가 폴더와 함께 들어온다. 전에는 여기서 손으로 옮겼다.
+```
+copy <배포본>\cdp.exe C:\cdp\tools\
+```
+
+배포본 루트의 `cdp.exe` 하나를 복사한다. **패키지가 여럿이어도 exe 는 배포본에 하나다** —
+폴더마다 넣으면 배포본이 패키지 수만큼(68MB×N) 커져서 루트에 한 번만 둔다(2026-09-23).
+복사하지 않으면 아래 둘이 빠진다.
 
 두 가지가 여기에 달려 있다.
 

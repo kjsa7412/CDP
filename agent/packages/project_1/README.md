@@ -23,7 +23,8 @@
 ## 붓는다
 
 ```
-xcopy /E /I <배포본>\knowledge-repo-dpms C:\cdp
+xcopy /E /I <배포본>\knowledge-repo-project_1 C:\cdp
+copy <배포본>\cdp.exe C:\cdp\tools\
 cd /d C:\cdp
 git init && git config core.hooksPath .githooks
 ```

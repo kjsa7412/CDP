@@ -587,11 +587,21 @@ await check(31, '같은 id 두 번 → E_EXISTS', async () => {
 })
 
 await check(32, '요청 2MB 초과 → 413', async () => {
-  const r = await fetch(`http://127.0.0.1:${PORT}/mcp/alpha`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TK },
-    body: 'x'.repeat(2 * 1024 * 1024 + 64),
-  })
+  // 서버가 상한을 넘는 순간 소켓을 끊으면 클라이언트는 413 을 읽기 전에 "fetch failed" 를
+  // 볼 수 있다 — 경쟁이다(2026-09-23 실측 한 번, 다음 실행은 통과). 한 번은 다시 보낸다.
+  let r
+  for (let i = 0; ; i++) {
+    try {
+      r = await fetch(`http://127.0.0.1:${PORT}/mcp/alpha`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TK },
+        body: 'x'.repeat(2 * 1024 * 1024 + 64),
+      })
+      break
+    } catch (e) {
+      if (i >= 1 || !/fetch failed/.test(String(e?.message))) throw e
+    }
+  }
   eq(r.status, 413, 'status')
   return '413'
 })

@@ -45,10 +45,10 @@ ops\release.cmd 0.2.5
 `ops/release/v0.2.5/` 하나다.
 
 ```
-knowledge-repo-<이름>/   **복사하면 그게 지식 레포다.** 패키지마다 하나씩
-                        exe 도 그 안 `tools/` 에 들어 있다
+cdp.exe                 앱 + ctx 한 파일 (~68MB). **패키지가 여럿이어도 하나** — 복사한 레포의 tools/ 에 넣는다
+knowledge-repo-<이름>/   **복사하면 그게 지식 레포다.** 패키지마다 하나씩 (exe 는 없다)
 설치.md            이 문서
-README.md          요약 (번들 시각이 박힌다)
+README.md          요약 (번들 시각 · 패키지 표)
 ```
 
 **설계서는 안 들어간다.** CDP 를 고칠 사람의 것이고 서비스와 무관하다 —
@@ -71,7 +71,7 @@ git tag -a v0.2.5 -m "..."
 폐쇄망이면 파일 두 개다.
 
 ```
-① ops/release/v0.2.5/ 폴더째        (또는 knowledge-repo-<이름>/ 만 — exe 가 그 안에 있다)
+① ops/release/v0.2.5/ 폴더째        (또는 cdp.exe + knowledge-repo-<고른 것>/ 둘만)
 ② git bundle create knowledge.bundle --all      ← 지식 레포가 이미 있다면
 ```
 
@@ -81,19 +81,20 @@ CDN·인터넷을 타는 것이 하나도 없다. 화면의 폰트까지 base64 
 
 ## ③ 지식 레포 — 관리자, 프로젝트당 1회
 
-**폴더 하나를 복사한다.** 배포본에 `knowledge-repo-*` 가 여럿이면 프로젝트에 맞는
+**폴더 하나와 exe 를 복사한다.** 배포본에 `knowledge-repo-*` 가 여럿이면 프로젝트에 맞는
 **하나만** — 어느 패키지가 무엇인지는 배포본 루트 `README.md` 의 패키지 표에 있다.
 
 ```
 xcopy /E /I <배포본>\knowledge-repo-<고른 것> C:\cdp
+copy <배포본>\cdp.exe C:\cdp\tools\
 cd /d C:\cdp
 git init && git config core.hooksPath .githooks
 ```
 
-**세 줄이 전부다.** 전에는 `repo-kit\` 과 `packages\<고른 것>\` 을 차례로 붓고
-exe 를 따로 옮겨야 했다. **그 이름은
-만든 쪽 개념이지 받는 쪽의 것이 아니다** — 무엇이 무엇인지 알아야 순서를
-맞출 수 있었다. 지금은 배포본에 완성된 채로 들어 있다.
+**네 줄이다.** 전에는 `repo-kit\` 과 `packages\<고른 것>\` 을 차례로 부어야 했다.
+**그 이름은 만든 쪽 개념이지 받는 쪽의 것이 아니다** — 무엇이 무엇인지 알아야 순서를
+맞출 수 있었다. 지금은 배포본에 완성된 채로 들어 있다. exe 는 배포본 루트에 **하나**다 —
+한때 폴더마다 넣었는데 패키지가 늘자 배포본이 그 수만큼(68MB×N) 커져서 되돌렸다(2026-09-23).
 
 | 폴더 안에 이미 있는 것 | 빠지면 |
 |---|---|
@@ -102,7 +103,7 @@ exe 를 따로 옮겨야 했다. **그 이름은
 | `docs/` — 관리 문서 골격 | 등록부가 가리키는 섹션이 없다 |
 | `.gitattributes` — 줄바꿈 고정 | **훅이 조용히 죽는다** |
 | `bin/` · `.githooks/` · `.claude/skills` | 검사도 절차도 없다 |
-| `tools/cdp.exe` — 앱 + ctx | Node 없는 PC 에서 훅이 검사를 건너뛴다 |
+| `tools/cdp.exe` — **배포본 루트의 `cdp.exe` 를 복사해 넣는다** | Node 없는 PC 에서 훅이 검사를 건너뛴다 · 더블클릭할 것이 없다 |
 
 마지막에서 둘째가 무섭다. CRLF 로 체크아웃되면 `pre-commit` 의 셔뱅 뒤에
 캐리지리턴이 붙어 실행되지 않는다. **커밋은 통과하고 검사만 사라진다.**
@@ -213,7 +214,7 @@ cd C:\cdp && bin\ctx check      → 이상 없음
 
 ```
 copy <새 배포본>\knowledge-repo-dpms\bin\*         C:\cdp\bin\
-copy <새 배포본>\knowledge-repo-dpms\tools\*       C:\cdp\tools\
+copy <새 배포본>\cdp.exe                             C:\cdp\tools\
 copy <새 배포본>\knowledge-repo-dpms\MANUAL*.md    C:\cdp\
 C:\cdp\tools\cdp.exe ctx setup C:\gdi   ← skill 도 같이 갱신된다
 ```

@@ -109,12 +109,17 @@ export function assembleKnowledgeRepo({ root = ROOT, name, dest, exe = null, ctx
   put('agent/gitattributes', '.gitattributes')
   put('agent/gitignore', '.gitignore')
 
-  // 실행 파일 — 폴더 안 tools/ 에. 레포의 `.gitignore` 가 막으므로 커밋되지는 않는다.
+  // tools/ — 실행 파일 자리. 배포본은 exe 를 **루트에 한 번만** 두고(패키지가 여럿이어도
+  // 68MB 하나 — 폴더마다 넣던 때 셋에서 213MB 였다) 받는 사람이 여기로 복사한다. 그래서
+  // 빈 폴더를 `.gitkeep` 으로 남긴다 — `copy cdp.exe C:\cdp\tools\` 는 폴더가 없으면
+  // 실패하고, 빈 폴더는 zip 도 git 도 실어 주지 않는다. exe 를 직접 주면(시험용) 담는다 —
+  // 레포의 `.gitignore` 가 `/tools/*.exe` 를 막으므로 커밋되지는 않는다.
+  fs.mkdirSync(path.join(R, 'tools'), { recursive: true })
   if (exe) {
-    if (fs.existsSync(exe)) {
-      fs.mkdirSync(path.join(R, 'tools'), { recursive: true })
-      fs.copyFileSync(exe, path.join(R, 'tools', path.basename(exe)))
-    } else missing.push(path.relative(root, exe) || exe)
+    if (fs.existsSync(exe)) fs.copyFileSync(exe, path.join(R, 'tools', path.basename(exe)))
+    else missing.push(path.relative(root, exe) || exe)
+  } else {
+    fs.writeFileSync(path.join(R, 'tools', '.gitkeep'), '')
   }
 
   // 이 패키지가 정하는 층 — docs/ 골격 · 등록부 · 어휘. 매니페스트는 빼고.

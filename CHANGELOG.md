@@ -17,6 +17,7 @@
 - 서버 산출물 `cdp-server-v<버전>.tar.gz`(`npm run release:server`) — `bin/` · `web/` · `packages/` · `deploy/`
 - 조립 함수 하나(`ops/lib/assemble.mjs`)로 클라이언트 릴리스와 서버 산출물이 같은 지식 레포 폴더를 낸다
 - `npm run release -- --no-build` — 조립만 다시
+- 클라이언트 배포본의 `cdp.exe` 는 **루트에 하나**(2026-09-23) — 패키지마다 `tools/` 에 넣지 않는다. 조립은 빈 `tools/`(`.gitkeep`)를 남기고 받는 사람이 복사한다(설치.md ③). 패키지 셋에서 213MB → 75MB
 
 **서버 설치**
 - `ops/deploy/install.sh`(멱등 · node 경로를 유닛에 박음 · healthz 확인) · `upgrade.sh`(백업 · 교체 · 재시작 · built/자산 해시 대조 · 실패 시 되돌림)
