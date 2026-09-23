@@ -263,7 +263,7 @@ ctx sync      원격과의 차이 · 훅 설정 여부
 ctx version   이 번들이 언제 만들어졌나
 ctx setup     작업 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기 · --also · --desktop)
 ctx mcp       MCP 서버 (stdio) · ctx serve  MCP 서버 (HTTP) + 관리 서비스
-ctx package   패키지 — list · show · check(부어서 검사) · new
+ctx package   패키지 — list · show · check(부어서 검사) · new · rename(프로젝트 이름으로)
 ctx repo      지식 레포 — new <경로> --package <이름> [--origin --push] · list --root
 ctx import-dir  md 폴더를 work/ 로 들인다 (--dry 먼저)
 ctx serve doctor · init   서버 준비물 검사 · 첫 사용자와 토큰

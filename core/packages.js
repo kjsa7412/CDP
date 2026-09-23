@@ -261,8 +261,9 @@ export async function newPackage(packagesDir, { name, from, title = null, descri
     const lines = readText(raw).split('\n')
     const heading = `# ${name} — ${manifest.title || name}`
     const note =
-      `> **\`${from}\`${base.version ? ' v' + base.version : ''} 에서 복제** · ${today}. 문서 목록 · 등록부 · 어휘는 아직 원본과\n` +
-      `> 같다 — 이 프로젝트의 것으로 고친다. 원본과 다른 것만이 이 패키지다.`
+      `> **\`${from}\`${base.version ? ' v' + base.version : ''} 에서 복제** · ${today}. 이름 · 제목 · 문서 목록 · 등록부 · 어휘가 아직 원본의\n` +
+      `> 것이다 — 적용하는 프로젝트의 것으로 고친다. 이름은 \`ctx package rename\`, 문서 목록은 사람이.\n` +
+      `> 원본과 다른 것만이 이 패키지다.`
     const i = lines.findIndex((l) => /^#\s/.test(l))
     if (i >= 0) {
       lines[i] = heading
@@ -274,4 +275,53 @@ export async function newPackage(packagesDir, { name, from, title = null, descri
     readme = true
   }
   return { name, path: dst, manifest, readme }
+}
+
+/**
+ * 패키지 이름을 바꾼다 — 폴더 · 매니페스트 `name` · README 첫 제목을 한 번에.
+ *
+ * 패키지는 서식이라 **적용하는 프로젝트에 맞춰 이름이 바뀌는 것이 정상**이다 —
+ * `project_1` 같은 이름은 자리표시자다. 셋 중 하나만 바꾸면 `readManifest` 가
+ * "name 이 폴더명과 다르다" 로 거절하거나(매니페스트), 레포를 연 사람이 옛 이름을
+ * 읽는다(README). 그래서 하나의 동작이다.
+ *
+ * 이미 세운 지식 레포는 건드리지 않는다 — 레포는 패키지의 사본이고 이름을 따로
+ * 갖는다(`ctx repo new <경로>`). 서버의 `packages/` 는 다음 산출물이 따라간다.
+ */
+export async function renamePackage(packagesDir, { from, to, title = null }) {
+  if (!NAME_RE.test(String(to || ''))) throw new CtxError('E_INPUT', '패키지 이름 형식이 아니다 (영문·숫자·._-)', { name: to })
+  if (from === to) throw new CtxError('E_INPUT', '같은 이름이다', { from, to })
+  const src = path.join(packagesDir, from)
+  const dst = path.join(packagesDir, to)
+  if (!(await isPackageDir(src))) throw new CtxError('E_NOT_FOUND', `패키지가 없다 — ${from}`, { from })
+  if (await exists(dst)) throw new CtxError('E_EXISTS', '그 이름의 패키지가 이미 있다', { name: to })
+  const base = await readManifest(src) // 매니페스트가 폴더와 어긋나 있으면 여기서 멈춘다
+  await fs.rename(src, dst)
+  const today = new Date().toISOString().slice(0, 10)
+  const manifest = {
+    name: to,
+    title: title ?? base.title ?? null,
+    version: base.version ?? '0.1.0',
+    description: base.description ?? null,
+    source: [base.source, `이름 바꿈 ${from} → ${to} · ${today}`].filter(Boolean).join(' · '),
+    updated: today,
+  }
+  await fs.writeFile(path.join(dst, MANIFEST), JSON.stringify(manifest, null, 2) + '\n', 'utf8')
+
+  // README — 첫 제목만. 본문은 그 패키지의 것이라 손대지 않는다
+  const readmePath = path.join(dst, 'README.md')
+  const raw = await fs.readFile(readmePath, 'utf8').catch(() => null)
+  let readme = false
+  if (raw != null) {
+    const lines = readText(raw).split('\n')
+    const i = lines.findIndex((l) => /^#\s/.test(l))
+    if (i >= 0) {
+      const m = /^#\s+\S+(?:\s+—\s+(.*))?\s*$/.exec(lines[i])
+      const oldTitle = m && m[1] ? m[1].trim() : null
+      lines[i] = `# ${to} — ${title ?? oldTitle ?? manifest.title ?? to}`
+      await fs.writeFile(readmePath, lines.join('\n'), 'utf8')
+      readme = true
+    }
+  }
+  return { from, to, path: dst, manifest, readme }
 }

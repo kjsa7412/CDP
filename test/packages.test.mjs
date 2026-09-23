@@ -138,8 +138,32 @@ test('newPackage — 복사하고 매니페스트를 고친다 · 이름 형식 
     // 둘이 나란히 보인다 — 다중 패키지
     assert.deepEqual((await P.listPackages(d)).map((p) => p.name), ['base', 'copy'])
 
+    // 이름 바꿈 — 폴더 · 매니페스트 · README 제목이 한 번에.  본문은 그대로.  세운 레포와 무관
+    const rn = await P.renamePackage(d, { from: 'copy', to: 'gdi' })
+    assert.equal(rn.to, 'gdi')
+    assert.equal(await fs.stat(path.join(d, 'copy')).catch(() => null), null, '옛 폴더는 없다')
+    const m2 = await P.readManifest(path.join(d, 'gdi'))
+    assert.equal(m2.name, 'gdi')
+    assert.equal(m2.title, '복사본', '제목은 안 주면 그대로')
+    assert.match(m2.source, /이름 바꿈 copy → gdi/)
+    const readme2 = await fs.readFile(path.join(d, 'gdi', 'README.md'), 'utf8')
+    assert.match(readme2.split('\n')[0], /^# gdi — 복사본$/)
+    assert.match(readme2, /본문은 그대로 남아야 한다/)
+    assert.deepEqual((await P.listPackages(d)).map((p) => p.name), ['base', 'gdi'])
+    assert.equal((await P.checkPackage(path.join(d, 'gdi'))).ok, true)
+
+    // 제목까지 — README 제목도 따라간다
+    const rn2 = await P.renamePackage(d, { from: 'gdi', to: 'gdi2', title: 'GDI 문서 세트' })
+    assert.equal(rn2.manifest.title, 'GDI 문서 세트')
+    assert.match((await fs.readFile(path.join(d, 'gdi2', 'README.md'), 'utf8')).split('\n')[0], /^# gdi2 — GDI 문서 세트$/)
+
+    await assert.rejects(P.renamePackage(d, { from: 'gdi2', to: '한글' }), /이름 형식/)
+    await assert.rejects(P.renamePackage(d, { from: 'gdi2', to: 'gdi2' }), /같은 이름/)
+    await assert.rejects(P.renamePackage(d, { from: 'gdi2', to: 'base' }), /이미 있다/)
+    await assert.rejects(P.renamePackage(d, { from: '없음', to: 'x' }), /패키지가 없다/)
+
     await assert.rejects(P.newPackage(d, { name: '한글', from: 'base' }), /이름 형식/)
-    await assert.rejects(P.newPackage(d, { name: 'copy', from: 'base' }), /이미 있다/)
+    await assert.rejects(P.newPackage(d, { name: 'base', from: 'gdi2' }), /이미 있다/)
     await assert.rejects(P.newPackage(d, { name: 'x', from: '없음' }), /원본 패키지가 없다/)
   } finally {
     await fs.rm(d, { recursive: true, force: true })

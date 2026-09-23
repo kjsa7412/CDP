@@ -59,7 +59,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx serve token [list|revoke] --auth <f>  토큰 — 신원만 증명한다
   ctx serve doctor --root … --auth … --data …   서버 준비물 검사 (fail 이면 exit 1)
   ctx serve init --auth <f> --name <이름>       첫 사용자 + 토큰을 한 번에 (명부가 없을 때만)
-  ctx package list|show|check|new           패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로
+  ctx package list|show|check|new|rename    패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로 · 이름 바꿈
   ctx repo new <경로> --package <이름> [--origin <url>] [--push]   지식 레포를 세운다
   ctx repo list --root <폴더>               서버 <root> 의 레포 목록
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다

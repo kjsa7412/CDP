@@ -4,6 +4,7 @@
 //   ctx package show  <이름>
 //   ctx package check [<이름> | --all]          부어서 ctx check — CI 가 돈다
 //   ctx package new   <이름> --from <이름> [--title …]
+//   ctx package rename <이름> <새 이름> [--title …]   폴더 · 매니페스트 · README 제목을 한 번에
 //
 // **계산은 `core/packages.js` 가 한다.** 여기는 찾고 · 찍고 · exit code 를 낸다.
 //
@@ -78,7 +79,9 @@ export async function materializePackage(pk, name) {
   const { assembleKnowledgeRepo } = await import('../../ops/lib/assemble.mjs')
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-asm-'))
   const dest = path.join(tmp, name)
-  const r = assembleKnowledgeRepo({ root: pk.sourceRoot, name, dest, exe: null })
+  // 도구는 소스 루트에서, 문서는 **그 패키지 폴더**에서 — `--packages <dir>` 가 소스 트리
+  // 밖을 가리켜도 된다. 전에는 root/agent/packages/<name> 으로 고정이라 임시 사본을 검사할 수 없었다.
+  const r = assembleKnowledgeRepo({ root: pk.sourceRoot, name, dest, exe: null, packageDir: dir })
   if (r.missing.length) {
     await fs.rm(tmp, { recursive: true, force: true }).catch(() => {})
     throw Object.assign(new Error('조립에 빠진 것이 있다 — ' + r.missing.join(' · ') + NL + '  (npm run build:ctx 를 먼저 돌렸나)'), { code: 'E_INPUT' })
@@ -151,7 +154,7 @@ export async function runPackage(opt) {
         const assemble = pk.sourceRoot && !(await isCompleted(dir))
           ? async (dest) => {
               const { assembleKnowledgeRepo } = await import('../../ops/lib/assemble.mjs')
-              const r = assembleKnowledgeRepo({ root: pk.sourceRoot, name, dest, exe: null })
+              const r = assembleKnowledgeRepo({ root: pk.sourceRoot, name, dest, exe: null, packageDir: dir })
               if (r.missing.length) throw new Error('조립에 빠진 것 — ' + r.missing.join(' · '))
             }
           : null
@@ -186,7 +189,26 @@ export async function runPackage(opt) {
       return 0
     }
 
-    return usage('list · show <이름> · check [<이름>|--all] · new <이름> --from <이름>')
+    if (sub === 'rename') {
+      const to = opt.args[2]
+      if (!arg || !to) return usage('rename <이름> <새 이름> [--title …]')
+      if (!pk.sourceRoot && pk.how !== '--packages') {
+        err('ctx package rename: 패키지는 소스 레포(agent/packages) 에서 바꾼다. 서버 산출물의 packages/ 는 조립 결과다 — 다음 산출물이 따라간다.')
+        return 2
+      }
+      const r = await P.renamePackage(pk.dir, { from: arg, to, title: opt.title ?? null })
+      out(`바꿨다: ${arg} → ${to}  (${r.path})`)
+      out(`  ${JSON.stringify(r.manifest)}`)
+      out('')
+      out('다음 —')
+      out('  1. agent/packages/README.md 의 목록 줄을 고친다')
+      out(`  2. ctx package check ${to}`)
+      out('  이미 세운 지식 레포는 그대로다 — 레포는 패키지의 사본이고 이름을 따로 갖는다')
+      out('  서버의 packages/ 는 다음 산출물(release:server → upgrade.sh)에서 바뀐다')
+      return 0
+    }
+
+    return usage('list · show <이름> · check [<이름>|--all] · new <이름> --from <이름> · rename <이름> <새 이름>')
   } catch (e) {
     const x = toError(e)
     err(`ctx package: ${x.message}`)

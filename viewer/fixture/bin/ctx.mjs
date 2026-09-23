@@ -29026,7 +29026,7 @@ var init_ctx_mcp = __esm({
     init_repo();
     init_tools();
     init_tools();
-    BUILT = "2026-09-23 03:26";
+    BUILT = "2026-09-23 03:52";
     NL2 = String.fromCharCode(10);
     CARD = {
       match: "\uC774\uB984\xB7alias\xB7\uC790\uC720 \uD45C\uD604\uC744 \uC815\uBCF8 \uC88C\uD45C\uB85C \uB300\uC870\uD55C\uB2E4. \uD14C\uC774\uBE14\xB7\uD654\uBA74\xB7API\xB7\uD329\uD130\xB7\uC6D0\uCC9C\xB7\uC6A9\uC5B4\uB97C \uB9D0\uB85C \uAC00\uB9AC\uCF30\uC73C\uBA74 \uC88C\uD45C\uB97C \uC9D0\uC791\uD558\uC9C0 \uB9D0\uACE0 \uBA3C\uC800 \uC774\uAC83\uC73C\uB85C \uD655\uC815\uD55C\uB2E4. `\uBBF8\uB4F1\uC7AC` \uB294 \uC5B4\uD718\uC5D0 \uC5C6\uB2E4\uB294 \uB73B\uC774\uB2E4 \u2014 \uB2E4\uB978 \uC88C\uD45C\uB85C \uBC14\uAFB8\uC9C0 \uB9D0\uACE0 \uADF8\uB300\uB85C \uBCF4\uACE0\uD55C\uB2E4. \uD3D0\uAE30 \uC88C\uD45C\uBA74 \uD6C4\uC18D \uC88C\uD45C\uB97C \uC900\uB2E4. `repo` \uB97C \uC8FC\uC9C0 \uC54A\uC73C\uBA74 **\uB4E0 \uB808\uD3EC\uB97C \uC804\uBD80 \uB300\uC870**\uD558\uACE0 \uACB0\uACFC\uB9C8\uB2E4 `repo` \uB97C \uC801\uB294\uB2E4 \u2014 \uADF8 \uAC12\uC744 \uC774\uD6C4 \uB3C4\uAD6C\uC5D0 \uADF8\uB300\uB85C \uB118\uAE34\uB2E4. \uB450 \uB808\uD3EC\uC5D0 \uB2E4 \uC788\uC73C\uBA74 \uB458 \uB2E4 \uBCF4\uACE0\uD55C\uB2E4(\uACE0\uB974\uC9C0 \uC54A\uB294\uB2E4)",
@@ -29472,8 +29472,9 @@ async function newPackage(packagesDir, { name, from, title = null, description =
   if (raw != null) {
     const lines = readText(raw).split("\n");
     const heading = `# ${name} \u2014 ${manifest.title || name}`;
-    const note = `> **\`${from}\`${base.version ? " v" + base.version : ""} \uC5D0\uC11C \uBCF5\uC81C** \xB7 ${today}. \uBB38\uC11C \uBAA9\uB85D \xB7 \uB4F1\uB85D\uBD80 \xB7 \uC5B4\uD718\uB294 \uC544\uC9C1 \uC6D0\uBCF8\uACFC
-> \uAC19\uB2E4 \u2014 \uC774 \uD504\uB85C\uC81D\uD2B8\uC758 \uAC83\uC73C\uB85C \uACE0\uCE5C\uB2E4. \uC6D0\uBCF8\uACFC \uB2E4\uB978 \uAC83\uB9CC\uC774 \uC774 \uD328\uD0A4\uC9C0\uB2E4.`;
+    const note = `> **\`${from}\`${base.version ? " v" + base.version : ""} \uC5D0\uC11C \uBCF5\uC81C** \xB7 ${today}. \uC774\uB984 \xB7 \uC81C\uBAA9 \xB7 \uBB38\uC11C \uBAA9\uB85D \xB7 \uB4F1\uB85D\uBD80 \xB7 \uC5B4\uD718\uAC00 \uC544\uC9C1 \uC6D0\uBCF8\uC758
+> \uAC83\uC774\uB2E4 \u2014 \uC801\uC6A9\uD558\uB294 \uD504\uB85C\uC81D\uD2B8\uC758 \uAC83\uC73C\uB85C \uACE0\uCE5C\uB2E4. \uC774\uB984\uC740 \`ctx package rename\`, \uBB38\uC11C \uBAA9\uB85D\uC740 \uC0AC\uB78C\uC774.
+> \uC6D0\uBCF8\uACFC \uB2E4\uB978 \uAC83\uB9CC\uC774 \uC774 \uD328\uD0A4\uC9C0\uB2E4.`;
     const i = lines.findIndex((l) => /^#\s/.test(l));
     if (i >= 0) {
       lines[i] = heading;
@@ -29485,6 +29486,41 @@ async function newPackage(packagesDir, { name, from, title = null, description =
     readme = true;
   }
   return { name, path: dst, manifest, readme };
+}
+async function renamePackage(packagesDir, { from, to, title = null }) {
+  if (!NAME_RE.test(String(to || ""))) throw new CtxError("E_INPUT", "\uD328\uD0A4\uC9C0 \uC774\uB984 \uD615\uC2DD\uC774 \uC544\uB2C8\uB2E4 (\uC601\uBB38\xB7\uC22B\uC790\xB7._-)", { name: to });
+  if (from === to) throw new CtxError("E_INPUT", "\uAC19\uC740 \uC774\uB984\uC774\uB2E4", { from, to });
+  const src = path7.join(packagesDir, from);
+  const dst = path7.join(packagesDir, to);
+  if (!await isPackageDir(src)) throw new CtxError("E_NOT_FOUND", `\uD328\uD0A4\uC9C0\uAC00 \uC5C6\uB2E4 \u2014 ${from}`, { from });
+  if (await exists(dst)) throw new CtxError("E_EXISTS", "\uADF8 \uC774\uB984\uC758 \uD328\uD0A4\uC9C0\uAC00 \uC774\uBBF8 \uC788\uB2E4", { name: to });
+  const base = await readManifest(src);
+  await fs7.rename(src, dst);
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const manifest = {
+    name: to,
+    title: title ?? base.title ?? null,
+    version: base.version ?? "0.1.0",
+    description: base.description ?? null,
+    source: [base.source, `\uC774\uB984 \uBC14\uAFC8 ${from} \u2192 ${to} \xB7 ${today}`].filter(Boolean).join(" \xB7 "),
+    updated: today
+  };
+  await fs7.writeFile(path7.join(dst, MANIFEST), JSON.stringify(manifest, null, 2) + "\n", "utf8");
+  const readmePath = path7.join(dst, "README.md");
+  const raw = await fs7.readFile(readmePath, "utf8").catch(() => null);
+  let readme = false;
+  if (raw != null) {
+    const lines = readText(raw).split("\n");
+    const i = lines.findIndex((l) => /^#\s/.test(l));
+    if (i >= 0) {
+      const m = /^#\s+\S+(?:\s+—\s+(.*))?\s*$/.exec(lines[i]);
+      const oldTitle = m && m[1] ? m[1].trim() : null;
+      lines[i] = `# ${to} \u2014 ${title ?? oldTitle ?? manifest.title ?? to}`;
+      await fs7.writeFile(readmePath, lines.join("\n"), "utf8");
+      readme = true;
+    }
+  }
+  return { from, to, path: dst, manifest, readme };
 }
 var MANIFEST, NAME_RE;
 var init_packages = __esm({
@@ -29536,7 +29572,7 @@ function listPackages2(root = ROOT) {
   if (!fs8.existsSync(dir)) return [];
   return fs8.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory() && fs8.existsSync(path8.join(dir, e.name, "_vocab.md"))).map((e) => e.name).sort();
 }
-function assembleKnowledgeRepo({ root = ROOT, name, dest, exe = null, ctxDir = null }) {
+function assembleKnowledgeRepo({ root = ROOT, name, dest, exe = null, ctxDir = null, packageDir = null }) {
   const missing = [];
   const R = dest;
   const ctx = ctxDir || path8.join(root, "ops", "out", "ctx");
@@ -29571,7 +29607,7 @@ function assembleKnowledgeRepo({ root = ROOT, name, dest, exe = null, ctxDir = n
       fs8.copyFileSync(exe, path8.join(R, "tools", path8.basename(exe)));
     } else missing.push(path8.relative(root, exe) || exe);
   }
-  put(path8.join("agent", "packages", name), ".", { skip: (n) => PACKAGE_EXCLUDE.has(n) });
+  put(packageDir || path8.join("agent", "packages", name), ".", { skip: (n) => PACKAGE_EXCLUDE.has(n) });
   fs8.mkdirSync(path8.join(R, "work"), { recursive: true });
   fs8.writeFileSync(path8.join(R, "work", ".gitkeep"), "");
   try {
@@ -29669,7 +29705,7 @@ async function materializePackage(pk, name) {
   const { assembleKnowledgeRepo: assembleKnowledgeRepo2 } = await Promise.resolve().then(() => (init_assemble(), assemble_exports));
   const tmp = await fs9.mkdtemp(path9.join(os4.tmpdir(), "cdp-asm-"));
   const dest = path9.join(tmp, name);
-  const r = assembleKnowledgeRepo2({ root: pk.sourceRoot, name, dest, exe: null });
+  const r = assembleKnowledgeRepo2({ root: pk.sourceRoot, name, dest, exe: null, packageDir: dir });
   if (r.missing.length) {
     await fs9.rm(tmp, { recursive: true, force: true }).catch(() => {
     });
@@ -29733,7 +29769,7 @@ async function runPackage(opt) {
         const dir = path9.join(pk.dir, name);
         const assemble = pk.sourceRoot && !await isCompleted(dir) ? async (dest) => {
           const { assembleKnowledgeRepo: assembleKnowledgeRepo2 } = await Promise.resolve().then(() => (init_assemble(), assemble_exports));
-          const r2 = assembleKnowledgeRepo2({ root: pk.sourceRoot, name, dest, exe: null });
+          const r2 = assembleKnowledgeRepo2({ root: pk.sourceRoot, name, dest, exe: null, packageDir: dir });
           if (r2.missing.length) throw new Error("\uC870\uB9BD\uC5D0 \uBE60\uC9C4 \uAC83 \u2014 " + r2.missing.join(" \xB7 "));
         } : null;
         const r = await checkPackage(dir, { assemble });
@@ -29765,7 +29801,25 @@ async function runPackage(opt) {
       out2("  \uADDC\uC57D\uACFC \uC88C\uD45C \uC124\uACC4\uB294 \uBCF5\uC0AC\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 docs/\uAD00\uB9AC\uBB38\uC11C\uD328\uD0A4\uC9C0/ \uC5D0 \uD55C \uBC8C\uB9CC \uB454\uB2E4");
       return 0;
     }
-    return usage("list \xB7 show <\uC774\uB984> \xB7 check [<\uC774\uB984>|--all] \xB7 new <\uC774\uB984> --from <\uC774\uB984>");
+    if (sub === "rename") {
+      const to = opt.args[2];
+      if (!arg || !to) return usage("rename <\uC774\uB984> <\uC0C8 \uC774\uB984> [--title \u2026]");
+      if (!pk.sourceRoot && pk.how !== "--packages") {
+        err2("ctx package rename: \uD328\uD0A4\uC9C0\uB294 \uC18C\uC2A4 \uB808\uD3EC(agent/packages) \uC5D0\uC11C \uBC14\uAFBC\uB2E4. \uC11C\uBC84 \uC0B0\uCD9C\uBB3C\uC758 packages/ \uB294 \uC870\uB9BD \uACB0\uACFC\uB2E4 \u2014 \uB2E4\uC74C \uC0B0\uCD9C\uBB3C\uC774 \uB530\uB77C\uAC04\uB2E4.");
+        return 2;
+      }
+      const r = await renamePackage(pk.dir, { from: arg, to, title: opt.title ?? null });
+      out2(`\uBC14\uAFE8\uB2E4: ${arg} \u2192 ${to}  (${r.path})`);
+      out2(`  ${JSON.stringify(r.manifest)}`);
+      out2("");
+      out2("\uB2E4\uC74C \u2014");
+      out2("  1. agent/packages/README.md \uC758 \uBAA9\uB85D \uC904\uC744 \uACE0\uCE5C\uB2E4");
+      out2(`  2. ctx package check ${to}`);
+      out2("  \uC774\uBBF8 \uC138\uC6B4 \uC9C0\uC2DD \uB808\uD3EC\uB294 \uADF8\uB300\uB85C\uB2E4 \u2014 \uB808\uD3EC\uB294 \uD328\uD0A4\uC9C0\uC758 \uC0AC\uBCF8\uC774\uACE0 \uC774\uB984\uC744 \uB530\uB85C \uAC16\uB294\uB2E4");
+      out2("  \uC11C\uBC84\uC758 packages/ \uB294 \uB2E4\uC74C \uC0B0\uCD9C\uBB3C(release:server \u2192 upgrade.sh)\uC5D0\uC11C \uBC14\uB010\uB2E4");
+      return 0;
+    }
+    return usage("list \xB7 show <\uC774\uB984> \xB7 check [<\uC774\uB984>|--all] \xB7 new <\uC774\uB984> --from <\uC774\uB984> \xB7 rename <\uC774\uB984> <\uC0C8 \uC774\uB984>");
   } catch (e) {
     const x = toError(e);
     err2(`ctx package: ${x.message}`);
@@ -40199,10 +40253,10 @@ async function runSync(root, { pull = true, onPhase = () => {
 
 // viewer/bin/ctx-cli.mjs
 init_tools();
-var BUILT2 = "2026-09-23 03:26";
+var BUILT2 = "2026-09-23 03:52";
 var BS2 = String.fromCharCode(92);
 var SEP = path22.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-23 03:26)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-23 03:52)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131
@@ -40224,7 +40278,7 @@ var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09
   ctx serve token [list|revoke] --auth <f>  \uD1A0\uD070 \u2014 \uC2E0\uC6D0\uB9CC \uC99D\uBA85\uD55C\uB2E4
   ctx serve doctor --root \u2026 --auth \u2026 --data \u2026   \uC11C\uBC84 \uC900\uBE44\uBB3C \uAC80\uC0AC (fail \uC774\uBA74 exit 1)
   ctx serve init --auth <f> --name <\uC774\uB984>       \uCCAB \uC0AC\uC6A9\uC790 + \uD1A0\uD070\uC744 \uD55C \uBC88\uC5D0 (\uBA85\uBD80\uAC00 \uC5C6\uC744 \uB54C\uB9CC)
-  ctx package list|show|check|new           \uD328\uD0A4\uC9C0 \u2014 \uBAA9\uB85D \xB7 \uB0B4\uC6A9 \xB7 \uBD80\uC5B4\uC11C \uAC80\uC0AC \xB7 \uBCF5\uC0AC\uD574 \uC0C8\uB85C
+  ctx package list|show|check|new|rename    \uD328\uD0A4\uC9C0 \u2014 \uBAA9\uB85D \xB7 \uB0B4\uC6A9 \xB7 \uBD80\uC5B4\uC11C \uAC80\uC0AC \xB7 \uBCF5\uC0AC\uD574 \uC0C8\uB85C \xB7 \uC774\uB984 \uBC14\uAFC8
   ctx repo new <\uACBD\uB85C> --package <\uC774\uB984> [--origin <url>] [--push]   \uC9C0\uC2DD \uB808\uD3EC\uB97C \uC138\uC6B4\uB2E4
   ctx repo list --root <\uD3F4\uB354>               \uC11C\uBC84 <root> \uC758 \uB808\uD3EC \uBAA9\uB85D
   ctx import-dir <\uC6D0\uBCF8> --repo <\uC9C0\uC2DD\uB808\uD3EC> [--dry] [--author <\uC774\uB984>]   md \uD3F4\uB354\uB97C work/ \uB85C \uB4E4\uC778\uB2E4

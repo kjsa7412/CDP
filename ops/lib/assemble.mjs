@@ -66,11 +66,13 @@ export function listPackages(root = ROOT) {
  *   dest    만들 폴더. 있으면 그 안에 덧쓴다 (release 는 미리 지우고 부른다)
  *   exe     실행 파일 경로 또는 null. 있으면 tools/ 에 담는다
  *   ctxDir  ctx 번들이 있는 폴더 (기본 ops/out/ctx)
+ *   packageDir  패키지 폴더 (기본 <root>/agent/packages/<name>). `--packages <dir>` 로
+ *           소스 트리 밖의 패키지를 가리켰을 때 — 도구는 root 에서, 문서는 여기서 온다
  *
  * 반환 { missing: [빠진 소스 경로] } — 조용히 넘기지 않는다. 없는 채로
  * 배포되면 받는 쪽이 그것을 없는 기능으로 안다.
  */
-export function assembleKnowledgeRepo({ root = ROOT, name, dest, exe = null, ctxDir = null }) {
+export function assembleKnowledgeRepo({ root = ROOT, name, dest, exe = null, ctxDir = null, packageDir = null }) {
   const missing = []
   const R = dest
   const ctx = ctxDir || path.join(root, 'ops', 'out', 'ctx')
@@ -116,7 +118,7 @@ export function assembleKnowledgeRepo({ root = ROOT, name, dest, exe = null, ctx
   }
 
   // 이 패키지가 정하는 층 — docs/ 골격 · 등록부 · 어휘. 매니페스트는 빼고.
-  put(path.join('agent', 'packages', name), '.', { skip: (n) => PACKAGE_EXCLUDE.has(n) })
+  put(packageDir || path.join('agent', 'packages', name), '.', { skip: (n) => PACKAGE_EXCLUDE.has(n) })
 
   // 작업 기록이 들어갈 자리. **`.gitkeep` 이 있어야 한다** — 빈 디렉터리는
   // git 이 추적하지 않으므로 clone 한 팀원에게는 없다.
