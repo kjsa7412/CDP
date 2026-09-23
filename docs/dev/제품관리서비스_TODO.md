@@ -1,0 +1,258 @@
+# CDP 제품 관리 서비스 — 실행 TODO
+
+2026-09-23 · 근거 [`CDP_제품관리서비스_검토 v0.1`](../design/CDP_제품관리서비스_검토_v0.1.md) · 시작 v0.9.0 → 목표 **v0.10.0**
+
+> **검토는 확정됐다.** 결정 D1~D14 를 더 고치지 않고 실행한다. 뒤집어야 하면 검토 문서 §5 를 먼저
+> 고치고 여기를 따라 고친다 — 코드에서 조용히 갈라지지 않게.
+>
+> 절 번호는 검토 §6 의 단계 번호와 맞춘다. 체크 항목마다 **끝났다고 보는 기준**이 있고, 브라우저
+> 항목 말고는 전부 명령 하나로 확인된다. 브라우저 항목은 「나온 것」 표에 실측으로 적는다.
+>
+> **모든 결정은 권장으로 처리한다**(운영자 지시). 물어볼 것이 생기면 항목으로 올리고 권장안으로
+> 진행한 뒤 「나온 것」 표에 적는다. 커밋까지만 — push · 태그는 사람이.
+
+---
+
+## 지금 어디까지 됐나
+
+| | 상태 |
+|---|---|
+| 검토 문서 | **완료** |
+| 0 전제 | **완료** — 검토 §5 D1~D14 |
+| ① 명부 v1.2 · 역할 · 부트스트랩 · CLI · 테스트 | 미착수 |
+| ② 서버 — 사이트 라우트 · 산출물 · 설치 스크립트 | 미착수 |
+| ③ 서버 — `/admin/*` · 재인증 · 감사 · 속도 제한 · CIDR · 하네스 | 미착수 |
+| ④ 화면 — 라우터 · 소개 · 설명서 · 로그인 · 마법사 | 미착수 |
+| ⑤ 화면 — 콘솔 일곱 페이지 · 레포 화면의 상단 | 미착수 |
+| ⑥ 문서 · CHANGELOG · 0.10.0 · 검증 완주 | 미착수 |
+| ⑦ (정하면) origin 맞추기 · 금고 · PAT 만료 메모 | 미착수 — D13 |
+
+### 시작 상태 (2026-09-23 실측)
+
+```
+npm test               70 / 70 (12파일)
+npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
+서버 라우트            /healthz /login /logout /me /repos /packages /workrepos* /kit/* /mcp* /api/* /r/*
+서버 산출물            bin · web · packages · deploy   (manual/ 없음)
+명부                   v1.1 — users[].write · 토큰 해시 · CLI 만
+```
+
+---
+
+## 0. 전제 — 닫혔다
+
+검토 §5 의 D1~D14 가 전부다. 코드가 따라야 하는 것만 다시 적는다.
+
+- [x] 한 프로세스 · 한 포트 · 한 번들 — 사이트 · 콘솔 · 레포는 **주소**가 가른다(D1)
+- [x] 소개 · 설명서는 공개 · 레포 이름 없음 · `--private-pages` 로 닫힌다(D2)
+- [x] 첫 관리자 = `install.sh` 의 일회용 코드 → `/setup` · `serve init` 도 남는다(D3)
+- [x] `/admin/*` — 401(세션 없음) · 403(admin 아님 · CIDR 밖) · 401 `E_REAUTH`(쓰기에 재인증 없음)(D4 · D5)
+- [x] 원문 보관 · 재배정 · 삭제 없음 · 갱신 · PAT 는 셸(D6 · D7 · D8)
+- [x] 레포 붙이는 길 둘 — 세우기 · clone(D9) · 렌더는 화면(D10) · 개발자 설명서도 싣는다(D11) · 라우터는 손으로(D12)
+- [x] ⑦ 은 정하면(D13) · 판 0.10.0(D14)
+
+---
+
+## ① 명부 v1.2 · 역할 · 부트스트랩 · CLI · 테스트
+
+### 1.1 `core/auth.js`
+
+- [ ] `ROLES = ['viewer','writer','admin']` · `roleOf(u)` — `role` 이 유효하면 그것, 아니면 `write` 로 접는다(`true` → writer · 없으면 viewer)
+- [ ] `load()` 가 사용자마다 `role` 을 채우고 토큰마다 `id`(sha256 앞 8자) · `status`(없으면 `active`)를 채운다. **v1.1 파일이 그대로 읽힌다.** `store()` 는 `version: '1.2'` 를 쓴다
+- [ ] `userAdd({ name, label, repos, role, write })` — `role` 우선 · `write` 는 옛 이름. 유효하지 않은 역할은 `E_INPUT`
+- [ ] `userSet(db, name, patch, { actor })` — `role` · `write`(→ role) · `active`. **가드 둘** — 마지막 활성 admin 을 내리거나 끄면 `E_LAST_ADMIN` · `actor === name` 인데 `role` 또는 `active` 를 바꾸면 `E_SELF`
+- [ ] `decide` · `decideSession` 이 `role · admin · write(= role ≠ viewer)` 를 낸다 · `status: revoked` 토큰은 "폐기된 토큰" 으로 거절
+- [ ] `issue()` — 기본 만료를 **그 사람의 역할**로(admin `ADMIN_EXPIRES_DAYS = 30` · 나머지 90) · 레코드에 `id` · `status: 'active'`
+- [ ] `revoke(db, { user, id, by, now })` — 지우지 않고 `status · revokedAt · revokedBy`. 활성인 것만 센다 · 0 이면 `E_NOT_FOUND`
+- [ ] `reissue(db, { id, by, now })` → `{ raw, rec, old }` — 폐기 + 발급 한 번 · 메모는 옛 메모 + ` 재발급`
+- [ ] `tokenSet(db, { id, note, expires })` — `expires` 는 `YYYY-MM-DD` · 일수 · `never`
+- [ ] `tokenList(db, now)` 에 `status · revokedAt · revokedBy` · `userList` 에 `role · admin`
+- [ ] `admins(db)` — 활성 admin 목록
+- [ ] 부트스트랩 — `ensureBootstrap(dataDir, db)`(명부가 비면 `<data>/bootstrap.code` 0600 을 만들거나 읽어 돌려주고, 있으면 파일을 지우고 null) · `verifyBootstrap(dataDir, code)`(길이 비교 뒤 `timingSafeEqual`) · `clearBootstrap(dataDir)`
+- [ ] 재인증 쿠키 — `signSession(secret, user, { hours })` 로 15분(`minutes` 인자) · `readSession` 그대로
+
+### 1.2 `core/net.js`
+
+- [ ] `parseCidrs('10.10.20.0/24, 127.0.0.1')` · `ipInCidrs(ip, cidrs)` — IPv4 · `::ffff:` 접두 제거 · IPv6 은 `::1` 과 정확 일치만
+- [ ] `makeLimiter({ limit, windowMs, now })` — IP 마다 미끄러지는 창 · `hit(ip) → { ok, remaining }` · 시계는 인자로
+
+### 1.3 CLI — `ctx-cli.mjs` · `ctx-mcp-serve.mjs`(runAuthCmd) · `ctx-serve-doctor.mjs`
+
+- [ ] `--role <r>` 파싱 · `user add --role` · `user set --role`(가드 메시지 그대로 출력 · exit 2)
+- [ ] `token reissue --id` · `token set --id --note|--expires` · `token revoke --name [--id]` 가 상태를 바꾼다 · `token list` 에 상태 열
+- [ ] `serve init` 의 첫 사용자가 `admin`
+- [ ] `doctor` — `관리자 N`(0 이면 warn) · 30일 넘게 남은 admin 토큰 warn · `bootstrap.code` 가 있으면 한 줄 · `--manual` 폴더(없으면 warn)
+- [ ] `runDoctor` 를 **`doctorRows(opt) → rows`** 와 출력으로 가른다 — 서버가 같은 함수를 부른다
+
+### 1.4 테스트
+
+- [ ] `test/auth.test.mjs` — 역할 정규화(v1.1 → writer) · `userAdd --role` · 마지막 admin 가드 · 자기 해제 거절 · `revoke` 가 상태를 바꾸고 `decide` 가 거절 · `reissue` 왕복 · admin 기본 30일 · `tokenSet` · 부트스트랩 만들기 · 검증 · 명부가 생기면 지운다
+- [ ] `test/net.test.mjs` — CIDR 안 · 밖 · `::ffff:` · 잘못된 CIDR · 속도 제한 창(20 → 21번째 거절 · 창이 지나면 다시)
+
+**끝났다고 보는 기준** — `npm test` 초록 · 기존 70건 그대로 통과(`write` 를 넘기던 테스트가 `role` 로 바뀐 것 외에 동작 변화 없음) ·
+`ctx serve user set --role viewer` 로 마지막 admin 을 내리면 exit 2 와 문장.
+
+---
+
+## ② 서버 — 사이트 라우트 · 산출물 · 설치 스크립트
+
+### 2.1 라우트 (`ctx-mcp-serve.mjs`)
+
+- [ ] 인자 — `--manual <dir>`(기본 `<bin>/../manual`) · `--private-pages` · `--admin-from <cidr,…>`
+- [ ] `serveWeb` 이 `index.html` 을 낼 때 `</head>` 앞에 `<script>window.__CDP_SERVER__=true</script>` 를 심는다
+- [ ] `GET /site/info` — `{ version, built, repos: n, mirror, setupNeeded, privatePages, manuals: [{ id, title }], user, role }` · 레포 이름 없음
+- [ ] `GET /site/manual/<파일>` — `manual/` 의 `*.md` · `그림/*.svg` · `deploy/설치절차.md`. 목록 밖 · `..` 는 404. `--private-pages` 면 세션 필요
+- [ ] `GET /` · `/manual*` → SPA(공개 · `--private-pages` 면 세션 → 없으면 `/login?next=`)
+- [ ] `GET /setup` → SPA · `POST /setup { code, name, label }` — 명부 있으면 409 · 코드 틀리면 401(속도 제한) · 맞으면 admin + 토큰 · 코드 파일 삭제 · 쿠키 · `{ user, raw, id, expires }` · `auth.log` 두 줄
+- [ ] `GET /login` → SPA(`web/` 없으면 옛 HTML) · `POST /login` — form 은 302 · JSON 은 `{ ok, next }` / 401 `{ error }` · 속도 제한
+- [ ] `GET /logout` → `/`
+- [ ] `GET /r` — 볼 수 있는 레포가 있으면 첫 레포로 302 · 없으면 SPA(빈 상태 화면)
+- [ ] `GET /me` 에 `role · admin · sudo · expiresInDays`
+- [ ] `GET /console*` → SPA(세션 없으면 `/login?next=`)
+- [ ] 서버 시작 때 `ensureBootstrap` — 명부가 비면 stderr 한 줄(`/setup` 주소 · 코드)
+- [ ] `serve.log` 줄 끝에 토큰 id 열 하나(`lastUsed` 가 토큰별로도 집계되게) — 앞 열은 그대로
+
+### 2.2 판 · 산출물 · 설치
+
+- [ ] `build-ctx.mjs` — 번들의 `__CDP_VERSION__` 을 `package.json` 의 `version` 으로 찍는다 → `appVersion()` 이 번들에서 판을 낸다
+- [ ] `release-server.mjs` — `manual/*.md` → `manual/` · `docs/그림/{1_세_레포_구조,2_설치_5단계,7_MCP_두_모드}.svg` → `manual/그림/` · README 한 줄
+- [ ] `install.sh` — `manual` 폴더 · 배치 · `/healthz` 뒤 `bootstrap.code` 가 있으면 **`/setup` 주소와 코드**를 찍는다 · 「다음 할 일」 을 3장(git 자격)과 브라우저 둘로
+- [ ] `upgrade.sh` — `manual/` 도 갈아 끼운다(`manual.bak` 한 세대)
+- [ ] `Dockerfile` — `COPY manual ./manual`
+
+### 2.3 하네스
+
+- [ ] 78 `/site/info` — 200 · `repos` 가 숫자 · 본문에 레포 이름 없음 · `setupNeeded: false`
+- [ ] 79 `/site/manual/사용자_설명서.md` 200 · `/site/manual/../auth.json` 404 · 목록 밖 404
+- [ ] 80 명부를 비운 두 번째 서버 — `bootstrap.code` 생성 · 틀린 코드 401 · 맞는 코드 → admin · 원문 1회 · 파일 삭제 · 둘째 `/setup` 409
+
+**끝났다고 보는 기준** — `npm run verify` 에 78~80 ✓ · 서버 산출물을 풀어 `manual/사용자_설명서.md` 와 `manual/그림/` 이 있고
+`node bin/ctx.mjs version` 첫 줄에 판이 붙는다.
+
+---
+
+## ③ 서버 — `/admin/*` · 재인증 · 감사 · 속도 제한 · CIDR
+
+### 3.1 공통
+
+- [ ] `/admin/*` 판정 순서 — 세션(401) → admin(403 `E_FORBIDDEN`) → CIDR(403) → 쓰기면 `cdp_su`(401 `E_REAUTH`)
+- [ ] `POST /admin/sudo { token }` — `decide` 로 판정 · 같은 사용자여야 한다 · 15분 `cdp_su` · 속도 제한
+- [ ] 쓰기마다 `auth.audit` — `admin <행위> · <행위자> · <대상> · <바뀐 값>` (토큰은 앞 8자)
+- [ ] 속도 제한 — `POST /login` · `/setup` · `/admin/sudo` IP 당 분당 20 → 429 `E_RATE`
+
+### 3.2 엔드포인트
+
+- [ ] `GET /admin/overview` — 사용자 · 관리자 · 토큰(활성 · 7일 내 · 폐기) · 레포(수 · 미러) · 작업 레포 상태 수 · 마지막 doctor 요약 · 경고 목록
+- [ ] `GET /admin/users` · `POST /admin/users` · `PATCH /admin/users/<name>`(`E_LAST_ADMIN` 409 · `E_SELF` 400)
+- [ ] `GET /admin/tokens` · `POST /admin/tokens` · `POST /admin/tokens/<id>/reissue` · `POST /admin/tokens/<id>/revoke` · `PATCH /admin/tokens/<id>`
+- [ ] `GET /admin/repos`(전부 · 볼 수 있는 사람) · `POST /admin/repos`(세우기 · clone · `grant`)
+- [ ] `core/reponew.js` — `cloneRepo({ url, dest })` — `git clone` 120초 · 끝에 `_vocab.md` 없으면 폴더를 지우고 `E_CHECK` · `hooksPath`
+- [ ] `GET /admin/workrepos` — 대장 전부 + 상태
+- [ ] `GET /admin/doctor[?fresh=1]` — `doctorRows` · 60초 캐시 · `{ at, ok, fails, warns, rows }`
+- [ ] `GET /admin/server` — 설정값 · 판 · 빌드 · node · pid · 기동 시각
+- [ ] `GET /admin/audit?limit=` · `GET /admin/log?limit=` — 마지막 N 줄(회전분 포함)
+
+### 3.3 하네스
+
+- [ ] 81 `/admin/users` — 세션 없음 401 · viewer 403 · admin 200
+- [ ] 82 쓰기 — 재인증 없음 401 `E_REAUTH` → `/admin/sudo`(틀린 토큰 401 · 남의 토큰 401) → 200 · 마지막 admin 내리기 409 · 자기 해제 400 · `auth.log` 마지막 줄에 행위자 · 대상
+- [ ] 83 토큰 — 발급 응답에 원문 · 목록에 원문 없음 · reissue 뒤 옛 토큰 401 · 새 토큰 200 · 옛 행이 `revoked` 로 남는다
+- [ ] 84 admin 기본 30일 · viewer 90일
+- [ ] 85 `/login` 21번째 실패 429
+- [ ] 86 `/admin/doctor` 줄마다 `state · what` · `/admin/server` 에 `version`
+- [ ] 87 v1.1 명부(`write:true`)를 서버가 읽으면 `/me.role === 'writer'`
+- [ ] 88 `--admin-from 10.0.0.0/8` 로 띄운 서버에 루프백 admin → 403 · `/site/info` 는 200
+
+**끝났다고 보는 기준** — `npm run verify` ✗ 0 · 81~88 ✓.
+
+---
+
+## ④ 화면 — 라우터 · 소개 · 설명서 · 로그인 · 마법사
+
+- [ ] `lib/api.js` — 모드 셋(`local · repo · site`) · `window.__CDP_SERVER__` · `site.info() · site.manual(id) · site.login(token, next) · site.setup(body)` · `admin.*` · 401 `E_REAUTH` 는 이동하지 않고 던진다
+- [ ] `lib/router.js` — `useRoute()` · `navigate()` · `<Link>` — `pushState` · `popstate` · 의존성 0
+- [ ] `main.jsx` — 경로 첫 조각으로 `App`(로컬 · `/r/<레포>/`) · `Site`(`/` · `/manual` · `/login` · `/setup` · `/r`) · `Console`(`/console`)
+- [ ] `lib/markdown.js` — 제목 slug 를 GitHub 규칙으로(소문자 · 공백 → `-` · 구두점 제거 · 한글 유지) — 세 권의 목차 링크가 그 규칙이다 · 기존 `sectionSlug` 호출이 같은 함수를 쓴다
+- [ ] `site/Site.jsx` — 상단(표식 · 설명서 · 로그인/내 레포 · 콘솔) · 바닥
+- [ ] `site/Landing.jsx` — 검토 §4.4 의 블록 · `/site/info` 하나
+- [ ] `site/Manual.jsx` — 책 목록 · 왼쪽 목차 · 본문 · 링크 재작성(`*.md` → `/manual/<이름>` · `../` → GitHub) · 앵커 이동 · 현재 절 표시
+- [ ] `site/Login.jsx` — 토큰 한 칸 · 보기 · 실패 한 문장 · `next`
+- [ ] `site/Setup.jsx` — 세 단계 · 토큰 원문 모달 · [콘솔로]
+- [ ] `site/NoRepo.jsx` — `/r` 빈 상태(관리자면 콘솔 링크)
+- [ ] `styles/site.css` — 읽는 면 · `doc.css` 조판 재사용 · 900px
+- [ ] `Icon.jsx` — users · key · server · shield · home · plus · trash · edit
+- [ ] `App.jsx` 도움말에 "설명서 →"
+
+**끝났다고 보는 기준** — `npm run build` 통과 · 브라우저에서 `/` → 설명서 세 권이 열리고 목차 링크가 그 절로 간다 ·
+`/setup` 이 명부 없는 서버에서 끝까지 · 로그인 뒤 `/r/<레포>/` (「나온 것」에 실측).
+
+---
+
+## ⑤ 화면 — 콘솔 · 레포 화면의 상단
+
+- [ ] `console/Console.jsx` — 상단(표식 · 사용자 · 역할 칩 · 설명서 · 문서로 · 로그아웃) · 왼쪽 메뉴 일곱 · `useRoute`
+- [ ] `console/ui.jsx` — `PageHead · Toolbar · Table · Modal · Field · Chip · Empty · Confirm · TokenReveal · SudoGate`
+- [ ] `console/Overview.jsx` — 카드 넷 · 경고 목록 · 최근 감사 5 · admin 0 안내
+- [ ] `console/Users.jsx` — 표 · 추가 모달 · 역할 · 레포 · 비활성 · 매트릭스(체크 → `PATCH users`)
+- [ ] `console/Tokens.jsx` — 표(폐기 회색) · 발급 · 재발급 · 연장 · 메모 · 폐기 · 원문 모달
+- [ ] `console/Repos.jsx` — 표 · 새 레포 모달(세우기 / clone · grant) · 열기
+- [ ] `console/WorkRepos.jsx` — 표 전부 · 그 레포로
+- [ ] `console/Server.jsx` — 설정 · 진단(다시 검사) · 패키지 · 갱신 안내 · 로그 · 파일 위치
+- [ ] `console/Audit.jsx` — 줄 · 걸러 보기
+- [ ] 재인증 — `E_REAUTH` → 모달 → `POST /admin/sudo` → 하던 동작 재시도
+- [ ] `styles/console.css` — 페이지 머리 · 툴바 · 표 확장 · 모달 폼 · 매트릭스 · 900px
+- [ ] `App.jsx` — 레포 이름표 **항상 메뉴**(권한 표시) · `who` 에 역할 칩 · 설명서 · 관리자면 콘솔 링크 · `AdminView` 맨 아래 콘솔로 →
+- [ ] writer 가 `/console` 에 오면 "관리자 권한이 필요합니다 — 셸에서 `ctx serve user set --name <이름> --role admin`"
+
+**끝났다고 보는 기준** — 브라우저 실측 — 일곱 페이지가 그려지고 사용자 추가 → 토큰 발급 → 원문 복사 → 그 토큰으로 로그인 →
+레포가 보인다 · 재인증 모달이 끼어들고 통과하면 동작이 이어진다 · 다크 · 900px (「나온 것」).
+
+---
+
+## ⑥ 문서 · CHANGELOG · 0.10.0 · 검증 완주
+
+- [ ] MCP 설계서 — §4.3 표에 사이트 · 콘솔 API 행 · §4.4.1 · §4.4.2 · §6.3 · §6.6.4 에 **정정** 붙임(지우지 않는다)
+- [ ] 관리자 설명서 — 3.5(마법사) · 3.7(화면 · 콘솔) · 6장을 **화면 기준**으로(CLI 는 "셸에서도 같은 것") · 7.5 · 부록 B · C · 11장 표 두 줄 정정
+- [ ] 사용자 설명서 — 0장(설명서 페이지 주소) · 2.1 ⑤ · 8.1 · 10.3(토큰 잃음 → 재발급 30초)
+- [ ] 개발자 설명서 — 11.2 · 11.3(세 얼굴) · 부록 C(엔드포인트)
+- [ ] `설치절차.md` 5장 · 7장 · `deploy/README.md` · `agent/manual/admin.md` 하지 않는 것 표
+- [ ] 루트 `README.md` — 화면 절에 사이트 · 콘솔 · 문서 표 · `docs/README.md` 링크 · 검토 v0.1 머리에 "→ 제품관리서비스 검토에 흡수"
+- [ ] `CHANGELOG.md` `## v0.10.0` · `package.json` 0.10.0
+- [ ] `npm test` · `npm run verify` · `npm run build` · `npm run build:ctx` · `npm run release:server -- 0.10.0` 를 풀어 확인 · 결과를 「나온 것」 에
+- [ ] 태그 `v0.10.0` — **운영자가 단다**
+
+---
+
+## 나온 것
+
+단계마다 실측 · 설계와 어긋난 곳 · 잡은 버그. **끝난 단계만 적는다** — 예정을 적지 않는다.
+
+| 단계 | 무엇 |
+|---|---|
+| (아직 없음) | |
+
+---
+
+## 남은 것 — 사람이 한다
+
+| | 무엇 | 왜 사람인가 |
+|---|---|---|
+| 1 | `git push` · 태그 `v0.10.0` | push 는 사람이 — 결정 그대로 |
+| 2 | 실서버 `10.10.20.188` — `upgrade.sh` 로 올린 뒤 `ctx serve user set --name kjsa --role admin`(v1.1 명부라 관리자가 0명) · 브라우저 `/console` | 실서버 · 셸 |
+| 3 | 소개 · 설명서를 한 번 읽고 문구를 다듬는다 — 사내 IP 예시를 자리표시자로 바꿀지 | 문서 정리 |
+| 4 | ⑦ 을 정한다 — origin 맞추기 · 금고 · PAT 만료 메모 | D13 |
+
+---
+
+## 하지 않는 것
+
+검토 §7 그대로다. 구현 중에 "겸사겸사" 넣지 않는다.
+
+| | 왜 |
+|---|---|
+| 판매자 화면 | R5 |
+| 브라우저에서 설치 · 갱신 · 재시작 · PAT | D7 · D8 |
+| 문서 · 어휘 · 등록부 편집 · `import-dir` | §6.5 · 사람 PC 의 파일 |
+| 토큰 원문 보관 · 재배정 · 사용자 삭제 | 검토 v0.1 D3~D5 |
+| 화면 자동 테스트 | R12 — API 는 하네스가 덮고 화면은 실측 표에 |
+| 새 의존성(라우터 · UI 라이브러리) | 의존성 0 · CDN 없음 |
