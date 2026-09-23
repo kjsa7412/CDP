@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CDP 제품 관리 서비스 — 목업 v0.10.0 안</title>
+<!-- 실제 토큰 · 클래스를 그대로 물려 쓴다. 이 파일은 검토용이며 제품에 들어가지 않는다. -->
+<link rel="stylesheet" href="../../../viewer/src/styles/font.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/tokens.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/app.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/admin.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/doc.css" />
+<link rel="stylesheet" href="mockup.css" />
+</head>
+<body>
+
+<!-- ── 아이콘 — Icon.jsx 의 경로 그대로 + 콘솔용 여덟 ─────────────────── -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6.5 9.5 17 4 11.5"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.8 21.2 19.6a1.4 1.4 0 0 1-1.2 2.1H4a1.4 1.4 0 0 1-1.2-2.1z"/><path d="M12 9.8v4.4"/><path d="M12 17.6h.01"/></symbol>
+  <symbol id="i-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 18 18 6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11.2v5"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.1"/><path d="M19.3 14.6a1.5 1.5 0 0 0 .3 1.7l.1.1a1.8 1.8 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1.1v.3a1.8 1.8 0 1 1-3.6 0v-.2a1.5 1.5 0 0 0-2.6-1.1l-.1.1a1.8 1.8 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1.1-2.6h-.3a1.8 1.8 0 1 1 0-3.6h.2a1.5 1.5 0 0 0 1.1-2.6l-.1-.1a1.8 1.8 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 1.7.3h.1a1.5 1.5 0 0 0 .9-1.4v-.3a1.8 1.8 0 1 1 3.6 0v.2a1.5 1.5 0 0 0 2.6 1.1l.1-.1a1.8 1.8 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0-.3 1.7v.1a1.5 1.5 0 0 0 1.4.9h.3a1.8 1.8 0 1 1 0 3.6h-.2a1.5 1.5 0 0 0-1.4.9z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="5.2" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.8" cy="12" r="1.7"/></g></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7.5 6.6a7 7 0 1 0 9 0"/></symbol>
+  <symbol id="i-chevronDown" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol>
+  <symbol id="i-chevronRight" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-arrowRight" viewBox="0 0 24 24"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v5a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V7.5A1.5 1.5 0 0 1 6 6h5"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.6"/><circle cx="5" cy="18.5" r="2.6"/><circle cx="19" cy="18.5" r="2.6"/><path d="M10.6 7.3 6.4 16.2"/><path d="M13.4 7.3l4.2 8.9"/><path d="M7.6 18.5h8.8"/></symbol>
+  <symbol id="i-managed" viewBox="0 0 24 24"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v18H7.5A2.5 2.5 0 0 1 5 18.5z"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-work" viewBox="0 0 24 24"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5"/><path d="M9 13.5h6"/><path d="M9 17h4"/></symbol>
+  <symbol id="i-coord" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5V8M15 3.5V8"/><path d="M6.5 8h11v3.2a5.5 5.5 0 0 1-5.5 5.5 5.5 5.5 0 0 1-5.5-5.5z"/><path d="M12 16.7v3.8"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.8C10.4 5.2 8.2 4.6 3.5 4.6v13c4.7 0 6.9.6 8.5 2 1.6-1.4 3.8-2 8.5-2v-13c-4.7 0-6.9.6-8.5 2z"/><path d="M12 6.8v12.8"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5V5.5A1.5 1.5 0 0 1 4.5 4h8A1.5 1.5 0 0 1 14 5.5V6"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 24 24"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 4.5V11h-6.5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 6.5A2 2 0 0 1 5.5 4.5h3.7l2 2.6h7.3a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></symbol>
+  <!-- 콘솔용 여덟 -->
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M15.5 4.6a3.2 3.2 0 0 1 0 6.8"/><path d="M16.5 13.6a5.5 5.5 0 0 1 4 5.4"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="14.5" r="4.3"/><path d="M11.2 11.3 20.5 2"/><path d="M16 6.5l3 3"/><path d="M13.5 9l3 3"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="6.5" rx="1.8"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.8"/><path d="M7 7.2h.01M7 16.7h.01"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 4.5 6.5v5.2c0 4.6 3.2 7.8 7.5 9.3 4.3-1.5 7.5-4.7 7.5-9.3V6.5z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6.5h12M8 12h12M8 17.5h12"/><path d="M4 6.5h.01M4 12h.01M4 17.5h.01"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 10v10h12V10"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+</svg>
+
+<!-- ── 검토 막대 — 제품 UI 가 아니다 ─────────────────────────────────── -->
+<header class="rb">
+  <span class="rb__tag">목업 · 검토용 · v0.10.0 안</span>
+  <span class="rb__grp">사이트</span>
+  <button class="rb__tab" data-go="landing">소개</button>
+  <button class="rb__tab" data-go="manual">설명서</button>
+  <button class="rb__tab" data-go="login">로그인</button>
+  <button class="rb__tab" data-go="setup">설치 마법사</button>
+  <button class="rb__tab" data-go="norepo">/r 빈 상태</button>
+  <span class="rb__grp">콘솔</span>
+  <button class="rb__tab" data-go="con-overview">현황</button>
+  <button class="rb__tab" data-go="con-users">사용자</button>
+  <button class="rb__tab" data-go="con-tokens">토큰</button>
+  <button class="rb__tab" data-go="con-repos">지식 레포</button>
+  <button class="rb__tab" data-go="con-workrepos">작업 레포</button>
+  <button class="rb__tab" data-go="con-server">서버</button>
+  <button class="rb__tab" data-go="con-audit">감사</button>
+  <span class="rb__grp">레포</span>
+  <button class="rb__tab" data-go="repo">/r/gdi 상단</button>
+  <span class="rb__sp"></span>
+  <button class="rb__tog" id="togTheme" aria-pressed="false">다크</button>
+  <button class="rb__tog" id="togWidth" aria-pressed="false">900px</button>
+</header>
+
+<div class="stage">
+<div class="frame" id="frame">
+  <div class="frame__url">
+    <span class="frame__dots"><i></i><i></i><i></i></span>
+    <span class="frame__addr">http://10.10.20.188:7374<b id="route">/</b></span>
+  </div>
+  <div class="frame__body" id="body">
+
+<!-- ════════════════════════════════════════════════════════════════════
+     사이트 — 소개  /
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="landing" data-route="/" data-site="landing">
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <div class="hero__eyebrow">CDP · 맥락 배포 프로토콜 — 지식 레포 뷰어 · 도구 · MCP 서버</div>
+        <h1>좌표로 찾고<br/>사람이 본문을 읽는다</h1>
+        <p class="hero__lead">프로젝트 지식을 <b>작업 기록(사건)</b>과 <b>관리 문서(상태)</b> 두 층으로 두고,
+          <b>좌표</b>로 잇고, 커밋할 때 <b>검사</b>한다. 갱신 누락은 상태가 아니라 오류다 —
+          그래서 "밀림" 이 없다.</p>
+        <div class="hero__cta">
+          <a class="btn btn--accent" href="#">들어가기 <svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrowRight"/></svg></a>
+          <a class="btn" href="#"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-book"/></svg> 설명서</a>
+        </div>
+      </div>
+      <aside class="hero__aside">
+        <section class="acard">
+          <div class="acard__head"><span class="acard__title">이 서버</span><span class="acard__hint">10.10.20.188:7374</span></div>
+          <div class="acard__body">
+            <div class="arow"><span class="arow__label">판</span><span class="arow__value"><span class="amono">v0.10.0</span><span class="amuted">· 빌드 2026-09-23 14:02</span></span></div>
+            <div class="arow"><span class="arow__label">지식 레포</span><span class="arow__value"><b class="num">3</b><span class="amuted">곳</span></span></div>
+            <div class="arow"><span class="arow__label">미러</span><span class="arow__value">최신 <b class="num">2</b> <span class="amuted">·</span> 밀림 <b class="num" style="color:var(--warn)">1</b> <span class="amuted">·</span> 원격 없음 <b class="num">0</b></span></div>
+            <div class="arow"><span class="arow__label">MCP</span><span class="arow__value"><span class="amono">/mcp/&lt;레포&gt;</span><span class="amuted">· 도구 13</span></span></div>
+            <div class="anote">토큰은 이 서버의 <b>관리자</b>에게 받는다. 화면과 에이전트가 같은 토큰을 쓴다.</div>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="sec">
+      <p class="sec__cap">세 가지</p>
+      <div class="cards3">
+        <div class="fcard"><svg class="ico" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-coord"/></svg><h3>좌표</h3><p><code>table:rp_plnd_mst</code> 같은 이름표 하나로 사건과 상태를 잇는다. 검색이 "비슷한 것" 을 내는 자리에서 좌표는 <b>그것</b>을 낸다.</p></div>
+        <div class="fcard"><svg class="ico" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-managed"/></svg><h3>두 층</h3><p><b>work/</b> 는 사건 — 왜 그렇게 정했나, 불변. <b>docs/</b> 는 상태 — 지금 어떻게 생겼나, 가변. 좌표가 둘을 잇는다.</p></div>
+        <div class="fcard"><svg class="ico" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><h3>검사</h3><p>좌표를 건드린 작업은 그 정본 섹션을 채워야 커밋된다. 서버형은 <code>save</code> 가, 로컬형은 git 훅이 <b>같은 계산</b>으로 막는다.</p></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <p class="sec__cap">어떻게 쓰나</p>
+      <div class="cards3">
+        <div class="fcard"><h3>에이전트</h3><p>Claude Code 가 MCP 로 붙는다. 읽기 도구 12종 + <code>save</code>. 스킬 7종이 절차를 든다 — 검토 → 주입 → 기록.</p></div>
+        <div class="fcard"><h3>화면</h3><p>찾기 → 뻗어나가기 → 읽기. 좌표 그래프. 갱신이 남은 곳은 <b>현황</b>에 있다. 편집은 없다 — 쓰기는 <code>save</code> 하나다.</p></div>
+        <div class="fcard"><h3>CLI</h3><p><code>ctx check</code> · <code>derive</code> · <code>where</code> · <code>match</code>. 화면과 <b>같은 계산</b>이라 답이 갈리지 않는다.</p></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <p class="sec__cap">두 배치</p>
+      <div class="cards2">
+        <div class="fcard"><h3>서버형 — 이 서버</h3><p>지식 레포는 서버에 하나. 서버가 유일한 작성자다. 사람은 토큰 하나와 꾸러미 zip 으로 붙는다.</p><ul><li>HTTP + 토큰 · <code>.mcp.json</code> 을 커밋한다</li><li><code>save</code> 가 검사 · 커밋 · origin 미러</li><li>브라우저에서 사람 · 레포 · 토큰을 관리한다</li></ul></div>
+        <div class="fcard"><h3>로컬형 — 폐쇄망 PC</h3><p>사람마다 clone. 원격이 정본. <code>cdp.exe</code> 하나로 화면과 도구가 돈다 — Node 가 없어도 된다.</p><ul><li>stdio MCP · git 훅이 검사</li><li>배포본 zip 한 개를 반입한다</li><li>이 서버가 그 레포를 미러할 수도 있다</li></ul></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <p class="sec__cap">누가 읽나 — 설명서 세 권</p>
+      <div class="cards3">
+        <div class="fcard fcard--link"><svg class="ico" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-book"/></svg><h3>사용자 설명서</h3><p>작업 레포에서 에이전트로 일하고 기록한다.</p><ul><li>처음 한 번 — 연결</li><li>하루 흐름 · 작업 요청 · 기록</li><li>막혔을 때</li></ul><div class="fcard__foot">읽기 →</div></div>
+        <div class="fcard fcard--link"><svg class="ico" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg><h3>관리자 설명서</h3><p>서버 · 지식 레포 · 명부를 세우고, 어휘와 등록부를 지킨다.</p><ul><li>서버형 · 로컬형 설치</li><li>사람 관리 — 콘솔</li><li>운영 · 갱신 · 장애</li></ul><div class="fcard__foot">읽기 →</div></div>
+        <div class="fcard fcard--link"><svg class="ico" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-gear"/></svg><h3>개발자 설명서</h3><p>CDP 자체를 고치고 릴리스한다.</p><ul><li>구조 · 불변조건</li><li>검증 · 릴리스</li><li>서버 · MCP · 패키지</li></ul><div class="fcard__foot">읽기 →</div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <p class="sec__cap">그림</p>
+      <div class="cards2">
+        <figure class="fig" style="margin:0"><img src="../../그림/1_세_레포_구조.svg" alt="세 레포 구조"/><figcaption>세 레포 — 소스 · 지식 · 작업</figcaption></figure>
+        <figure class="fig" style="margin:0"><img src="../../그림/7_MCP_두_모드.svg" alt="MCP 두 모드"/><figcaption>MCP 두 모드 — 서버형 · 로컬형</figcaption></figure>
+      </div>
+    </div>
+  </div>
+  <footer class="site-foot"><span>CDP v0.10.0 · 빌드 2026-09-23 14:02</span><span class="sp"></span><a href="#">설명서</a><a href="#">로그인</a></footer>
+
+  <template class="notes-src">
+    <h3>소개 — <span class="notes__route">/</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>첫 화면이 <b>토큰 한 칸</b>이 아니라 이것이 된다. 세션이 있으면 [들어가기] 가 [내 레포로] 로 바뀐다.</li>
+      <li>「이 서버」 카드는 <code>/site/info</code> 하나 — 레포 <b>이름</b>은 없다(집계만 · D2).</li>
+      <li>광고 문구 없음 · 새 색 없음. 읽는 면이라 종이(--surface)에 선다.</li>
+      <li>그림은 <code>docs/그림</code> SVG 를 그대로 싣는다 — 흰 바탕이라 다크에서 종이 한 장으로 보인다.</li>
+    </ul>
+    <p class="cap">정할 것</p>
+    <ul><li>기본 공개 · <code>--private-pages</code> 로 닫힘(D2) — 이 배치는 사내망이라 공개로 간다.</li></ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     사이트 — 설명서  /manual/관리자_설명서
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="manual" data-route="/manual/관리자_설명서#6-사람-관리--명부와-토큰" data-site="manual">
+  <div class="man">
+    <nav class="man__nav">
+      <div class="man__cap">설명서</div>
+      <a class="man__book" href="#"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-book"/></svg>사용자 설명서<small>v0.10.0</small></a>
+      <a class="man__book" href="#" aria-current="page"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg>관리자 설명서<small>v0.10.0</small></a>
+      <a class="man__book" href="#"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-gear"/></svg>개발자 설명서<small>v0.10.0</small></a>
+      <a class="man__book" href="#"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-server"/></svg>서버 설치 절차<small>deploy</small></a>
+      <div class="man__toc">
+        <a href="#">1. 관리자가 맡는 것</a>
+        <a href="#">2. 받는 것 — 배포본</a>
+        <a href="#">3. 서버형 설치</a>
+        <a href="#" class="is-h3">3.2 install.sh</a>
+        <a href="#" class="is-h3">3.5 첫 관리자 — 설치 마법사</a>
+        <a href="#">4. 로컬형 설치</a>
+        <a href="#">5. 작업 레포에 에이전트 세팅 넣기</a>
+        <a href="#" aria-current="true">6. 사람 관리 — 콘솔</a>
+        <a href="#" class="is-h3">6.1 모델 — 권한은 사람에게</a>
+        <a href="#" class="is-h3">6.2 사용자를 추가한다</a>
+        <a href="#" class="is-h3">6.3 토큰 — 발급 · 재발급 · 폐기</a>
+        <a href="#">7. 지식 레포 운영</a>
+        <a href="#">8. 기존 문서 들이기</a>
+        <a href="#">9. 갱신</a>
+        <a href="#">10. 장애 대응</a>
+        <a href="#">11. 하지 않는 것</a>
+        <a href="#">부록 A · B · C</a>
+      </div>
+    </nav>
+    <div class="man__body">
+      <div class="man__crumb">설명서 › 관리자 설명서 › 6. 사람 관리</div>
+      <article class="doc">
+        <h2>6. 사람 관리 — 콘솔</h2>
+        <p>서버형에만 있다. 로컬형은 git 원격의 권한이 곧 권한이다. 사람을 붙이는 일은 <strong>콘솔</strong>
+          (<code>http://&lt;서버&gt;:7374/console</code>)에서 한다 — 관리자(<code>admin</code>)만 들어간다.
+          셸에서도 같은 것이 된다(부록 B).</p>
+        <h3>6.1 모델 — 권한은 사람에게, 토큰은 신원만</h3>
+        <pre><code>auth.json
+  users[]    name · label · repos(볼 수 있는 레포) · role(viewer · writer · admin) · active
+  tokens[]   id · sha256 · user · issued · expires · note · status        ← 원문은 없다</code></pre>
+        <table>
+          <thead><tr><th>할 수 있는 것</th><th>viewer</th><th>writer</th><th>admin</th></tr></thead>
+          <tbody>
+            <tr><td>볼 수 있는 레포 읽기 · MCP 읽기 도구</td><td>○</td><td>○</td><td>○</td></tr>
+            <tr><td><code>save</code> · 레포 세우기 · 작업 레포 등록</td><td></td><td>○</td><td>○</td></tr>
+            <tr><td>콘솔 — 사용자 · 토큰 · 레포 전부 · 진단 · 감사</td><td></td><td></td><td>○</td></tr>
+          </tbody>
+        </table>
+        <blockquote><strong>토큰 원문은 저장되지 않는다.</strong> SHA-256 만 남는다. 잃으면 복구가 아니라 <em>재발급</em>이다 —
+          콘솔 &gt; 토큰 &gt; 그 행의 [재발급] 한 번. 권한은 사람에 붙어 있어 잃는 것이 없다.</blockquote>
+        <h3>6.2 사용자를 추가한다</h3>
+        <p>콘솔 &gt; <strong>사용자</strong> &gt; [+ 사용자]. 이름(영문 · 숫자 · <code>.</code> <code>_</code> <code>-</code> — 커밋의 <code>author</code> 로 남는다) ·
+          라벨 · 역할 · 볼 수 있는 레포를 고른다. 쓰기 동작은 <strong>재인증</strong>을 요구한다 — 자기 토큰을 한 번 더 넣으면 15분 동안 통한다.</p>
+        <p>셸에서는 —</p>
+        <pre><code>$CTX serve user add --auth $A --data $D --name &lt;아이디&gt; --label "&lt;소속 · 역할&gt;" --repos gdi --role writer</code></pre>
+        <h3>6.3 토큰 — 발급 · 재발급 · 폐기</h3>
+        <p>콘솔 &gt; <strong>토큰</strong> &gt; [+ 발급]. 원문은 모달에 <strong>한 번</strong> 보인다 — 닫으면 다시 볼 수 없다. 본인에게 직접 전한다.
+          관리자의 토큰은 기본 30일, 나머지는 90일이다.</p>
+      </article>
+    </div>
+  </div>
+  <template class="notes-src">
+    <h3>설명서 — <span class="notes__route">/manual/&lt;책&gt;</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>원천은 <code>manual/</code> 그대로 — 서버 산출물에 실리고 화면이 렌더한다(D10). 문서 조판은 뷰어의 <code>.doc</code> 그대로.</li>
+      <li>왼쪽 — 세 권 + 설치 절차. 그 아래 <b>현재 책의 목차</b>(h2 · h3). 제목 앵커는 GitHub 규칙과 같아 책 안의 목차 링크가 그대로 산다.</li>
+      <li>공개다 — 토큰을 받기 전의 사용자가 읽는다(D2).</li>
+    </ul>
+    <p class="cap">정할 것</p>
+    <ul><li>개발자 설명서도 싣는다(D11). 빼려면 목록에서 한 줄.</li></ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     사이트 — 로그인  /login
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="login" data-route="/login?next=%2Fr" data-site="login">
+  <div class="auth">
+    <div class="auth__box">
+      <div class="auth__brand"><span class="topbar__mark" aria-hidden="true">C</span><h1>CDP</h1></div>
+      <p class="auth__sub">지식 레포 관리 서비스 · 10.10.20.188</p>
+      <form class="form" onsubmit="return false">
+        <div class="field">
+          <label class="field__l" for="tk">토큰</label>
+          <div class="field--row" style="display:flex">
+            <input id="tk" class="mono" type="password" value="Zk9x2……………………………………" autocomplete="off" spellcheck="false"/>
+            <button class="abtn" type="button" style="flex:none"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg> 보기</button>
+          </div>
+          <span class="field__h">붙여넣는 값이다. 앞뒤 공백은 지운다.</span>
+        </div>
+        <button class="btn btn--accent" type="submit">들어가기</button>
+        <div class="anote">토큰은 관리자에게 받는다. 분실하면 <b>재발급</b> — 재사용할 수 없다. 실패하면 이유를 가르지 않고 "토큰을 확인하세요" 한 줄만 낸다.</div>
+      </form>
+      <div class="auth__links"><a href="#">← 소개</a><a href="#">설명서</a></div>
+    </div>
+  </div>
+  <template class="notes-src">
+    <h3>로그인 — <span class="notes__route">/login</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>서버가 그리던 HTML 을 SPA 로 옮긴다 — 소개 · 설명서와 같은 토큰. 입력은 여전히 <b>한 칸</b>(토큰이 아이디를 든다).</li>
+      <li>실패 메시지 하나 · 분당 20회 제한(429).</li>
+      <li><code>web/</code> 이 없으면 옛 서버 HTML 이 폴백으로 남는다.</li>
+    </ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     사이트 — 설치 마법사  /setup
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="setup" data-route="/setup" data-site="setup">
+  <div class="auth">
+    <div class="auth__box auth__box--wide">
+      <div class="auth__brand"><span class="topbar__mark" aria-hidden="true">C</span><h1>이 서버를 처음 설정합니다</h1></div>
+      <p class="auth__sub">명부가 비어 있습니다. 첫 관리자를 만들면 나머지는 콘솔에서 합니다.</p>
+      <div class="steps">
+        <div class="step2" data-done="1"><b>1</b> 부트스트랩 코드</div>
+        <div class="step2" aria-current="step"><b>2</b> 첫 관리자</div>
+        <div class="step2"><b>3</b> 토큰</div>
+      </div>
+      <section class="acard">
+        <div class="acard__body" style="padding:16px 18px">
+          <div class="form">
+            <div class="field">
+              <label class="field__l">이름 (아이디)</label>
+              <input class="mono" value="kjsa" spellcheck="false"/>
+              <span class="field__h">영문 · 숫자 · <code>.</code> <code>_</code> <code>-</code>. 커밋의 <code>author</code> 로 남는다 — 사내 아이디를 쓴다.</span>
+            </div>
+            <div class="field">
+              <label class="field__l">라벨</label>
+              <input value="사경진 · 개발" />
+              <span class="field__h">사람이 읽는 이름. 소속 · 역할.</span>
+            </div>
+            <div class="anote">이 사람은 <b>admin</b> 이고 모든 레포(<code>*</code>)를 본다. 다음 사람부터는 콘솔 &gt; 사용자에서 역할과 레포를 고른다.</div>
+          </div>
+        </div>
+      </section>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn">← 코드</button>
+        <span style="flex:1"></span>
+        <button class="btn btn--accent">관리자 만들기 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3단계 — 토큰 원문 -->
+  <div class="overlay" data-modal="setup-token" data-label="③ 토큰 원문" hidden>
+    <div class="overlay__box overlay__box--form" role="dialog">
+      <div class="overlay__head">첫 관리자를 만들었습니다 — 토큰은 지금 한 번만 보입니다<span class="topbar__spacer"></span></div>
+      <div class="mform">
+        <div class="reveal">Zk9x2vQm7HcT1pYw3nRfL8sBdU6aEo4gJiK0hVtXyNe</div>
+        <div class="reveal__act">
+          <button class="abtn abtn--accent"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-copy"/></svg> 복사</button>
+          <span class="amuted" style="font-size:12px">id <span class="amono">31a0f265</span> · 사용자 <b>kjsa</b> · 만료 2026-10-23 (30일)</span>
+        </div>
+        <div class="anote anote--warn"><b>닫으면 다시 볼 수 없습니다.</b> <code>CDP_TOKEN</code> 환경변수에 넣습니다 — 파일 · 메신저 · 이슈에 남기지 않습니다. 잃으면 콘솔에서 재발급합니다.</div>
+        <div class="anote">브라우저는 이미 로그인되어 있습니다. 다음은 콘솔 &gt; <b>지식 레포</b>에서 첫 레포를 세우는 것입니다(설치절차 4장).</div>
+      </div>
+      <div class="mfoot"><span class="sp"></span><button class="btn btn--accent">콘솔로 →</button></div>
+    </div>
+  </div>
+
+  <template class="notes-src">
+    <h3>설치 마법사 — <span class="notes__route">/setup</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>① 코드 — <code>install.sh</code> 가 마지막에 찍은 일회용 코드(또는 <code>&lt;data&gt;/bootstrap.code</code>). 명부가 비어 있을 때만 통한다.</li>
+      <li>② 첫 관리자 — 이름 · 라벨. 역할은 admin · 레포는 <code>*</code> 로 고정.</li>
+      <li>③ 토큰 — 원문 한 번 · 복사 · 콘솔로. 「③ 토큰 원문」 버튼으로 보기.</li>
+      <li>명부가 있으면 이 주소는 "이미 설정된 서버입니다 → 로그인" 한 줄.</li>
+    </ul>
+    <p class="cap">정할 것</p>
+    <ul><li>D3 — <code>serve init</code>(셸)도 그대로 남는다. 둘이 같은 일을 한다.</li></ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     사이트 — /r 빈 상태
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="norepo" data-route="/r" data-site="norepo">
+  <div class="empty-page">
+    <section class="acard">
+      <div class="acard__head"><span class="acard__title">볼 수 있는 지식 레포가 없습니다</span></div>
+      <div class="acard__body">
+        <div class="arow"><span class="arow__label">계정</span><span class="arow__value"><b>kjsa</b> <span class="who__role">admin</span></span></div>
+        <div class="arow"><span class="arow__label">서버의 레포</span><span class="arow__value"><b class="num">0</b> 곳</span></div>
+        <div class="anote">이 서버에 아직 지식 레포가 없습니다. <b>콘솔 &gt; 지식 레포</b>에서 패키지로 세우거나 origin 에서 받아 옵니다. 일반 사용자라면 관리자에게 레포 권한을 요청합니다.</div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <a class="btn btn--accent btn--sm" href="#">콘솔 &gt; 지식 레포 →</a>
+          <a class="btn btn--sm" href="#">설명서 · 관리자 3.4</a>
+        </div>
+      </div>
+    </section>
+  </div>
+  <template class="notes-src">
+    <h3>/r 빈 상태 — <span class="notes__route">/r</span></h3>
+    <ul>
+      <li>마법사 직후의 관리자 · 레포 권한이 없는 사용자가 보는 화면. 지금은 서버 HTML(<code>emptyPage</code>) — SPA 로 옮긴다.</li>
+      <li>레포가 있으면 <code>/r</code> 은 첫 레포로 302.</li>
+    </ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     콘솔 — 현황  /console
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="con-overview" data-route="/console" data-con="overview">
+  <div class="con-page">
+    <div class="phead"><div><h1 class="phead__t">현황</h1><p class="phead__s">이 서버를 지금 쓸 수 있는 상태인가 — 카드마다 자기 페이지로 간다</p></div>
+      <div class="phead__act"><span class="tcount">진단 12분 전</span><button class="abtn"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sync"/></svg> 다시 검사</button></div></div>
+
+    <div class="alerts">
+      <div class="alert"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-warn"/></svg> 7일 안에 만료되는 토큰 1 — <b>park</b> (e8b767e0 · 5일)<span class="sp"></span><a href="#">토큰 →</a></div>
+      <div class="alert"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-warn"/></svg> 미러가 밀린 레포 1 — <b>beta</b> 2건이 origin 에 안 갔다<span class="sp"></span><a href="#">지식 레포 →</a></div>
+    </div>
+
+    <div class="agrid">
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">서버</span><span class="topbar__spacer"></span><button class="abtn">자세히</button></div>
+        <div class="acard__body">
+          <div class="stats"><div class="stat"><span class="stat__n">3</span><span class="stat__l">지식 레포</span></div><div class="stat stat--warn"><span class="stat__n">1</span><span class="stat__l">미러 밀림</span></div><div class="stat"><span class="stat__n">4</span><span class="stat__l">패키지</span></div></div>
+          <div class="arow"><span class="arow__label">판</span><span class="arow__value"><span class="amono">v0.10.0</span><span class="amuted">· 빌드 09-23 14:02 · node v20.20.2</span></span></div>
+          <div class="arow"><span class="arow__label">기동</span><span class="arow__value"><span class="amuted">3일 전 · 09-20 09:11</span></span></div>
+        </div>
+      </section>
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">사람</span><span class="topbar__spacer"></span><button class="abtn">자세히</button></div>
+        <div class="acard__body">
+          <div class="stats"><div class="stat"><span class="stat__n">4</span><span class="stat__l">사용자 · 활성 3</span></div><div class="stat"><span class="stat__n">1</span><span class="stat__l">관리자</span></div><div class="stat stat--warn"><span class="stat__n">1</span><span class="stat__l">토큰 만료 임박</span></div></div>
+          <div class="arow"><span class="arow__label">토큰</span><span class="arow__value">활성 <b class="num">4</b> <span class="amuted">·</span> 폐기 <b class="num">1</b></span></div>
+          <div class="arow"><span class="arow__label">마지막 로그인</span><span class="arow__value"><span class="amuted">kjsa · 14분 전</span></span></div>
+        </div>
+      </section>
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">작업 레포</span><span class="topbar__spacer"></span><button class="abtn">자세히</button></div>
+        <div class="acard__body">
+          <div class="stats"><div class="stat"><span class="stat__n">3</span><span class="stat__l">등록</span></div><div class="stat"><span class="stat__n">1</span><span class="stat__l">최신</span></div><div class="stat stat--warn"><span class="stat__n">2</span><span class="stat__l">낡음 · 미설치</span></div></div>
+          <div class="anote">등록 · 꾸러미는 그 지식 레포의 <b>관리 &gt; 작업 레포</b>에서 한다. 여기서는 서버 전체를 한눈에.</div>
+        </div>
+      </section>
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">진단</span><span class="acard__hint">ctx serve doctor 와 같은 줄</span><span class="topbar__spacer"></span><button class="abtn">자세히</button></div>
+        <div class="acard__body">
+          <div class="stats"><div class="stat"><span class="stat__n">9</span><span class="stat__l">ok</span></div><div class="stat stat--warn"><span class="stat__n">2</span><span class="stat__l">warn</span></div><div class="stat"><span class="stat__n">0</span><span class="stat__l">fail</span></div></div>
+          <div class="arow"><span class="arow__label"><svg class="ico" width="13" height="13" style="color:var(--warn)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-warn"/></svg> git 자격</span><span class="arow__value"><span class="awarn">평문 PAT — 스코프가 api 면 계정 전체를 연다</span></span></div>
+          <div class="arow"><span class="arow__label"><svg class="ico" width="13" height="13" style="color:var(--warn)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-warn"/></svg> 레포 beta 미러</span><span class="arow__value"><span class="awarn">2건이 origin 에 안 갔다</span></span></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="acard">
+      <div class="acard__head"><span class="acard__title">최근 감사</span><span class="acard__hint">auth.log 마지막 5줄</span><span class="topbar__spacer"></span><button class="abtn">전부 →</button></div>
+      <div class="acard__body">
+        <div class="auditline"><time>09-23 14:02</time><span class="who2">kjsa</span><span class="what">token issue · <b>park</b> · <code>e8b767e0</code> · expires=2026-12-22</span></div>
+        <div class="auditline"><time>09-23 14:01</time><span class="who2">kjsa</span><span class="what">user add · <b>park</b> · repos=gdi · role=writer</span></div>
+        <div class="auditline"><time>09-23 11:40</time><span class="who2">kjsa</span><span class="what">repo new · <b>beta</b> · package=project_1 · origin=http://10.10.20.250:2900/soln1/beta.git · pushed</span></div>
+        <div class="auditline"><time>09-22 18:20</time><span class="who2">kjsa</span><span class="what">token revoke · <b>qa</b> · <code>5f00c3d1</code></span></div>
+        <div class="auditline"><time>09-22 09:05</time><span class="who2">(셸)</span><span class="what">init · user add · <b>kjsa</b> · repos=* · role=admin</span></div>
+      </div>
+    </section>
+    <div class="anote">이 화면은 <b>사람이 열었을 때만 말합니다.</b> 알림을 띄우지 않습니다.</div>
+  </div>
+  <template class="notes-src">
+    <h3>콘솔 · 현황 — <span class="notes__route">/console</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>상단은 앱 크롬(<code>.topbar</code>) · 왼쪽 메뉴는 지금 관리 화면의 <code>.astep</code> 그대로. 새 디자인 언어가 아니라 <b>같은 프로그램의 다른 얼굴</b>이다.</li>
+      <li>경고 띠는 이상이 있을 때만 — 정상이면 카드 넷과 감사 5줄뿐(정상은 조용하다).</li>
+      <li>숫자 카드(<code>.stat</code>)는 새 부품 — 색은 앰버 · 적만.</li>
+    </ul>
+    <p class="cap">정할 것</p>
+    <ul><li>작업 레포 <b>등록</b>은 레포 화면에 두고 콘솔은 읽기만(§4.7). 콘솔에서도 등록하게 할지.</li></ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     콘솔 — 사용자  /console/users
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="con-users" data-route="/console/users" data-con="users">
+  <div class="con-page">
+    <div class="phead"><div><h1 class="phead__t">사용자</h1><p class="phead__s">권한은 사람에 붙는다 — 역할과 볼 수 있는 레포. 삭제는 없다, 비활성이다</p></div>
+      <div class="phead__act"><button class="btn btn--accent btn--sm"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"/></svg> 사용자</button></div></div>
+
+    <div class="toolbar">
+      <label class="tin"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"/></svg><input placeholder="이름 · 라벨"/></label>
+      <select class="tsel"><option>역할 전체</option><option>admin</option><option>writer</option><option>viewer</option></select>
+      <label class="tchk"><input type="checkbox" checked/> 활성만</label>
+      <span class="sp"></span><span class="tcount">4명 · 활성 3</span>
+    </div>
+
+    <section class="acard acard--table">
+      <div class="acard__body">
+        <table class="ctable">
+          <thead><tr><th>이름</th><th>역할</th><th>볼 수 있는 레포</th><th class="ar">토큰</th><th>마지막 사용</th><th>활성</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="name">kjsa</span><span class="sub">사경진 · 개발</span></td><td><span class="chip chip--admin"><svg class="ico" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg>admin</span></td><td><span class="chip chip--off">전체 *</span></td><td class="ar num">2 / 2</td><td class="dim">14분 전 · 09-23 14:02</td><td><span class="chip">활성</span></td><td><div class="rowact"><button class="abtn">역할</button><button class="abtn">레포</button><button class="abtn"><svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-key"/></svg> 발급</button><button class="iconbtn" title="더보기"><svg class="ico" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75"><use href="#i-more"/></svg></button></div></td></tr>
+            <tr><td><span class="name">park</span><span class="sub">박 · 개발</span></td><td><span class="chip">writer</span></td><td><span class="chip chip--off">gdi</span></td><td class="ar num">1 / 1</td><td class="dim">—</td><td><span class="chip">활성</span></td><td><div class="rowact"><button class="abtn">역할</button><button class="abtn">레포</button><button class="abtn"><svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-key"/></svg> 발급</button><button class="iconbtn" title="더보기"><svg class="ico" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75"><use href="#i-more"/></svg></button></div></td></tr>
+            <tr><td><span class="name">qa</span><span class="sub">QA 공용</span></td><td><span class="chip">viewer</span></td><td><span class="chip chip--off">gdi</span> <span class="chip chip--off">beta</span></td><td class="ar num">1 / 2</td><td class="dim">2일 전 · 09-21 17:30</td><td><span class="chip">활성</span></td><td><div class="rowact"><button class="abtn">역할</button><button class="abtn">레포</button><button class="abtn"><svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-key"/></svg> 발급</button><button class="iconbtn" title="더보기"><svg class="ico" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75"><use href="#i-more"/></svg></button></div></td></tr>
+            <tr class="is-off"><td><span class="name">lee</span><span class="sub">이 · PM · 2026-09-01 떠남</span></td><td><span class="chip">writer</span></td><td><span class="chip chip--off">beta</span></td><td class="ar num">0 / 1</td><td class="dim">8-29</td><td><span class="chip chip--off">비활성</span></td><td><div class="rowact"><button class="abtn">재활성</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="acard">
+      <div class="acard__head"><span class="acard__title">레포 × 사용자</span><span class="acard__hint">체크 하나가 그 사람의 repos 한 줄이다 — 저장 즉시 다음 요청부터</span></div>
+      <div class="acard__body" style="overflow-x:auto">
+        <table class="matrix">
+          <thead><tr><th>사용자</th><th>gdi</th><th>beta</th><th>delta</th></tr></thead>
+          <tbody>
+            <tr><td><b>kjsa</b> <span class="all">전체 *</span></td><td class="all">●</td><td class="all">●</td><td class="all">●</td></tr>
+            <tr><td><b>park</b></td><td><input type="checkbox" checked/></td><td><input type="checkbox"/></td><td><input type="checkbox"/></td></tr>
+            <tr><td><b>qa</b></td><td><input type="checkbox" checked/></td><td><input type="checkbox" checked/></td><td><input type="checkbox"/></td></tr>
+          </tbody>
+        </table>
+        <div class="anote">권한 밖 레포는 그 사람의 화면 · API · MCP 어디에도 <b>존재를 알리지 않는다</b>. 비활성 사용자는 표에서 뺀다.</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="overlay" data-modal="add-user" data-label="+ 사용자" hidden>
+    <div class="overlay__box overlay__box--form" role="dialog">
+      <div class="overlay__head">사용자 추가<span class="topbar__spacer"></span><button class="iconbtn" data-close><svg class="ico" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><use href="#i-close"/></svg></button></div>
+      <div class="mform">
+        <div class="field"><label class="field__l">이름 (아이디)</label><input class="mono" placeholder="영문 · 숫자 · . _ -" value="choi"/><span class="field__h">커밋의 <code>author</code> 로 남는다 — 사내 아이디를 쓴다. 바꿀 수 없다.</span></div>
+        <div class="field"><label class="field__l">라벨</label><input placeholder="소속 · 역할" value="최 · 개발"/></div>
+        <div class="field"><span class="field__l">역할</span>
+          <div class="seg" role="group"><button aria-pressed="false">viewer <small class="amuted">읽기</small></button><button aria-pressed="true">writer <small class="amuted">save · 레포 세우기</small></button><button aria-pressed="false">admin <small class="amuted">콘솔</small></button></div></div>
+        <div class="field"><span class="field__l">볼 수 있는 레포</span>
+          <div class="checks"><label><input type="checkbox" checked/> gdi</label><label><input type="checkbox"/> beta</label><label><input type="checkbox"/> delta</label><label><input type="checkbox"/> <b>전체 *</b></label></div></div>
+        <div class="anote">토큰은 여기서 발급하지 않는다 — 추가한 뒤 그 행의 [발급], 또는 토큰 페이지에서.</div>
+      </div>
+      <div class="mfoot"><span class="amuted" style="font-size:11.5px">auth.log 에 남는다 · 재인증 필요</span><span class="sp"></span><button class="abtn" data-close>취소</button><button class="abtn abtn--accent">추가</button></div>
+    </div>
+  </div>
+
+  <template class="notes-src">
+    <h3>콘솔 · 사용자 — <span class="notes__route">/console/users</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>표 한 장 + 아래 <b>레포 × 사용자 매트릭스</b>(검토 v0.1 §3.2 — 레포마다 여는 쪽이 실제 운영).</li>
+      <li>역할 칩은 회색 — 색 예산을 지킨다. admin 만 방패 아이콘.</li>
+      <li>비활성은 회색 행으로 남는다(D6 · 삭제 없음). 「+ 사용자」 버튼으로 추가 모달.</li>
+      <li>자기 자신의 역할 · 활성은 바꿀 수 없다(<code>E_SELF</code>) · 마지막 admin 은 내릴 수 없다(<code>E_LAST_ADMIN</code>) — 그 두 버튼은 자기 행에서 흐려진다.</li>
+    </ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     콘솔 — 토큰  /console/tokens
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="con-tokens" data-route="/console/tokens" data-con="tokens">
+  <div class="con-page">
+    <div class="phead"><div><h1 class="phead__t">토큰</h1><p class="phead__s">신원만 증명한다 — 권한은 사람에게 있다. 원문은 발급 때 한 번, 잃으면 재발급</p></div>
+      <div class="phead__act"><button class="btn btn--accent btn--sm"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"/></svg> 발급</button></div></div>
+
+    <div class="toolbar">
+      <label class="tin"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"/></svg><input placeholder="사용자 · 메모 · id"/></label>
+      <label class="tchk"><input type="checkbox"/> 활성만</label>
+      <span class="sp"></span><span class="tcount">5개 · 활성 4 · 폐기 1</span>
+    </div>
+
+    <section class="acard acard--table">
+      <div class="acard__body">
+        <table class="ctable">
+          <thead><tr><th>id</th><th>사용자</th><th>메모</th><th>발급</th><th>만료</th><th>마지막 사용</th><th>상태</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="mono">31a0f265</td><td><span class="name">kjsa</span></td><td>노트북</td><td class="dim">09-23</td><td>10-23 <span class="dim">· 30일</span></td><td class="dim">14분 전</td><td><span class="chip">활성</span></td><td><div class="rowact"><button class="abtn">재발급</button><button class="abtn">연장</button><button class="abtn">메모</button><button class="abtn abtn--warn">폐기</button></div></td></tr>
+            <tr><td class="mono">7c2d91aa</td><td><span class="name">kjsa</span></td><td>폐쇄망 PC</td><td class="dim">09-21</td><td>무기한</td><td class="dim">3일 전</td><td><span class="chip">활성</span></td><td><div class="rowact"><button class="abtn">재발급</button><button class="abtn">연장</button><button class="abtn">메모</button><button class="abtn abtn--warn">폐기</button></div></td></tr>
+            <tr><td class="mono">e8b767e0</td><td><span class="name">park</span></td><td>노트북</td><td class="dim">06-29</td><td><span class="awarn"><svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-warn"/></svg> 09-28 · 5일</span></td><td class="dim">—</td><td><span class="chip chip--warn">만료 임박</span></td><td><div class="rowact"><button class="abtn">재발급</button><button class="abtn">연장</button><button class="abtn">메모</button><button class="abtn abtn--warn">폐기</button></div></td></tr>
+            <tr><td class="mono">c41e70d8</td><td><span class="name">qa</span></td><td>공용 PC</td><td class="dim">09-15</td><td>12-14 <span class="dim">· 82일</span></td><td class="dim">2일 전</td><td><span class="chip">활성</span></td><td><div class="rowact"><button class="abtn">재발급</button><button class="abtn">연장</button><button class="abtn">메모</button><button class="abtn abtn--warn">폐기</button></div></td></tr>
+            <tr class="is-off"><td class="mono">5f00c3d1</td><td><span class="name">qa</span></td><td>노트북 (잃음)</td><td class="dim">09-02</td><td class="dim">12-01</td><td class="dim">09-20</td><td><span class="chip chip--off">폐기 · 09-22 kjsa</span></td><td><div class="rowact"><button class="abtn">메모</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="anote"><b>원문은 어디에도 저장되지 않는다.</b> 표의 id 는 해시 앞 8자다. 폐기한 행은 회색으로 남는다 — "이 사람 토큰이 언제 있었나" 가 이력이다. 관리자 토큰은 기본 30일.</div>
+  </div>
+
+  <div class="overlay" data-modal="issue" data-label="+ 발급" hidden>
+    <div class="overlay__box overlay__box--form" role="dialog">
+      <div class="overlay__head">토큰 발급<span class="topbar__spacer"></span><button class="iconbtn" data-close><svg class="ico" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><use href="#i-close"/></svg></button></div>
+      <div class="mform">
+        <div class="field"><label class="field__l">사용자</label><select><option>park — 박 · 개발 (writer)</option><option>kjsa — 사경진 · 개발 (admin)</option><option>qa — QA 공용 (viewer)</option></select></div>
+        <div class="field"><label class="field__l">메모</label><input placeholder="기기 — 노트북 · 폐쇄망 PC …" value="새 노트북"/><span class="field__h">기기마다 하나씩 발급한다. 하나를 잃으면 그것만 폐기한다.</span></div>
+        <div class="field"><span class="field__l">만료</span><div class="seg" role="group"><button aria-pressed="false">30일</button><button aria-pressed="true">90일 <small class="amuted">기본</small></button><button aria-pressed="false">날짜…</button><button aria-pressed="false">무기한</button></div><span class="field__h">admin 이면 30일이 기본이다. 무기한은 감시용 계정에만.</span></div>
+      </div>
+      <div class="mfoot"><span class="amuted" style="font-size:11.5px">원문은 다음 화면에 한 번 보인다</span><span class="sp"></span><button class="abtn" data-close>취소</button><button class="abtn abtn--accent">발급</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" data-modal="reveal" data-label="원문 한 번" hidden>
+    <div class="overlay__box overlay__box--form" role="dialog">
+      <div class="overlay__head">park 의 새 토큰 — 지금 한 번만 보입니다<span class="topbar__spacer"></span></div>
+      <div class="mform">
+        <div class="reveal">pR3mWq8vZx1LtK0cH6yBn9dA2sUfE5gJoT7iV4hMkQw</div>
+        <div class="reveal__act"><button class="abtn abtn--accent"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-copy"/></svg> 복사</button><span class="amuted" style="font-size:12px">id <span class="amono">a91e0c27</span> · 만료 2026-12-22 (90일) · 메모 새 노트북</span></div>
+        <div class="anote anote--warn"><b>닫으면 다시 볼 수 없습니다.</b> 본인에게 직접 전합니다 — 메신저 · 메일 · 이슈에 평문으로 남기지 않습니다. 남겼으면 유출로 보고 폐기 후 재발급합니다.</div>
+      </div>
+      <div class="mfoot"><span class="sp"></span><button class="abtn abtn--accent" data-close>확인 — 전했다</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" data-modal="sudo" data-label="재인증(끼어드는 모달)" hidden>
+    <div class="overlay__box overlay__box--form" role="dialog" style="width:min(440px,94vw)">
+      <div class="overlay__head"><svg class="ico" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg> 관리자 확인<span class="topbar__spacer"></span></div>
+      <div class="mform">
+        <p style="margin:0;font-size:13px;color:var(--text-2)">명부를 바꾸는 동작입니다. <b>kjsa</b> 의 토큰을 한 번 더 넣으면 <b>15분</b> 동안 다시 묻지 않습니다.</p>
+        <div class="field"><label class="field__l">내 토큰</label><div class="field--row" style="display:flex"><input class="mono" type="password" value="••••••••••••••••••••••••" autocomplete="off"/><button class="abtn" type="button" style="flex:none"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg></button></div></div>
+        <div class="anote">세션이 탈취돼도 이 15분 밖에서는 명부가 바뀌지 않게 하는 장치입니다(sudo 와 같은 모양). 통과하면 하던 동작 — <b>park 토큰 발급</b> — 을 이어 합니다.</div>
+      </div>
+      <div class="mfoot"><span class="sp"></span><button class="abtn" data-close>취소</button><button class="abtn abtn--accent">확인하고 계속</button></div>
+    </div>
+  </div>
+
+  <template class="notes-src">
+    <h3>콘솔 · 토큰 — <span class="notes__route">/console/tokens</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>행 동작 넷 — 재발급(폐기+발급 한 동작) · 연장 · 메모 · 폐기. 폐기 행은 회색으로 남는다.</li>
+      <li>「+ 발급」 → 「원문 한 번」 → 닫으면 끝. 모달 셋을 버튼으로 차례로 보기.</li>
+      <li>「재인증」 — 쓰기 동작이 <code>E_REAUTH</code> 를 받으면 <b>끼어들고</b>, 통과하면 하던 동작을 이어 한다. 미리 재인증할 필요가 없다(D5).</li>
+      <li>만료 임박은 앰버 칩 하나 — 정상 행에는 색이 없다.</li>
+    </ul>
+    <p class="cap">정할 것</p>
+    <ul><li>재인증 창 15분(D5). 원문 보관 · 재배정은 없다(D6).</li></ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     콘솔 — 지식 레포  /console/repos
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="con-repos" data-route="/console/repos" data-con="repos">
+  <div class="con-page">
+    <div class="phead"><div><h1 class="phead__t">지식 레포</h1><p class="phead__s">이 서버가 든 레포 전부 — 등록은 폴더를 두는 것이고, 두는 길이 둘이다</p></div>
+      <div class="phead__act"><button class="btn btn--accent btn--sm"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"/></svg> 새 레포</button></div></div>
+
+    <section class="acard acard--table">
+      <div class="acard__body">
+        <table class="ctable">
+          <thead><tr><th>이름</th><th>head</th><th>미러</th><th class="ar">문서</th><th class="ar">좌표</th><th>볼 수 있는 사람</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="name">gdi</span><span class="sub">GDI 수행 지식 — 테이블 · 화면 · API · 모듈 · 코드 · 이슈</span></td><td class="mono">3c074aa <span class="dim">main</span></td><td><span class="chip">최신</span></td><td class="ar num">16</td><td class="ar num">291</td><td><span class="chip chip--off">kjsa</span> <span class="chip chip--off">park</span> <span class="chip chip--off">qa</span></td><td><div class="rowact"><button class="abtn"><svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-doc"/></svg> 열기</button><button class="abtn">접근</button></div></td></tr>
+            <tr><td><span class="name">beta</span><span class="sub">프로젝트 2 문서 세트 (project_1)</span></td><td class="mono">7fb07b5 <span class="dim">main</span></td><td><span class="chip chip--warn"><svg class="ico" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-warn"/></svg> 밀림 2</span></td><td class="ar num">40</td><td class="ar num">0</td><td><span class="chip chip--off">kjsa</span> <span class="chip chip--off">qa</span></td><td><div class="rowact"><button class="abtn"><svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-doc"/></svg> 열기</button><button class="abtn">접근</button></div></td></tr>
+            <tr><td><span class="name">delta</span><span class="sub">dpms 서식 — 시작 전</span></td><td class="mono">a91e0c2 <span class="dim">master</span></td><td><span class="chip chip--off">원격 없음</span></td><td class="ar num">40</td><td class="ar num">0</td><td><span class="chip chip--off">kjsa</span></td><td><div class="rowact"><button class="abtn"><svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-doc"/></svg> 열기</button><button class="abtn">접근</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="anote">커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. <b>밀림</b>이 계속되면 서버 &gt; 진단의 <code>레포 … push</code> 줄과 origin 자격(PAT · 셸)을 봅니다. 등록부 · 어휘를 서버 밖에서 고쳤으면 설명서 7.6.</div>
+  </div>
+
+  <div class="overlay" data-modal="new-repo" data-label="+ 새 레포" hidden>
+    <div class="overlay__box overlay__box--wide" role="dialog">
+      <div class="overlay__head">새 지식 레포<span class="topbar__spacer"></span><button class="iconbtn" data-close><svg class="ico" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><use href="#i-close"/></svg></button></div>
+      <div class="mtabs"><button aria-selected="true">패키지에서 세운다</button><button aria-selected="false">origin 에서 받아 온다 (clone)</button></div>
+      <div class="mform" style="border-top:1px solid var(--border)">
+        <div class="field"><label class="field__l">레포 이름</label><input class="mono" value="epsilon" spellcheck="false"/><span class="field__h">폴더명 = 레포 이름 = 주소 조각. 영문 · 숫자 · <code>. _ -</code></span></div>
+        <div class="field"><label class="field__l">패키지 — 서식이지 내용이 아니다</label>
+          <select><option>dpms v1.0.0 — 공공 SI 산출물 서식 · 문서 40</option><option>project_1 v1.0.0 — 프로젝트 1 문서 세트 · 문서 40</option><option>project_2 v1.0.0 — 프로젝트 2 문서 세트 · 문서 40</option></select>
+          <span class="field__h">문서 골격 · 등록부 · 어휘가 들어오고 그 프로젝트의 값은 없다. 세운 뒤 첫날 할 일 다섯 줄은 그 레포의 README 에.</span></div>
+        <div class="field"><label class="field__l">origin (선택)</label><input class="mono" placeholder="http://10.10.20.250:2900/<그룹>/<프로젝트>.git — 먼저 만들어 둔 빈 프로젝트"/><span class="field__h">있으면 첫 커밋을 바로 보낸다. 서버는 GitLab 프로젝트를 <b>만들 수 없다</b> — 웹에서 먼저 만든다.</span></div>
+        <div class="field"><span class="field__l">볼 수 있는 사람</span><div class="checks"><label><input type="checkbox" checked disabled/> kjsa <span class="amuted">(전체 *)</span></label><label><input type="checkbox" checked/> park</label><label><input type="checkbox"/> qa</label></div><span class="field__h">세우면서 <code>repos</code> 에 넣는다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다.</span></div>
+      </div>
+      <div class="mfoot"><span class="amuted" style="font-size:11.5px">첫 커밋에서 훅(<code>ctx check</code>)이 돈다 · auth.log · 재인증</span><span class="sp"></span><button class="abtn" data-close>취소</button><button class="abtn abtn--accent">세우기</button></div>
+    </div>
+  </div>
+
+  <template class="notes-src">
+    <h3>콘솔 · 지식 레포 — <span class="notes__route">/console/repos</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>서버의 레포 <b>전부</b>(관리자에게만 · 검토 v0.1 D6) · 볼 수 있는 사람이 열로 보인다.</li>
+      <li>「+ 새 레포」 모달 — 탭 둘: 패키지에서 세우기 / origin 에서 clone(D9). 세우면서 접근 부여.</li>
+      <li>[접근] 은 사용자 페이지의 매트릭스로 간다(그 레포 열만 강조).</li>
+    </ul>
+    <p class="cap">정할 것</p>
+    <ul><li>"origin 과 맞추기(ff-only)" 버튼은 ⑦ 로 미뤘다(D13). 넣으려면 이 행의 동작 하나.</li></ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     콘솔 — 작업 레포  /console/workrepos
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="con-workrepos" data-route="/console/workrepos" data-con="workrepos">
+  <div class="con-page">
+    <div class="phead"><div><h1 class="phead__t">작업 레포</h1><p class="phead__s">어느 코드 레포가 어느 판의 꾸러미를 들고 있나 — 서버 전체 대장. 관문이 아니라 장부다</p></div></div>
+    <div class="toolbar"><select class="tsel"><option>지식 레포 전체</option><option>gdi</option><option>beta</option></select><select class="tsel"><option>상태 전체</option><option>최신</option><option>낡음</option><option>미설치</option></select><span class="sp"></span><span class="tcount">3곳 · 최신 1 · 낡음 1 · 미설치 1</span></div>
+    <section class="acard acard--table">
+      <div class="acard__body">
+        <table class="ctable">
+          <thead><tr><th>작업 레포</th><th>지식 레포</th><th>담당</th><th>상태</th><th>kit</th><th>마지막 보고</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="name">my-app</span><span class="sub">프런트</span></td><td><span class="chip chip--off">gdi</span></td><td>kjsa</td><td><span class="chip">최신</span></td><td class="mono">a3f19c</td><td class="dim">09-23 14:02 · kjsa</td><td><div class="rowact"><button class="abtn">그 레포로 →</button></div></td></tr>
+            <tr><td><span class="name">gdi-batch</span><span class="sub">배치</span></td><td><span class="chip chip--off">gdi</span></td><td>park</td><td><span class="chip chip--warn">낡음</span></td><td class="mono">91b0e2 <span class="dim">→ a3f19c</span></td><td class="dim">09-02 09:11 · park</td><td><div class="rowact"><button class="abtn">그 레포로 →</button></div></td></tr>
+            <tr><td><span class="name">ops-bot</span></td><td><span class="chip chip--off">beta</span></td><td class="dim">담당 없음</td><td><span class="chip chip--off">미설치</span></td><td class="dim">—</td><td class="dim">—</td><td><div class="rowact"><button class="abtn">그 레포로 →</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="anote">등록 · 꾸러미 내려받기 · 설치 방법은 <b>그 지식 레포의 관리 &gt; 작업 레포</b>에 있다 — 꾸러미가 레포마다 다르기 때문이다. <b>낡음</b>은 설치 보고의 kit 해시가 서버의 지금 해시와 다르다는 뜻 — 각자 <code>node install.mjs</code> 를 한 번 더.</div>
+  </div>
+  <template class="notes-src">
+    <h3>콘솔 · 작업 레포 — <span class="notes__route">/console/workrepos</span></h3>
+    <ul>
+      <li>읽기 전용 — 전 레포의 대장을 한눈에. 등록 · 꾸러미는 레포 화면에 그대로(§4.7).</li>
+      <li>"그 레포로 →" 는 <code>/r/&lt;레포&gt;/</code> 의 관리 &gt; 작업 레포로 간다.</li>
+    </ul>
+    <p class="cap">정할 것</p>
+    <ul><li>콘솔에서도 등록하게 할지 — 지식 레포 선택 한 칸이 더 붙는다. 권장은 읽기만.</li></ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     콘솔 — 서버  /console/server
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="con-server" data-route="/console/server" data-con="server">
+  <div class="con-page">
+    <div class="phead"><div><h1 class="phead__t">서버</h1><p class="phead__s">이 프로세스가 무엇으로 떠 있나 · 진단 · 패키지 · 갱신 · 로그. 고치는 것은 셸이고 여기는 보는 자리다</p></div>
+      <div class="phead__act"><button class="abtn"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sync"/></svg> 다시 검사</button></div></div>
+
+    <div class="agrid">
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">이 프로세스</span></div>
+        <div class="acard__body">
+          <div class="arow"><span class="arow__label">판</span><span class="arow__value"><span class="amono">v0.10.0</span><span class="amuted">· 빌드 2026-09-23 14:02</span></span></div>
+          <div class="arow"><span class="arow__label">실행</span><span class="arow__value"><span class="amuted">node v20.20.2 · pid 18422 · 기동 09-20 09:11</span></span></div>
+          <div class="arow"><span class="arow__label">bind</span><span class="arow__value"><span class="amono">10.10.20.188:7374</span><span class="amuted">· 프록시 없음 · 평문</span></span></div>
+          <div class="arow"><span class="arow__label">mirror</span><span class="arow__value"><span class="amuted">켜짐 — save 뒤 push</span></span></div>
+          <div class="arow"><span class="arow__label">관리 API 대역</span><span class="arow__value"><span class="amono">10.10.20.0/24</span><span class="amuted">· --admin-from</span></span></div>
+          <div class="arow"><span class="arow__label">소개 · 설명서</span><span class="arow__value"><span class="amuted">공개</span></span></div>
+        </div>
+      </section>
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">파일이 어디에 있나</span><span class="acard__hint">관리자에게만 보인다</span></div>
+        <div class="acard__body">
+          <div class="arow"><span class="arow__label">레포</span><span class="arow__value"><span class="amono">/opt/cdp/repos</span></span></div>
+          <div class="arow"><span class="arow__label">명부</span><span class="arow__value"><span class="amono">/opt/cdp/auth.json</span><span class="amuted">· 600</span></span></div>
+          <div class="arow"><span class="arow__label">데이터 · 로그</span><span class="arow__value"><span class="amono">/opt/cdp/data</span></span></div>
+          <div class="arow"><span class="arow__label">화면 · 설명서</span><span class="arow__value"><span class="amono">/opt/cdp/web</span><span class="amono">/opt/cdp/manual</span></span></div>
+          <div class="arow"><span class="arow__label">패키지</span><span class="arow__value"><span class="amono">/opt/cdp/packages</span><span class="amuted">· 4개</span></span></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="acard">
+      <div class="acard__head"><span class="acard__title">진단</span><span class="acard__hint">ctx serve doctor 와 같은 줄 · 12분 전 · 60초 캐시</span><span class="topbar__spacer"></span><span class="tcount">ok 9 · warn 2 · fail 0</span></div>
+      <div class="acard__body doctor">
+        <div class="doctor__row" data-s="ok"><svg class="ico" width="13" height="13" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="what">node</span><span class="note">v20.20.2</span></div>
+        <div class="doctor__row" data-s="ok"><svg class="ico" width="13" height="13" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="what">git</span><span class="note">git version 2.43.0</span></div>
+        <div class="doctor__row" data-s="ok"><svg class="ico" width="13" height="13" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="what">auth.json</span><span class="note">/opt/cdp/auth.json · 600</span></div>
+        <div class="doctor__row" data-s="ok"><svg class="ico" width="13" height="13" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="what">명부</span><span class="note">사용자 4 · admin 1 · writer 2 · 토큰 5</span></div>
+        <div class="doctor__row" data-s="ok"><svg class="ico" width="13" height="13" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="what">--data · --web · manual</span><span class="note">쓰기 가능 · index.html · 설명서 3권</span></div>
+        <div class="doctor__row" data-s="ok"><svg class="ico" width="13" height="13" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="what">레포 gdi</span><span class="note">head 3c074aa · origin/main · push 자격 있음</span></div>
+        <div class="doctor__row" data-s="warn"><svg class="ico" width="13" height="13" style="color:var(--warn)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-warn"/></svg><span class="what">레포 beta 미러</span><span class="note">2건이 origin 에 안 갔다</span></div>
+        <div class="doctor__row" data-s="ok"><svg class="ico" width="13" height="13" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="what">레포 delta</span><span class="note">upstream 없음 — 미러 off (head a91e0c2)</span></div>
+        <div class="doctor__row" data-s="warn"><svg class="ico" width="13" height="13" style="color:var(--warn)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-warn"/></svg><span class="what">git 자격</span><span class="note">평문 PAT 가 있다 — 스코프가 api 면 계정 전체를 연다. Deploy Key 로 좁힐 수 있으면 좁힌다(설치절차 10장)</span></div>
+        <div class="doctor__row" data-s="ok"><svg class="ico" width="13" height="13" style="color:var(--text-3)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="what">서버</span><span class="note">10.10.20.188:7374 응답 · 레포 3 · 미러 ok 2 lag 1 off 0</span></div>
+      </div>
+    </section>
+
+    <div class="agrid">
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">갱신</span><span class="acard__hint">셸의 일이다 — 여기는 판과 명령</span></div>
+        <div class="acard__body">
+          <div class="arow"><span class="arow__label">지금</span><span class="arow__value"><span class="amono">v0.10.0</span><span class="amuted">· 2026-09-23 14:02</span></span></div>
+          <div class="arow arow--stack"><span class="arow__label">새 판을 올리려면</span><span class="arow__value"><button class="acmd" title="복사"><code>sudo bash /opt/cdp/deploy/upgrade.sh /tmp/cdp-server-v0.10.1.tar.gz</code><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-copy"/></svg></button></span></div>
+          <div class="anote">자기 자신(<code>ctx.mjs</code>)을 갈아 끼우고 재시작하는 일이라 브라우저에서 시작하지 않는다 — 실패했을 때 되돌리는 길이 셸뿐이다. 명부 · 대장 · 레포는 건드리지 않는다.</div>
+        </div>
+      </section>
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">패키지</span><span class="acard__hint">/opt/cdp/packages · 새 레포가 여기서 복사된다</span></div>
+        <div class="acard__body">
+          <div class="arow"><span class="arow__label"><span class="amono">dpms</span></span><span class="arow__value">v1.0.0 <span class="amuted">· 공공 SI 산출물 서식 · 문서 40 · 타입 16</span></span></div>
+          <div class="arow"><span class="arow__label"><span class="amono">project_1</span></span><span class="arow__value">v1.0.0 <span class="amuted">· 문서 40</span></span></div>
+          <div class="arow"><span class="arow__label"><span class="amono">project_2</span></span><span class="arow__value">v1.0.0 <span class="amuted">· 문서 40</span></span></div>
+          <div class="anote">패키지 이름은 자리표시자다 — 적용하는 프로젝트 이름으로 바꾼다(<code>ctx package rename</code> · 개발 PC). 패키지 이름 ≠ 레포 이름.</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="acard">
+      <div class="acard__head"><span class="acard__title">로그</span><span class="acard__hint">serve.log 마지막 200줄 · 회전 3 × 1MB</span><span class="topbar__spacer"></span><label class="tin" style="min-width:180px;height:26px"><svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"/></svg><input placeholder="걸러 보기 — 401 · save"/></label></div>
+      <div class="acard__body"><pre class="logbox">2026-09-23T05:02:11.402Z · kjsa · gdi · tools/call · section · api:/adapter/a10/expense-slip · 41ms · 200 · 10.10.20.31 · 31a0f265
+2026-09-23T05:02:19.877Z · kjsa · gdi · tools/call · save · 2026-0923-A10-기본값 · 812ms · 200 · 10.10.20.31 · 31a0f265
+2026-09-23T05:02:20.104Z · - · - · POST · /login · - · 9ms · 401 · 토큰을 찾을 수 없다 · 10.10.20.77
+2026-09-23T05:03:44.010Z · park · gdi · GET · /docs · - · 6ms · 200 · 10.10.20.52 · e8b767e0
+2026-09-23T05:04:02.559Z · kjsa · - · POST · /admin/tokens · park · 22ms · 200 · 10.10.20.31 · 31a0f265
+[cdp-serve] 미러 push 실패 beta: ! [rejected] main -> main (fetch first)</pre>
+      <div class="anote">문서 내용 · 검색어 · 토큰 원문은 로그에 없다. 프로세스가 죽었을 때는 <code>journalctl -u cdp-serve</code> — 그것은 프로세스 밖이라 여기 없다.</div></div>
+    </section>
+  </div>
+  <template class="notes-src">
+    <h3>콘솔 · 서버 — <span class="notes__route">/console/server</span></h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>전부 <b>읽기</b>다 — 설정값 · 진단 · 패키지 · 갱신 명령 · 로그. 고치는 것은 셸(D7 · D8).</li>
+      <li>진단은 <code>ctx serve doctor</code> 와 같은 함수 · 같은 줄. 60초 캐시 · [다시 검사].</li>
+      <li>파일 위치 · 로그는 관리자에게만 — §6.6.3 "서버 경로를 내지 않는다" 는 일반 사용자 이야기였다.</li>
+    </ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     콘솔 — 감사  /console/audit
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="con-audit" data-route="/console/audit" data-con="audit">
+  <div class="con-page">
+    <div class="phead"><div><h1 class="phead__t">감사</h1><p class="phead__s">명부 · 토큰 · 레포 · 대장의 변경 — auth.log 그대로. 회전하지 않는다, 이력이다</p></div></div>
+    <div class="toolbar"><label class="tin"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"/></svg><input placeholder="사용자 · 행위 · id"/></label><select class="tsel"><option>행위 전체</option><option>user</option><option>token</option><option>repo</option><option>workrepo</option><option>admin sudo</option></select><span class="sp"></span><span class="tcount">마지막 200줄 · 전체 1,204줄</span></div>
+    <section class="acard">
+      <div class="acard__body">
+        <div class="auditline"><time>2026-09-23 14:04</time><span class="who2">kjsa</span><span class="what">admin sudo · 15분</span></div>
+        <div class="auditline"><time>2026-09-23 14:02</time><span class="who2">kjsa</span><span class="what">token issue · <b>park</b> · <code>e8b767e0</code> · expires=2026-12-22 · note=노트북</span></div>
+        <div class="auditline"><time>2026-09-23 14:01</time><span class="who2">kjsa</span><span class="what">user add · <b>park</b> · repos=gdi · role=writer · label=박 · 개발</span></div>
+        <div class="auditline"><time>2026-09-23 11:40</time><span class="who2">kjsa</span><span class="what">repo new · <b>beta</b> · package=project_1 · origin=http://10.10.20.250:2900/soln1/beta.git · pushed · grant=qa</span></div>
+        <div class="auditline"><time>2026-09-23 11:02</time><span class="who2">kjsa</span><span class="what">workrepo add · <code>wr_7f2a</code> · my-app · gdi · owner=kjsa</span></div>
+        <div class="auditline"><time>2026-09-22 18:20</time><span class="who2">kjsa</span><span class="what">token revoke · <b>qa</b> · <code>5f00c3d1</code> · 1개</span></div>
+        <div class="auditline"><time>2026-09-22 18:19</time><span class="who2">kjsa</span><span class="what">user set · <b>qa</b> · {"repos":["gdi","beta"]}</span></div>
+        <div class="auditline"><time>2026-09-22 09:05</time><span class="who2">(셸)</span><span class="what">init · token issue · <b>kjsa</b> · <code>31a0f265</code> · expires=2026-10-22</span></div>
+        <div class="auditline"><time>2026-09-22 09:05</time><span class="who2">(셸)</span><span class="what">init · user add · <b>kjsa</b> · repos=* · role=admin</span></div>
+      </div>
+    </section>
+    <div class="anote">토큰은 앞 8자만 적힌다. 셸에서 한 것은 행위자가 <b>(셸)</b> 이다 — CLI 와 콘솔이 같은 파일에 같은 모양으로 남긴다.</div>
+  </div>
+  <template class="notes-src">
+    <h3>콘솔 · 감사 — <span class="notes__route">/console/audit</span></h3>
+    <ul>
+      <li><code>auth.log</code> 마지막 N 줄을 그대로 — 행위자 · 대상 · 바뀐 값. 걸러 보기만 있다.</li>
+      <li>콘솔의 모든 쓰기가 여기 남는다(§4.2). 재인증(sudo)도 한 줄.</li>
+    </ul>
+  </template>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     레포 화면 — /r/gdi/ 상단의 변화
+     ════════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="repo" data-route="/r/gdi/">
+  <header class="topbar" style="position:relative;z-index:2">
+    <span class="topbar__repo">
+      <button class="topbar__name" aria-expanded="true"><span class="topbar__mark" aria-hidden="true">g</span>gdi <svg class="ico" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chevronDown"/></svg></button>
+      <div class="repomenu" role="menu" style="min-width:340px">
+        <div class="repomenu__cap">볼 수 있는 레포 2</div>
+        <button class="repomenu__row" aria-current="true"><b>gdi</b><span>GDI 수행 지식 — 테이블 · 화면 · API …</span><span class="chip">쓰기</span></button>
+        <button class="repomenu__row"><b>beta</b><span>프로젝트 2 문서 세트</span><span class="chip chip--off">읽기</span></button>
+        <div class="repomenu__hr"></div>
+        <div class="repomenu__cap">관리자만 — 이 서버의 레포 3</div>
+        <button class="repomenu__row" style="opacity:.6"><b>delta</b><span>권한 없는 사람 3 · 원격 없음</span><span class="chip chip--off">콘솔에서 할당 →</span></button>
+      </div>
+    </span>
+    <div class="seg seg--mode" role="group"><button aria-pressed="true"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-doc"/></svg> 문서</button><button><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-graph"/></svg> 그래프</button><button><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-gear"/></svg> 관리</button></div>
+    <span class="topbar__spacer"></span>
+    <button class="topbar__search"><svg class="ico" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search"/></svg><span>검색 · 이동</span><span class="topbar__spacer"></span><span class="kbd">⌘K</span></button>
+    <span class="topbar__spacer"></span>
+    <button class="pill"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> 검사</button>
+    <span class="who">
+      <a class="who__lnk" href="#" title="설명서"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-book"/></svg> 설명서</a>
+      <a class="who__lnk" href="#" title="콘솔"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg> 콘솔</a>
+      <b style="color:var(--text)">kjsa</b><span class="who__role">admin</span>
+      <a class="who__out" href="#" title="로그아웃"><svg class="ico" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-power"/></svg></a>
+    </span>
+    <button class="iconbtn" title="더보기"><svg class="ico" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75"><use href="#i-more"/></svg></button>
+  </header>
+  <div class="admin" style="flex:1">
+    <nav class="admin__menu" aria-label="관리">
+      <button class="astep" aria-current="true"><svg class="ico astep__i" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg><span class="astep__txt"><span class="astep__t">현황</span><span class="astep__s">지금 쓸 수 있는 상태인가</span></span></button>
+      <button class="astep"><svg class="ico astep__i" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-managed"/></svg><span class="astep__txt"><span class="astep__t">지식 레포</span><span class="astep__s">어디를 보고 있나 · 세운다</span></span></button>
+      <button class="astep"><svg class="ico astep__i" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plug"/></svg><span class="astep__txt"><span class="astep__t">작업 레포</span><span class="astep__s">등록 · 꾸러미 · 설치 대장</span></span></button>
+      <button class="astep"><svg class="ico astep__i" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-info"/></svg><span class="astep__txt"><span class="astep__t">진단 · 정보</span><span class="astep__s">버전 · 레포 수 · 스캔 시각</span></span></button>
+      <div class="menu__hr"></div>
+      <button class="astep"><svg class="ico astep__i" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield"/></svg><span class="astep__txt"><span class="astep__t">콘솔로 →</span><span class="astep__s">사람 · 토큰 · 레포 전부 · 서버</span></span></button>
+      <span class="topbar__spacer" style="flex:1"></span>
+      <button class="astep astep--back"><svg class="ico" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-doc"/></svg><span class="astep__txt"><span class="astep__t">문서로 돌아가기</span><span class="astep__s kbd">esc</span></span></button>
+    </nav>
+    <div class="admin__body" style="opacity:.45"><div class="admin__wrap"><div class="agrid"><section class="acard"><div class="acard__head"><span class="acard__title">지식 레포</span></div><div class="acard__body"><div class="arow"><span class="arow__label">보고 있는 곳</span><span class="arow__value"><span class="amono">gdi</span></span></div><div class="arow"><span class="arow__label">담긴 것</span><span class="arow__value">문서 <b class="num">16</b> · 좌표 <b class="num">291</b></span></div></div></section><section class="acard"><div class="acard__head"><span class="acard__title">미러</span></div><div class="acard__body"><div class="arow"><span class="arow__label">보낼 것</span><span class="arow__value"><b class="num">0</b> 건</span></div></div></section></div></div></div>
+  </div>
+  <template class="notes-src">
+    <h3>레포 화면 — <span class="notes__route">/r/gdi/</span> 상단</h3>
+    <p class="cap">봐 줄 것</p>
+    <ul>
+      <li>레포 이름표가 <b>항상 메뉴</b>다(하나여도) — 볼 수 있는 레포와 내 권한(쓰기 · 읽기) 칩. 관리자에게만 「이 서버의 레포」 절이 더 붙어 권한 밖 레포가 회색으로 보인다(검토 v0.1 D6 · D8 ①).</li>
+      <li>오른쪽 <code>who</code> 에 설명서 · (관리자면) 콘솔 링크 · 역할 칩.</li>
+      <li>관리 메뉴 넷은 그대로 — 레포 하나의 것. 관리자에게 「콘솔로 →」 한 줄.</li>
+    </ul>
+  </template>
+</section>
+
+  </div><!-- /frame__body -->
+</div><!-- /frame -->
+<aside class="notes" id="notes"></aside>
+</div><!-- /stage -->
+
+<script>
+(() => {
+  const body = document.getElementById('body')
+  const route = document.getElementById('route')
+  const notes = document.getElementById('notes')
+  const frame = document.getElementById('frame')
+  const ico = (n, s = 14, extra = '') => `<svg class="ico ${extra}" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${n}"/></svg>`
+
+  // ── 사이트 껍데기 — 소개 · 설명서 · 로그인 · 마법사 · 빈 상태 ──────────
+  const SITE_NAV = (cur, loggedIn) => `
+    <header class="site-top">
+      <span class="site-top__brand"><span class="topbar__mark" aria-hidden="true">C</span>CDP</span>
+      <nav class="site-top__nav">
+        <a href="#" ${cur === 'landing' ? 'aria-current="page"' : ''}>소개</a>
+        <a href="#" ${cur === 'manual' ? 'aria-current="page"' : ''}>설명서</a>
+      </nav>
+      <span class="site-top__sp"></span>
+      ${loggedIn
+        ? `<span class="site-top__me"><b style="color:var(--text)">kjsa</b><span class="who__role">admin</span><a class="btn btn--sm" href="#">${ico('shield', 13)} 콘솔</a>${cur === 'norepo' ? '' : `<a class="btn btn--accent btn--sm" href="#">내 레포로 ${ico('arrowRight', 13)}</a>`}</span>`
+        : `<span class="site-top__me"><a class="btn btn--sm" href="#">로그인</a></span>`}
+    </header>`
+  for (const s of body.querySelectorAll('.screen[data-site]')) {
+    const kind = s.dataset.site
+    const inner = document.createElement('div')
+    inner.className = 'site'
+    // 볼 수 있는 레포가 없는 사람에게 [내 레포로] 를 내밀지 않는다 — 갈 곳이 없다
+    inner.innerHTML = SITE_NAV(kind, kind === 'norepo' || kind === 'manual')
+    while (s.firstChild && !(s.firstChild.tagName === 'TEMPLATE') && !(s.firstChild.classList && s.firstChild.classList.contains('overlay'))) inner.appendChild(s.firstChild)
+    s.prepend(inner)
+  }
+
+  // ── 콘솔 껍데기 — 상단 + 왼쫉 메뉴 일곱 ────────────────────────────────
+  const MENU = [
+    ['overview', 'check', '현황', '지금 쓸 수 있는 상태인가'],
+    ['users', 'users', '사용자', '역할 · 레포 할당 · 비활성'],
+    ['tokens', 'key', '토큰', '발급 · 재발급 · 폐기'],
+    ['repos', 'managed', '지식 레포', '전부 · 세우기 · 접근'],
+    ['workrepos', 'plug', '작업 레포', '설치 대장 · 낡음'],
+    ['server', 'server', '서버', '설정 · 진단 · 갱신 · 로그'],
+    ['audit', 'list', '감사', 'auth.log'],
+  ]
+  for (const s of body.querySelectorAll('.screen[data-con]')) {
+    const cur = s.dataset.con
+    const page = s.querySelector('.con-page')
+    const shell = document.createElement('div')
+    shell.className = 'con'
+    shell.innerHTML = `
+      <header class="topbar">
+        <span class="con__brand"><span class="topbar__mark" aria-hidden="true">C</span>CDP <small>콘솔</small></span>
+        <span class="topbar__spacer"></span>
+        <nav class="con__links">
+          <a href="#">${ico('book', 13)} 설명서</a>
+          <a href="#">${ico('doc', 13)} 문서로</a>
+        </nav>
+        <span class="who"><b style="color:var(--text)">kjsa</b><span class="who__role">admin</span><a class="who__out" href="#" title="로그아웃">${ico('power', 13)}</a></span>
+      </header>
+      <div class="admin">
+        <nav class="admin__menu" aria-label="콘솔">
+          ${MENU.map(([k, i, t, sub]) => `<button class="astep" ${k === cur ? 'aria-current="true"' : ''}>${ico(i, 15, 'astep__i')}<span class="astep__txt"><span class="astep__t">${t}</span><span class="astep__s">${sub}</span></span></button>`).join('')}
+          <span class="topbar__spacer" style="flex:1"></span>
+          <button class="astep astep--back">${ico('doc', 15)}<span class="astep__txt"><span class="astep__t">문서로</span><span class="astep__s">/r</span></span></button>
+        </nav>
+        <div class="admin__body"><div class="admin__wrap"></div></div>
+      </div>`
+    shell.querySelector('.admin__wrap').append(...page.childNodes)
+    page.replaceWith(shell)
+  }
+
+  // ── 탭 · 경로 · 노트 · 모달 ─────────────────────────────────────────────
+  const tabs = [...document.querySelectorAll('.rb__tab')]
+  function show(name) {
+    for (const s of body.querySelectorAll('.screen')) {
+      const on = s.dataset.screen === name
+      if (on) s.dataset.on = '1'
+      else delete s.dataset.on
+      for (const m of s.querySelectorAll('.overlay')) m.hidden = true
+    }
+    for (const t of tabs) t.setAttribute('aria-pressed', String(t.dataset.go === name))
+    const s = body.querySelector(`.screen[data-screen="${name}"]`)
+    route.textContent = s.dataset.route
+    const tpl = s.querySelector('template.notes-src')
+    notes.innerHTML = tpl ? tpl.innerHTML : ''
+    const modals = [...s.querySelectorAll('.overlay[data-modal]')]
+    if (modals.length) {
+      const box = document.createElement('div')
+      box.innerHTML = '<p class="cap">모달 보기</p>'
+      const row = document.createElement('div')
+      row.className = 'notes__modals'
+      for (const m of modals) {
+        const b = document.createElement('button')
+        b.textContent = m.dataset.label
+        b.setAttribute('aria-pressed', 'false')
+        b.onclick = () => {
+          const open = m.hidden
+          for (const x of modals) x.hidden = true
+          for (const y of row.children) y.setAttribute('aria-pressed', 'false')
+          m.hidden = !open
+          b.setAttribute('aria-pressed', String(open))
+        }
+        row.appendChild(b)
+      }
+      box.appendChild(row)
+      notes.appendChild(box)
+    }
+    body.scrollTop = 0
+    location.hash = name
+  }
+  for (const t of tabs) t.onclick = () => show(t.dataset.go)
+  body.addEventListener('click', (e) => {
+    if (e.target.closest('[data-close]')) {
+      e.target.closest('.overlay').hidden = true
+      for (const b of notes.querySelectorAll('.notes__modals button')) b.setAttribute('aria-pressed', 'false')
+    } else if (e.target.classList.contains('overlay')) {
+      e.target.hidden = true
+      for (const b of notes.querySelectorAll('.notes__modals button')) b.setAttribute('aria-pressed', 'false')
+    }
+    if (e.target.closest('a[href="#"]')) e.preventDefault()
+  })
+
+  const togTheme = document.getElementById('togTheme')
+  togTheme.onclick = () => {
+    const dark = document.documentElement.dataset.theme !== 'dark'
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+    togTheme.setAttribute('aria-pressed', String(dark))
+  }
+  const togWidth = document.getElementById('togWidth')
+  togWidth.onclick = () => {
+    const narrow = frame.dataset.w !== '900'
+    if (narrow) frame.dataset.w = '900'
+    else delete frame.dataset.w
+    togWidth.setAttribute('aria-pressed', String(narrow))
+  }
+  document.documentElement.dataset.theme = 'light'
+  const first = location.hash.slice(1)
+  show(tabs.some((t) => t.dataset.go === first) ? first : 'landing')
+})()
+</script>
+</body>
+</html>
