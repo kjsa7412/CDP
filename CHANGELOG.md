@@ -27,6 +27,7 @@
 - 매니페스트 `_package.json` · `ctx package list · show · check · new` · `core/packages.js`
 - `ctx package check` 가 부어서 `ctx check` 를 돌린다 — CI 가 패키지마다 돈다
 - `_managed.md` 파서가 설명 표(첫 칸에 `배치:` 같은 타입)를 규칙으로 읽지 않는다
+- 복제 패키지 `project_1` · `project_2`(dpms 에서 · 2026-09-23) — 다중 패키지 경로 실측. `package new` 가 README 제목 · 출처를 함께 고치고 `convert/` 는 복사하지 않는다 · 릴리스 README 가 패키지 표를 낸다 · 화면의 새 지식 레포가 패키지를 **고르게** 한다 · `repo new` 와 `POST /repos` 가 없는 패키지 이름에 있는 것을 같이 낸다 · 하네스 74번이 `--all`
 
 **지식 레포 생성**
 - `ctx repo new <경로> --package <이름> [--origin] [--push]` · `ctx repo list --root` · `core/reponew.js`

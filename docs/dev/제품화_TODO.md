@@ -377,5 +377,5 @@ Docker                   이미지 빌드 · /healthz · HEALTHCHECK healthy
 | `cdp-managed` 모드 B | R15 — 설계서를 먼저 고친다 |
 | HTTP 토큰 발급 | §4.4.1 — `init` 도 서버 셸의 CLI 다 |
 | 관리 서비스의 명부 화면 | 명부는 서버 셸의 것 |
-| 두 번째 패키지 | R17 — 만드는 길만 |
+| 두 번째 패키지 | R17 — 만드는 길만. **정정 2026-09-23** — 운영자 지시로 `project_1` · `project_2` 를 dpms 에서 복제해 두었다(다중 패키지 경로 실측) |
 | macOS CI | 실사용자 없음 |

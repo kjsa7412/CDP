@@ -34,8 +34,10 @@ export default function RepoServer({ say }) {
     load()
   }, [load])
 
+  // 패키지가 하나면 그것이다. **여럿이면 고르게 한다** — 첫 것을 미리 골라 두면
+  // 이름만 치고 세우기를 눌러 엉뚱한 서식으로 레포가 생긴다. origin 에 커밋이 가는 일이다.
   useEffect(() => {
-    if (pkgs?.packages?.length && !form.pkg) setForm((f) => ({ ...f, pkg: pkgs.packages[0].name }))
+    if (pkgs?.packages?.length === 1 && !form.pkg) setForm((f) => ({ ...f, pkg: pkgs.packages[0].name }))
   }, [pkgs, form.pkg])
 
   const submit = async () => {
@@ -117,6 +119,7 @@ export default function RepoServer({ say }) {
                   spellCheck={false}
                 />
                 <select value={form.pkg} onChange={(e) => setForm({ ...form, pkg: e.target.value })}>
+                  {pkgs.packages.length > 1 && <option value="">— 패키지를 고른다 —</option>}
                   {pkgs.packages.map((p) => (
                     <option key={p.name} value={p.name}>
                       {p.name}
@@ -137,6 +140,11 @@ export default function RepoServer({ say }) {
                   style={{ flex: '1 1 100%' }}
                 />
               </div>
+              {form.pkg && pkgs.packages.find((p) => p.name === form.pkg)?.description && (
+                <Note>
+                  <b>{form.pkg}</b> — {pkgs.packages.find((p) => p.name === form.pkg).description}
+                </Note>
+              )}
               <Note>
                 패키지는 <b>서식</b>입니다 — 문서 골격 · 등록부 · 어휘가 들어오고 그 프로젝트의 값은 없습니다. 세운 뒤
                 첫날 할 일(안 쓰는 문서 지우기 · 등록부 패턴 지우기 · 어휘 등록)은 그 레포의 <code>README.md</code>{' '}

@@ -16,6 +16,10 @@ async function makePackage(dir, name, { brokenDoc = false, orphanExample = false
   const p = path.join(dir, name)
   await fs.mkdir(path.join(p, 'docs'), { recursive: true })
   await fs.writeFile(path.join(p, '_package.json'), JSON.stringify({ name, title: '시험', version: '0.1.0' }))
+  await fs.writeFile(path.join(p, 'README.md'), `# ${name} — 시험 세트\n\n본문은 그대로 남아야 한다.\n`)
+  // 변환기 자리 — 복제에는 따라가지 않아야 한다
+  await fs.mkdir(path.join(p, 'convert'))
+  await fs.writeFile(path.join(p, 'convert', 'x.py'), '# 변환기')
   await fs.writeFile(
     path.join(p, '_managed.md'),
     `# 등록부\n\n| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n| \`table:*\` | \`docs/테이블정의서.md\` | \`## {값}\` |\n| \`screen:*\` | \`docs/${brokenDoc ? '없는문서' : '화면설계서'}.md\` | \`## {값}\` |\n`
@@ -121,6 +125,18 @@ test('newPackage — 복사하고 매니페스트를 고친다 · 이름 형식 
     const m = await P.readManifest(path.join(d, 'copy'))
     assert.equal(m.name, 'copy')
     assert.equal((await P.checkPackage(path.join(d, 'copy'))).ok, true)
+
+    // README — 제목은 새 이름, 출처 한 줄, 본문은 그대로.  convert/ 는 안 따라온다
+    assert.equal(r.readme, true)
+    const readme = await fs.readFile(path.join(d, 'copy', 'README.md'), 'utf8')
+    assert.match(readme.split('\n')[0], /^# copy — 복사본$/)
+    assert.match(readme, /`base` v0\.1\.0 에서 복제/)
+    assert.match(readme, /본문은 그대로 남아야 한다/)
+    assert.equal(await fs.stat(path.join(d, 'copy', 'convert')).catch(() => null), null, 'convert/ 는 복사하지 않는다')
+    assert.ok(await fs.stat(path.join(d, 'base', 'convert')), '원본의 convert/ 는 그대로')
+
+    // 둘이 나란히 보인다 — 다중 패키지
+    assert.deepEqual((await P.listPackages(d)).map((p) => p.name), ['base', 'copy'])
 
     await assert.rejects(P.newPackage(d, { name: '한글', from: 'base' }), /이름 형식/)
     await assert.rejects(P.newPackage(d, { name: 'copy', from: 'base' }), /이미 있다/)

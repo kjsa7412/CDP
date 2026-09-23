@@ -222,6 +222,14 @@ export async function checkPackage(dir, { assemble = null } = {}) {
 /**
  * 새 패키지 — 기존 것을 복사하고 매니페스트를 고친다. **문서 목록을 고치는 것은
  * 사람이다**(검토 R17). 표본이 하나인데 축을 세우지 않는다.
+ *
+ * 복사에서 빼는 것 — `convert/`. 원본 문서 종류의 변환기 자리라 복제한 패키지의
+ * 것이 아니다(원본 xlsx 가 없으면 돌지도 않는다).
+ *
+ * README 도 고친다 — 패키지의 `README.md` 는 조립되어 지식 레포의 루트 README 가
+ * 된다. 복제한 채로 두면 `project_1` 레포를 연 사람이 "dpms" 라는 제목을 읽고,
+ * 어디서 왔는지는 아무 데도 없다. 첫 제목을 새 이름으로 바꾸고 출처 한 줄을 넣는다.
+ * 나머지 본문(문서 목록 · 첫날 할 일)은 그대로다 — 그것을 고치는 것이 사람의 일이다.
  */
 export async function newPackage(packagesDir, { name, from, title = null, description = null }) {
   if (!NAME_RE.test(String(name || ''))) throw new CtxError('E_INPUT', '패키지 이름 형식이 아니다 (영문·숫자·._-)', { name })
@@ -230,15 +238,40 @@ export async function newPackage(packagesDir, { name, from, title = null, descri
   if (!(await isPackageDir(src))) throw new CtxError('E_NOT_FOUND', `원본 패키지가 없다 — ${from}`, { from })
   if (await exists(dst)) throw new CtxError('E_EXISTS', '그 이름의 패키지가 이미 있다', { name })
   await fs.cp(src, dst, { recursive: true })
+  // `fs.cp` 의 filter 는 경로 표기(8.3 단축명 · 대소문자)에 따라 비교가 어긋난다 —
+  // 복사한 뒤 지우는 쪽이 확실하다. 지우는 것은 패키지 루트의 convert/ 하나다.
+  await fs.rm(path.join(dst, 'convert'), { recursive: true, force: true })
   const base = await readManifest(src)
+  const today = new Date().toISOString().slice(0, 10)
   const manifest = {
     name,
     title: title ?? (base.title ? base.title + ' (사본)' : null),
     version: '0.1.0',
     description: description ?? base.description ?? null,
-    source: `agent/packages/${from} 에서 복사`,
-    updated: new Date().toISOString().slice(0, 10),
+    source: `${from}${base.version ? ' v' + base.version : ''} 에서 복제 (agent/packages/${from}) · ${today}`,
+    updated: today,
   }
   await fs.writeFile(path.join(dst, MANIFEST), JSON.stringify(manifest, null, 2) + '\n', 'utf8')
-  return { name, path: dst, manifest }
+
+  // README — 첫 제목을 새 이름으로, 바로 아래 출처 한 줄
+  const readmePath = path.join(dst, 'README.md')
+  const raw = await fs.readFile(readmePath, 'utf8').catch(() => null)
+  let readme = false
+  if (raw != null) {
+    const lines = readText(raw).split('\n')
+    const heading = `# ${name} — ${manifest.title || name}`
+    const note =
+      `> **\`${from}\`${base.version ? ' v' + base.version : ''} 에서 복제** · ${today}. 문서 목록 · 등록부 · 어휘는 아직 원본과\n` +
+      `> 같다 — 이 프로젝트의 것으로 고친다. 원본과 다른 것만이 이 패키지다.`
+    const i = lines.findIndex((l) => /^#\s/.test(l))
+    if (i >= 0) {
+      lines[i] = heading
+      lines.splice(i + 1, 0, '', note)
+    } else {
+      lines.unshift(heading, '', note, '')
+    }
+    await fs.writeFile(readmePath, lines.join('\n'), 'utf8')
+    readme = true
+  }
+  return { name, path: dst, manifest, readme }
 }

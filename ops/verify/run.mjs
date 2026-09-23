@@ -940,11 +940,15 @@ await check(73, '세운 레포에 save 가 한 번 성공한다 (등록부 · �
   return `commit ${ok.commit} · 섹션 ${ok.sections}`
 })
 
-await check(74, '패키지 검사 — ctx package check 가 dpms 를 ok 로 낸다', async () => {
-  const r = await ctx('package', 'check', 'dpms', '--json')
+// 패키지가 여럿이다 — dpms 하나만 보면 복제한 패키지가 깨져도 초록이다. 전부 본다.
+await check(74, '패키지 검사 — ctx package check --all 이 모든 패키지를 ok 로 낸다', async () => {
+  const r = await ctx('package', 'check', '--all', '--json')
   const j = JSON.parse(r.stdout)
-  must(j[0].ok, JSON.stringify(j[0].problems).slice(0, 200))
-  return `문서 ${j[0].docs} · 패턴 ${j[0].patterns} · 예시 ${j[0].examples}`
+  must(j.length >= 1, '패키지가 없다')
+  must(j.some((p) => p.name === 'dpms'), 'dpms 가 없다')
+  const bad = j.filter((p) => !p.ok)
+  must(!bad.length, bad.map((p) => `${p.name}: ${JSON.stringify(p.problems).slice(0, 120)}`).join(' / '))
+  return `${j.length}개 ok — ` + j.map((p) => `${p.name}(문서 ${p.docs} · 패턴 ${p.patterns})`).join(' · ')
 })
 
 await check(14, '모드 A `.mcp.json` — Windows 는 cmd /c ctx.cmd mcp', async () => {

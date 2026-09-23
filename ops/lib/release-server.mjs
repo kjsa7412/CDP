@@ -110,7 +110,7 @@ fs.writeFileSync(
 \`\`\`
 bin/ctx.mjs       서버 본체 — MCP(stdio · http) · 관리 서비스 · ctx.  Node 20 으로 돈다
 web/              관리 서비스 화면
-packages/<이름>/  완성된 지식 레포 폴더.  \`ctx repo new\` 가 여기서 복사한다
+packages/<이름>/  완성된 지식 레포 폴더.  \`ctx repo new\` 가 여기서 복사한다 — ${packages.join(' · ')}
 deploy/           systemd 유닛 · install.sh · upgrade.sh · Dockerfile
 \`\`\`
 

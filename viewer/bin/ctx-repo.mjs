@@ -8,6 +8,7 @@
 
 import path from 'node:path'
 import { newRepo, listRepos } from '../../core/reponew.js'
+import { listPackages } from '../../core/packages.js'
 import { toError } from '../../core/tools.js'
 import { resolvePackages, materializePackage } from './ctx-package.mjs'
 
@@ -25,6 +26,12 @@ export async function runRepo(opt) {
     if (sub === 'new') {
       if (!arg || !opt.package) {
         err('ctx repo new <경로> --package <이름> [--origin <url>] [--push] [--dry]')
+        // 패키지가 여럿이면 이름을 알아야 고른다 — 있는 것을 같이 찍는다
+        const pk0 = await resolvePackages({ explicit: opt.packages }).catch(() => null)
+        const names = pk0
+          ? (await listPackages(pk0.dir).catch(() => [])).map((p) => p.name + (p.manifest?.title ? ' (' + p.manifest.title + ')' : ''))
+          : []
+        if (names.length) err('  패키지: ' + names.join(' · '))
         return 2
       }
       const pk = await resolvePackages({ explicit: opt.packages })

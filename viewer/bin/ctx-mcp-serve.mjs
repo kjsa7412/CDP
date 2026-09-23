@@ -600,7 +600,15 @@ export async function runServe(opt = {}) {
         try {
           mat = await materializePackage(pk, pkgName)
         } catch (e) {
-          return json(res, e.code === 'E_NOT_FOUND' ? 404 : 400, { error: { code: e.code || 'E_INPUT', message: e.message } })
+          // 패키지가 여럿이면 이름을 알아야 고른다 — 없는 이름을 줬을 때 있는 것을 같이 낸다
+          const names = e.code === 'E_NOT_FOUND' ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => p.name) : []
+          return json(res, e.code === 'E_NOT_FOUND' ? 404 : 400, {
+            error: {
+              code: e.code || 'E_INPUT',
+              message: e.message + (names.length ? ' — 있는 패키지: ' + names.join(' · ') : ''),
+              detail: names.length ? { packages: names } : undefined,
+            },
+          })
         }
         try {
           const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: a.user })

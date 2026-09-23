@@ -29026,7 +29026,7 @@ var init_ctx_mcp = __esm({
     init_repo();
     init_tools();
     init_tools();
-    BUILT = "2026-09-23 03:06";
+    BUILT = "2026-09-23 03:26";
     NL2 = String.fromCharCode(10);
     CARD = {
       match: "\uC774\uB984\xB7alias\xB7\uC790\uC720 \uD45C\uD604\uC744 \uC815\uBCF8 \uC88C\uD45C\uB85C \uB300\uC870\uD55C\uB2E4. \uD14C\uC774\uBE14\xB7\uD654\uBA74\xB7API\xB7\uD329\uD130\xB7\uC6D0\uCC9C\xB7\uC6A9\uC5B4\uB97C \uB9D0\uB85C \uAC00\uB9AC\uCF30\uC73C\uBA74 \uC88C\uD45C\uB97C \uC9D0\uC791\uD558\uC9C0 \uB9D0\uACE0 \uBA3C\uC800 \uC774\uAC83\uC73C\uB85C \uD655\uC815\uD55C\uB2E4. `\uBBF8\uB4F1\uC7AC` \uB294 \uC5B4\uD718\uC5D0 \uC5C6\uB2E4\uB294 \uB73B\uC774\uB2E4 \u2014 \uB2E4\uB978 \uC88C\uD45C\uB85C \uBC14\uAFB8\uC9C0 \uB9D0\uACE0 \uADF8\uB300\uB85C \uBCF4\uACE0\uD55C\uB2E4. \uD3D0\uAE30 \uC88C\uD45C\uBA74 \uD6C4\uC18D \uC88C\uD45C\uB97C \uC900\uB2E4. `repo` \uB97C \uC8FC\uC9C0 \uC54A\uC73C\uBA74 **\uB4E0 \uB808\uD3EC\uB97C \uC804\uBD80 \uB300\uC870**\uD558\uACE0 \uACB0\uACFC\uB9C8\uB2E4 `repo` \uB97C \uC801\uB294\uB2E4 \u2014 \uADF8 \uAC12\uC744 \uC774\uD6C4 \uB3C4\uAD6C\uC5D0 \uADF8\uB300\uB85C \uB118\uAE34\uB2E4. \uB450 \uB808\uD3EC\uC5D0 \uB2E4 \uC788\uC73C\uBA74 \uB458 \uB2E4 \uBCF4\uACE0\uD55C\uB2E4(\uACE0\uB974\uC9C0 \uC54A\uB294\uB2E4)",
@@ -29454,17 +29454,37 @@ async function newPackage(packagesDir, { name, from, title = null, description =
   if (!await isPackageDir(src)) throw new CtxError("E_NOT_FOUND", `\uC6D0\uBCF8 \uD328\uD0A4\uC9C0\uAC00 \uC5C6\uB2E4 \u2014 ${from}`, { from });
   if (await exists(dst)) throw new CtxError("E_EXISTS", "\uADF8 \uC774\uB984\uC758 \uD328\uD0A4\uC9C0\uAC00 \uC774\uBBF8 \uC788\uB2E4", { name });
   await fs7.cp(src, dst, { recursive: true });
+  await fs7.rm(path7.join(dst, "convert"), { recursive: true, force: true });
   const base = await readManifest(src);
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const manifest = {
     name,
     title: title ?? (base.title ? base.title + " (\uC0AC\uBCF8)" : null),
     version: "0.1.0",
     description: description ?? base.description ?? null,
-    source: `agent/packages/${from} \uC5D0\uC11C \uBCF5\uC0AC`,
-    updated: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
+    source: `${from}${base.version ? " v" + base.version : ""} \uC5D0\uC11C \uBCF5\uC81C (agent/packages/${from}) \xB7 ${today}`,
+    updated: today
   };
   await fs7.writeFile(path7.join(dst, MANIFEST), JSON.stringify(manifest, null, 2) + "\n", "utf8");
-  return { name, path: dst, manifest };
+  const readmePath = path7.join(dst, "README.md");
+  const raw = await fs7.readFile(readmePath, "utf8").catch(() => null);
+  let readme = false;
+  if (raw != null) {
+    const lines = readText(raw).split("\n");
+    const heading = `# ${name} \u2014 ${manifest.title || name}`;
+    const note = `> **\`${from}\`${base.version ? " v" + base.version : ""} \uC5D0\uC11C \uBCF5\uC81C** \xB7 ${today}. \uBB38\uC11C \uBAA9\uB85D \xB7 \uB4F1\uB85D\uBD80 \xB7 \uC5B4\uD718\uB294 \uC544\uC9C1 \uC6D0\uBCF8\uACFC
+> \uAC19\uB2E4 \u2014 \uC774 \uD504\uB85C\uC81D\uD2B8\uC758 \uAC83\uC73C\uB85C \uACE0\uCE5C\uB2E4. \uC6D0\uBCF8\uACFC \uB2E4\uB978 \uAC83\uB9CC\uC774 \uC774 \uD328\uD0A4\uC9C0\uB2E4.`;
+    const i = lines.findIndex((l) => /^#\s/.test(l));
+    if (i >= 0) {
+      lines[i] = heading;
+      lines.splice(i + 1, 0, "", note);
+    } else {
+      lines.unshift(heading, "", note, "");
+    }
+    await fs7.writeFile(readmePath, lines.join("\n"), "utf8");
+    readme = true;
+  }
+  return { name, path: dst, manifest, readme };
 }
 var MANIFEST, NAME_RE;
 var init_packages = __esm({
@@ -29903,6 +29923,9 @@ async function runRepo(opt) {
     if (sub === "new") {
       if (!arg || !opt.package) {
         err3("ctx repo new <\uACBD\uB85C> --package <\uC774\uB984> [--origin <url>] [--push] [--dry]");
+        const pk0 = await resolvePackages({ explicit: opt.packages }).catch(() => null);
+        const names = pk0 ? (await listPackages(pk0.dir).catch(() => [])).map((p) => p.name + (p.manifest?.title ? " (" + p.manifest.title + ")" : "")) : [];
+        if (names.length) err3("  \uD328\uD0A4\uC9C0: " + names.join(" \xB7 "));
         return 2;
       }
       const pk = await resolvePackages({ explicit: opt.packages });
@@ -29964,6 +29987,7 @@ var NL5, out3, err3, pad2;
 var init_ctx_repo = __esm({
   "viewer/bin/ctx-repo.mjs"() {
     init_reponew();
+    init_packages();
     init_tools();
     init_ctx_package();
     NL5 = String.fromCharCode(10);
@@ -39536,7 +39560,14 @@ async function runServe(opt = {}) {
         try {
           mat = await materializePackage(pk, pkgName);
         } catch (e) {
-          return json2(res, e.code === "E_NOT_FOUND" ? 404 : 400, { error: { code: e.code || "E_INPUT", message: e.message } });
+          const names = e.code === "E_NOT_FOUND" ? (await listPackages(pk.dir).catch(() => [])).map((p) => p.name) : [];
+          return json2(res, e.code === "E_NOT_FOUND" ? 404 : 400, {
+            error: {
+              code: e.code || "E_INPUT",
+              message: e.message + (names.length ? " \u2014 \uC788\uB294 \uD328\uD0A4\uC9C0: " + names.join(" \xB7 ") : ""),
+              detail: names.length ? { packages: names } : void 0
+            }
+          });
         }
         try {
           const r = await newRepo({ from: mat.from, dest: path21.join(root, name), origin: origin2, push: !!origin2, author: a.user });
@@ -40168,10 +40199,10 @@ async function runSync(root, { pull = true, onPhase = () => {
 
 // viewer/bin/ctx-cli.mjs
 init_tools();
-var BUILT2 = "2026-09-23 03:06";
+var BUILT2 = "2026-09-23 03:26";
 var BS2 = String.fromCharCode(92);
 var SEP = path22.sep;
-var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-23 03:06)
+var USAGE = `ctx - \uC9C0\uC2DD \uB808\uD3EC \uB3C4\uAD6C  (\uBC88\uB4E4 2026-09-23 03:26)
 
   ctx check [--json]        \uCEE4\uBC0B \uAC00\uB2A5\uD55C\uAC00. \uC624\uB958\uAC00 \uC788\uC73C\uBA74 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md \uC7AC\uC0DD\uC131

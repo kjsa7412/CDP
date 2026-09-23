@@ -142,6 +142,29 @@ for (const name of packages) {
 // ── 3) 설치 안내 ────────────────────────────────────────────────────────
 const stamp = bundleStamp(ROOT)
 
+// 패키지 표 — 배포본에 폴더가 여럿이면 받는 사람이 **하나를 고른다.** 이름만으로는
+// 못 고르므로 매니페스트의 제목 · 판 · 설명과 문서 수를 같이 낸다. 전에는 예시가
+// `knowledge-repo-dpms` 하나로 박혀 있어 둘째 패키지가 생기면 안내가 거짓이 됐다.
+const countDocs = (d) => {
+  let n = 0
+  ;(function walk(x) {
+    if (!fs.existsSync(x)) return
+    for (const e of fs.readdirSync(x, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(path.join(x, e.name))
+      else if (/\.md$/i.test(e.name)) n++
+    }
+  })(d)
+  return n
+}
+const pkgRows = packages.map((name) => {
+  let mf = {}
+  try {
+    mf = JSON.parse(fs.readFileSync(path.join(ROOT, 'agent', 'packages', name, '_package.json'), 'utf8').replace(/^﻿/, ''))
+  } catch {}
+  const docs = countDocs(path.join(ROOT, 'agent', 'packages', name, 'docs'))
+  return `| \`knowledge-repo-${name}/\` | ${mf.title || ''} | ${mf.version || '-'} | ${docs} | ${mf.description || ''} |`
+})
+
 fs.writeFileSync(
   path.join(OUT, 'README.md'),
   `# CDP v${VERSION}
@@ -170,10 +193,19 @@ knowledge-repo-<이름>/   **복사하면 그게 지식 레포다.** 패키지�
 설치는 \`설치.md\` 를 따른다 — 네 자리(개발 PC · 지식 레포 · 작업
 레포 · 팀원 PC)에서 벌어지고, 한 자리만 보면 반드시 빠뜨린다.
 
+## 이 배포본의 패키지 — **하나만 고른다**
+
+| 폴더 | 무엇 | 판 | 문서 | 설명 |
+|---|---|---|--:|---|
+${pkgRows.join('\n')}
+
+프로젝트당 지식 레포는 하나다. 프로젝트에 맞는 폴더 **하나**를 복사한다 — 둘을
+합치지 않는다. 패키지는 서식이라 값이 없고, 문서 목록만 다르다.
+
 ## 새 지식 레포 세우기 — 폴더를 복사한다
 
 \`\`\`
-xcopy /E /I knowledge-repo-dpms C:\\cdp
+xcopy /E /I knowledge-repo-<고른 것> C:\\cdp
 cd /d C:\\cdp
 git init && git config core.hooksPath .githooks
 \`\`\`

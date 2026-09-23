@@ -81,10 +81,11 @@ CDN·인터넷을 타는 것이 하나도 없다. 화면의 폰트까지 base64 
 
 ## ③ 지식 레포 — 관리자, 프로젝트당 1회
 
-**폴더 하나를 복사한다.**
+**폴더 하나를 복사한다.** 배포본에 `knowledge-repo-*` 가 여럿이면 프로젝트에 맞는
+**하나만** — 어느 패키지가 무엇인지는 배포본 루트 `README.md` 의 패키지 표에 있다.
 
 ```
-xcopy /E /I <배포본>\knowledge-repo-dpms C:\cdp
+xcopy /E /I <배포본>\knowledge-repo-<고른 것> C:\cdp
 cd /d C:\cdp
 git init && git config core.hooksPath .githooks
 ```
