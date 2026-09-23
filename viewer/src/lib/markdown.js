@@ -47,6 +47,9 @@ const md = new MarkdownIt({
   typographer: false, // 한글 문서에서 따옴표 치환이 오히려 방해된다
   breaks: false,
 })
+// `install.sh` · `설치절차.md` 같은 파일 이름은 주소가 아니다 — .sh · .md 가 실제 TLD 라서 linkify 가
+// 물었다. 스킴(http · https)이 붙은 것만 링크로 만든다.
+md.linkify.set({ fuzzyLink: false, fuzzyEmail: false })
 
 // 제목 앵커
 md.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
@@ -54,7 +57,12 @@ md.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
   if (t.tag === 'h2' || t.tag === 'h3') {
     const inline = tokens[idx + 1]
     const text = inline?.content || ''
-    const slug = slugify(text)
+    // 같은 제목이 둘이면 GitHub 처럼 `-1` `-2` 를 붙인다 — 목차 링크가 첫 것만 가리키지 않게
+    let slug = slugify(text)
+    env.slugs = env.slugs || new Map()
+    const seen = env.slugs.get(slug) || 0
+    env.slugs.set(slug, seen + 1)
+    if (seen) slug = `${slug}-${seen}`
     t.attrSet('id', slug)
     env.toc = env.toc || []
     env.toc.push({ level: Number(t.tag[1]), text, slug })
@@ -293,13 +301,15 @@ export function sectionSlug(toc, value) {
   if (!want) return null
   return (toc || []).find((t) => normValue(headValue(t.text)) === want)?.slug || null
 }
+// **GitHub 의 규칙과 같다** — 소문자 · 구두점 제거(`-` `_` 공백만 남긴다) · 공백 하나가 `-` 하나.
+// 설명서 세 권의 목차 링크(`#6-사람-관리--명부와-토큰`)가 그 규칙으로 적혀 있다. 전에는 공백 묶음을
+// `-` 하나로 접고 60자에서 잘라 그 링크가 그 절로 가지 않았다(제품관리서비스 검토 §4.5).
 const slugify = (s) =>
   String(s)
     .trim()
     .toLowerCase()
     .replace(/[^\w가-힣\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .slice(0, 60)
+    .replace(/\s/g, '-')
 const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const escapeAttr = (s) => String(s).replace(/[^\w-]/g, '')

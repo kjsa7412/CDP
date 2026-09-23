@@ -1533,3 +1533,16 @@
   background: var(--surface-3, rgba(127, 127, 127, 0.12));
   color: var(--text);
 }
+
+/* 레포 메뉴 — **항상 메뉴다**(하나여도 · 제품관리서비스 검토 §4.8). 행마다 이름 · 제목 · 권한 칩.
+   관리자에게는 「이 서버의 레포」 절이 더 붙어 권한 밖 레포가 회색으로 보인다(검토 v0.1 D6). */
+.repomenu__row { flex-direction: row; align-items: center; gap: 10px; }
+.repomenu__row span { flex: 1; }
+.repomenu__row .chip { margin-left: auto; flex: none; }
+.repomenu__cap { padding: 6px 10px 2px; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; color: var(--text-3); }
+.repomenu__hr { height: 1px; margin: 4px 2px; background: var(--border); }
+a.repomenu__row, a.repomenu__row:hover { text-decoration: none; color: inherit; }
+/* 누구로 보고 있나 — 역할 칩 · 설명서 · (관리자면) 콘솔 */
+.who__role { padding: 2px 7px; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: var(--text-2); background: var(--surface-3); border-radius: 999px; }
+.who .who__lnk { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); padding: 3px 6px; border-radius: var(--r-sm); }
+.who .who__lnk:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }

@@ -89,7 +89,7 @@ export async function doctorRows(opt) {
         // 관리자 토큰은 짧아야 한다(30일). 90일 · 무기한이면 말한다.
         const adminNames = new Set(admins.map((a) => a.name))
         // 남은 일수는 그날 끝까지라 올림이다 — 갓 발급한 30일 토큰이 31 로 센다. 하루를 봐준다.
-        const longAdmin = list.filter((t) => t.status === 'active' && adminNames.has(t.user) && (t.daysLeft === null || t.daysLeft > auth.ADMIN_EXPIRES_DAYS + 1))
+        const longAdmin = list.filter((t) => t.status === 'active' && adminNames.has(t.user) && (t.daysLeft === null || t.daysLeft > auth.ADMIN_EXPIRES_DAYS))
         if (longAdmin.length) warn('관리자 토큰', longAdmin.map((t) => `${t.user}(${t.id}) ${t.daysLeft === null ? '무기한' : t.daysLeft + '일'}`).join(' · ') + ` — 관리자 토큰은 ${auth.ADMIN_EXPIRES_DAYS}일 안으로 둔다`)
       } catch (e) {
         fail('auth.json 형식', e.message)
@@ -126,7 +126,7 @@ export async function doctorRows(opt) {
   // ── 패키지
   const pk = await resolvePackages({ explicit: opt.packages })
   if (pk) {
-    const n = (await fs.readdir(pk.dir).catch(() => [])).length
+    const n = (await fs.readdir(pk.dir, { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory()).length
     ok('packages', `${pk.dir} (${pk.how}) · ${n}개`)
   } else warn('packages', '없다 — ctx repo new 를 쓰려면 --packages')
 

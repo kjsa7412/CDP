@@ -481,7 +481,7 @@ export async function runServe(opt = {}) {
       try {
         const r = await cloneRepo({ url: clone, dest: path.join(root, name) })
         await store.refresh()
-        await auth.audit(dataDir, `repo clone · ${actor} · ${name} · origin=${clone}`)
+        await auth.audit(dataDir, `admin repo clone · ${actor} · ${name} · origin=${clone}`)
         return { status: 200, body: { name, commit: r.commit, origin: clone, cloned: true } }
       } catch (e) {
         const code = e?.code || 'E_GIT'
@@ -504,7 +504,7 @@ export async function runServe(opt = {}) {
     try {
       const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor })
       await store.refresh()
-      await auth.audit(dataDir, `repo new · ${actor} · ${name} · package=${pkgName}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
+      await auth.audit(dataDir, `admin repo new · ${actor} · ${name} · package=${pkgName}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
       return { status: 200, body: { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null } }
     } catch (e) {
       const code = e?.code || 'E_REPO'
@@ -607,6 +607,17 @@ export async function runServe(opt = {}) {
         return json(res, 200, { ok: true, built: BUILT, repos: list.length, mirror })
       }
 
+      // 화면 자산 — **인증 앞에서 낸다.**
+      //
+      // 로그인 화면을 그리려면 그 전에 받아야 하고, 담긴 것은 빌드 산출물뿐이라
+      // 숨길 것이 없다. 인증 뒤에 두면 401 이 나서 화면이 아예 안 뜬다 —
+      // 실측으로 잡았다(두 번 — 2026-09-22 · 사이트 라우트를 넣으며 한 번 더).
+      if (/^\/(assets\/|favicon|[^/]+\.(?:js|css|svg|png|ico|woff2?)$)/.test(url.pathname)) {
+        return serveWeb({ req, res, url, webDir, log })
+      }
+      // HEAD 는 GET 과 같이 본다 — 브라우저 · 감시가 페이지를 HEAD 로 찔러 본다
+      const isGet = req.method === 'GET' || req.method === 'HEAD'
+
       // ── 사이트(검토 §4.2) — 소개 · 설명서 · 로그인 · 마법사는 인증 **앞**에 온다.
       //
       // 토큰을 받기 전의 사용자가 읽는 페이지다(D2). `--private-pages` 면 세션을 요구한다.
@@ -662,7 +673,7 @@ export async function runServe(opt = {}) {
 
       // 페이지 — 전부 같은 `index.html` 이다. 라우팅은 화면이 한다(D12).
       const isPublicPage = url.pathname === '/' || url.pathname === '/manual' || url.pathname.startsWith('/manual/') || url.pathname === '/setup'
-      if (isPublicPage && req.method === 'GET') {
+      if (isPublicPage && isGet) {
         if (privatePages && url.pathname !== '/setup') {
           const who = await pageAuth()
           if (!who.ok) return toLogin()
@@ -670,7 +681,7 @@ export async function runServe(opt = {}) {
         return serveWeb({ req, res, url, webDir, log })
       }
       // 콘솔 — 세션이 있어야 화면을 낸다. admin 인지는 화면과 API 가 본다(D4 — 403).
-      if ((url.pathname === '/console' || url.pathname.startsWith('/console/')) && req.method === 'GET') {
+      if ((url.pathname === '/console' || url.pathname.startsWith('/console/')) && isGet) {
         const who = await pageAuth()
         if (!who.ok) return toLogin()
         return serveWeb({ req, res, url, webDir, log })
@@ -1731,8 +1742,11 @@ async function manualIndex(manualDir) {
   const items = []
   let figDir = null
   let figures = []
+  // 읽는 순서 — 사용자 · 관리자 · 개발자(설명서 표 그대로). 파일명 정렬은 '개발자' 가 먼저다.
+  const ORDER = ['사용자_설명서.md', '관리자_설명서.md', '개발자_설명서.md']
+  const rank = (n) => (ORDER.includes(n) ? ORDER.indexOf(n) : ORDER.length)
   if (manualDir) {
-    for (const n of (await fs.readdir(manualDir).catch(() => [])).sort()) {
+    for (const n of (await fs.readdir(manualDir).catch(() => [])).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))) {
       if (!/_설명서\.md$/.test(n)) continue
       items.push({ id: n.replace(/\.md$/, ''), title: await titleOfMd(path.join(manualDir, n)), file: path.join(manualDir, n) })
     }

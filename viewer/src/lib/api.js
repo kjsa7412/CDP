@@ -1,14 +1,17 @@
 // API 클라이언트.
 //
-// **한 번들이 두 모드에서 돈다**(MCP 설계서 §6.8). 빌드를 둘로 나누면
-// 유지비가 두 배고, 같은 화면이 갈라지면 한쪽만 고쳐진다.
+// **한 번들이 세 얼굴에서 돈다**(MCP 설계서 §6.8 · 제품관리서비스 검토 §4.1). 빌드를
+// 나누면 유지비가 배고, 같은 화면이 갈라지면 한쪽만 고쳐진다.
 //
-// 모드는 **주소가 말해 준다.** 관리 서비스는 화면을 `/r/<repo>/…` 로 서빙하므로
-// 경로 첫 조각이 `r` 이면 서버 모드이고 둘째가 레포 이름이다 — 판정하려고
-// 왕복할 필요가 없다.
+// 얼굴은 **주소가 말해 준다.**
 //
-//   로컬   /            → /api/…              세션 토큰 헤더 · SSE · 하트비트
-//   서버   /r/<repo>/   → /api/<repo>/…       세션 쿠키 · SSE 없음 · 하트비트 없음
+//   로컬   /                → /api/…             세션 토큰 헤더 · SSE · 하트비트        face: local
+//   레포   /r/<repo>/       → /api/<repo>/…      세션 쿠키 · SSE 없음 · 하트비트 없음  face: repo
+//   사이트 / · /manual · /login · /setup · /r      face: site    ┐ 서버가 index.html 에 심은
+//   콘솔   /console/…                              face: console ┘ window.__CDP_SERVER__ 로 안다
+//
+// `/r/` 밖에서는 경로만으로 로컬과 서버를 가를 수 없다(둘 다 `/`). 그래서 서버가
+// `index.html` 을 낼 때 한 줄을 심는다 — 왕복 없이 첫 렌더에서 갈린다.
 //
 // 세션 토큰은 URL 의 ?t= 로 한 번 받아 sessionStorage 에 넣고 이후 헤더로
 // 보낸다. 외부 페이지는 sessionStorage 를 읽을 수 없다(설계서 §7.2).
@@ -36,17 +39,21 @@ function readToken() {
 
 export const token = readToken()
 
-// ── 모드 ────────────────────────────────────────────────────────────────────
+// ── 모드 · 얼굴 ─────────────────────────────────────────────────────────────
 
 function readMode() {
   const seg = location.pathname.split('/').filter(Boolean)
-  if (seg[0] === 'r' && seg[1]) return { server: true, repo: decodeURIComponent(seg[1]) }
-  return { server: false, repo: null }
+  if (seg[0] === 'r' && seg[1]) return { server: true, repo: decodeURIComponent(seg[1]), face: 'repo' }
+  if (typeof window !== 'undefined' && window.__CDP_SERVER__) {
+    return { server: true, repo: null, face: seg[0] === 'console' ? 'console' : 'site' }
+  }
+  return { server: false, repo: null, face: 'local' }
 }
 
 export const mode = readMode()
 export const isServer = mode.server
-const BASE = mode.server ? `/api/${encodeURIComponent(mode.repo)}` : '/api'
+export const face = mode.face
+const BASE = mode.repo ? `/api/${encodeURIComponent(mode.repo)}` : '/api'
 
 // 레포를 바꾼다 = **주소를 바꾼다.** 화면 상태를 들고 가지 않는다(§6.6.2) —
 // 좌표 체계가 레포마다 다르므로 이어받을 수 있는 것이 없다.
@@ -74,10 +81,14 @@ function saveLocalState(patch) {
 
 // `allowStatus` — **실패가 결과인 호출이 있다.**
 //
-// ff 불가·원격 안 닿음은 HTTP 오류가 아니라 **읽어야 하는 답**이다. 전에는
+// ff 불가·원격 안 닿음·로그인 실패는 HTTP 오류가 아니라 **읽어야 하는 답**이다. 전에는
 // 그것도 예외로 던져서, 서버가 보낸 "원격이 3건 앞서 있고 로컬에도 2건이
 // 있습니다 — 터미널에서 git pull --rebase" 가 화면에서는 `HTTP 409` 로만
 // 보였다. 본문을 그대로 돌려준다.
+//
+// 401 은 둘로 갈린다 — `E_REAUTH`(콘솔 쓰기에 관리자 확인이 필요하다)는 **던진다**
+// 부르는 쪽이 확인 모달을 띄우고 다시 시도한다. 나머지 401 은 세션이 끊긴 것이라
+// 보던 곳을 들고 로그인으로 간다(§6.6.1).
 async function req(path, opts = {}) {
   const { allowStatus = [], absolute = false, ...init } = opts
   const res = await fetch((absolute ? '' : BASE) + path, {
@@ -89,31 +100,38 @@ async function req(path, opts = {}) {
       ...init.headers,
     },
   })
+  if (!res.ok && allowStatus.includes(res.status)) return res.json()
   if (res.status === 401) {
-    // 세션이 끊겼다. **보던 곳을 들고 로그인으로 간다**(§6.6.1).
+    let j = null
+    try {
+      j = await res.json()
+    } catch {}
+    if (j?.error?.code === 'E_REAUTH') throw new ApiError(j.error.message, 401, 'E_REAUTH')
     if (mode.server) {
       location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search)
       return new Promise(() => {}) // 이동 중 — 화면이 오류를 그리지 않게
     }
     throw new ApiError('토큰이 없거나 만료되었습니다. 앱을 다시 실행하세요.', 401)
   }
-  if (!res.ok && allowStatus.includes(res.status)) return res.json()
   if (!res.ok) {
     let detail = ''
+    let code = null
     try {
       const j = await res.json()
-      detail = j?.error || j?.message || ''
+      detail = j?.error?.message || j?.error || j?.message || ''
+      code = j?.error?.code || null
     } catch {}
-    throw new ApiError(detail || `HTTP ${res.status}`, res.status)
+    throw new ApiError(detail || `HTTP ${res.status}`, res.status, code)
   }
   const ct = res.headers.get('content-type') || ''
   return ct.includes('json') ? res.json() : res.text()
 }
 
 export class ApiError extends Error {
-  constructor(msg, status) {
+  constructor(msg, status, code = null) {
     super(msg)
     this.status = status
+    this.code = code
   }
 }
 
@@ -139,7 +157,7 @@ export const api = {
   state: () => (mode.server ? Promise.resolve(localState()) : req('/state')),
   saveState: (patch) =>
     mode.server ? Promise.resolve(saveLocalState(patch)) : req('/state', { method: 'POST', body: JSON.stringify(patch) }),
-  // 누구인가 · 무엇을 볼 수 있는가. 서버 모드에만 있다.
+  // 누구인가 · 무엇을 볼 수 있는가 · 역할. 서버 모드에만 있다.
   me: () => (mode.server ? req('/me', { absolute: true }) : Promise.resolve(null)),
 
   // ── 설치 대장 (§6.7.2) — 서버 모드 전용. 로컬의 `/workrepos` 와 **다른
@@ -173,6 +191,41 @@ export const api = {
   probeExternal: (p) => req(`/probe-external?path=${encodeURIComponent(p)}`),
   open: (p) => req('/open', { method: 'POST', body: JSON.stringify({ path: p }) }),
   heartbeat: () => req('/heartbeat', { method: 'POST' }).catch(() => {}),
+}
+
+// ── 사이트 (검토 §4.2) — 공개 자리. 레포 이름 · 사람 이름이 없는 값만 온다 ──────
+export const site = {
+  info: () => req('/site/info', { absolute: true }),
+  // 설명서 원문 — 렌더는 화면이 한다(D10). 응답이 text/markdown 이라 문자열로 온다
+  manual: (id) => req('/site/manual/' + encodeURIComponent(id) + '.md', { absolute: true }),
+  figure: (name) => '/site/manual/' + encodeURIComponent('그림') + '/' + encodeURIComponent(name),
+  // 로그인 · 마법사 — 실패(401 · 409 · 429)가 **읽어야 하는 답**이다
+  login: (tok, next) => req('/login', { absolute: true, method: 'POST', body: JSON.stringify({ token: tok, next }), allowStatus: [401, 429] }),
+  setup: (body) => req('/setup', { absolute: true, method: 'POST', body: JSON.stringify(body), allowStatus: [400, 401, 409, 429] }),
+}
+
+// ── 콘솔 (검토 §4.2 · §4.7) — admin · 쓰기는 재인증(`E_REAUTH` 를 던진다) ─────────
+const A = (p, init = {}) => req('/admin' + p, { absolute: true, ...init })
+const J = (method, body) => ({ method, body: JSON.stringify(body ?? {}) })
+export const admin = {
+  overview: () => A('/overview'),
+  users: () => A('/users'),
+  userAdd: (b) => A('/users', J('POST', b)),
+  userSet: (name, b) => A('/users/' + encodeURIComponent(name), J('PATCH', b)),
+  tokens: () => A('/tokens'),
+  tokenIssue: (b) => A('/tokens', J('POST', b)),
+  tokenReissue: (id, b = {}) => A(`/tokens/${encodeURIComponent(id)}/reissue`, J('POST', b)),
+  tokenRevoke: (id) => A(`/tokens/${encodeURIComponent(id)}/revoke`, J('POST', {})),
+  tokenSet: (id, b) => A('/tokens/' + encodeURIComponent(id), J('PATCH', b)),
+  repos: () => A('/repos'),
+  repoNew: (b) => A('/repos', J('POST', b)),
+  workrepos: () => A('/workrepos'),
+  doctor: (fresh = false) => A('/doctor' + (fresh ? '?fresh=1' : '')),
+  server: () => A('/server'),
+  audit: (limit = 200) => A('/audit?limit=' + limit),
+  log: (limit = 200) => A('/log?limit=' + limit),
+  // 재인증 — 틀린 토큰(401) · 너무 잦음(429)은 답이다
+  sudo: (tok) => A('/sudo', { ...J('POST', { token: tok }), allowStatus: [401, 429] }),
 }
 
 // SSE — 파일 변경·스캔 진행. 감시가 살아 있으면 새로고침 버튼이 필요 없다(§23.1).

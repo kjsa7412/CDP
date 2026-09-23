@@ -1,0 +1,159 @@
+// 서버 — 이 프로세스가 무엇으로 떠 있나 · 진단 · 패키지 · 갱신 · 로그. 제품관리서비스 검토 §4.7.
+//
+// **전부 읽기다.** 고치는 것은 셸이다(D7 · D8) — 갱신은 upgrade.sh, 비밀은 셸에서. 여기는
+// 그 명령과 지금 값을 보이는 자리. 파일 위치 · 로그는 관리자에게만 보인다.
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { admin } from '../lib/api.js'
+import Icon from '../components/Icon.jsx'
+import { PageHead, Card, Row, Mono, Note, Btn, Cmd, Search, when } from './ui.jsx'
+
+const MARK = { ok: ['check', 'var(--text-3)'], warn: ['warn', 'var(--warn)'], fail: ['block', 'var(--danger)'] }
+
+export default function Server({ say }) {
+  const [sv, setSv] = useState(null)
+  const [doc, setDoc] = useState(null)
+  const [log, setLog] = useState(null)
+  const [q, setQ] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(() => {
+    admin.server().then(setSv).catch((e) => say(e.message, 6000))
+    admin.doctor().then(setDoc).catch(() => setDoc(null))
+    admin.log(200).then(setLog).catch(() => setLog(null))
+  }, [say])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const recheck = async () => {
+    setBusy(true)
+    try {
+      setDoc(await admin.doctor(true))
+    } catch (e) {
+      say(e.message, 6000)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const logLines = useMemo(() => {
+    if (!log) return []
+    const k = q.trim()
+    return log.lines.filter((l) => !k || l.includes(k))
+  }, [log, q])
+
+  if (!sv) return <span className="amuted">읽는 중…</span>
+  const prefix = sv.data ? sv.data.replace(/[\\/][^\\/]+$/, '') : '/opt/cdp'
+  return (
+    <>
+      <PageHead title="서버" sub="이 프로세스가 무엇으로 떠 있나 · 진단 · 패키지 · 갱신 · 로그. 고치는 것은 셸이고 여기는 보는 자리다">
+        <Btn onClick={recheck} disabled={busy}>
+          <Icon name="sync" size={13} className={busy ? 'spin' : undefined} /> {busy ? '검사 중…' : '다시 검사'}
+        </Btn>
+      </PageHead>
+
+      <div className="agrid">
+        <Card title="이 프로세스">
+          <Row label="판">
+            <Mono>{sv.version ? `v${sv.version}` : '—'}</Mono>
+            <span className="amuted">· 빌드 {sv.built}</span>
+          </Row>
+          <Row label="실행">
+            <span className="amuted">
+              node {sv.node} · pid {sv.pid} · 기동 {when(new Date(sv.startedAt).toISOString())}
+            </span>
+          </Row>
+          <Row label="bind">
+            <Mono>
+              {sv.bind}:{sv.port}
+            </Mono>
+            <span className="amuted">{sv.publicUrl ? `· 공개 주소 ${sv.publicUrl}` : '· 프록시 없음 · 평문'}</span>
+          </Row>
+          <Row label="mirror">
+            <span className="amuted">{sv.mirror ? '켜짐 — save 뒤 push' : '꺼짐 — save 뒤 push 하지 않는다'}</span>
+          </Row>
+          <Row label="관리 API 대역">
+            {sv.adminFrom?.length ? <Mono>{sv.adminFrom.join(' · ')}</Mono> : <span className="amuted">제한 없음 — bind 가 유일한 경계다</span>}
+          </Row>
+          <Row label="소개 · 설명서">
+            <span className="amuted">{sv.privatePages ? '로그인 뒤에만 (--private-pages)' : '공개'}</span>
+          </Row>
+        </Card>
+        <Card title="파일이 어디에 있나" hint="관리자에게만 보인다">
+          <Row label="레포">
+            <Mono>{sv.root}</Mono>
+          </Row>
+          <Row label="명부">
+            <Mono>{sv.auth || '—'}</Mono>
+            <span className="amuted">· 600</span>
+          </Row>
+          <Row label="데이터 · 로그">
+            <Mono>{sv.data || '—'}</Mono>
+          </Row>
+          <Row label="화면 · 설명서">
+            <Mono>{sv.web}</Mono>
+            {sv.manual && <Mono>{sv.manual}</Mono>}
+            {!sv.webOk && <span className="awarn">index.html 없음</span>}
+          </Row>
+          <Row label="패키지">
+            <Mono>{sv.packages || '—'}</Mono>
+            <span className="amuted">· {sv.packagesList.length}개</span>
+          </Row>
+        </Card>
+      </div>
+
+      <Card title="진단" hint={doc ? `ctx serve doctor 와 같은 줄 · ${when(new Date(doc.at).toISOString())} · 60초 캐시` : 'ctx serve doctor 와 같은 줄'} actions={doc && <span className="tcount">ok {doc.rows.length - doc.fails - doc.warns} · warn {doc.warns} · fail {doc.fails}</span>}>
+        {!doc ? (
+          <span className="amuted">{busy ? '검사 중…' : '아직 검사하지 않았다 — 다시 검사'}</span>
+        ) : (
+          <div className="doctor">
+            {doc.rows.map((r, i) => {
+              const [ic, color] = MARK[r.state] || MARK.ok
+              return (
+                <div className="doctor__row" key={i} data-s={r.state}>
+                  <Icon name={ic} size={13} style={{ color, flex: 'none' }} />
+                  <span className="what">{r.what}</span>
+                  <span className="note">{r.note}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Card>
+
+      <div className="agrid">
+        <Card title="갱신" hint="셸의 일이다 — 여기는 판과 명령">
+          <Row label="지금">
+            <Mono>{sv.version ? `v${sv.version}` : '—'}</Mono>
+            <span className="amuted">· {sv.built}</span>
+          </Row>
+          <Row label="새 판을 올리려면" stack>
+            <Cmd>{`sudo bash ${prefix}/deploy/upgrade.sh /tmp/cdp-server-v<버전>.tar.gz`}</Cmd>
+          </Row>
+          <Note>
+            자기 자신(<code>ctx.mjs</code>)을 갈아 끼우고 재시작하는 일이라 브라우저에서 시작하지 않는다 — 실패했을 때 되돌리는 길이 셸뿐이다. 명부 · 대장 · 레포는 건드리지 않는다.
+          </Note>
+        </Card>
+        <Card title="패키지" hint="새 레포가 여기서 복사된다">
+          {sv.packagesList.length === 0 && <span className="amuted">없다 — --packages</span>}
+          {sv.packagesList.map((p) => (
+            <Row key={p.name} label={<Mono>{p.name}</Mono>}>
+              {p.version ? `v${p.version}` : ''} <span className="amuted">· {p.title || ''} · 문서 {p.docs}{p.types != null ? ` · 타입 ${p.types}` : ''}</span>
+            </Row>
+          ))}
+          <Note>
+            패키지 이름은 자리표시자다 — 적용하는 프로젝트 이름으로 바꾼다(<code>ctx package rename</code> · 개발 PC). 패키지 이름 ≠ 레포 이름.
+          </Note>
+        </Card>
+      </div>
+
+      <Card title="로그" hint={log ? `serve.log 마지막 ${log.lines.length}줄 (전체 ${log.total}) · 회전 3 × 1MB` : 'serve.log'} actions={<Search value={q} onChange={setQ} placeholder="걸러 보기 — 401 · save" style={{ minWidth: 180, height: 26 }} />}>
+        <pre className="logbox">{logLines.join('\n') || '(없음)'}</pre>
+        <Note>
+          문서 내용 · 검색어 · 토큰 원문은 로그에 없다. 프로세스가 죽었을 때는 <code>journalctl -u cdp-serve</code> — 그것은 프로세스 밖이라 여기 없다.
+        </Note>
+      </Card>
+    </>
+  )
+}

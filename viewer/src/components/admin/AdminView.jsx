@@ -57,6 +57,7 @@ export default function AdminView({
   firstRun = false,
   onOpened,
   say,
+  me = null,
 }) {
   const [diag, setDiag] = useState(null)
 
@@ -88,6 +89,20 @@ export default function AdminView({
               </span>
             </button>
           ))}
+          {/* 관리자에게 — 콘솔로. 여기 넷은 레포 하나의 것이고, 사람 · 토큰 · 레포 전부 · 서버는 콘솔의 것이다
+              (제품관리서비스 검토 §4.8). */}
+          {isServer && me?.admin && (
+            <>
+              <div className="menu__hr" />
+              <a className="astep" href="/console" style={{ textDecoration: 'none' }}>
+                <Icon name="shield" size={15} />
+                <span className="astep__txt">
+                  <span className="astep__t">콘솔로 →</span>
+                  <span className="astep__s">사람 · 토큰 · 레포 전부 · 서버</span>
+                </span>
+              </a>
+            </>
+          )}
           <span className="topbar__spacer" style={{ flex: 1 }} />
           <button className="astep astep--back" onClick={onClose}>
             <Icon name="doc" size={15} />

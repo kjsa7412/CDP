@@ -105,11 +105,13 @@ export function decide(db, rawToken, now = Date.now()) {
   }
 }
 
+// 남은 일수는 **달력 날짜의 차이**다 — 만료일 자정 대 오늘 자정(둘 다 UTC, `day()` 와 같은 기준).
+// 갓 발급한 30일 토큰이 30일이어야 하고, 만료일 당일은 0일(그날 23:59:59 까지는 산다 — decide).
 export function daysLeft(rec, now = Date.now()) {
   if (!rec?.expires || rec.expires === 'never') return null
-  const at = Date.parse(rec.expires + 'T23:59:59')
+  const at = Date.parse(rec.expires)
   if (!Number.isFinite(at)) return null
-  return Math.ceil((at - now) / DAY)
+  return Math.round((at - Date.parse(day(now))) / DAY)
 }
 
 // ── 파일 ────────────────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@
 // 필요하다. 상단 `그래프` 로 들어가면 창 전체를 쓰고 `Esc` 로 돌아온다.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, subscribe, startHeartbeat, ApiError } from './lib/api.js'
+import { api, admin, subscribe, startHeartbeat, ApiError } from './lib/api.js'
 import { buildCoordIndex } from './lib/markdown.js'
 import { summaryText } from './lib/format.js'
 import DocView from './components/DocView.jsx'
@@ -71,6 +71,11 @@ export default function App() {
   // 서버 모드의 나 — 누구인가 · 무엇을 볼 수 있는가(§6.6.2). 로컬은 null.
   const [me, setMe] = useState(null)
   const [repoMenu, setRepoMenu] = useState(false)
+  // 관리자에게만 — 이 서버의 레포 전부. 권한 밖 레포를 회색으로 보인다(검토 v0.1 D6). 메뉴를 열 때 한 번 읽는다.
+  const [allRepos, setAllRepos] = useState(null)
+  useEffect(() => {
+    if (repoMenu && me?.admin && allRepos === null) admin.repos().then((r) => setAllRepos(r.repos || [])).catch(() => setAllRepos([]))
+  }, [repoMenu, me?.admin, allRepos])
   // 검사 결과는 뷰가 아니라 **오버레이**다.
   //
   // 오류는 커밋을 막으므로 **무엇이 막았는지**로 가는 길이 항상 있어야 한다.
@@ -495,7 +500,9 @@ export default function App() {
       <header className="topbar">
         {/* 로컬은 이름표, 서버는 **고르는 자리**다(§6.6.2). 레포가 하나면
             전환 UI 를 내지 않는다 — 고를 것이 없는데 메뉴를 내밀지 않는다. */}
-        {isServer && (me?.repos?.length || 0) > 1 ? (
+        {/* 로컬은 이름표, 서버는 **고르는 자리**다(§6.6.2). 하나여도 메뉴다(제품관리서비스 검토 §4.8) —
+            메뉴를 열면 볼 수 있는 레포와 내 권한이 보이고, 관리자에게는 이 서버의 레포 전부가 더 붙는다. */}
+        {isServer && me ? (
           <span className="topbar__repo">
             <button className="topbar__name" onClick={() => setRepoMenu((v) => !v)} aria-expanded={repoMenu}>
               <span className="topbar__mark" aria-hidden="true">{appMode.repo.slice(0, 1)}</span>
@@ -503,20 +510,49 @@ export default function App() {
               <Icon name="chevronDown" size={12} />
             </button>
             {repoMenu && (
-              <div className="repomenu" role="menu">
-                {me.repos.map((r) => (
-                  <button
-                    key={r.name}
-                    className="repomenu__row"
-                    role="menuitem"
-                    aria-current={r.name === appMode.repo}
-                    onClick={() => r.name !== appMode.repo && gotoRepo(r.name)}
-                  >
-                    <b>{r.name}</b>
-                    <span>{r.title || ''}</span>
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="scrim" onMouseDown={() => setRepoMenu(false)} />
+                <div className="repomenu" role="menu">
+                  <div className="repomenu__cap">볼 수 있는 레포 {me.repos.length}</div>
+                  {me.repos.map((r) => (
+                    <button
+                      key={r.name}
+                      className="repomenu__row"
+                      role="menuitem"
+                      aria-current={r.name === appMode.repo}
+                      onClick={() => r.name !== appMode.repo && gotoRepo(r.name)}
+                    >
+                      <b>{r.name}</b>
+                      <span>{r.title || ''}</span>
+                      <span className={me.write ? 'chip' : 'chip chip--off'}>{me.write ? '쓰기' : '읽기'}</span>
+                    </button>
+                  ))}
+                  {me.admin && (allRepos || []).some((r) => !me.repos.some((m) => m.name === r.name)) && (
+                    <>
+                      <div className="repomenu__hr" />
+                      <div className="repomenu__cap">관리자만 — 이 서버의 레포 {allRepos.length}</div>
+                      {allRepos
+                        .filter((r) => !me.repos.some((m) => m.name === r.name))
+                        .map((r) => (
+                          <a key={r.name} className="repomenu__row" href="/console/repos" style={{ opacity: 0.7 }}>
+                            <b>{r.name}</b>
+                            <span>{r.title || ''} · 볼 수 있는 사람 {r.users?.length ?? 0}</span>
+                            <span className="chip chip--off">콘솔에서 할당 →</span>
+                          </a>
+                        ))}
+                    </>
+                  )}
+                  {me.admin && (
+                    <>
+                      <div className="repomenu__hr" />
+                      <a className="repomenu__row" href="/console/repos">
+                        <b>콘솔 › 지식 레포</b>
+                        <span>세우기 · clone · 접근</span>
+                      </a>
+                    </>
+                  )}
+                </div>
+              </>
             )}
           </span>
         ) : (
@@ -587,7 +623,16 @@ export default function App() {
         {/* 서버 모드에서 loopback 경고가 있던 자리(§6.6.3). */}
         {isServer && me && (
           <span className="who">
-            {me.user}
+            <a className="who__lnk" href="/manual" title="제품 설명서">
+              <Icon name="book" size={13} /> 설명서
+            </a>
+            {me.admin && (
+              <a className="who__lnk" href="/console" title="콘솔 — 사람 · 토큰 · 레포 전부 · 서버">
+                <Icon name="shield" size={13} /> 콘솔
+              </a>
+            )}
+            <b style={{ color: 'var(--text)' }}>{me.user}</b>
+            <span className="who__role">{me.role}</span>
             <a className="who__out" href="/logout" title="로그아웃">
               <Icon name="power" size={13} />
             </a>
@@ -684,6 +729,7 @@ export default function App() {
           onTab={setAdminTab}
           state={state}
           repo={repo}
+          me={me}
           patch={patch}
           sync={sync}
           onSync={syncNow}
@@ -1004,6 +1050,14 @@ function Help({ docs = [], onOpen, onClose }) {
             ))}
           </dl>
 
+          {isServer && (
+            <>
+              <div className="help__cap">설명서</div>
+              <a className="help__doc" href="/manual" style={{ textDecoration: 'none' }}>
+                <Icon name="book" size={14} /> 제품 설명서 — 사용자 · 관리자 · 개발자
+              </a>
+            </>
+          )}
           {manuals.length > 0 && (
             <>
               <div className="help__cap">매뉴얼</div>

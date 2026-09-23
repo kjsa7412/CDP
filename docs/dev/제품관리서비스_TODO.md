@@ -22,9 +22,9 @@
 | ① 명부 v1.2 · 역할 · 부트스트랩 · CLI · 테스트 | **완료** — 테스트 86 / 86 · 하네스 ✓ 62 ✗ 0 |
 | ② 서버 — 사이트 라우트 · 산출물 · 설치 스크립트 | **완료** — 하네스 78 · 79 · 80 ✓ |
 | ③ 서버 — `/admin/*` · 재인증 · 감사 · 속도 제한 · CIDR · 하네스 | **완료** — 하네스 81~88 ✓ · 전체 ✓ 73 ✗ 0 – 16 |
-| ④ · ⑤ 앞 — **목업 검토** (운영자 지시 2026-09-23) | **목업 완료 · 검토 대기** — [`제품관리서비스_목업/index.html`](제품관리서비스_목업/index.html) 13 화면 · 모달 6 · 다크 · 900px |
-| ④ 화면 — 라우터 · 소개 · 설명서 · 로그인 · 마법사 | 미착수 — 목업 검토 뒤 |
-| ⑤ 화면 — 콘솔 일곱 페이지 · 레포 화면의 상단 | 미착수 — 목업 검토 뒤 |
+| ④ · ⑤ 앞 — **목업 검토** (운영자 지시 2026-09-23) | **완료** — 운영자 "권장안으로 끝까지"(2026-09-23) → 정할 것 다섯 모두 권장안 · [`제품관리서비스_목업/index.html`](제품관리서비스_목업/index.html) 13 화면 · 모달 6 · 다크 · 900px |
+| ④ 화면 — 라우터 · 소개 · 설명서 · 로그인 · 마법사 | **완료** — 빌드 ✓(index 495 kB · gzip 169 kB) · 실측 — 소개 · 설명서 네 권(관리자 설명서 목차 앵커 14/14) · 마법사 끝까지 · 로그인 → `/r/alpha/` |
+| ⑤ 화면 — 콘솔 일곱 페이지 · 레포 화면의 상단 | **완료** — 일곱 페이지 실측 · 사용자 추가 → 재인증 → 토큰 발급 → 그 토큰으로 로그인 → 레포 2 · 새 레포 gamma · 다크 · 900px · 테스트 87 / 87 · 하네스 ✓ 73 ✗ 0 – 16 |
 | ⑥ 문서 · CHANGELOG · 0.10.0 · 검증 완주 | 미착수 |
 | ⑦ (정하면) origin 맞추기 · 금고 · PAT 만료 메모 | 미착수 — D13 |
 
@@ -176,8 +176,8 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 - [x] `docs/dev/제품관리서비스_목업/index.html` · `mockup.css` — 화면 13(소개 · 설명서 · 로그인 · 마법사 · /r 빈 상태 · 콘솔 7 · 레포 상단) · 모달 6 · 다크 · 900px · 화면마다 「봐 줄 것 · 정할 것」 노트
 - [x] 브라우저 실측 — 13 화면 · 모달 6 · 다크 2 · 900px 2 를 찍어 확인. 잡은 것 — `.overlay{display:flex}` 가 `hidden` 을 밀어 모달이 기본으로 열려 있던 것 · 프레임이 노트 옆에서 잘리던 것(`flex-wrap`)
-- [ ] **운영자 검토** — 정할 것 다섯(§4.7 콘솔에서 작업 레포 등록 · D2 공개 기본 · D5 재인증 15분 · D13 ff-only 버튼 · 소개의 그림 수) 과 문구 · 배치
-- [ ] 검토 결과를 이 문서 「나온 것」 과 검토 §5 에 적고 ④ · ⑤ 로
+- [x] **운영자 검토** — 정할 것 다섯(§4.7 콘솔에서 작업 레포 등록 · D2 공개 기본 · D5 재인증 15분 · D13 ff-only 버튼 · 소개의 그림 수) 과 문구 · 배치 → **"권장안으로 끝까지 절차대로"**(2026-09-23) — 다섯 모두 권장안, 문구 · 배치 목업대로
+- [x] 검토 결과를 이 문서 「나온 것」 과 검토 §5 에 적고 ④ · ⑤ 로
 
 **끝났다고 보는 기준** — 운영자가 "이대로" 또는 고칠 목록을 준다. 목업 파일은 `docs/dev/` 에 남긴다(이력).
 
@@ -185,19 +185,19 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 ## ④ 화면 — 라우터 · 소개 · 설명서 · 로그인 · 마법사
 
-- [ ] `lib/api.js` — 모드 셋(`local · repo · site`) · `window.__CDP_SERVER__` · `site.info() · site.manual(id) · site.login(token, next) · site.setup(body)` · `admin.*` · 401 `E_REAUTH` 는 이동하지 않고 던진다
-- [ ] `lib/router.js` — `useRoute()` · `navigate()` · `<Link>` — `pushState` · `popstate` · 의존성 0
-- [ ] `main.jsx` — 경로 첫 조각으로 `App`(로컬 · `/r/<레포>/`) · `Site`(`/` · `/manual` · `/login` · `/setup` · `/r`) · `Console`(`/console`)
-- [ ] `lib/markdown.js` — 제목 slug 를 GitHub 규칙으로(소문자 · 공백 → `-` · 구두점 제거 · 한글 유지) — 세 권의 목차 링크가 그 규칙이다 · 기존 `sectionSlug` 호출이 같은 함수를 쓴다
-- [ ] `site/Site.jsx` — 상단(표식 · 설명서 · 로그인/내 레포 · 콘솔) · 바닥
-- [ ] `site/Landing.jsx` — 검토 §4.4 의 블록 · `/site/info` 하나
-- [ ] `site/Manual.jsx` — 책 목록 · 왼쪽 목차 · 본문 · 링크 재작성(`*.md` → `/manual/<이름>` · `../` → GitHub) · 앵커 이동 · 현재 절 표시
-- [ ] `site/Login.jsx` — 토큰 한 칸 · 보기 · 실패 한 문장 · `next`
-- [ ] `site/Setup.jsx` — 세 단계 · 토큰 원문 모달 · [콘솔로]
-- [ ] `site/NoRepo.jsx` — `/r` 빈 상태(관리자면 콘솔 링크)
-- [ ] `styles/site.css` — 읽는 면 · `doc.css` 조판 재사용 · 900px
-- [ ] `Icon.jsx` — users · key · server · shield · home · plus · trash · edit
-- [ ] `App.jsx` 도움말에 "설명서 →"
+- [x] `lib/api.js` — 모드 셋(`local · repo · site`) · `window.__CDP_SERVER__` · `site.info() · site.manual(id) · site.login(token, next) · site.setup(body)` · `admin.*` · 401 `E_REAUTH` 는 이동하지 않고 던진다
+- [x] `lib/router.jsx` — `useRoute()` · `navigate()` · `<Link>` — `pushState` · `popstate` · 의존성 0
+- [x] `main.jsx` — 경로 첫 조각으로 `App`(로컬 · `/r/<레포>/`) · `Site`(`/` · `/manual` · `/login` · `/setup` · `/r`) · `Console`(`/console`)
+- [x] `lib/markdown.js` — 제목 slug 를 GitHub 규칙으로(소문자 · 공백 → `-` · 구두점 제거 · 한글 유지) — 세 권의 목차 링크가 그 규칙이다 · 기존 `sectionSlug` 호출이 같은 함수를 쓴다
+- [x] `site/Site.jsx` — 상단(표식 · 설명서 · 로그인/내 레포 · 콘솔) · 바닥
+- [x] `site/Landing.jsx` — 검토 §4.4 의 블록 · `/site/info` 하나
+- [x] `site/Manual.jsx` — 책 목록 · 왼쪽 목차 · 본문 · 링크 재작성(`*.md` → `/manual/<이름>` · `../` → GitHub) · 앵커 이동 · 현재 절 표시
+- [x] `site/Login.jsx` — 토큰 한 칸 · 보기 · 실패 한 문장 · `next`
+- [x] `site/Setup.jsx` — 세 단계 · 토큰 원문 모달 · [콘솔로]
+- [x] `site/NoRepo.jsx` — `/r` 빈 상태(관리자면 콘솔 링크)
+- [x] `styles/site.css` — 읽는 면 · `doc.css` 조판 재사용 · 900px
+- [x] `Icon.jsx` — users · key · server · shield · home · plus · trash · edit
+- [x] `App.jsx` 도움말에 "설명서 →"
 
 **끝났다고 보는 기준** — `npm run build` 통과 · 브라우저에서 `/` → 설명서 세 권이 열리고 목차 링크가 그 절로 간다 ·
 `/setup` 이 명부 없는 서버에서 끝까지 · 로그인 뒤 `/r/<레포>/` (「나온 것」에 실측).
@@ -206,19 +206,19 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 ## ⑤ 화면 — 콘솔 · 레포 화면의 상단
 
-- [ ] `console/Console.jsx` — 상단(표식 · 사용자 · 역할 칩 · 설명서 · 문서로 · 로그아웃) · 왼쪽 메뉴 일곱 · `useRoute`
-- [ ] `console/ui.jsx` — `PageHead · Toolbar · Table · Modal · Field · Chip · Empty · Confirm · TokenReveal · SudoGate`
-- [ ] `console/Overview.jsx` — 카드 넷 · 경고 목록 · 최근 감사 5 · admin 0 안내
-- [ ] `console/Users.jsx` — 표 · 추가 모달 · 역할 · 레포 · 비활성 · 매트릭스(체크 → `PATCH users`)
-- [ ] `console/Tokens.jsx` — 표(폐기 회색) · 발급 · 재발급 · 연장 · 메모 · 폐기 · 원문 모달
-- [ ] `console/Repos.jsx` — 표 · 새 레포 모달(세우기 / clone · grant) · 열기
-- [ ] `console/WorkRepos.jsx` — 표 전부 · 그 레포로
-- [ ] `console/Server.jsx` — 설정 · 진단(다시 검사) · 패키지 · 갱신 안내 · 로그 · 파일 위치
-- [ ] `console/Audit.jsx` — 줄 · 걸러 보기
-- [ ] 재인증 — `E_REAUTH` → 모달 → `POST /admin/sudo` → 하던 동작 재시도
-- [ ] `styles/console.css` — 페이지 머리 · 툴바 · 표 확장 · 모달 폼 · 매트릭스 · 900px
-- [ ] `App.jsx` — 레포 이름표 **항상 메뉴**(권한 표시) · `who` 에 역할 칩 · 설명서 · 관리자면 콘솔 링크 · `AdminView` 맨 아래 콘솔로 →
-- [ ] writer 가 `/console` 에 오면 "관리자 권한이 필요합니다 — 셸에서 `ctx serve user set --name <이름> --role admin`"
+- [x] `console/Console.jsx` — 상단(표식 · 사용자 · 역할 칩 · 설명서 · 문서로 · 로그아웃) · 왼쪽 메뉴 일곱 · `useRoute`
+- [x] `console/ui.jsx` — `PageHead · Toolbar · Table · Modal · Field · Chip · Empty · Confirm · TokenReveal · SudoGate`
+- [x] `console/Overview.jsx` — 카드 넷 · 경고 목록 · 최근 감사 5 · admin 0 안내
+- [x] `console/Users.jsx` — 표 · 추가 모달 · 역할 · 레포 · 비활성 · 매트릭스(체크 → `PATCH users`)
+- [x] `console/Tokens.jsx` — 표(폐기 회색) · 발급 · 재발급 · 연장 · 메모 · 폐기 · 원문 모달
+- [x] `console/Repos.jsx` — 표 · 새 레포 모달(세우기 / clone · grant) · 열기
+- [x] `console/WorkRepos.jsx` — 표 전부 · 그 레포로
+- [x] `console/Server.jsx` — 설정 · 진단(다시 검사) · 패키지 · 갱신 안내 · 로그 · 파일 위치
+- [x] `console/Audit.jsx` — 줄 · 걸러 보기
+- [x] 재인증 — `E_REAUTH` → 모달 → `POST /admin/sudo` → 하던 동작 재시도
+- [x] `styles/console.css` — 페이지 머리 · 툴바 · 표 확장 · 모달 폼 · 매트릭스 · 900px
+- [x] `App.jsx` — 레포 이름표 **항상 메뉴**(권한 표시) · `who` 에 역할 칩 · 설명서 · 관리자면 콘솔 링크 · `AdminView` 맨 아래 콘솔로 →
+- [x] writer 가 `/console` 에 오면 "관리자 권한이 필요합니다 — 셸에서 `ctx serve user set --name <이름> --role admin`"
 
 **끝났다고 보는 기준** — 브라우저 실측 — 일곱 페이지가 그려지고 사용자 추가 → 토큰 발급 → 원문 복사 → 그 토큰으로 로그인 →
 레포가 보인다 · 재인증 모달이 끼어들고 통과하면 동작이 이어진다 · 다크 · 900px (「나온 것」).
@@ -245,6 +245,9 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 
 | 단계 | 무엇 |
 |---|---|
+| ④·⑤ 앞 | 목업 검토 — 운영자 "권장안으로 끝까지 절차대로"(2026-09-23). 정할 것 다섯: §4.7 작업 레포 등록은 콘솔에서 하지 않는다(그 지식 레포의 관리 > 작업 레포 · 콘솔은 대장만) · D2 소개 · 설명서 공개 기본(`--private-pages`) · D5 재인증 15분 · D13 ff-only 버튼은 ⑦ · 소개의 그림은 둘(세 레포 구조 · MCP 두 모드). 목업 `mockup.css` ②절이 그대로 `site.css` · `console.css` 가 됐다 |
+| ④ | 세 얼굴 한 번들 — `main.jsx` 가 경로 첫 조각으로 `App` · `Site` · `Console` 을 고르고 `<html data-face>` 를 찍는다 · `router.jsx`(pushState · 의존성 0) · `api.js` 의 `face` · `site.*` · `admin.*` · 401 `E_REAUTH` 는 던진다. 빌드 ✓ index 495 kB(gzip 169 kB). **실측(dev 서버 · 레포 alpha · beta)** — `/` 소개(`/site/info` 200 · 그림 SVG 2 · "첫 관리자가 없습니다 → 마법사") · `/setup` 3단계 끝까지(코드 → kjsa admin → 원문 1회 · 만료 2026-10-23 · 브라우저 로그인 상태 · 코드 파일 삭제) · `/manual/관리자_설명서` 목차 앵커 14/14 일치 · 네 권 순서 사용자 · 관리자 · 개발자 · 설치절차 · `/login?next=/r/alpha/` → hong 토큰 → `/r/alpha/`. **잡은 것** — 정적 자원 라우트가 사이트 라우트에 밀려 `/assets/*` 401(자원 라우트를 인증 앞으로) · 설명서 안 다른 책 링크가 렌더러 인코딩 위에 한 번 더 인코딩돼 `%25EC…`(풀고 넣는다) · linkify 가 `install.sh` · `설치절차.md` 를 주소로 삼음(`.sh` · `.md` 가 TLD — `fuzzyLink` off) · 설명서 순서가 파일명 정렬(개발자 먼저) |
+| ⑤ | 콘솔 일곱 페이지 + 레포 화면 상단. **실측** — 현황(카드 셋 · 진단 · 최근 감사 5) · 사용자 추가 hong(writer · alpha) → **재인증 모달**(`E_REAUTH` → 토큰 → `POST /admin/sudo` → 하던 추가가 이어진다 · 15분) · 매트릭스에 hong 줄 · 토큰 발급 940ab5a7(90일 · 원문 1회 · "확인 — 전했다") · 새 레포 gamma(패키지 project_2 · grant hong · 3410 ms · 파일 67) → 목록 · `/r/gamma/` · 작업 레포 빈 상태 · 서버(진단 ok 8 warn 3 fail 0 · serve.log 52줄 · 파일 위치) · 감사 7줄(행위자 kjsa · 마법사) · hong 으로 로그인 → 레포 메뉴 2(alpha · gamma · 쓰기 · beta 없음 · 콘솔 줄 없음) · `/console` → "관리자 권한이 필요합니다" · `/r/beta/` → alpha 로 302 · 관리자의 관리 메뉴 넷 + 「콘솔로 →」 · 다크 900px(메뉴 56px 아이콘 · 가로 스크롤 없음). 테스트 87 / 87 · 하네스 ✓ 73 ✗ 0 – 16(67~69 는 브라우저 실측 메모로). **잡은 것** — 감사 줄 파서가 `setup · ` 을 (셸)로 · 갓 발급한 30일 토큰이 31일(`daysLeft` 를 달력 날짜 차이로 · doctor 의 하루 봐주기 제거) · 발급 모달에 기본과 같은 30일이 둘 · `Field` 라벨이 입력과 안 묶임(`htmlFor`) · `repo new` · `clone` 감사 줄에 `admin` 접두 없음 · doctor 패키지 수가 README.md 를 세어 4 |
 | ② | 사이트 라우트 — `/site/info`(집계 · 레포 이름 없음 · 세션이 있으면 user · role) · `/site/manual/<파일>`(색인 밖은 404 — 경로 순회가 여기서 끝난다) · `/` `/manual*` `/setup` 은 공개 SPA · `/console*` 은 세션 → SPA · `POST /setup`(코드 · 명부 비었을 때만 · 원문 1회 · 쿠키 · 코드 파일 삭제) · `/login` form + JSON · 속도 제한 · `/logout` → `/` · `/r` 빈 상태 · `/me` 에 role · admin · sudo · index.html 에 `window.__CDP_SERVER__` 표식 · `serve.log` 끝 열에 토큰 id. `build-ctx` 가 `__CDP_VERSION__` 을 찍어 서버가 판을 안다(v0.9.0 실측). 산출물 `manual/` + 그림 셋 · `install.sh` 가 끝에 `/setup` 주소와 코드 · `upgrade.sh` `manual.bak` · Dockerfile. **잡은 것** — 하네스 62 가 옛 계약(`GET /` 빈 상태 HTML)을 봤다 → `/r` 200 + `/me.repos` 0 으로 · `--auth` 없는 개발 모드가 `authenticate.browser` 가 없어 죽던 것(객체로) |
 | ③ | `/admin/*` 열여덟 — sudo(15분 `cdp_su` · `kind: sudo` · 세션 쿠키로 흉내 불가) · overview · users · tokens(issue · reissue · revoke · PATCH) · repos(전부 · 세우기 · clone · grant) · workrepos · doctor(60초 캐시) · server · audit · log. 판정 401 → 403(admin · CIDR) → 401 `E_REAUTH`. `buildRepo` 하나를 `POST /repos` 와 `POST /admin/repos` 가 같이 쓴다 · `core/reponew.js` `cloneRepo`(지식 레포 아니면 지운다 · 테스트 87). 하네스 81~88(62 재계약 포함) ✓ · 전체 ✓ 73 ✗ 0 – 16. **잡은 것** — 하네스 앞 검사(37)가 TK 를 폐기해 두어 콘솔 검사가 전부 401 — 살아 있는 토큰을 새로 받는다 |
 | ① | 명부 v1.2 — `role` 을 저장하고 `write` 는 읽을 때만 접는다(v1.1 파일 그대로 읽힘 · 저장하면 `version: 1.2`). 폐기는 `status: revoked` 로 남고 `decide` 가 "폐기된 토큰" 으로 거절. `reissue` · `tokenSet` · 가드 둘(`E_LAST_ADMIN` · `E_SELF`) · 부트스트랩 셋 · `signSession` 에 `kind: sudo` · `doctorRows` 분리(관리자 수 · 관리자 토큰 30일 · 부트스트랩 코드 · manual) · CLI `--role` · `token reissue/set` · `serve.log` 토큰별 마지막 사용. 테스트 70 → 86(auth 14 · net 3) · 하네스 ✓ 62 ✗ 0. **잡은 것** — 갓 발급한 30일 토큰이 올림으로 31 로 세어 doctor 가 "30일보다 멀다" 를 냈다(하루를 봐준다) · `token revoke` 가 줄을 지워 이력이 사라지던 것 |
