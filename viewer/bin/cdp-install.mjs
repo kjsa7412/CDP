@@ -101,10 +101,32 @@ export async function main(argv) {
     out('[주의] ' + String(w).split(NL).join(NL + '       '))
   }
 
+  // 설치 결과 보고(§6.7.4). **관문이 아니다** — 실패해도 설치는 끝났고
+  // 대장이 "미설치" 로 남을 뿐이다. 토큰이 없으면 조용히 건너뛴다.
+  //
+  // **바뀐 것이 없어도 보고한다.** pull 로 세팅을 받은 사람은 설치할 것이 없는데,
+  // 그 사람의 행이 대장에서 "미설치" 로 남았다(설명서 걷기 2026-09-23). 토큰을 두고
+  // 이 명령을 한 번 돌리면 행이 최신이 되게 — 그것이 대장의 용도다.
+  const report = async () => {
+    if (!CFG.workrepo) return
+    const token = process.env.CDP_TOKEN
+    if (!token) {
+      out('CDP_TOKEN 이 없어 대장 보고는 건너뜁니다 — 설치는 끝났습니다. 토큰을 두고 한 번 더 돌리면 보고합니다.')
+      return
+    }
+    const r = await fetch(`${CFG.server}/workrepos/${encodeURIComponent(CFG.workrepo)}/applied`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+      body: JSON.stringify({ kit: CFG.kit || null }),
+    }).catch(() => null)
+    out(r?.ok ? '대장에 보고했습니다.' : '대장 보고는 실패했습니다 — 설치는 끝났습니다 (보고는 추적용입니다)')
+  }
+
   const changes = plan.actions.filter((a) => a.op !== 'same')
   if (!changes.length) {
     out('')
     out('이미 최신입니다.')
+    if (!dry) await report()
     return 0
   }
   if (dry) {
@@ -127,26 +149,11 @@ export async function main(argv) {
   await applySetup(plan)
   out('')
   out(`${changes.length}건 적용했습니다.${CFG.kit ? ` (kit ${CFG.kit})` : ''}`)
-
-  // 설치 결과 보고(§6.7.4). **관문이 아니다** — 실패해도 설치는 끝났고
-  // 대장이 "미설치" 로 남을 뿐이다. 토큰이 없으면 조용히 건너뛴다.
-  if (CFG.workrepo) {
-    const token = process.env.CDP_TOKEN
-    if (!token) {
-      out('CDP_TOKEN 이 없어 대장 보고는 건너뜁니다 — 설치는 끝났습니다.')
-    } else {
-      const r = await fetch(`${CFG.server}/workrepos/${encodeURIComponent(CFG.workrepo)}/applied`, {
-        method: 'POST',
-        headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
-        body: JSON.stringify({ kit: CFG.kit || null }),
-      }).catch(() => null)
-      out(r?.ok ? '대장에 보고했습니다.' : '대장 보고는 실패했습니다 — 설치는 끝났습니다 (보고는 추적용입니다)')
-    }
-  }
+  await report()
 
   out('')
   out('다음 —')
-  out('  1. CDP_TOKEN 을 환경변수에 둔다 (관리자에게 직접 받는다)')
+  out('  1. CDP_TOKEN 이 아직 없으면 환경변수에 둔다 (관리자에게 직접 받는다) — 있었으면 대장 보고까지 끝났다')
   out('       macOS · Linux   export CDP_TOKEN=<토큰>')
   out('       Windows         setx CDP_TOKEN <토큰>')
   out('  2. Claude Code 를 다시 켠다 (환경변수는 프로세스 시작 때 읽힌다)')

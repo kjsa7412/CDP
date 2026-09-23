@@ -375,7 +375,7 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
   dpms/
 ```
 
-- 등록 = 폴더를 두는 것. `git clone <origin> <root>/<name>` 뒤 재시작 없이 다음 요청부터 인식(폴더 목록은 60초마다 갱신).
+- 등록 = 폴더를 두는 것. `git clone <origin> <root>/<name>` 뒤 재시작 없이 **그 레포로 가는 첫 요청**부터 인식 — 모르는 이름이 오면 폴더를 다시 훑는다(2초에 한 번 · 2026-09-23). 전체 목록은 60초마다, 비어 있으면 즉시 갱신.
   **다른 길 하나** (2026-09-22 · 제품화 R6) — `ctx repo new <root>/<name> --package <이름>` 이 패키지 폴더를 복사해
   `git init` · `hooksPath` · 첫 커밋(훅) · `remote add` · `push` 까지 한다. 관리 서비스의 `POST /repos`(`write`)가 같은
   함수(`core/reponew.js`)를 부른다. origin 이 없는 패키지도 이제 서버에 설 수 있다.

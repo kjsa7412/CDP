@@ -136,11 +136,26 @@ export function makeStore(root, log) {
     at = Date.now()
   }
 
+  // 모르는 이름이 오면 다시 훑는다 — `repo new` · clone 직후의 첫 요청(꾸러미 · 등록 · MCP ·
+  // 화면)이 1분을 기다리지 않게. 설명서 걷기(2026-09-23)에서 `repo new` 바로 뒤에 작업 레포를
+  // 등록하니 "그런 지식 레포가 없다" 였다. 없는 이름으로 두들기는 요청이 readdir 을 매번
+  // 부르지 않게 2초에 한 번만.
+  let missAt = 0
+  const ensure = async (name) => {
+    if (repos.some((r) => r.name === name)) return true
+    if (Date.now() - missAt > 2_000) {
+      missAt = Date.now()
+      await refresh()
+    }
+    return repos.some((r) => r.name === name)
+  }
   return {
     async list() {
-      if (Date.now() - at > 60_000) await refresh()
+      // 비어 있으면 1분을 기다리지 않는다 — 첫 레포를 세운 직후 화면과 /me 가 빈 목록을 보였다
+      if (Date.now() - at > 60_000 || (!repos.length && Date.now() - at > 2_000)) await refresh()
       return repos
     },
+    ensure,
     cache: (name) => caches.get(name),
     async view(name) {
       const v = views.get(name)
@@ -671,7 +686,10 @@ export async function runServe(opt = {}) {
           }
           if (url.pathname === '/workrepos' && req.method === 'POST') {
             const body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
-            const row = wr.add(db, body, { users: await usersOf(opt.auth), repos: mine.map((r) => r.name) })
+            // 방금 세운 레포를 바로 등록할 수 있게 — 모르는 이름이면 폴더를 다시 훑는다
+            if (body.knowledge) await store.ensure(String(body.knowledge))
+            const known = (await store.list()).filter((r) => !a.allow || a.allow(r.name)).map((r) => r.name)
+            const row = wr.add(db, body, { users: await usersOf(opt.auth), repos: known })
             await wr.save(dataDir, db)
             await auth.audit(dataDir, `workrepo add · ${a.user} · ${row.id} · ${row.name} · ${row.knowledge}`)
             log.req({ ip, user: a.user, method: 'POST', tool: '/workrepos', key: row.id, ms: Date.now() - t0, status: 200 })
@@ -712,6 +730,7 @@ export async function runServe(opt = {}) {
       const apiM = /^\/api\/([^/]+)(\/.*)?$/.exec(url.pathname)
       if (apiM) {
         const name = decodeURIComponent(apiM[1])
+        await store.ensure(name)
         const found = (await store.list()).find((x) => x.name === name)
         if (!found || (a.allow && !a.allow(name))) {
           log.req({ ip, user: a.user, method: req.method, tool: '/api', key: name, ms: Date.now() - t0, status: 404 })
@@ -744,6 +763,7 @@ export async function runServe(opt = {}) {
       const kitM = /^\/kit\/([^/]+)\/?$/.exec(url.pathname)
       if (kitM && req.method === 'GET') {
         const name = decodeURIComponent(kitM[1])
+        await store.ensure(name)
         const found = (await store.list()).find((x) => x.name === name)
         // 권한 밖 레포는 **없는 것**이다(§4.6). 403 은 존재를 알려 준다.
         if (!found || (a.allow && !a.allow(name))) {
@@ -811,6 +831,9 @@ export async function runServe(opt = {}) {
       }
 
       if (url.pathname === '/mcp' || url.pathname.startsWith('/mcp/')) {
+        // 방금 둔 레포로 오는 첫 MCP 요청 — 모르는 이름이면 폴더를 다시 훑는다
+        const mcpName = decodeURIComponent(url.pathname.split('/')[2] || '')
+        if (mcpName) await store.ensure(mcpName)
         let body = Buffer.alloc(0)
         if (req.method === 'POST') {
           const got = overLimit(req, MAX_BODY) ? { tooLarge: true } : await readBody(req, MAX_BODY)
@@ -1246,7 +1269,18 @@ function installNote({ origin, repo, row, kit }) {
 
 **\`kit/\` 안의 것은 아직 아무 데도 안 갔다.** 옮기는 일은 아래가 한다.
 
-## 2. 설치한다
+## 2. 토큰을 환경변수에 둔다 — **먼저**
+
+    # macOS · Linux
+    export CDP_TOKEN=<관리자에게 받은 토큰>
+    # Windows
+    setx CDP_TOKEN <관리자에게 받은 토큰>     (새 터미널부터 먹는다)
+
+**이 꾸러미에 토큰은 없다.** 관리자에게 직접 받는다 — 메신저·메일에 남기지 않는다.
+먼저 두는 이유 — 다음 단계가 이 값을 보고 관리자의 설치 대장에 보고한다. 없어도 설치는
+되지만 관리 화면의 이 작업 레포 행이 \`미설치\` 로 남는다.
+
+## 3. 설치한다
 
     node install.mjs <작업 레포 경로>
 
@@ -1255,7 +1289,7 @@ function installNote({ origin, repo, row, kit }) {
 - \`CLAUDE.md\` 가 이미 있으면 \`<!-- cdp:begin -->\` ~ \`<!-- cdp:end -->\` **블록만** 갈아 끼운다
 - \`.mcp.json\` 이 이미 있으면 \`cdp\` 항목만 더한다 — **다른 MCP 서버는 그대로 둔다**
 - 작업 레포의 \`cdp-\` 아닌 skill 은 건드리지 않는다
-- \`CDP_TOKEN\` 이 있으면 설치 대장에 보고까지 한다
+- \`CDP_TOKEN\` 이 있으면 설치 대장에 보고까지 한다 — 바뀐 것이 없어도 보고한다(pull 로 받은 사람도 한 번 돌린다)
 
 ### Node 가 없으면
 
@@ -1268,15 +1302,6 @@ function installNote({ origin, repo, row, kit }) {
 
 \`bin/ctx\` 를 가진 사람은 이것도 된다 —
 \`ctx setup --server ${origin} --repo ${repo} --workrepo ${row.id} <작업레포>\`
-
-## 3. 토큰을 환경변수에 둔다
-
-    # macOS · Linux
-    export CDP_TOKEN=<관리자에게 받은 토큰>
-    # Windows
-    setx CDP_TOKEN <관리자에게 받은 토큰>
-
-**이 꾸러미에 토큰은 없다.** 관리자에게 직접 받는다 — 메신저·메일에 남기지 않는다.
 
 ## 4. Claude Code 를 다시 켠다
 

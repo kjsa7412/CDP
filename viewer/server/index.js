@@ -98,8 +98,20 @@ async function main() {
 
   if (args.watch === false) appState.merge({ watch: false })
 
-  // 경로 결정: --repo > 저장된 설정 > 없음(경로 지정 화면)
-  let root = args.repo ? path.resolve(args.repo) : appState.all().repoPath
+  // 경로 결정: --repo > exe 가 든 지식 레포(<repo>/tools/cdp.exe) > 저장된 설정 > 없음(경로 지정 화면)
+  //
+  // **exe 는 레포 안 tools/ 에 산다**(설치.md ③). 더블클릭하면 그 레포가 열려야 하는데 전에는
+  // 저장된 설정만 봐서 첫 실행이 경로 지정 화면이었고, 레포가 둘이면 어느 exe 를 눌러도 마지막에
+  // 고른 레포가 열렸다(설명서 걷기 2026-09-23). `ctx` 의 규칙 ④(자기 위치의 부모)와 같다.
+  const homeOfExe = () => {
+    try {
+      const up = path.resolve(path.dirname(process.execPath), '..')
+      return fs.existsSync(path.join(up, '_vocab.md')) ? up : null
+    } catch {
+      return null
+    }
+  }
+  let root = args.repo ? path.resolve(args.repo) : homeOfExe() || appState.all().repoPath
   if (root && !fs.existsSync(root)) {
     console.error(`[cdp] 경로를 찾을 수 없습니다: ${root}`)
     root = null

@@ -216,6 +216,7 @@ cd C:\cdp && bin\ctx check      → 이상 없음
 copy <새 배포본>\knowledge-repo-dpms\bin\*         C:\cdp\bin\
 copy <새 배포본>\cdp.exe                             C:\cdp\tools\
 copy <새 배포본>\knowledge-repo-dpms\MANUAL*.md    C:\cdp\
+copy <새 배포본>\knowledge-repo-dpms\.gitattributes C:\cdp\     ← 도구 파일이다 (*.cmd eol=crlf · 2026-09-23)
 C:\cdp\tools\cdp.exe ctx setup C:\gdi   ← skill 도 같이 갱신된다
 ```
 

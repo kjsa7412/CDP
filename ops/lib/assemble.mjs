@@ -24,10 +24,16 @@ const PACKAGE_EXCLUDE = new Set(['_package.json', 'convert'])
 
 const BIN = /[.](?:exe|png|jpe?g|gif|ico|pdf|xlsx?|hwpx?|pptx?|zip|woff2?|ttf|otf|blob)$/i
 
+// **`.cmd` 는 손대지 않는다.** cmd.exe 는 CRLF 를 전제한다 — LF 로 바꾸면 `( … )` 블록과
+// `%VAR%` 가 어긋나 "'RLEVELHEREctx.mjs' 은(는) 내부 또는 외부 명령…" 으로 죽는다.
+// 설명서 걷기(2026-09-23)에서 `.mcp.json` 이 띄운 bin/ctx.cmd 가 그렇게 죽었다 — 모드 A 의
+// MCP 가 통째로 빠지는 자리다. 지식 레포의 `.gitattributes` 도 같은 이유로 `*.cmd eol=crlf`.
+const KEEP = /[.](?:cmd|bat)$/i
+
 // **줄바꿈을 LF 로 맞춰서 담는다.** 기준은 자기 자신을 clone 한 결과와
-// 같아지는 것이다(`release.mjs` 의 같은 주석). 이진은 그대로.
+// 같아지는 것이다(`release.mjs` 의 같은 주석). 이진과 `.cmd` 는 그대로.
 export function copyFileLF(s, d) {
-  if (BIN.test(s)) return fs.copyFileSync(s, d)
+  if (BIN.test(s) || KEEP.test(s)) return fs.copyFileSync(s, d)
   const b = fs.readFileSync(s)
   if (b.includes(0)) return fs.copyFileSync(s, d)
   fs.writeFileSync(d, b.toString('utf8').replace(/\r\n/g, '\n'))

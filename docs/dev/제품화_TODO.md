@@ -352,6 +352,7 @@ Docker                   이미지 빌드 · /healthz · HEALTHCHECK healthy
 | 7 MCP | `--also` · `--desktop` · `inspect().mcp` · 90일 경고. `--built-at` 는 하네스 전용 플래그 — 20번이 살아났다 |
 | 8 문서 | 구조정리 원칙(`docs/dev/` 는 안 건드린다) 그대로 — 옮긴 폴더를 가리키던 링크만 고쳤다(`MCP_적용검토_설계서` 1곳). attic 안의 옛 경로 문구는 기록이라 둔다 |
 | 9 검증 | 위 「끝난 상태」. 시험 셸이 Git Bash 면 `MSYS_NO_PATHCONV=1` — `/opt/…` 인자를 `C:/Program Files/Git/opt/…` 로 바꿔 wsl · docker 에 넘긴다 |
+| 10 설명서 걷기 (2026-09-23) | 세 설명서를 처음부터 그대로 따라갔다 — 로컬형(Windows · 배포본 복사 → 훅 → setup → `.mcp.json` 으로 MCP → exe) · 서버형(WSL · install → repo new → init → doctor → 로그인 → 등록 → 꾸러미 → install.mjs → MCP HTTP 13종). 잡은 것 다섯 — ① 조립이 `bin/ctx.cmd` 를 LF 로 바꿔 cmd.exe 에서 죽었다(모드 A 의 MCP 전부) → `.cmd` 는 바이트 그대로 · 지식 레포 `.gitattributes` 에 `*.cmd eol=crlf` ② `--no-build` 뒤 exe 만 낡아 세 곳의 `ctx version` 이 달랐다 → `release` 가 대조해 exit 1 ③ `repo new` 직후 등록이 "그런 지식 레포가 없다"(1분 주기) → 모르는 이름이면 다시 훑는다 ④ 뷰어 exe 가 자기 레포를 안 열었다(저장된 설정만) → 자기 위치의 부모 ⑤ 토큰을 나중에 두는 순서라 설치 보고가 안 갔다 → 순서 바꿈 · 바뀐 것 없어도 보고 |
 
 ---
 

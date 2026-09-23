@@ -41,11 +41,15 @@ const run = (cmd, args) =>
 // 전부 되돌리기 때문이다. 복사 붙여넣기로 끝난다고 해 놓고 첫 화면이 경고면
 // 그 약속이 거짓말이 된다.
 //
-// 기준은 **자기 자신을 clone 한 결과와 같아지는 것**이다. 그래서 예외를 두지
-// 않는다 -- `.cmd` 도 clone 하면 LF 가 되고, 그래도 돈다.
+// 기준은 **자기 자신을 clone 한 결과와 같아지는 것**이다. 예외는 `.cmd` 하나 —
+// 전에는 "clone 하면 LF 가 되고, 그래도 돈다" 고 적어 두었는데 **틀렸다.** LF 로 바뀐
+// ctx.cmd 는 cmd.exe 에서 `( … )` 블록이 어긋나 죽는다(2026-09-23 실측 · CRLF 는 돈다).
+// 그래서 지식 레포의 `.gitattributes` 도 `*.cmd text eol=crlf` 다.
 const BIN = /[.](?:exe|png|jpe?g|gif|ico|pdf|xlsx?|hwpx?|pptx?|zip|woff2?|ttf|otf|blob)$/i
+// `.cmd` 는 CRLF 그대로 — cmd.exe 가 LF 파일을 잘못 읽는다(`assemble.mjs` 의 같은 주석).
+const ASIS = /[.](?:cmd|bat)$/i
 function copyFile(s, d) {
-  if (BIN.test(s)) return fs.copyFileSync(s, d)
+  if (BIN.test(s) || ASIS.test(s)) return fs.copyFileSync(s, d)
   const b = fs.readFileSync(s)
   // NUL 이 있으면 확장자가 뭐든 이진이다. 확장자 목록은 언젠가 샌다.
   if (b.includes(0)) return fs.copyFileSync(s, d)
@@ -140,6 +144,16 @@ need(path.join('ops', 'out', 'exe', EXE), EXE)
 
 // ── 3) 설치 안내 ────────────────────────────────────────────────────────
 const stamp = bundleStamp(ROOT)
+
+// **exe 안의 ctx 판이 번들과 같아야 한다.** `--no-build` 로 조립만 다시 하면 exe 는 옛 번들을
+// 품고 레포의 bin/ 은 새 번들이 된다 — 설치.md ⑥ "세 곳이 같아야 한다" 가 배포본 안에서부터
+// 깨진다(설명서 걷기 2026-09-23: exe 03:24 · bin 03:52). 사람이 보라고 적은 것을 빌드가 먼저 본다.
+try {
+  const v = execFileSync(path.join(OUT, EXE), ['ctx', 'version'], { encoding: 'utf8' }).split(/\r?\n/)[0].trim()
+  if (v !== stamp) missing.push(`${EXE} 의 ctx 판(${v})이 번들(${stamp})과 다르다 — npm run build:exe 뒤 다시 (또는 --no-build 를 뺀다)`)
+} catch (e) {
+  missing.push(`${EXE} 가 실행되지 않는다 — ${String(e?.message || e).split(/\r?\n/)[0]}`)
+}
 
 // 패키지 표 — 배포본에 폴더가 여럿이면 받는 사람이 **하나를 고른다.** 이름만으로는
 // 못 고르므로 매니페스트의 제목 · 판 · 설명과 문서 수를 같이 낸다. 전에는 예시가
