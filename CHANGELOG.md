@@ -3,6 +3,40 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.10.0
+
+제품 관리 서비스 — [`docs/design/CDP_제품관리서비스_검토_v0.1.md`](docs/design/CDP_제품관리서비스_검토_v0.1.md) · [`docs/dev/제품관리서비스_TODO.md`](docs/dev/제품관리서비스_TODO.md)
+
+**세 얼굴 한 프로세스** — `ctx serve` 가 주소로 얼굴을 고른다
+- 사이트 `/` 소개 · `/manual/<책>` 설명서(서버가 든 `manual/` 원문을 화면이 렌더 · GitHub 규칙 slug) · `/login`(JSON · `next`) · `/setup` 첫 관리자 마법사 · `/r` 빈 상태
+- 콘솔 `/console` 일곱 — 현황 · 사용자(매트릭스) · 토큰(원문 1회 · 재발급 · 폐기 회색) · 지식 레포(세우기 · clone · grant) · 작업 레포 · 서버(진단 · 로그 · 파일 위치) · 감사
+- 레포 화면 — 레포 메뉴 항상(쓰기/읽기 칩) · who 에 설명서 · 콘솔 · 역할 칩 · 관리 메뉴에 「콘솔로 →」 · 도움말에 제품 설명서
+- 화면: `lib/router.jsx`(의존성 0) · `main.jsx` 가 `App` · `Site` · `Console` 을 고름 · `styles/site.css` · `console.css` · `Icon` 열 개
+
+**명부 v1.2** — `core/auth.js`
+- `role` viewer · writer · admin(`write: true` 는 writer 로 읽힘) · 토큰 `status` active · revoked(폐기가 행으로 남는다) · `reissue` = 폐기 + 발급 · `tokenSet`
+- 기본 만료 관리자 30일 · 나머지 90일 · 남은 일수는 달력 날짜 차이 · 가드 `E_LAST_ADMIN` · `E_SELF`
+- 부트스트랩 코드 `<data>/bootstrap.code`(명부가 비었을 때만 · 쓰면 삭제) · 재인증 쿠키 `cdp_su`(15분 · `kind: sudo`)
+- CLI `serve init`(첫 사용자 admin) · `user add/set --role` · `token reissue` · `token set` · `serve doctor` 에 관리자 수 · 관리자 토큰 30일 · 부트스트랩 · manual 줄
+
+**서버** — `viewer/bin/ctx-mcp-serve.mjs`
+- `/site/info` · `/site/manual/<파일>` · `POST /setup` · `POST /admin/sudo` · `/admin/*` 열여덟(overview · users · tokens · repos · workrepos · doctor · server · audit · log) — 비관리자 403 · 쓰기는 `cdp_su` 없으면 401 `E_REAUTH`
+- `--manual <dir>` · `--private-pages` · `--admin-from <CIDR,…>`(관리 API 대역) · 속도 제한 `/login` · `/setup` · `/admin/sudo` 20/분 → 429 `E_RATE`(`core/net.js`)
+- `buildRepo` 하나를 `POST /repos` 와 `POST /admin/repos` 가 같이 쓴다 · `core/reponew.js` `cloneRepo`(지식 레포가 아니면 지운다)
+- `serve.log` 끝 열에 토큰 id · `auth.log` 콘솔 줄은 `admin <행위> · <행위자> · …` · `index.html` 에 `window.__CDP_SERVER__` · `/logout` → `/` · `GET /` 는 소개(레포로 보내지 않는다)
+- 정적 자원은 인증 앞에서 낸다 · `linkify` 가 `install.sh` 같은 파일 이름을 주소로 삼지 않는다(`fuzzyLink` off)
+
+**산출물 · 설치**
+- `cdp-server-v*.tar.gz` 에 `manual/`(세 권 · 설치 절차 · 그림) · `install.sh` 가 끝에 `/setup` 주소와 부트스트랩 코드 · `upgrade.sh` 가 `manual` 도 갈고 되돌린다 · Dockerfile `COPY manual`
+- `build-ctx` 가 `__CDP_VERSION__` 을 찍어 서버가 판을 안다
+
+**문서**
+- 관리자 설명서 3.5(마법사) · 3.7(세 얼굴) · 6장(콘솔 기준 · 셸은 같은 것) · 7.5 · 11장 · 부록 A · B · C · 사용자 설명서 0장 · 2.1 · 8.1 · 10.3 · 개발자 설명서 11.2 · 11.3 · 부록 C · 설치절차 5장 · 7장 · deploy README · 루트 README 「사이트 · 콘솔」
+- MCP 설계서 §4.3 · §4.4.1 · §4.4.2 · §6.3 · §6.6.4 에 **정정** 상자(지우지 않는다) · 목업 `docs/dev/제품관리서비스_목업/`
+
+**검증**
+- 테스트 87(auth 14 · net 3 · reponew clone) · 하네스 78~88(사이트 · 마법사 · `/admin/*` · 재인증 · 토큰 · 만료 · clone · v1.1 명부 · CIDR · 속도 제한) — ✓ 73 ✗ 0 – 16
+
 ## v0.9.0
 
 제품화 1차 — [`docs/design/CDP_제품화_검토_v1.0.md`](docs/design/CDP_제품화_검토_v1.0.md) · [`docs/dev/제품화_TODO.md`](docs/dev/제품화_TODO.md)
