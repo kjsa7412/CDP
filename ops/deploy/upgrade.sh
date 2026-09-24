@@ -71,7 +71,8 @@ cp "$NEW"/bin/ctx.mjs "$NEW"/bin/ctx "$NEW"/bin/ctx.cmd "$PREFIX/bin/" 2>/dev/nu
 rm -rf "$PREFIX/web" && mkdir -p "$PREFIX/web" && cp -r "$NEW"/web/. "$PREFIX/web/"
 if [ -d "$NEW/packages" ]; then rm -rf "$PREFIX/packages" && mkdir -p "$PREFIX/packages" && cp -r "$NEW"/packages/. "$PREFIX/packages/"; fi
 if [ -d "$NEW/manual" ]; then rm -rf "$PREFIX/manual" && mkdir -p "$PREFIX/manual" && cp -r "$NEW"/manual/. "$PREFIX/manual/"; fi
-if [ -d "$NEW/deploy" ]; then mkdir -p "$PREFIX/deploy" && cp "$NEW"/deploy/*.sh "$NEW"/deploy/cdp-serve.service "$PREFIX/deploy/" 2>/dev/null || true; fi
+# 설치절차.md 도 — 서버의 /manual 페이지가 <prefix>/deploy/설치절차.md 를 「서버 설치 절차」 책으로 낸다
+if [ -d "$NEW/deploy" ]; then mkdir -p "$PREFIX/deploy" && cp "$NEW"/deploy/*.sh "$NEW"/deploy/cdp-serve.service "$NEW"/deploy/설치절차.md "$PREFIX/deploy/" 2>/dev/null || true; fi
 chmod 755 "$PREFIX/bin/ctx" 2>/dev/null || true
 chown -R "$SVC_USER:$SVC_USER" "$PREFIX/bin" "$PREFIX/web" "$PREFIX/packages" "$PREFIX/manual" "$PREFIX/deploy" 2>/dev/null || true
 

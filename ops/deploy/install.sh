@@ -78,7 +78,7 @@ else skip "packages/ 가 산출물에 없다 — ctx repo new 를 못 쓴다"; f
 if [ -d "$SRC/manual" ]; then
   if [ "$DRY" = 0 ]; then rm -rf "$PREFIX/manual" && mkdir -p "$PREFIX/manual" && cp -r "$SRC"/manual/. "$PREFIX/manual/"; else printf '[install]   (dry) manual/ 교체\n'; fi
 else skip "manual/ 이 산출물에 없다 — 설명서 페이지가 빈다"; fi
-run cp "$SRC"/deploy/*.sh "$SRC"/deploy/cdp-serve.service "$PREFIX/deploy/" 2>/dev/null || true
+run cp "$SRC"/deploy/*.sh "$SRC"/deploy/cdp-serve.service "$SRC"/deploy/설치절차.md "$PREFIX/deploy/" 2>/dev/null || true   # 설치절차.md 는 /manual 의 「서버 설치 절차」 책이다
 run chmod 755 "$PREFIX/bin/ctx" "$PREFIX/deploy/"*.sh 2>/dev/null || true
 run chown -R "$SVC_USER:$SVC_USER" "$PREFIX"
 # 파일이 실제로 돈다 — 번들 시각이 나와야 한다

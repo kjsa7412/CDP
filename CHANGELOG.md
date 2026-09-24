@@ -3,6 +3,10 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## 미출시 (main)
+
+- `install.sh` · `upgrade.sh` 가 `deploy/설치절차.md` 도 `<prefix>/deploy/` 에 복사한다 — 서버의 `/manual` 이 그 파일을 「서버 설치 절차」 책으로 내는데 v0.10.0 스크립트는 `*.sh` 와 유닛만 옮겨 실서버 목록에서 그 책이 빠졌다(2026-09-24 실측). 이미 올린 서버는 파일 하나를 복사하고 재시작한다 — 관리자 설명서 부록 A
+
 ## v0.10.0
 
 제품 관리 서비스 — [`docs/design/CDP_제품관리서비스_검토_v0.1.md`](docs/design/CDP_제품관리서비스_검토_v0.1.md) · [`docs/dev/제품관리서비스_TODO.md`](docs/dev/제품관리서비스_TODO.md)
