@@ -6,7 +6,7 @@
 
 import { useState } from 'react'
 import { site } from '../lib/api.js'
-import { Link } from '../lib/router.jsx'
+import { Link, useTitle } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
 
 export default function Setup({ info, onDone }) {
@@ -18,6 +18,7 @@ export default function Setup({ info, onDone }) {
   const [msg, setMsg] = useState(null)
   const [done, setDone] = useState(null)
   const [copied, setCopied] = useState(false)
+  useTitle('첫 설정 · CDP')
 
   if (info && !info.setupNeeded && !done) {
     return (
@@ -80,8 +81,8 @@ export default function Setup({ info, onDone }) {
               <div className="acard__body" style={{ padding: '16px 18px' }}>
                 <div className="form">
                   <div className="field">
-                    <label className="field__l">부트스트랩 코드</label>
-                    <input className="mono" value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} autoFocus placeholder="install.sh 가 마지막에 찍은 한 줄" />
+                    <label className="field__l" htmlFor="su-code">부트스트랩 코드</label>
+                    <input id="su-code" className="mono" value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} autoFocus placeholder="install.sh 가 마지막에 찍은 한 줄" />
                     <span className="field__h">
                       서버의 <code>&lt;data&gt;/bootstrap.code</code> 와 같은 값이다. 명부가 생기면 어디서도 통하지 않는다.
                     </span>
@@ -109,15 +110,15 @@ export default function Setup({ info, onDone }) {
               <div className="acard__body" style={{ padding: '16px 18px' }}>
                 <div className="form">
                   <div className="field">
-                    <label className="field__l">이름 (아이디)</label>
-                    <input className="mono" value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} autoFocus placeholder="kjsa" />
+                    <label className="field__l" htmlFor="su-name">이름 (아이디)</label>
+                    <input id="su-name" className="mono" value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} autoFocus placeholder="kjsa" />
                     <span className="field__h">
                       영문 · 숫자 · <code>.</code> <code>_</code> <code>-</code>. 커밋의 <code>author</code> 로 남는다 — 사내 아이디를 쓴다. 바꿀 수 없다.
                     </span>
                   </div>
                   <div className="field">
-                    <label className="field__l">라벨</label>
-                    <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="소속 · 역할" />
+                    <label className="field__l" htmlFor="su-label">라벨</label>
+                    <input id="su-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="소속 · 역할" />
                     <span className="field__h">사람이 읽는 이름.</span>
                   </div>
                   {msg && <div className="anote anote--bad">{msg}</div>}

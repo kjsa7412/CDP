@@ -31,6 +31,7 @@ import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
 import Icon from './components/Icon.jsx'
+import TopBar from './components/TopBar.jsx'
 
 // 왼쪽 폭 — 하는 일에 따라 다르다. 목록은 제목 한 줄이면 되고, 뻗어나가기는
 // 열이 둘 이상 들어가야 "가로로 뻗는다"가 성립한다.
@@ -420,7 +421,8 @@ export default function App() {
   // 탭이 전부 `cdp` 면 어느 창이 어느 레포인지 알 수 없다.
   useEffect(() => {
     const name = repo?.root ? repo.root.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).pop() : null
-    document.title = !name || name.toLowerCase() === 'cdp' ? 'cdp' : `${name} — cdp`
+    // 규칙은 `<페이지> · CDP` — 세 얼굴이 같다(화면 UX 검토 v0.1 P3)
+    document.title = !name || name.toLowerCase() === 'cdp' ? 'CDP' : `${name} · CDP`
   }, [repo?.root])
 
   const coordIndex = useMemo(() => buildCoordIndex(tree), [tree])
@@ -497,157 +499,122 @@ export default function App() {
       data-nodoc={docId ? '0' : '1'}
       data-force-status={repo.watchEnabled && !repo.watchAlive ? '1' : '0'}
     >
-      <header className="topbar">
-        {/* 로컬은 이름표, 서버는 **고르는 자리**다(§6.6.2). 레포가 하나면
-            전환 UI 를 내지 않는다 — 고를 것이 없는데 메뉴를 내밀지 않는다. */}
-        {/* 로컬은 이름표, 서버는 **고르는 자리**다(§6.6.2). 하나여도 메뉴다(제품관리서비스 검토 §4.8) —
-            메뉴를 열면 볼 수 있는 레포와 내 권한이 보이고, 관리자에게는 이 서버의 레포 전부가 더 붙는다. */}
-        {isServer && me ? (
-          <span className="topbar__repo">
-            <button className="topbar__name" onClick={() => setRepoMenu((v) => !v)} aria-expanded={repoMenu}>
-              <span className="topbar__mark" aria-hidden="true">{appMode.repo.slice(0, 1)}</span>
-              {appMode.repo}
-              <Icon name="chevronDown" size={12} />
-            </button>
-            {repoMenu && (
-              <>
-                <div className="scrim" onMouseDown={() => setRepoMenu(false)} />
-                <div className="repomenu" role="menu">
-                  <div className="repomenu__cap">볼 수 있는 레포 {me.repos.length}</div>
-                  {me.repos.map((r) => (
-                    <button
-                      key={r.name}
-                      className="repomenu__row"
-                      role="menuitem"
-                      aria-current={r.name === appMode.repo}
-                      onClick={() => r.name !== appMode.repo && gotoRepo(r.name)}
-                    >
-                      <b>{r.name}</b>
-                      <span>{r.title || ''}</span>
-                      <span className={me.write ? 'chip' : 'chip chip--off'}>{me.write ? '쓰기' : '읽기'}</span>
-                    </button>
-                  ))}
-                  {me.admin && (allRepos || []).some((r) => !me.repos.some((m) => m.name === r.name)) && (
-                    <>
-                      <div className="repomenu__hr" />
-                      <div className="repomenu__cap">관리자만 — 이 서버의 레포 {allRepos.length}</div>
-                      {allRepos
-                        .filter((r) => !me.repos.some((m) => m.name === r.name))
-                        .map((r) => (
-                          <a key={r.name} className="repomenu__row" href="/console/repos" style={{ opacity: 0.7 }}>
-                            <b>{r.name}</b>
-                            <span>{r.title || ''} · 볼 수 있는 사람 {r.users?.length ?? 0}</span>
-                            <span className="chip chip--off">콘솔에서 할당 →</span>
+      {/* 상단 — 세 얼굴이 같이 쓰는 TopBar(화면 UX 검토 v0.1 §5.1). 표식은 소개로, 「레포」 탭이 레포 메뉴다.
+          서버 모드에서 하나여도 메뉴다(제품관리서비스 검토 §4.8) — 볼 수 있는 레포와 내 권한이 보이고, 관리자에게는
+          이 서버의 레포 전부가 더 붙는다. 로컬은 얼굴이 하나라 스위처 없이 레포 이름표만 선다. */}
+      <TopBar
+        face={isServer ? 'repo' : 'local'}
+        me={isServer ? me : null}
+        repoName={isServer ? appMode.repo : repoName}
+        repoMenu={
+          isServer && me
+            ? {
+                open: repoMenu,
+                onToggle: () => setRepoMenu((v) => !v),
+                content: (
+                  <>
+                    <div className="scrim" onMouseDown={() => setRepoMenu(false)} />
+                    <div className="repomenu" role="menu">
+                      <div className="repomenu__cap">볼 수 있는 레포 {me.repos.length}</div>
+                      {me.repos.map((r) => (
+                        <button
+                          key={r.name}
+                          className="repomenu__row"
+                          role="menuitem"
+                          aria-current={r.name === appMode.repo}
+                          onClick={() => r.name !== appMode.repo && gotoRepo(r.name)}
+                        >
+                          <b>{r.name}</b>
+                          <span>{r.title || ''}</span>
+                          <span className={me.write ? 'chip' : 'chip chip--off'}>{me.write ? '쓰기' : '읽기'}</span>
+                        </button>
+                      ))}
+                      {me.admin && (allRepos || []).some((r) => !me.repos.some((m) => m.name === r.name)) && (
+                        <>
+                          <div className="repomenu__hr" />
+                          <div className="repomenu__cap">관리자만 — 이 서버의 레포 {allRepos.length}</div>
+                          {allRepos
+                            .filter((r) => !me.repos.some((m) => m.name === r.name))
+                            .map((r) => (
+                              <a key={r.name} className="repomenu__row" href="/console/repos" style={{ opacity: 0.7 }}>
+                                <b>{r.name}</b>
+                                <span>{r.title || ''} · 볼 수 있는 사람 {r.users?.length ?? 0}</span>
+                                <span className="chip chip--off">콘솔에서 할당 →</span>
+                              </a>
+                            ))}
+                        </>
+                      )}
+                      {me.admin && (
+                        <>
+                          <div className="repomenu__hr" />
+                          <a className="repomenu__row" href="/console/repos">
+                            <b>콘솔 › 지식 레포</b>
+                            <span>세우기 · clone · 접근</span>
                           </a>
-                        ))}
-                    </>
-                  )}
-                  {me.admin && (
-                    <>
-                      <div className="repomenu__hr" />
-                      <a className="repomenu__row" href="/console/repos">
-                        <b>콘솔 › 지식 레포</b>
-                        <span>세우기 · clone · 접근</span>
-                      </a>
-                    </>
-                  )}
-                </div>
-              </>
+                        </>
+                      )}
+                    </div>
+                  </>
+                ),
+              }
+            : null
+        }
+        center={
+          <>
+            {/* loopback 경고는 **로컬만의 것**이다. 원격에서는 늘 참이라 경고가 아니다(§6.6.3). */}
+            {!isServer && repo.hostWarning && (
+              <span className="hostwarn"><Icon name="warn" size={13} /> loopback 아님</span>
             )}
-          </span>
-        ) : (
-          <span className="topbar__name">
-            <span className="topbar__mark" aria-hidden="true">{repoName.slice(0, 1)}</span>
-            {repoName}
-          </span>
-        )}
-        {/* loopback 경고는 **로컬만의 것**이다. 원격에서는 늘 참이라 경고가
-            아니다 — 그 자리에 user 와 로그아웃이 온다(§6.6.3). */}
-        {!isServer && repo.hostWarning && (
-          <span className="hostwarn"><Icon name="warn" size={13} /> loopback 아님</span>
-        )}
 
-        {/* 화면 전체 모드 둘. **그래프는 패널이 아니라 화면이다** —
-            좌표 288개짜리 그림을 400px 안에서 읽을 수 있는 사람은 없다. */}
-        <div className="seg seg--mode" role="group" aria-label="화면">
-          <button aria-pressed={topMode === 'doc'} onClick={() => setTopMode('doc')}>
-            <Icon name="doc" size={14} /> 문서
-          </button>
-          <button aria-pressed={topMode === 'graph'} onClick={() => setTopMode('graph')}>
-            <Icon name="graph" size={14} /> 그래프
-          </button>
-          {/* 관리도 **화면**이다. 레포 여섯 곳의 설치 상태와 이력 스무 줄은
-              380px 팝오버에 안 들어간다 — 그래프를 화면으로 올린 것과 같다. */}
-          <button aria-pressed={topMode === 'admin'} onClick={() => setTopMode('admin')} title="레포 · 동기화 · 에이전트 설치">
-            <Icon name="gear" size={14} /> 관리
-          </button>
-        </div>
+            {/* 화면 전체 모드 둘. **그래프는 패널이 아니라 화면이다** —
+                좌표 288개짜리 그림을 400px 안에서 읽을 수 있는 사람은 없다. */}
+            <div className="seg seg--mode" role="group" aria-label="화면">
+              <button aria-pressed={topMode === 'doc'} onClick={() => setTopMode('doc')}>
+                <Icon name="doc" size={14} /> 문서
+              </button>
+              <button aria-pressed={topMode === 'graph'} onClick={() => setTopMode('graph')}>
+                <Icon name="graph" size={14} /> 그래프
+              </button>
+              {/* 관리도 **화면**이다. 레포 여섯 곳의 설치 상태와 이력 스무 줄은
+                  380px 팝오버에 안 들어간다 — 그래프를 화면으로 올린 것과 같다. */}
+              <button aria-pressed={topMode === 'admin'} onClick={() => setTopMode('admin')} title="레포 · 동기화 · 에이전트 설치">
+                <Icon name="gear" size={14} /> 관리
+              </button>
+            </div>
 
-        {/* 접었을 때 펴는 버튼이 여기 나지 않는다 — **버튼이 영역을 옮기면
-            안 된다.** 접는 것도 펴는 것도 왼쪽 자리에서 한다(§27.5). */}
+            <button className="topbar__search" onClick={() => setPaletteOpen(true)}>
+              <Icon name="search" size={14} />
+              <span>검색 · 이동</span>
+              <span className="topbar__spacer" />
+              <span className="kbd">⌘K</span>
+            </button>
 
-        <span className="topbar__spacer" />
-        <button className="topbar__search" onClick={() => setPaletteOpen(true)}>
-          <Icon name="search" size={14} />
-          <span>검색 · 이동</span>
-          <span className="topbar__spacer" />
-          <span className="kbd">⌘K</span>
-        </button>
-        <span className="topbar__spacer" />
+            {/* 동기화 — **하루에 제일 먼저 누르는 것이다.** 도는 동안 단계와 경과 초가 이 버튼에 뜬다.
+                로컬만 — 서버는 언제나 origin HEAD 이고 받을 것이 없다(§4.8). */}
+            {!isServer && <SyncButton sync={sync} onSync={syncNow} />}
 
-        {/* 동기화 — **하루에 제일 먼저 누르는 것이다.**
-            ⋯ 안에 있으면 매일 메뉴를 열고 찾아 눌러야 하고, 무엇보다
-            **도는 중인지가 안 보였다** — 사내망 fetch 실측 19.5초 동안 화면이
-            조용하면 멎은 줄로 읽는다. 지금은 단계와 경과 초가 이 버튼에 뜬다.
-            받는 것만 여기 있다 — push 는 상태바와 관리>동기화에 따로 있다. */}
-        {/* 동기화 버튼은 **로컬만** — 서버는 언제나 origin HEAD 이고 받을
-            것이 없다(§4.8). 상태는 관리 > 동기화에서 읽기로 본다. */}
-        {!isServer && <SyncButton sync={sync} onSync={syncNow} />}
-
-        {/* 검증 — **아침에 제일 먼저 보는 값이다.** 상태바 11.5px 글씨에
-            두면 매일 찾아 읽어야 한다. 0건이면 조용하다. */}
-        {c.error > 0 ? (
-          <button className="pill pill--error" onClick={() => setCheckOpen(true)} title="검사 결과 — 커밋이 거부된다">
-            <Icon name="block" size={13} /> 검증 {c.error}
-          </button>
-        ) : c.warn > 0 ? (
-          <button className="pill pill--warn" onClick={() => setCheckOpen(true)} title="검사 결과">
-            <Icon name="warn" size={13} /> 검증 {c.warn}
-          </button>
-        ) : (
-          <button className="pill" onClick={() => setCheckOpen(true)} title="검사 결과 — 통과했을 때도 볼 수 있다">
-            <Icon name="check" size={13} /> 검사
-          </button>
-        )}
-
-        {/* 서버 모드에서 loopback 경고가 있던 자리(§6.6.3). */}
-        {isServer && me && (
-          <span className="who">
-            <a className="who__lnk" href="/manual" title="제품 설명서">
-              <Icon name="book" size={13} /> 설명서
-            </a>
-            {me.admin && (
-              <a className="who__lnk" href="/console" title="콘솔 — 사람 · 토큰 · 레포 전부 · 서버">
-                <Icon name="shield" size={13} /> 콘솔
-              </a>
+            {/* 검증 — **아침에 제일 먼저 보는 값이다.** 0건이면 조용하다. */}
+            {c.error > 0 ? (
+              <button className="pill pill--error" onClick={() => setCheckOpen(true)} title="검사 결과 — 커밋이 거부된다">
+                <Icon name="block" size={13} /> 검증 {c.error}
+              </button>
+            ) : c.warn > 0 ? (
+              <button className="pill pill--warn" onClick={() => setCheckOpen(true)} title="검사 결과">
+                <Icon name="warn" size={13} /> 검증 {c.warn}
+              </button>
+            ) : (
+              <button className="pill" onClick={() => setCheckOpen(true)} title="검사 결과 — 통과했을 때도 볼 수 있다">
+                <Icon name="check" size={13} /> 검사
+              </button>
             )}
-            <b style={{ color: 'var(--text)' }}>{me.user}</b>
-            <span className="who__role">{me.role}</span>
-            <a className="who__out" href="/logout" title="로그아웃">
-              <Icon name="power" size={13} />
-            </a>
-          </span>
-        )}
-
-        <button
-          className="iconbtn"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((m) => !m)}
-          title="더보기"
-        >
-          <Icon name="more" size={16} />
-        </button>
-      </header>
+          </>
+        }
+        right={
+          <button className="iconbtn" aria-expanded={menuOpen} onClick={() => setMenuOpen((m) => !m)} title="더보기" aria-label="더보기">
+            <Icon name="more" size={16} />
+          </button>
+        }
+      />
 
       {/* 더보기 — 하루에 몇 번 안 누르는 것들. 상단바에 늘 펴 둘 이유가 없다.
           전에는 동기화·매뉴얼·읽기모드·비율 4개·설정이 전부 상단바에 있었다.
@@ -661,7 +628,7 @@ export default function App() {
           <div className="menu" role="menu">
             <button className="menu__row" onClick={() => { setMenuOpen(false); setHelpOpen(true) }}>
               <span className="menu__ico"><Icon name="book" size={15} /></span>
-              도움말 — 단축키 · 매뉴얼
+              도움말 — 단축키 · 설명서
               <span className="menu__hint kbd">?</span>
             </button>
             <button
@@ -1060,7 +1027,7 @@ function Help({ docs = [], onOpen, onClose }) {
           )}
           {manuals.length > 0 && (
             <>
-              <div className="help__cap">매뉴얼</div>
+              <div className="help__cap">레포 문서</div>
               {manuals.map((d) => (
                 <button key={d.path} className="help__doc" onClick={() => onOpen?.(d.path)}>
                   <Icon name="book" size={14} /> {manualLabel(d.path)}

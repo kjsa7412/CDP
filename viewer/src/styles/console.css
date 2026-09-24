@@ -11,19 +11,7 @@
 .con .admin { flex: 1; }
 .con .admin__body { padding: 22px 24px 48px; }
 .con .admin__wrap { width: min(1120px, 100%); gap: 14px; }
-.con__brand { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.015em; white-space: nowrap; }
-.con__brand small { font-weight: 500; color: var(--text-3); }
-.con__links { display: flex; gap: 2px; }
-.con__links a {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
-  font-size: 12.5px;
-  color: var(--text-2);
-  border-radius: var(--r-sm);
-}
-.con__links a:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }
+/* 상단은 세 얼굴이 같이 쓰는 .topbar(app.css) — 콘솔만의 표식 · 링크 클래스는 없어졌다(화면 UX 검토 v0.1 §5.1) */
 .astep__i { color: var(--text-3); }
 .astep[aria-current='true'] .astep__i { color: var(--accent); }
 .admin__menu .menu__hr { margin: 8px 6px; }
@@ -61,7 +49,7 @@
 }
 .tchk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
 .tchk input { accent-color: var(--accent); }
-.tcount { font-size: 12px; color: var(--text-3); }
+.tcount { font-size: 12px; color: var(--text-2); }
 
 .ctable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .ctable th {
@@ -88,7 +76,7 @@
 .rowact .abtn { padding: 3px 8px; font-size: 11.5px; }
 .rowact .iconbtn { width: 26px; height: 26px; }
 .name { font-weight: 600; }
-.sub { display: block; font-size: 11px; color: var(--text-3); font-weight: 400; margin-top: 1px; }
+.sub { display: block; font-size: 11px; color: var(--text-2); font-weight: 400; margin-top: 1px; }
 
 .chip {
   display: inline-flex;
@@ -190,8 +178,6 @@
 .repomenu__row span { flex: 1; }
 .repomenu__cap { padding: 6px 10px 2px; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; color: var(--text-3); }
 .repomenu__hr { height: 1px; margin: 4px 2px; background: var(--border); }
-.who .who__lnk { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); padding: 3px 6px; border-radius: var(--r-sm); }
-.who .who__lnk:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }
 
 /* 900px — 메뉴가 아이콘만 남는다 · 숫자 카드 둘씩 · 표는 가로 스크롤(.acard--table 이 이미 한다) */
 @media (max-width: 900px) {
@@ -201,10 +187,8 @@
   .con .admin__body { padding: 16px 12px 40px; }
   .stats { grid-template-columns: 1fr 1fr; }
   .phead { flex-wrap: wrap; }
-  .con__links { display: none; }
 }
 
 /* 링크로 그린 메뉴 · 표식 — 밑줄 없음 */
-.con__brand, .con__brand:hover { color: inherit; text-decoration: none; }
 .admin__menu a.astep, .admin__menu a.astep:hover { text-decoration: none; }
 .rowact a.abtn, .rowact a.abtn:hover { text-decoration: none; }

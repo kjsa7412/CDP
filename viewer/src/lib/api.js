@@ -55,6 +55,44 @@ export const isServer = mode.server
 export const face = mode.face
 const BASE = mode.repo ? `/api/${encodeURIComponent(mode.repo)}` : '/api'
 
+// ── 얼굴 사이에서 같이 읽는 것 둘 — 마지막 레포 · 테마 (화면 UX 검토 v0.1 §5.2 · §5.6) ─────
+//
+// 같은 origin 의 세 얼굴이 같은 localStorage 를 본다. 서버에 두지 않는다(§6.8) — 사람마다 다르고
+// 잃어도 그만인 값이다. 이름뿐이라 비밀도 아니다.
+const LAST = 'cdp.lastRepo'
+const THEME = 'cdp.theme'
+export function lastRepo() {
+  try {
+    return localStorage.getItem(LAST) || null
+  } catch {
+    return null
+  }
+}
+export function rememberRepo(name) {
+  try {
+    if (name) localStorage.setItem(LAST, name)
+    else localStorage.removeItem(LAST)
+  } catch {}
+}
+// 레포 화면이 열렸다 = 그 레포를 볼 수 있다(볼 수 없으면 서버가 여기까지 보내지 않는다) — 기억한다
+if (mode.server && mode.repo) rememberRepo(mode.repo)
+// 「레포」 로 가는 주소 — 마지막에 보던 레포, 없으면 서버가 첫 레포를 고른다(/r)
+export const repoHref = () => (lastRepo() ? '/r/' + encodeURIComponent(lastRepo()) + '/' : '/r')
+export function getTheme() {
+  try {
+    const t = localStorage.getItem(THEME)
+    return t === 'light' || t === 'dark' ? t : 'system'
+  } catch {
+    return 'system'
+  }
+}
+export function setTheme(t) {
+  try {
+    if (t === 'light' || t === 'dark') localStorage.setItem(THEME, t)
+    else localStorage.removeItem(THEME)
+  } catch {}
+}
+
 // 레포를 바꾼다 = **주소를 바꾼다.** 화면 상태를 들고 가지 않는다(§6.6.2) —
 // 좌표 체계가 레포마다 다르므로 이어받을 수 있는 것이 없다.
 export function gotoRepo(name) {
@@ -64,19 +102,22 @@ export function gotoRepo(name) {
 // 서버 모드의 화면 상태는 **브라우저에 둔다**(§6.8). 서버 저장 0 —
 // 사람마다 다르고 잃어도 그만인 값이라 명부·설치 대장 옆에 둘 것이 아니다.
 const LS = 'cdp.state.' + (mode.repo || 'local')
+// 테마만은 레포별이 아니다 — alpha 에서 밝게 고정했는데 gamma · 콘솔 · 소개가 어둡던 것(검토 P12).
 function localState() {
+  let st = {}
   try {
-    return JSON.parse(localStorage.getItem(LS) || '{}')
-  } catch {
-    return {}
-  }
+    st = JSON.parse(localStorage.getItem(LS) || '{}')
+  } catch {}
+  return { ...st, theme: getTheme() }
 }
 function saveLocalState(patch) {
-  const next = { ...localState(), ...patch }
+  if ('theme' in patch) setTheme(patch.theme)
+  const { theme, ...rest } = patch
+  const next = { ...localState(), ...rest }
   try {
     localStorage.setItem(LS, JSON.stringify(next))
   } catch {}
-  return next
+  return { ...next, theme: getTheme() }
 }
 
 // `allowStatus` — **실패가 결과인 호출이 있다.**

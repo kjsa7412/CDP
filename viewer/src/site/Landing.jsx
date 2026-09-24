@@ -5,8 +5,8 @@
 // `manual/그림/`(소스에서는 `docs/그림`) SVG 를 그대로 — 없으면 그 자리를 비운다.
 
 import { useState } from 'react'
-import { site } from '../lib/api.js'
-import { Link } from '../lib/router.jsx'
+import { site, repoHref } from '../lib/api.js'
+import { Link, useTitle } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
 
 const BOOKS = {
@@ -17,7 +17,9 @@ const BOOKS = {
 }
 
 export default function Landing({ info }) {
-  const enter = info?.user ? '/r' : '/login?next=%2Fr'
+  useTitle('소개 · CDP')
+  // 로그인 뒤에는 마지막에 보던 레포로. 이름은 상단 스위처와 같은 말 — 「로그인」 · 「레포」(화면 UX 검토 v0.1 §5.5)
+  const enter = info?.user ? repoHref() : '/login?next=%2Fr'
   const m = info?.mirror || {}
   return (
     <>
@@ -36,7 +38,7 @@ export default function Landing({ info }) {
             </p>
             <div className="hero__cta">
               <a className="btn btn--accent" href={enter}>
-                {info?.user ? '내 레포로' : '들어가기'} <Icon name="arrowRight" size={14} />
+                {info?.user ? '레포 열기' : '로그인'} <Icon name="arrowRight" size={14} />
               </a>
               <Link className="btn" to="/manual">
                 <Icon name="book" size={14} /> 설명서
@@ -70,6 +72,14 @@ export default function Landing({ info }) {
                     최신 <b className="num">{m.ok ?? '—'}</b> <span className="amuted">·</span> 밀림{' '}
                     <b className="num" style={m.lag ? { color: 'var(--warn)' } : undefined}>{m.lag ?? '—'}</b> <span className="amuted">·</span> 원격 없음{' '}
                     <b className="num">{m.off ?? '—'}</b>
+                  </span>
+                </div>
+                <div className="arow">
+                  <span className="arow__label">얼굴</span>
+                  <span className="arow__value">
+                    <span className="amuted">
+                      <b style={{ color: 'var(--text)' }}>소개</b>(이 화면) · <b style={{ color: 'var(--text)' }}>설명서</b>(토큰 없이) · <b style={{ color: 'var(--text)' }}>레포</b>(로그인 뒤 문서 · 그래프) · <b style={{ color: 'var(--text)' }}>콘솔</b>(관리자 — 사람 · 토큰 · 레포 · 서버)
+                    </span>
                   </span>
                 </div>
                 <div className="arow">

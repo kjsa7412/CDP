@@ -1,15 +1,16 @@
 // 콘솔 — 관리자의 자리. 제품관리서비스 검토 §4.7.
 //
-// 상단은 앱의 크롬(.topbar) · 왼쪽 메뉴는 관리 화면의 .astep — 같은 프로그램의 다른 얼굴이다.
-// admin 이 아니면 문장 하나로 멈춘다(D4 — 403 을 화면에서도 같은 말로).
+// 상단은 세 얼굴이 같이 쓰는 `TopBar`(화면 UX 검토 v0.1 §5.1) · 왼쪽 메뉴는 관리 화면의 .astep — 같은 프로그램의
+// 다른 얼굴이다. admin 이 아니면 문장 하나로 멈춘다(D4 — 403 을 화면에서도 같은 말로).
 //
 // **재인증은 끼어드는 모달이다.** 쓰기 동작이 `E_REAUTH` 를 받으면 뜨고, 통과하면 하던 동작을
 // 이어 한다(D5). 관리자가 미리 재인증할 필요가 없다 — `withSudo(fn)` 하나로 페이지가 부른다.
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { api, admin, ApiError } from '../lib/api.js'
-import { useRoute, Link } from '../lib/router.jsx'
+import { api, admin, ApiError, repoHref } from '../lib/api.js'
+import { useRoute, Link, navigate, useTitle } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
+import TopBar from '../components/TopBar.jsx'
 import { Modal, Field } from './ui.jsx'
 import Overview from './Overview.jsx'
 import Users from './Users.jsx'
@@ -45,11 +46,18 @@ export default function Console() {
   }, [])
 
   useEffect(() => {
-    document.title = 'CDP 콘솔'
     api.me().then(setMe).catch((e) => setErr(e.message))
   }, [])
 
-  const page = route.segs[1] || 'overview'
+  // 없는 페이지(`/console/없음`)는 현황으로 — 주소를 고쳐 놓아야 왼쪽 메뉴의 현재 표시가 맞는다(검토 P6 · P22)
+  const seg = route.segs[1] || null
+  useEffect(() => {
+    if (seg && !PAGES[seg]) navigate('/console', { replace: true })
+  }, [seg])
+  const page = seg && PAGES[seg] ? seg : 'overview'
+  const label = MENU.find(([k]) => k === page)?.[2] || '현황'
+  useTitle(`콘솔 — ${label} · CDP`)
+
   if (err) return <Bare>{err}</Bare>
   if (!me) return <Bare>불러오는 중…</Bare>
   if (!me.admin) return <NoAdmin me={me} />
@@ -58,31 +66,12 @@ export default function Console() {
   return (
     <SudoProvider>
       <div className="con">
-        <header className="topbar">
-          <Link to="/console" className="con__brand">
-            <span className="topbar__mark" aria-hidden="true">C</span>CDP <small>콘솔</small>
-          </Link>
-          <span className="topbar__spacer" />
-          <nav className="con__links">
-            <a href="/manual">
-              <Icon name="book" size={13} /> 설명서
-            </a>
-            <a href="/r">
-              <Icon name="doc" size={13} /> 문서로
-            </a>
-          </nav>
-          <span className="who">
-            <b style={{ color: 'var(--text)' }}>{me.user}</b>
-            <span className="who__role">{me.role}</span>
-            <a className="who__out" href="/logout" title="로그아웃">
-              <Icon name="power" size={13} />
-            </a>
-          </span>
-        </header>
+        <TopBar face="console" me={me} hasRepos={(me.repos || []).length > 0} Link={Link} />
         <div className="admin">
           <nav className="admin__menu" aria-label="콘솔">
             {MENU.map(([k, icon, t, s]) => (
-              <Link key={k} to={'/console/' + k} className="astep" aria-current={page === k ? 'true' : undefined}>
+              // 900px 아래에서는 글자가 숨고 아이콘만 남는다 — 이름은 title · aria-label 로 남긴다(검토 P19)
+              <Link key={k} to={'/console/' + k} className="astep" aria-current={page === k ? 'true' : undefined} title={t} aria-label={t}>
                 <Icon name={icon} size={15} className="astep__i" />
                 <span className="astep__txt">
                   <span className="astep__t">{t}</span>
@@ -90,14 +79,7 @@ export default function Console() {
                 </span>
               </Link>
             ))}
-            <span className="topbar__spacer" style={{ flex: 1 }} />
-            <a className="astep astep--back" href="/r">
-              <Icon name="doc" size={15} />
-              <span className="astep__txt">
-                <span className="astep__t">문서로</span>
-                <span className="astep__s">/r</span>
-              </span>
-            </a>
+            {/* 레포로 가는 길은 상단의 「레포」 다 — 여기 「문서로」 를 따로 두지 않는다(검토 §5.5) */}
           </nav>
           <div className="admin__body">
             <div className="admin__wrap">
@@ -197,9 +179,11 @@ function SudoProvider({ children }) {
   )
 }
 
+// 불러오는 중 · 못 읽음 — 상단 바는 그대로 선다(얼굴을 떠나는 길이 언제나 있어야 한다)
 function Bare({ children }) {
   return (
     <div className="con">
+      <TopBar face="console" me={null} hideLogin Link={Link} />
       <div className="empty" style={{ paddingTop: '20vh' }}>{children}</div>
     </div>
   )
@@ -209,6 +193,7 @@ function Bare({ children }) {
 function NoAdmin({ me }) {
   return (
     <div className="con">
+      <TopBar face="console" me={me} hasRepos={(me.repos || []).length > 0} Link={Link} />
       <div className="empty-page">
         <section className="acard">
           <div className="acard__head">
@@ -226,8 +211,8 @@ function NoAdmin({ me }) {
             </div>
             <div className="apre">ctx serve user set --auth /opt/cdp/auth.json --data /opt/cdp/data --name {me.user} --role admin</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-              <a className="btn btn--sm" href="/r">문서로</a>
-              <a className="btn btn--sm" href="/manual/관리자_설명서">설명서 · 관리자 6장</a>
+              <a className="btn btn--sm" href={repoHref()}>레포</a>
+              <a className="btn btn--sm" href="/manual/관리자_설명서">설명서 › 관리자 6장</a>
             </div>
           </div>
         </section>

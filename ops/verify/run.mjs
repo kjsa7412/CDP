@@ -1159,6 +1159,8 @@ await check(80, '명부가 비면 bootstrap.code · /setup 이 첫 관리자를 
     const j = await ok.json()
     must(j.raw && j.raw.length > 30, '원문')
     must((ok.headers.get('set-cookie') || '').includes('cdp_s='), '세션 쿠키')
+    // 마법사 직후 첫 쓰기에서 방금 본 토큰을 다시 묻지 않는다 — 재인증 쿠키도 같이(화면 UX 검토 v0.1 P18 · D5 안)
+    must((ok.headers.get('set-cookie') || '').includes('cdp_su='), '재인증 쿠키(15분)')
     must((await fs.stat(path.join(D2, 'bootstrap.code')).catch(() => null)) === null, '코드 파일이 남았다')
     eq((await post({ code, name: 'again' })).status, 409, '둘째 setup')
     const me = await (await http(`http://127.0.0.1:${PORT + 1}`).call('/me', { headers: { authorization: 'Bearer ' + j.raw } })).json()
@@ -1342,6 +1344,44 @@ await check(88, 'v1.1 명부(write:true) 를 서버가 읽으면 writer · admin
   }
 })
 
+// ── 화면 UX 검토 v0.1 (2026-09-24) — 없는 주소 · 권한 밖 레포 ────────────────────────────────
+await check(89, '없는 주소 — 브라우저(text/html)면 화면 404+index · JSON 은 지금처럼 401 · 세션이 있어도 화면 · /api 접두는 그대로', async () => {
+  const base = `http://127.0.0.1:${PORT}`
+  const H0 = http(base)
+  const a = await H0.call('/nowhere', { headers: { accept: 'text/html,application/xhtml+xml,*/*;q=0.8' } })
+  eq(a.status, 404, 'html 404')
+  must((await a.text()).includes('window.__CDP_SERVER__=true'), '화면(index.html)')
+  const b = await H0.call('/nowhere')
+  eq(b.status, 401, 'json 401 — 에이전트 · API 는 그대로')
+  const c = await H.call('/nowhere', { headers: { accept: 'text/html' } })
+  eq(c.status, 404, '세션이 있어도 화면')
+  must((await c.text()).includes('window.__CDP_SERVER__=true'), '세션 화면')
+  eq((await H0.call('/api/alpha/nothing', { headers: { accept: 'text/html' } })).status, 401, '/api 접두는 JSON 401')
+  eq((await H0.call('/assets/nothing.js', { headers: { accept: 'text/html' } })).status, 404, '자산은 404 파일 없음')
+  return 'html 404+화면 · json 401 · 세션 화면 · /api 401'
+})
+
+await check(90, '권한 밖 · 없는 레포 — /r/<x>/ 가 말없이 첫 레포로 가지 않는다 · 둘 다 /r?from=<x> · 그 화면은 200 · /r 는 첫 레포', async () => {
+  const base = `http://127.0.0.1:${PORT}`
+  const T = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'qa', '--note', '검증 90', '--data', F.data)).stdout.trim()
+  const HQ = http(base)
+  const l = await HQ.call('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: T }) })
+  eq(l.status, 200, 'qa 로그인')
+  const a = await HQ.call('/r/beta/') // qa 는 alpha(+gamma) — beta 는 권한 밖
+  eq(a.status, 302, '권한 밖 302')
+  eq(a.headers.get('location'), '/r?from=beta', '권한 밖 → /r?from=beta')
+  const b = await HQ.call('/r/zeta/') // 없는 레포 — 같은 길(D4)
+  eq(b.status, 302, '없는 레포 302')
+  eq(b.headers.get('location'), '/r?from=zeta', '없는 레포도 /r?from=')
+  const c = await HQ.call('/r?from=beta')
+  eq(c.status, 200, '문장 페이지 200')
+  must((await c.text()).includes('window.__CDP_SERVER__=true'), '화면')
+  const d = await HQ.call('/r')
+  eq(d.status, 302, '/r 는 첫 레포로')
+  eq(d.headers.get('location'), '/r/alpha/', '첫 레포 alpha')
+  return '302 /r?from=beta · 302 /r?from=zeta · 200 · /r → alpha'
+})
+
 await check(85, '/login 속도 제한 — 21번째 안에 429 (마지막에 돈다 — 이 뒤로 로그인 없음)', async () => {
   let got = null
   for (let i = 1; i <= 21; i++) {
@@ -1372,8 +1412,8 @@ skip(63, '전환 메뉴에 권한 밖 레포가 없다', '6.2 브라우저 실�
 skip(64, '레포를 바꾸면 화면 상태 초기화', '6.2 브라우저 실측 — 전환이 주소 이동이라 구조적으로 성립')
 skip(65, '/r/<repo>/doc/<id> 를 새 창에 붙여넣으면 열린다', '6.2 브라우저 실측')
 skip(66, '⌘K 가 다른 레포의 좌표를 안 낸다', '6.2 — 모든 호출이 /api/<repo> 기준(45번이 경로를 덮는다)')
-skip(67, '서버 모드 관리 메뉴 — 현황 · 지식 레포 · 작업 레포 · 진단 넷 + 관리자에게 콘솔로', '6.2 브라우저 실측 — 2026-09-23 dev 서버에서 확인')
-skip(68, 'loopback 경고 자리에 설명서 · 콘솔(관리자) · user · 역할 칩 · 로그아웃', '6.2 브라우저 실측 — 2026-09-23 확인')
+skip(67, '서버 모드 관리 메뉴 — 현황 · 지식 레포 · 작업 레포 · 진단 넷 + 관리자에게 「콘솔」', '6.2 브라우저 실측 — 2026-09-23 확인 · 2026-09-24 화면 UX 로 이름만 「콘솔」')
+skip(68, '공통 상단 바 — 표식(→ 소개) · 소개 · 설명서 · 레포 · 콘솔(관리자) · 이름 · 역할 칩 · 로그아웃', '브라우저 실측 — 2026-09-24 화면 UX 검토 v0.1 (그림 14 · 20 · 21 의 「후」)')
 skip(69, '레포 메뉴는 서버 모드에서 항상 — 쓰기/읽기 칩 · 관리자에게 콘솔 › 지식 레포 줄', '6.2 브라우저 실측 — 2026-09-23 확인 (레포 하나여도 메뉴)')
 
 // ── 보고 ────────────────────────────────────────────────────────────────────

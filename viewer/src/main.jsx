@@ -8,7 +8,7 @@
 // 왕복이 없다 — 첫 렌더에서 갈린다.
 
 import { createRoot } from 'react-dom/client'
-import { face } from './lib/api.js'
+import { face, getTheme } from './lib/api.js'
 import App from './App.jsx'
 import Site from './site/Site.jsx'
 import Console from './console/Console.jsx'
@@ -22,14 +22,18 @@ import './styles/console.css'
 
 document.documentElement.dataset.face = face
 
-// 사이트 · 콘솔은 OS 테마를 따른다. 앱은 자기 설정(state.theme)이 있어 App 이 맡는다.
+// 테마 — **세 얼굴이 한 키(cdp.theme)를 본다**(화면 UX 검토 v0.1 P12). 레포 화면의 설정이 그 키에 쓰고,
+// 사이트 · 콘솔은 읽기만 한다. 기본은 OS 따라가기(§16.4). 앱(레포 · 로컬)은 state.theme 으로 같은 값을
+// 받아 App 이 맡는다.
 if (face === 'site' || face === 'console') {
   const mq = window.matchMedia('(prefers-color-scheme: dark)')
   const apply = () => {
-    document.documentElement.dataset.theme = mq.matches ? 'dark' : 'light'
+    const t = getTheme()
+    document.documentElement.dataset.theme = t === 'dark' || (t === 'system' && mq.matches) ? 'dark' : 'light'
   }
   apply()
   mq.addEventListener('change', apply)
+  window.addEventListener('storage', (e) => e.key === 'cdp.theme' && apply())
 }
 
 const Root = face === 'console' ? Console : face === 'site' ? Site : App

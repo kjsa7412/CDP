@@ -311,6 +311,9 @@ function loginPage({ next = '/', failed = false } = {}) {
 </form>`
 }
 
+// 서버가 아는 첫 조각 — 이 밖의 GET 이 브라우저에서 오면 화면의 「없는 주소입니다」 다(아래 onRequest).
+const KNOWN_PREFIX = /^\/(api|admin|site|mcp|kit|workrepos|repos|packages|me|healthz|r|console|login|logout|setup|manual|assets)(\/|$)/
+
 function cookieStr(name, value, { maxAge = 12 * 3600, secure = false } = {}) {
   const parts = [`${name}=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`]
   // 평문 HTTP 배치에서는 Secure 를 붙이면 쿠키가 아예 안 간다(§9.4).
@@ -323,6 +326,11 @@ function setCookie(res, value, opts = {}) {
 // 재인증 쿠키 — 15분 · `kind: sudo`(검토 §4.3 · D5). 세션 쿠키와 이름도 서명도 다르다.
 function setSudoCookie(res, value, opts = {}) {
   res.setHeader('set-cookie', cookieStr('cdp_su', value, { ...opts, maxAge: auth.SUDO_MINUTES * 60 }))
+}
+// 마법사 직후 — 세션과 재인증 쿠키를 **한 응답에** 둘 다(화면 UX 검토 v0.1 §5.7 · D5 의 15분 안). 방금 원문을
+// 눈으로 본 사람이 첫 쓰기에서 같은 원문을 또 넣지 않게. setHeader 는 덮어쓰므로 배열 하나로 낸다.
+function setSessionAndSudo(res, { session, sudo }, { secure = false } = {}) {
+  res.setHeader('set-cookie', [cookieStr('cdp_s', session, { secure }), cookieStr('cdp_su', sudo, { secure, maxAge: auth.SUDO_MINUTES * 60 })])
 }
 function clearCookies(res, { secure = false } = {}) {
   res.setHeader('set-cookie', [cookieStr('cdp_s', '', { maxAge: 0, secure }), cookieStr('cdp_su', '', { maxAge: 0, secure })])
@@ -718,8 +726,9 @@ export async function runServe(opt = {}) {
           await auth.audit(dataDir, `setup · user add · ${u.name} · repos=* · role=admin · ip=${ip}`)
           await auth.audit(dataDir, `setup · token issue · ${u.name} · ${rec.id} · expires=${rec.expires}`)
           log.req({ ip, user: u.name, method: 'POST', tool: '/setup', ms: Date.now() - t0, status: 200 })
-          // 브라우저는 이 자리에서 로그인된다 — 원문을 한 번 더 넣게 하지 않는다.
-          setCookie(res, auth.signSession(secret, u.name), { secure: secureCookie })
+          // 브라우저는 이 자리에서 로그인된다 — 원문을 한 번 더 넣게 하지 않는다. 재인증(15분)도 같이 —
+          // 첫 레포를 세우는 첫 쓰기에서 방금 본 토큰을 다시 묻지 않는다(화면 UX 검토 v0.1 P18).
+          setSessionAndSudo(res, { session: auth.signSession(secret, u.name), sudo: auth.signSession(secret, u.name, { minutes: auth.SUDO_MINUTES, kind: 'sudo' }) }, { secure: secureCookie })
           return json(res, 200, { user: u.name, raw, id: rec.id, expires: rec.expires })
         } catch (e) {
           return json(res, 400, { error: { code: e?.code || 'E_INPUT', message: e.message, detail: e.detail } })
@@ -777,6 +786,16 @@ export async function runServe(opt = {}) {
         clearCookies(res, { secure: secureCookie })
         res.writeHead(302, { location: '/' })
         return res.end()
+      }
+
+      // ── 없는 주소 — 사람이 주소창에 친 것이면 화면의 「없는 주소입니다」 를 낸다(화면 UX 검토 v0.1 P6).
+      //
+      // 전에는 여기까지 온 미지 경로가 Bearer 인증으로 흘러 `401 토큰이 없다` JSON 이 됐다 — 로그인한 사람에게도.
+      // `Accept: text/html` 을 보내는 것은 브라우저의 주소창뿐이라 API · MCP · 에이전트는 그대로 JSON 을 받는다.
+      // 아는 접두(라우트가 뒤에 있는 것 포함)는 건드리지 않는다.
+      if (isGet && !KNOWN_PREFIX.test(url.pathname) && String(req.headers.accept || '').includes('text/html')) {
+        log.req({ ip, method: req.method, key: url.pathname, ms: Date.now() - t0, status: 404, code: 'E_NOT_FOUND' })
+        return serveWeb({ req, res, url, webDir, log, status: 404 })
       }
 
       // 브라우저 경로(`/api` · `/r` · `/admin` …)는 쿠키를, 나머지는 Bearer 를 본다(§6.4).
@@ -1394,6 +1413,8 @@ export async function runServe(opt = {}) {
       // 토큰은 맞으므로 401 로 돌려보내지 않는다(§6.6.1).
       if (url.pathname === '/r' || url.pathname === '/r/') {
         const mine = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
+        // `?from=<이름>` — 열 수 없는 레포 주소로 왔다. 화면이 문장과 볼 수 있는 레포를 낸다(화면 UX 검토 v0.1 P5)
+        if (url.searchParams.has('from')) return serveWeb({ req, res, url, webDir, log })
         if (mine.length) {
           res.writeHead(302, { location: '/r/' + encodeURIComponent(mine[0].name) + '/' })
           return res.end()
@@ -1412,7 +1433,11 @@ export async function runServe(opt = {}) {
           await store.ensure(name)
           const again = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
           if (!again.some((r) => r.name === name)) {
-            res.writeHead(302, { location: again.length ? '/r/' + encodeURIComponent(again[0].name) + '/' : '/r' })
+            // **없는 레포와 권한 밖 레포를 같은 길로 보낸다**(D4 · §4.6 — 존재를 알리지 않는다). 전에는 말없이 첫
+            // 레포로 보내 동료가 준 링크가 왜 다른 곳에서 열렸는지 알 길이 없었다(화면 UX 검토 v0.1 P5). 화면(`/r?from=`)이
+            // "없거나 할당되지 않았다" 한 문장과 볼 수 있는 레포를 낸다.
+            log.req({ ip, user: a.user, method: 'GET', tool: '/r', key: name.slice(0, 60), ms: Date.now() - t0, status: 302, code: 'E_NOT_FOUND' })
+            res.writeHead(302, { location: '/r?from=' + encodeURIComponent(name) })
             return res.end()
           }
         }
@@ -1788,7 +1813,7 @@ async function titleOfMd(file) {
 //
 // `/r/<repo>/무엇이든` 은 전부 `index.html` 이다 — 라우팅은 화면이 한다.
 // 자산(`/assets/…`)만 실제 파일로 낸다.
-async function serveWeb({ req, res, url, webDir, log }) {
+async function serveWeb({ req, res, url, webDir, log, status = 200 }) {
   let rel = decodeURIComponent(url.pathname)
   const asset = /^\/(assets\/.+|[^/]+\.(?:js|css|svg|png|ico|woff2?))$/.exec(rel)
   rel = asset ? rel : '/index.html'
@@ -1813,7 +1838,7 @@ async function serveWeb({ req, res, url, webDir, log }) {
   // **같은 번들이 로컬 뷰어에서도 돈다**(§6.8). `/r/` 밖의 경로(`/` · `/manual` · `/console`)에서
   // 화면이 자기가 서버에서 왔는지 알 길이 없어 한 줄을 심는다 — 왕복 없이 첫 렌더에서 갈린다.
   if (rel === '/index.html') buf = Buffer.from(buf.toString('utf8').replace('</head>', '<script>window.__CDP_SERVER__=true</script></head>'), 'utf8')
-  res.writeHead(200, {
+  res.writeHead(rel === '/index.html' ? status : 200, {
     'content-type': MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream',
     'cache-control': rel === '/index.html' ? 'no-store' : 'public, max-age=31536000, immutable',
   })

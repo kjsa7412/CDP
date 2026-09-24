@@ -5,8 +5,8 @@
 // 명부를 흘린다. 분당 20회를 넘으면 서버가 429 를 낸다.
 
 import { useState } from 'react'
-import { site } from '../lib/api.js'
-import { Link } from '../lib/router.jsx'
+import { site, lastRepo, repoHref } from '../lib/api.js'
+import { Link, useTitle } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
 
 export default function Login({ next = '/r' }) {
@@ -14,6 +14,7 @@ export default function Login({ next = '/r' }) {
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
+  useTitle('로그인 · CDP')
 
   const submit = async (e) => {
     e.preventDefault()
@@ -24,8 +25,9 @@ export default function Login({ next = '/r' }) {
     try {
       const r = await site.login(t, next)
       if (r?.ok) {
-        // 얼굴이 바뀐다(사이트 → 레포 · 콘솔) — 새로 연다
-        location.href = r.next || next
+        // 얼굴이 바뀐다(사이트 → 레포 · 콘솔) — 새로 연다. 갈 곳이 그냥 /r 이면 마지막에 보던 레포로(P7).
+        const to = r.next || next
+        location.href = to === '/r' && lastRepo() ? repoHref() : to
         return
       }
       setMsg(r?.error?.message || '토큰을 확인하세요.')
@@ -57,7 +59,7 @@ export default function Login({ next = '/r' }) {
           </div>
           {msg && <div className="anote anote--bad">{msg}</div>}
           <button className="btn btn--accent" type="submit" disabled={busy || !tok.trim()}>
-            {busy ? '확인 중…' : '들어가기'}
+            {busy ? '확인 중…' : '로그인'}
           </button>
           <div className="anote">
             토큰은 관리자에게 받는다. 분실하면 <b>재발급</b> — 재사용할 수 없다.

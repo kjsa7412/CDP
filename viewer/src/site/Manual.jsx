@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { site } from '../lib/api.js'
-import { navigate, Link } from '../lib/router.jsx'
+import { navigate, Link, useTitle } from '../lib/router.jsx'
 import { renderMarkdown, enhance } from '../lib/markdown.js'
 import Icon from '../components/Icon.jsx'
 
@@ -121,6 +121,7 @@ export default function Manual({ info, id, hash }) {
   }, [rendered])
 
   const book = books.find((b) => b.id === id)
+  useTitle(book ? `${book.title.replace(/^CDP\s*/, '')} · CDP` : '설명서 · CDP')
   return (
     <div className="man">
       <nav className="man__nav" aria-label="설명서">

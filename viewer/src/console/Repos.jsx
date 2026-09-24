@@ -19,8 +19,18 @@ export default function Repos({ say }) {
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(null)
+  // 다시 읽는 중 — 세운 직후 표가 "레포가 없다" 인 채 노트만 뜨던 것(화면 UX 검토 v0.1 P16). 레포마다 첫 스캔을
+  // 하느라 목록이 1초를 넘게 걸린다 — 그 사이를 "읽는 중" 으로 둔다.
+  const [loading, setLoading] = useState(false)
 
-  const load = useCallback(() => admin.repos().then(setData).catch((e) => say(e.message, 6000)), [say])
+  const load = useCallback(() => {
+    setLoading(true)
+    return admin
+      .repos()
+      .then(setData)
+      .catch((e) => say(e.message, 6000))
+      .finally(() => setLoading(false))
+  }, [say])
   useEffect(() => {
     load()
   }, [load])
@@ -67,7 +77,7 @@ export default function Repos({ say }) {
             <tbody>
               {data.repos.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="dim">레포가 없다 — [새 레포] 로 패키지에서 세우거나 origin 에서 받아 온다</td>
+                  <td colSpan={7} className="dim">{loading ? '읽는 중…' : '레포가 없다 — [새 레포] 로 패키지에서 세우거나 origin 에서 받아 온다'}</td>
                 </tr>
               )}
               {data.repos.map((r) => {

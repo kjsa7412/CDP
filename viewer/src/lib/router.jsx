@@ -65,3 +65,10 @@ export function Link({ to, children, className, replace = false, onClick, ...res
     </a>
   )
 }
+
+// 탭 제목 — `<페이지> · CDP` 한 규칙(화면 UX 검토 v0.1 P3). 히스토리 · 탭 · 북마크에서 얼굴이 갈린다.
+export function useTitle(title) {
+  useEffect(() => {
+    if (title) document.title = title
+  }, [title])
+}

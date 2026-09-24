@@ -51,7 +51,7 @@
 .astep__t { font-size: 13px; }
 .astep__s {
   font-size: 10.5px;
-  color: var(--text-3);
+  color: var(--text-2); /* 10.5px 글자에 --text-3 는 3.0:1 — 화면 UX 검토 v0.1 P20 */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -97,7 +97,7 @@
   background: var(--surface-2);
 }
 .acard__title { font-size: 12.5px; font-weight: 600; color: var(--text); }
-.acard__hint { font-size: 11px; color: var(--text-3); }
+.acard__hint { font-size: 11px; color: var(--text-2); }
 .acard__body {
   padding: var(--sp-3);
   display: flex;

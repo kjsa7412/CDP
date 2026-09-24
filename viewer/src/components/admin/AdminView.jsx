@@ -81,6 +81,8 @@ export default function AdminView({
               className="astep"
               aria-current={cur === m.key}
               onClick={() => onTab(m.key)}
+              title={m.label}
+              aria-label={m.label}
             >
               <Icon name={m.icon} size={15} />
               <span className="astep__txt">
@@ -94,17 +96,17 @@ export default function AdminView({
           {isServer && me?.admin && (
             <>
               <div className="menu__hr" />
-              <a className="astep" href="/console" style={{ textDecoration: 'none' }}>
+              <a className="astep" href="/console" style={{ textDecoration: 'none' }} title="콘솔" aria-label="콘솔">
                 <Icon name="shield" size={15} />
                 <span className="astep__txt">
-                  <span className="astep__t">콘솔로 →</span>
+                  <span className="astep__t">콘솔</span>
                   <span className="astep__s">사람 · 토큰 · 레포 전부 · 서버</span>
                 </span>
               </a>
             </>
           )}
           <span className="topbar__spacer" style={{ flex: 1 }} />
-          <button className="astep astep--back" onClick={onClose}>
+          <button className="astep astep--back" onClick={onClose} title="문서로 돌아가기" aria-label="문서로 돌아가기">
             <Icon name="doc" size={15} />
             <span className="astep__txt">
               <span className="astep__t">문서로 돌아가기</span>
