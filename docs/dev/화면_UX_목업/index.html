@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CDP 화면 UX — 공통 상단 바 목업 v0.1 안</title>
+<!-- 실제 토큰 · 클래스를 그대로 물려 쓴다. 이 파일은 검토용이며 제품에 들어가지 않는다.
+     띄우기: 레포 루트에서  python -m http.server 5299  →  http://127.0.0.1:5299/docs/dev/화면_UX_목업/
+     장면: #now · #site · #repo · #console · #manual · #narrow · #errors  (뒤에 ;dark ;900 을 붙일 수 있다) -->
+<link rel="stylesheet" href="../../../viewer/src/styles/font.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/tokens.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/app.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/admin.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/doc.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/site.css" />
+<link rel="stylesheet" href="../../../viewer/src/styles/console.css" />
+<link rel="stylesheet" href="mockup.css" />
+</head>
+<body>
+
+<!-- ── 아이콘 — Icon.jsx 의 경로 그대로 ─────────────────────────────── -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6.5 9.5 17 4 11.5"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.8 21.2 19.6a1.4 1.4 0 0 1-1.2 2.1H4a1.4 1.4 0 0 1-1.2-2.1z"/><path d="M12 9.8v4.4"/><path d="M12 17.6h.01"/></symbol>
+  <symbol id="i-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 18 18 6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11.2v5"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.1"/><path d="M19.3 14.6a1.5 1.5 0 0 0 .3 1.7l.1.1a1.8 1.8 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1.1v.3a1.8 1.8 0 1 1-3.6 0v-.2a1.5 1.5 0 0 0-2.6-1.1l-.1.1a1.8 1.8 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1.1-2.6h-.3a1.8 1.8 0 1 1 0-3.6h.2a1.5 1.5 0 0 0 1.1-2.6l-.1-.1a1.8 1.8 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 1.7.3h.1a1.5 1.5 0 0 0 .9-1.4v-.3a1.8 1.8 0 1 1 3.6 0v.2a1.5 1.5 0 0 0 2.6 1.1l.1-.1a1.8 1.8 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0-.3 1.7v.1a1.5 1.5 0 0 0 1.4.9h.3a1.8 1.8 0 1 1 0 3.6h-.2a1.5 1.5 0 0 0-1.4.9z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="5.2" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.8" cy="12" r="1.7"/></g></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v8"/><path d="M7.5 6.6a7 7 0 1 0 9 0"/></symbol>
+  <symbol id="i-chevronDown" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol>
+  <symbol id="i-chevronRight" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-arrowRight" viewBox="0 0 24 24"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v5a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V7.5A1.5 1.5 0 0 1 6 6h5"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.6"/><circle cx="5" cy="18.5" r="2.6"/><circle cx="19" cy="18.5" r="2.6"/><path d="M10.6 7.3 6.4 16.2"/><path d="M13.4 7.3l4.2 8.9"/><path d="M7.6 18.5h8.8"/></symbol>
+  <symbol id="i-managed" viewBox="0 0 24 24"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v18H7.5A2.5 2.5 0 0 1 5 18.5z"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-work" viewBox="0 0 24 24"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5"/><path d="M9 13.5h6"/><path d="M9 17h4"/></symbol>
+  <symbol id="i-coord" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5V8M15 3.5V8"/><path d="M6.5 8h11v3.2a5.5 5.5 0 0 1-5.5 5.5 5.5 5.5 0 0 1-5.5-5.5z"/><path d="M12 16.7v3.8"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.8C10.4 5.2 8.2 4.6 3.5 4.6v13c4.7 0 6.9.6 8.5 2 1.6-1.4 3.8-2 8.5-2v-13c-4.7 0-6.9.6-8.5 2z"/><path d="M12 6.8v12.8"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5V5.5A1.5 1.5 0 0 1 4.5 4h8A1.5 1.5 0 0 1 14 5.5V6"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 24 24"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 4.5V11h-6.5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 6.5A2 2 0 0 1 5.5 4.5h3.7l2 2.6h7.3a2 2 0 0 1 2 2v8.4a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></symbol>
+  <!-- 콘솔용 여덟 -->
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M15.5 4.6a3.2 3.2 0 0 1 0 6.8"/><path d="M16.5 13.6a5.5 5.5 0 0 1 4 5.4"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="14.5" r="4.3"/><path d="M11.2 11.3 20.5 2"/><path d="M16 6.5l3 3"/><path d="M13.5 9l3 3"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="6.5" rx="1.8"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.8"/><path d="M7 7.2h.01M7 16.7h.01"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 4.5 6.5v5.2c0 4.6 3.2 7.8 7.5 9.3 4.3-1.5 7.5-4.7 7.5-9.3V6.5z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6.5h12M8 12h12M8 17.5h12"/><path d="M4 6.5h.01M4 12h.01M4 17.5h.01"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 10v10h12V10"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+</svg>
+
+<!-- ── 검토용 도구줄 ───────────────────────────────────────────────── -->
+<div class="rb">
+  <span class="rb__tag">목업 · 화면 UX v0.1 안</span>
+  <span class="rb__grp">지금</span>
+  <button class="rb__tab" data-go="now">상단 바 셋 (현행 · 실측)</button>
+  <span class="rb__grp">권장안</span>
+  <button class="rb__tab" data-go="site">소개 · 비로그인</button>
+  <button class="rb__tab" data-go="repo">레포 · hong</button>
+  <button class="rb__tab" data-go="console">콘솔 · kjsa</button>
+  <button class="rb__tab" data-go="manual">설명서 · 목차 고정</button>
+  <button class="rb__tab" data-go="narrow">900px · 표식 메뉴</button>
+  <button class="rb__tab" data-go="errors">권한 밖 · 없는 주소</button>
+  <span class="rb__sp"></span>
+  <button class="rb__tog" id="togTheme" aria-pressed="false">다크</button>
+  <button class="rb__tog" id="togWidth" aria-pressed="false">900px</button>
+</div>
+
+<div class="stage">
+<div class="frame" id="frame">
+  <div class="frame__url">
+    <span class="frame__dots"><i></i><i></i><i></i></span>
+    <span class="frame__tab" id="tabtitle">alpha · CDP</span>
+    <span class="frame__addr">http://10.10.20.188:7374<b id="route">/r/alpha/</b></span>
+  </div>
+  <div class="frame__body" id="body">
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     장면 0 — 지금. 세 얼굴의 상단 바를 실제 클래스로 나란히. 눈금은 2026-09-24 실측값.
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="now" data-route="/ · /r/alpha/ · /console" data-title="CDP">
+  <div class="stack">
+    <div>
+      <p class="stack__cap"><b>소개 · 설명서</b> — <code>.site-top</code> · 선언 56px · <span class="bad">실측 34px(긴 페이지) / 56px(짧은 페이지)</span> · 표식 → <code>/</code> · 설명서가 왼쪽 · 콘솔은 테두리 버튼 · 「내 레포로」 는 파란 버튼</p>
+      <div class="bar-only">
+        <header class="site-top">
+          <a class="site-top__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP</a>
+          <nav class="site-top__nav"><a href="#" aria-current="page">소개</a><a href="#">설명서</a></nav>
+          <span class="site-top__sp"></span>
+          <span class="site-top__me">
+            <b style="color:var(--text)">kjsa</b><span class="who__role">admin</span>
+            <a class="btn btn--sm" href="#"><svg class="ico" width="13" height="13"><use href="#i-shield"/></svg> 콘솔</a>
+            <a class="btn btn--accent btn--sm" href="#">내 레포로 <svg class="ico" width="13" height="13"><use href="#i-arrowRight"/></svg></a>
+            <a class="who__out" href="#" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a>
+          </span>
+        </header>
+        <span class="ruler">56 · 실측 34 / 56</span>
+      </div>
+    </div>
+    <div>
+      <p class="stack__cap"><b>레포</b> — <code>.topbar</code>(app) · 48px · 표식 자리에 <span class="bad">레포 첫 글자 + 레포 메뉴</span>(제품 이름 CDP 없음) · 설명서 · 콘솔은 오른쪽 글자 링크 · 소개로 가는 길 없음</p>
+      <div class="bar-only">
+        <header class="topbar" style="height:48px">
+          <span class="topbar__repo"><button class="topbar__name"><span class="topbar__mark" aria-hidden="true">A</span>alpha <svg class="ico" width="12" height="12"><use href="#i-chevronDown"/></svg></button></span>
+          <div class="seg seg--mode" role="group"><button aria-pressed="true"><svg class="ico" width="14" height="14"><use href="#i-doc"/></svg> 문서</button><button><svg class="ico" width="14" height="14"><use href="#i-graph"/></svg> 그래프</button><button><svg class="ico" width="14" height="14"><use href="#i-gear"/></svg> 관리</button></div>
+          <span class="topbar__spacer"></span>
+          <button class="topbar__search"><svg class="ico" width="14" height="14"><use href="#i-search"/></svg><span>검색 · 이동</span><span class="topbar__spacer"></span><span class="kbd">⌘K</span></button>
+          <span class="topbar__spacer"></span>
+          <button class="pill pill--warn"><svg class="ico" width="13" height="13"><use href="#i-warn"/></svg> 검증 2</button>
+          <span class="who">
+            <a class="who__lnk" href="#"><svg class="ico" width="13" height="13"><use href="#i-book"/></svg> 설명서</a>
+            <a class="who__lnk" href="#"><svg class="ico" width="13" height="13"><use href="#i-shield"/></svg> 콘솔</a>
+            <b style="color:var(--text)">kjsa</b><span class="who__role">admin</span>
+            <a class="who__out" href="#" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a>
+          </span>
+          <button class="iconbtn" title="더보기"><svg class="ico" width="16" height="16"><use href="#i-more"/></svg></button>
+        </header>
+        <span class="ruler ruler--ok">48</span>
+      </div>
+    </div>
+    <div>
+      <p class="stack__cap"><b>콘솔</b> — <code>.topbar</code>(con) · <span class="bad">높이 선언 없음 · 실측 30px / 25px(900px)</span> · 표식 → <code>/console</code> · 「문서로」 = <code>/r</code> 첫 레포 · 소개로 가는 길 없음</p>
+      <div class="bar-only">
+        <div class="con" style="min-height:0">
+          <header class="topbar">
+            <a class="con__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP <small>콘솔</small></a>
+            <span class="topbar__spacer"></span>
+            <nav class="con__links"><a href="#"><svg class="ico" width="13" height="13"><use href="#i-book"/></svg> 설명서</a><a href="#"><svg class="ico" width="13" height="13"><use href="#i-doc"/></svg> 문서로</a></nav>
+            <span class="who"><b style="color:var(--text)">kjsa</b><span class="who__role">admin</span><a class="who__out" href="#" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a></span>
+          </header>
+        </div>
+        <span class="ruler">실측 30 / 25</span>
+      </div>
+    </div>
+    <div>
+      <p class="stack__cap"><b>권장</b> — 부품 하나 <code>.topbar--rec</code> · 48px · 표식은 언제나 <code>C CDP → /</code> · 얼굴 스위처 넷이 같은 자리 · 현재 얼굴에 밑줄 · 얼굴 고유 도구는 가운데</p>
+      <div class="bar-only">
+        <header class="topbar topbar--rec">
+          <a class="topbar__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP</a>
+          <nav class="faces" aria-label="얼굴"><a href="#">소개</a><a href="#">설명서</a><a href="#" aria-current="page">레포 <span class="faces__sub">alpha</span> <svg class="ico" width="12" height="12"><use href="#i-chevronDown"/></svg></a><a href="#">콘솔</a></nav>
+          <div class="topbar__center">
+            <div class="seg seg--mode" role="group"><button aria-pressed="true"><svg class="ico" width="14" height="14"><use href="#i-doc"/></svg> 문서</button><button><svg class="ico" width="14" height="14"><use href="#i-graph"/></svg> 그래프</button><button><svg class="ico" width="14" height="14"><use href="#i-gear"/></svg> 관리</button></div>
+            <button class="topbar__search"><svg class="ico" width="14" height="14"><use href="#i-search"/></svg><span>검색 · 이동</span><span class="topbar__spacer"></span><span class="kbd">⌘K</span></button>
+            <button class="pill pill--warn"><svg class="ico" width="13" height="13"><use href="#i-warn"/></svg> 검증 2</button>
+          </div>
+          <span class="who"><b class="who__name" style="color:var(--text)">kjsa</b><span class="who__role">admin</span><a class="who__out" href="#" aria-label="로그아웃" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a></span>
+          <button class="iconbtn" title="더보기" aria-label="더보기"><svg class="ico" width="16" height="16"><use href="#i-more"/></svg></button>
+        </header>
+        <span class="ruler ruler--ok">48</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     장면 1 — 권장 · 소개(비로그인). 스위처는 소개 · 설명서 둘, 오른쪽은 [로그인].
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="site" data-route="/" data-title="소개 · CDP">
+  <div class="site">
+    <header class="topbar topbar--rec">
+      <a class="topbar__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP <svg class="ico caret" width="12" height="12"><use href="#i-chevronDown"/></svg></a>
+      <nav class="faces" aria-label="얼굴"><a href="#" aria-current="page">소개</a><a href="#">설명서</a></nav>
+      <div class="topbar__center"></div>
+      <a class="btn btn--sm" href="#">로그인</a>
+    </header>
+    <div class="wrap">
+      <div class="hero">
+        <div>
+          <div class="hero__eyebrow">CDP · 맥락 배포 프로토콜 — 지식 레포 뷰어 · 도구 · MCP 서버</div>
+          <h1>좌표로 찾고<br />사람이 본문을 읽는다</h1>
+          <p class="hero__lead">프로젝트 지식을 <b>작업 기록(사건)</b>과 <b>관리 문서(상태)</b> 두 층으로 두고, <b>좌표</b>로 잇고, 커밋할 때 <b>검사</b>한다.</p>
+          <div class="hero__cta">
+            <a class="btn btn--accent" href="#">로그인 <svg class="ico" width="14" height="14"><use href="#i-arrowRight"/></svg></a>
+            <a class="btn" href="#"><svg class="ico" width="14" height="14"><use href="#i-book"/></svg> 설명서</a>
+          </div>
+        </div>
+        <aside class="hero__aside">
+          <section class="acard">
+            <div class="acard__head"><span class="acard__title">이 서버</span><span class="acard__hint">10.10.20.188:7374</span></div>
+            <div class="acard__body">
+              <div class="arow"><span class="arow__label">판</span><span class="arow__value"><span class="amono">v0.10.0</span><span class="amuted">· 빌드 2026-09-24 00:46</span></span></div>
+              <div class="arow"><span class="arow__label">지식 레포</span><span class="arow__value"><b class="num">1</b><span class="amuted">곳</span></span></div>
+              <div class="arow"><span class="arow__label">네 얼굴</span><span class="arow__value"><span class="amuted"><b style="color:var(--text)">소개</b>(이 화면) · <b style="color:var(--text)">설명서</b>(토큰 없이) · <b style="color:var(--text)">레포</b>(로그인 뒤 문서 · 그래프) · <b style="color:var(--text)">콘솔</b>(관리자 — 사람 · 토큰 · 레포 · 서버)</span></span></div>
+              <div class="anote">토큰은 이 서버의 <b>관리자</b>에게 받는다. 화면과 에이전트가 같은 토큰을 쓴다.</div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+    <footer class="site-foot"><span>CDP v0.10.0 · 빌드 2026-09-24 00:46</span><span class="sp"></span><a href="#">설명서</a><a href="#">로그인</a></footer>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     장면 2 — 권장 · 레포(hong · writer · alpha). 레포 탭이 곧 레포 메뉴다. 관리자 변형은 아래 바.
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="repo" data-route="/r/alpha/" data-title="alpha · CDP">
+  <div class="con" style="min-height:100%">
+    <header class="topbar topbar--rec">
+      <a class="topbar__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP <svg class="ico caret" width="12" height="12"><use href="#i-chevronDown"/></svg></a>
+      <nav class="faces" aria-label="얼굴">
+        <a href="#">소개</a><a href="#">설명서</a>
+        <span class="topbar__repo">
+          <a href="#" aria-current="page" aria-haspopup="menu" aria-expanded="true">레포 <span class="faces__sub">alpha</span> <svg class="ico" width="12" height="12"><use href="#i-chevronDown"/></svg></a>
+          <div class="repomenu" role="menu">
+            <div class="repomenu__cap">볼 수 있는 레포 2</div>
+            <button class="repomenu__row" role="menuitem" aria-current="true"><b>alpha</b><span>프로젝트의 "지금 어떤 상태인가" 와 "왜 그렇게 됐나"</span><span class="chip">쓰기</span></button>
+            <button class="repomenu__row" role="menuitem"><b>gamma</b><span>dpms v1.0.0 에서 복제 · 2026-09-23</span><span class="chip">쓰기</span></button>
+          </div>
+        </span>
+      </nav>
+      <div class="topbar__center">
+        <div class="seg seg--mode" role="group"><button aria-pressed="true"><svg class="ico" width="14" height="14"><use href="#i-doc"/></svg> 문서</button><button><svg class="ico" width="14" height="14"><use href="#i-graph"/></svg> 그래프</button><button><svg class="ico" width="14" height="14"><use href="#i-gear"/></svg> 관리</button></div>
+        <button class="topbar__search"><svg class="ico" width="14" height="14"><use href="#i-search"/></svg><span>검색 · 이동</span><span class="topbar__spacer"></span><span class="kbd">⌘K</span></button>
+        <button class="pill pill--warn"><svg class="ico" width="13" height="13"><use href="#i-warn"/></svg> 검증 2</button>
+      </div>
+      <span class="who"><b class="who__name" style="color:var(--text)">hong</b><span class="who__role">writer</span><a class="who__out" href="#" aria-label="로그아웃" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a></span>
+      <button class="iconbtn" title="더보기" aria-label="더보기"><svg class="ico" width="16" height="16"><use href="#i-more"/></svg></button>
+    </header>
+    <div class="faded"><div class="fakepane"></div><div class="fakedoc"></div></div>
+    <div class="stack" style="padding:14px 18px 18px">
+      <div>
+        <p class="stack__cap"><b>관리자(kjsa)</b> 에게는 「콘솔」 탭이 하나 더 · 레포 메뉴에는 「이 서버의 레포」 절이 더 붙는다(지금과 같다) · 「내 레포로」 · 「문서로」 · 「콘솔로 →」 는 사라지고 스위처의 「레포」 · 「콘솔」 이 그 일을 한다</p>
+        <div class="bar-only">
+          <header class="topbar topbar--rec">
+            <a class="topbar__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP</a>
+            <nav class="faces" aria-label="얼굴"><a href="#">소개</a><a href="#">설명서</a><a href="#" aria-current="page">레포 <span class="faces__sub">gamma</span> <svg class="ico" width="12" height="12"><use href="#i-chevronDown"/></svg></a><a href="#">콘솔</a></nav>
+            <div class="topbar__center">
+              <div class="seg seg--mode" role="group"><button><svg class="ico" width="14" height="14"><use href="#i-doc"/></svg> 문서</button><button><svg class="ico" width="14" height="14"><use href="#i-graph"/></svg> 그래프</button><button aria-pressed="true"><svg class="ico" width="14" height="14"><use href="#i-gear"/></svg> 관리</button></div>
+              <button class="topbar__search"><svg class="ico" width="14" height="14"><use href="#i-search"/></svg><span>검색 · 이동</span><span class="topbar__spacer"></span><span class="kbd">⌘K</span></button>
+              <button class="pill"><svg class="ico" width="13" height="13"><use href="#i-check"/></svg> 검사</button>
+            </div>
+            <span class="who"><b class="who__name" style="color:var(--text)">kjsa</b><span class="who__role">admin</span><a class="who__out" href="#" aria-label="로그아웃" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a></span>
+            <button class="iconbtn" title="더보기" aria-label="더보기"><svg class="ico" width="16" height="16"><use href="#i-more"/></svg></button>
+          </header>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     장면 3 — 권장 · 콘솔(kjsa · admin). 같은 바 · 「콘솔」 에 밑줄 · 왼쪽 메뉴 일곱은 그대로(맨 아래 「문서로」 는 뺀다).
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="console" data-route="/console/users" data-title="콘솔 — 사용자 · CDP">
+  <div class="con">
+    <header class="topbar topbar--rec">
+      <a class="topbar__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP <svg class="ico caret" width="12" height="12"><use href="#i-chevronDown"/></svg></a>
+      <nav class="faces" aria-label="얼굴"><a href="#">소개</a><a href="#">설명서</a><a href="#">레포 <span class="faces__sub">gamma</span> <svg class="ico" width="12" height="12"><use href="#i-chevronDown"/></svg></a><a href="#" aria-current="page">콘솔</a></nav>
+      <div class="topbar__center"></div>
+      <span class="who"><b class="who__name" style="color:var(--text)">kjsa</b><span class="who__role">admin</span><a class="who__out" href="#" aria-label="로그아웃" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a></span>
+    </header>
+    <div class="admin">
+      <nav class="admin__menu" aria-label="콘솔">
+        <a class="astep" href="#" title="현황"><svg class="ico astep__i" width="15" height="15"><use href="#i-check"/></svg><span class="astep__txt"><span class="astep__t">현황</span><span class="astep__s">지금 쓸 수 있는 상태인가</span></span></a>
+        <a class="astep" href="#" aria-current="true" title="사용자"><svg class="ico astep__i" width="15" height="15"><use href="#i-users"/></svg><span class="astep__txt"><span class="astep__t">사용자</span><span class="astep__s">역할 · 레포 할당 · 비활성</span></span></a>
+        <a class="astep" href="#" title="토큰"><svg class="ico astep__i" width="15" height="15"><use href="#i-key"/></svg><span class="astep__txt"><span class="astep__t">토큰</span><span class="astep__s">발급 · 재발급 · 폐기</span></span></a>
+        <a class="astep" href="#" title="지식 레포"><svg class="ico astep__i" width="15" height="15"><use href="#i-managed"/></svg><span class="astep__txt"><span class="astep__t">지식 레포</span><span class="astep__s">전부 · 세우기 · 접근</span></span></a>
+        <a class="astep" href="#" title="작업 레포"><svg class="ico astep__i" width="15" height="15"><use href="#i-plug"/></svg><span class="astep__txt"><span class="astep__t">작업 레포</span><span class="astep__s">설치 대장 · 낡음</span></span></a>
+        <a class="astep" href="#" title="서버"><svg class="ico astep__i" width="15" height="15"><use href="#i-server"/></svg><span class="astep__txt"><span class="astep__t">서버</span><span class="astep__s">설정 · 진단 · 갱신 · 로그</span></span></a>
+        <a class="astep" href="#" title="감사"><svg class="ico astep__i" width="15" height="15"><use href="#i-list"/></svg><span class="astep__txt"><span class="astep__t">감사</span><span class="astep__s">auth.log</span></span></a>
+      </nav>
+      <div class="admin__body">
+        <div class="admin__wrap">
+          <div class="phead"><div><h1 class="phead__t">사용자</h1><p class="phead__s">권한은 사람에 붙는다 — 역할과 볼 수 있는 레포. 삭제는 없다, 비활성이다</p></div><div class="phead__act"><button class="btn btn--accent btn--sm"><svg class="ico" width="13" height="13"><use href="#i-plus"/></svg> 사용자</button></div></div>
+          <section class="acard acard--table">
+            <div class="acard__body">
+              <table class="ctable">
+                <thead><tr><th>이름</th><th>역할</th><th>볼 수 있는 레포</th><th class="ar">토큰</th><th>마지막 사용</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td><span class="name">kjsa</span><span class="sub">세정 · 관리자</span></td><td><span class="chip chip--admin"><svg class="ico" width="11" height="11"><use href="#i-shield"/></svg> admin</span></td><td><span class="chip chip--off">전체 *</span></td><td class="ar num">2 / 2</td><td class="dim">방금 · 09-24 13:38</td><td><div class="rowact"><button class="abtn">레포</button><button class="abtn"><svg class="ico" width="12" height="12"><use href="#i-key"/></svg> 발급</button></div></td></tr>
+                  <tr><td><span class="name">hong</span><span class="sub">개발 · 작성자</span></td><td><span class="chip">writer</span></td><td><span class="chip chip--off">alpha</span> <span class="chip chip--off">gamma</span></td><td class="ar num">2 / 2</td><td class="dim">3분 전 · 09-24 13:35</td><td><div class="rowact"><button class="abtn">역할</button><button class="abtn">레포</button><button class="abtn"><svg class="ico" width="12" height="12"><use href="#i-key"/></svg> 발급</button><button class="abtn">비활성</button></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <div class="anote">「문서로」 대신 상단의 <b>레포</b> 탭이 마지막에 보던 레포(gamma)로 간다. 표식 <b>C CDP</b> 는 소개로. 900px 아래에서는 스위처가 표식 메뉴로 접히고 왼쪽 메뉴의 아이콘에 <code>title</code> · <code>aria-label</code> 이 붙는다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     장면 4 — 권장 · 설명서(로그인 · kjsa). 바가 위에 붙어 있고 목차가 그 아래 고정 · 바닥글이 목차를 덮지 않는다.
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="manual" data-route="/manual/관리자_설명서#6-사람-관리--명부와-토큰" data-title="관리자 설명서 · CDP">
+  <div class="site">
+    <header class="topbar topbar--rec">
+      <a class="topbar__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP <svg class="ico caret" width="12" height="12"><use href="#i-chevronDown"/></svg></a>
+      <nav class="faces" aria-label="얼굴"><a href="#">소개</a><a href="#" aria-current="page">설명서</a><a href="#">레포 <span class="faces__sub">gamma</span> <svg class="ico" width="12" height="12"><use href="#i-chevronDown"/></svg></a><a href="#">콘솔</a></nav>
+      <div class="topbar__center"></div>
+      <span class="who"><b class="who__name" style="color:var(--text)">kjsa</b><span class="who__role">admin</span><a class="who__out" href="#" aria-label="로그아웃" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a></span>
+    </header>
+    <div class="man">
+      <nav class="man__nav" aria-label="설명서">
+        <div class="man__cap">설명서</div>
+        <a class="man__book" href="#"><svg class="ico" width="14" height="14"><use href="#i-book"/></svg>사용자 설명서<small>v0.10.0</small></a>
+        <a class="man__book" href="#" aria-current="page"><svg class="ico" width="14" height="14"><use href="#i-shield"/></svg>관리자 설명서<small>v0.10.0</small></a>
+        <a class="man__book" href="#"><svg class="ico" width="14" height="14"><use href="#i-gear"/></svg>개발자 설명서<small>v0.10.0</small></a>
+        <a class="man__book" href="#"><svg class="ico" width="14" height="14"><use href="#i-server"/></svg>서버 설치 절차<small>deploy</small></a>
+        <div class="man__toc">
+          <a href="#">1. 관리자가 맡는 것</a><a href="#">2. 받는 것 — 배포본</a><a href="#">3. 서버형 설치</a><a href="#" class="is-h3">3.5 첫 관리자 — /setup</a><a href="#" class="is-h3">3.7 화면 확인</a><a href="#">4. 로컬형 설치</a><a href="#">5. 작업 레포에 에이전트 세팅 넣기</a>
+          <a href="#" aria-current="true">6. 사람 관리 — 명부와 토큰</a><a href="#" class="is-h3">6.1 모델</a><a href="#" class="is-h3">6.2 사람을 추가한다</a><a href="#" class="is-h3">6.3 토큰을 발급한다</a><a href="#">7. 지식 레포 운영</a><a href="#">8. 기존 문서 들이기</a><a href="#">9. 갱신</a><a href="#">10. 장애 대응</a><a href="#">11. 하지 않는 것</a>
+        </div>
+      </nav>
+      <div class="man__body">
+        <div class="man__crumb">설명서 › CDP 관리자 설명서</div>
+        <article class="doc">
+          <h2>6. 사람 관리 — 명부와 토큰</h2>
+          <p>서버형에만 있다. 로컬형은 git 원격의 권한이 곧 권한이다. <b>콘솔 <code>/console</code> 에서 한다</b> — 관리자(<code>admin</code>)만 들어간다.</p>
+          <h3>6.1 모델 — 권한은 사람에게, 토큰은 신원만</h3>
+          <p>권한은 사람(<code>users[]</code>)에 붙는다. 토큰은 "이 사람이다" 만 증명한다. 사람의 역할 · 레포를 바꾸면 그 사람의 토큰 전부에 즉시 먹는다.</p>
+          <h3>6.2 사람을 추가한다</h3>
+          <p>콘솔 &gt; <b>사용자</b> &gt; [+ 사용자] — 이름(아이디) · 라벨 · 역할 · 볼 수 있는 레포. 저장하면 그 행의 [발급] 으로 이어진다.</p>
+          <h3>6.3 토큰을 발급한다</h3>
+          <p>콘솔 &gt; <b>토큰</b> &gt; [발급] — 사용자 · 메모(기기) · 만료. <b>원문은 다음 화면에 한 번</b> 보인다.</p>
+          <p style="height:420px;margin:0;color:var(--text-3)">(본문 계속 …)</p>
+          <h3>6.4 바꾸기 · 비활성 · 폐기</h3>
+          <p>목차는 이 자리까지 따라와 있어야 한다 — 지금은 33,633px 짜리 목차가 본문과 같이 스크롤되어 6장에서는 왼쪽이 빈 회색이다(그림 04).</p>
+        </article>
+      </div>
+    </div>
+    <footer class="site-foot"><span>CDP v0.10.0 · 빌드 2026-09-24 00:46</span><span class="sp"></span><a href="#">설명서</a><a href="#">레포</a></footer>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     장면 5 — 900px · 스위처가 표식 메뉴로 접힌다. 라벨은 살아 있다. (프레임 폭 토글이 자동으로 켜진다)
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="narrow" data-route="/console/users" data-title="콘솔 — 사용자 · CDP" data-w="900">
+  <div class="con">
+    <header class="topbar topbar--rec">
+      <a class="topbar__brand" href="#" aria-haspopup="menu" aria-expanded="true"><span class="topbar__mark" aria-hidden="true">C</span>CDP <svg class="ico caret" width="12" height="12"><use href="#i-chevronDown"/></svg></a>
+      <nav class="faces" aria-label="얼굴"><a href="#">소개</a><a href="#">설명서</a><a href="#">레포 <span class="faces__sub">gamma</span></a><a href="#" aria-current="page">콘솔</a></nav>
+      <div class="topbar__center"></div>
+      <span class="who"><b class="who__name" style="color:var(--text)">kjsa</b><span class="who__role">admin</span><a class="who__out" href="#" aria-label="로그아웃" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a></span>
+    </header>
+    <div class="brandmenu" role="menu">
+      <div class="menu__cap">CDP · 어디로</div>
+      <button class="menu__row" role="menuitem"><span class="menu__ico"><svg class="ico" width="14" height="14"><use href="#i-home"/></svg></span>소개</button>
+      <button class="menu__row" role="menuitem"><span class="menu__ico"><svg class="ico" width="14" height="14"><use href="#i-book"/></svg></span>설명서</button>
+      <button class="menu__row" role="menuitem"><span class="menu__ico"><svg class="ico" width="14" height="14"><use href="#i-managed"/></svg></span>레포 <span class="menu__hint">gamma · 마지막에 보던 곳</span></button>
+      <button class="menu__row" role="menuitem" aria-current="page"><span class="menu__ico"><svg class="ico" width="14" height="14"><use href="#i-shield"/></svg></span>콘솔 <span class="menu__hint">지금 여기</span></button>
+      <div class="menu__hr"></div>
+      <button class="menu__row" role="menuitem"><span class="menu__ico"><svg class="ico" width="14" height="14"><use href="#i-power"/></svg></span>로그아웃 <span class="menu__hint">kjsa</span></button>
+    </div>
+    <div class="admin">
+      <nav class="admin__menu" aria-label="콘솔">
+        <a class="astep" href="#" title="현황" aria-label="현황"><svg class="ico astep__i" width="15" height="15"><use href="#i-check"/></svg><span class="astep__txt"><span class="astep__t">현황</span></span></a>
+        <a class="astep" href="#" aria-current="true" title="사용자" aria-label="사용자"><svg class="ico astep__i" width="15" height="15"><use href="#i-users"/></svg><span class="astep__txt"><span class="astep__t">사용자</span></span></a>
+        <a class="astep" href="#" title="토큰" aria-label="토큰"><svg class="ico astep__i" width="15" height="15"><use href="#i-key"/></svg><span class="astep__txt"><span class="astep__t">토큰</span></span></a>
+        <a class="astep" href="#" title="지식 레포" aria-label="지식 레포"><svg class="ico astep__i" width="15" height="15"><use href="#i-managed"/></svg><span class="astep__txt"><span class="astep__t">지식 레포</span></span></a>
+        <a class="astep" href="#" title="작업 레포" aria-label="작업 레포"><svg class="ico astep__i" width="15" height="15"><use href="#i-plug"/></svg><span class="astep__txt"><span class="astep__t">작업 레포</span></span></a>
+        <a class="astep" href="#" title="서버" aria-label="서버"><svg class="ico astep__i" width="15" height="15"><use href="#i-server"/></svg><span class="astep__txt"><span class="astep__t">서버</span></span></a>
+        <a class="astep" href="#" title="감사" aria-label="감사"><svg class="ico astep__i" width="15" height="15"><use href="#i-list"/></svg><span class="astep__txt"><span class="astep__t">감사</span></span></a>
+      </nav>
+      <div class="admin__body">
+        <div class="admin__wrap">
+          <div class="phead"><div><h1 class="phead__t">사용자</h1><p class="phead__s">900px — 상단의 스위처는 표식 메뉴로 접히고, 왼쪽 메뉴는 아이콘만 남되 이름은 <code>title</code> · <code>aria-label</code> 로 남는다</p></div></div>
+          <div class="anote">지금(그림 30)은 900px 콘솔에서 상단의 설명서 · 문서로가 사라지고 왼쪽 아래에 이름 없는 문서 아이콘 하나만 남는다 — 얼굴을 떠나는 길이 보이지 않는다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     장면 6 — 권한 밖 레포 · 없는 주소. 조용한 리다이렉트 · JSON 대신 문장 하나 + 갈 수 있는 곳.
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" data-screen="errors" data-route="/r?from=beta" data-title="레포 · CDP">
+  <div class="site">
+    <header class="topbar topbar--rec">
+      <a class="topbar__brand" href="#"><span class="topbar__mark" aria-hidden="true">C</span>CDP <svg class="ico caret" width="12" height="12"><use href="#i-chevronDown"/></svg></a>
+      <nav class="faces" aria-label="얼굴"><a href="#">소개</a><a href="#">설명서</a><a href="#" aria-current="page">레포 <span class="faces__sub">alpha</span> <svg class="ico" width="12" height="12"><use href="#i-chevronDown"/></svg></a></nav>
+      <div class="topbar__center"></div>
+      <span class="who"><b class="who__name" style="color:var(--text)">hong</b><span class="who__role">writer</span><a class="who__out" href="#" aria-label="로그아웃" title="로그아웃"><svg class="ico" width="13" height="13"><use href="#i-power"/></svg></a></span>
+    </header>
+    <div class="errcards">
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">그 주소의 레포는 열 수 없습니다</span><span class="acard__hint">/r/beta/</span></div>
+        <div class="acard__body">
+          <div class="arow"><span class="arow__label">계정</span><span class="arow__value"><b>hong</b> <span class="who__role">writer</span></span></div>
+          <div class="anote">없거나 이 계정에 할당되지 않은 레포입니다 — 둘을 가르지 않습니다. 볼 수 있는 레포는 아래 둘입니다. 필요하면 <b>관리자</b>에게 할당을 요청합니다 — 권한은 사람에 붙어 있어 토큰을 다시 받을 필요는 없습니다.</div>
+          <div style="display:flex;gap:8px;margin-top:10px"><a class="btn btn--accent btn--sm" href="#">alpha 열기 <svg class="ico" width="13" height="13"><use href="#i-arrowRight"/></svg></a><a class="btn btn--sm" href="#">gamma 열기</a></div>
+        </div>
+      </section>
+      <section class="acard">
+        <div class="acard__head"><span class="acard__title">없는 주소입니다</span><span class="acard__hint">/nowhere</span></div>
+        <div class="acard__body">
+          <div class="anote">지금은 이 주소가 <span class="amono">{"error":{"code":"E_AUTH","message":"토큰이 없다"}}</span> 로 떨어진다(그림 09) — 로그인한 뒤에도 같다. 화면의 「없는 주소입니다」 페이지는 서버가 <code>index.html</code> 을 내지 않아 닿을 수 없다.</div>
+          <div class="anote" style="margin-top:8px">소개(<a href="#">/</a>) · 설명서(<a href="#">/manual</a>) · 레포(<a href="#">/r</a>) · 콘솔(<a href="#">/console</a>) 가운데 하나다.</div>
+        </div>
+      </section>
+    </div>
+    <footer class="site-foot"><span>CDP v0.10.0</span><span class="sp"></span><a href="#">설명서</a><a href="#">레포</a></footer>
+  </div>
+</section>
+
+  </div><!-- /frame__body -->
+</div><!-- /frame -->
+
+<aside class="notes" id="notes">
+  <h3 id="n-title">—</h3>
+  <div id="n-body"></div>
+</aside>
+</div><!-- /stage -->
+
+<script>
+// 장면 · 다크 · 900px — 전부 해시로. #repo;dark;900
+const NOTES = {
+  now: ['지금 — 세 얼굴, 세 부품', '<div class="cap">본 것</div><ul><li><code>.site-top</code>(56 선언 → 긴 페이지에서 34 렌더 · flex-shrink) · <code>.topbar</code> 48 · 콘솔 <code>.topbar</code> 30/25(선언 없음)</li><li>표식이 세 가지 일을 한다 — 소개 · 콘솔 홈 · 레포 메뉴</li><li>설명서 링크의 자리 · 크기가 셋 — 54×32 / 60×24 / 68×29</li><li>소개로 돌아가는 길이 레포 · 콘솔에 없다(로그아웃뿐)</li></ul><div class="cap">권장</div><ul><li>맨 아래 바 — 부품 하나 · 48px · 표식 → 소개 · 스위처 넷 · 현재 얼굴 밑줄</li></ul>'],
+  site: ['권장 — 소개(비로그인)', '<ul><li>스위처는 <b>소개 · 설명서</b> 둘. 로그인 뒤 <b>레포</b>, 관리자면 <b>콘솔</b>이 붙는다</li><li>「들어가기」 는 사라지고 <b>로그인</b> 하나 — 로그인 화면의 단추도 「로그인」</li><li>「이 서버」 카드에 <b>네 얼굴</b> 한 줄 — 무엇이 어디 있는지를 화면이 말한다(P14)</li><li>탭 제목 <code>소개 · CDP</code></li></ul>'],
+  repo: ['권장 — 레포(hong · writer)', '<ul><li>표식은 <b>C CDP → 소개</b>. 레포 이름은 스위처의 <b>레포</b> 탭이 든다 — 누르면 지금의 레포 메뉴 그대로</li><li>문서 · 그래프 · 관리 세그 · 검색 · 검증은 가운데 — 레포 고유 도구</li><li>오른쪽은 이름 · 역할 · 로그아웃뿐. 설명서 · 콘솔 링크는 스위처로 갔다</li><li>writer 에게는 콘솔 탭이 없다 — 지금과 같은 규칙</li><li>탭 제목 <code>alpha · CDP</code></li></ul>'],
+  console: ['권장 — 콘솔(kjsa · admin)', '<ul><li>같은 바 · <b>콘솔</b>에 밑줄 · 왼쪽 메뉴 일곱은 그대로</li><li>맨 아래 「문서로 /r」 는 뺀다 — 스위처의 <b>레포</b>가 <b>마지막에 보던 레포</b>로 간다(P4)</li><li>「CDP 콘솔」 표식은 없다 — 콘솔임은 스위처가 말한다</li><li>탭 제목 <code>콘솔 — 사용자 · CDP</code></li></ul>'],
+  manual: ['권장 — 설명서(목차 고정)', '<ul><li>바는 위에 붙고(sticky) 목차는 그 아래 고정 · 자기 스크롤 — 6장을 읽어도 왼쪽이 비지 않는다(P13)</li><li>바닥글이 목차를 덮지 않는다 — <code>.site-top</code> · <code>.site-foot</code> 에 <code>flex:none</code></li><li>책 넷(실서버는 지금 셋 — 설치 절차가 빠져 있다 · P15)</li></ul>'],
+  narrow: ['권장 — 900px', '<ul><li>스위처가 <b>표식 메뉴</b>로 접힌다 — 라벨이 남는다. 아이콘만 남기지 않는다(P19)</li><li>왼쪽 메뉴는 아이콘만 남되 <code>title</code> · <code>aria-label</code> 로 이름을 든다</li><li>레포 바에서는 더보기 단추가 눌리지 않게 <code>flex:none</code>(P21)</li></ul>'],
+  errors: ['권장 — 권한 밖 · 없는 주소', '<ul><li>hong 이 <code>/r/beta/</code> 를 열면 지금은 <b>말없이</b> alpha 로 간다(P5). 대신 문장 하나와 갈 수 있는 곳 — 없는 레포와 권한 밖을 <b>가르지 않는다</b>(D4 그대로)</li><li><code>/nowhere</code> 는 JSON 401 대신 화면의 「없는 주소입니다」(P6) — 서버가 HTML 요청의 미지 경로에 <code>index.html</code> 을 낸다</li></ul>'],
+}
+const $ = (s) => document.querySelector(s)
+const frame = $('#frame')
+function apply() {
+  const parts = (location.hash.replace(/^#/, '') || 'now').split(';')
+  const scene = NOTES[parts[0]] ? parts[0] : 'now'
+  const dark = parts.includes('dark')
+  const sec = document.querySelector(`[data-screen="${scene}"]`)
+  const w900 = parts.includes('900') || sec.dataset.w === '900'
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+  frame.dataset.w = w900 ? '900' : ''
+  for (const s of document.querySelectorAll('.screen')) s.dataset.on = s.dataset.screen === scene ? '1' : '0'
+  for (const b of document.querySelectorAll('.rb__tab')) b.setAttribute('aria-pressed', b.dataset.go === scene)
+  $('#togTheme').setAttribute('aria-pressed', dark)
+  $('#togWidth').setAttribute('aria-pressed', w900)
+  $('#route').textContent = sec.dataset.route
+  $('#tabtitle').textContent = sec.dataset.title
+  $('#n-title').textContent = NOTES[scene][0]
+  $('#n-body').innerHTML = NOTES[scene][1]
+  $('#body').scrollTop = 0
+}
+function set(scene, dark, w900) {
+  location.hash = [scene, dark ? 'dark' : null, w900 ? '900' : null].filter(Boolean).join(';')
+}
+function cur() {
+  const parts = (location.hash.replace(/^#/, '') || 'now').split(';')
+  return { scene: NOTES[parts[0]] ? parts[0] : 'now', dark: parts.includes('dark'), w900: parts.includes('900') }
+}
+for (const b of document.querySelectorAll('.rb__tab')) b.addEventListener('click', () => { const c = cur(); set(b.dataset.go, c.dark, c.w900) })
+$('#togTheme').addEventListener('click', () => { const c = cur(); set(c.scene, !c.dark, c.w900) })
+$('#togWidth').addEventListener('click', () => { const c = cur(); set(c.scene, c.dark, !c.w900) })
+window.addEventListener('hashchange', apply)
+apply()
+</script>
+</body>
+</html>
