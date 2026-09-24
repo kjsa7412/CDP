@@ -53,7 +53,7 @@ cdp.example.com { reverse_proxy 127.0.0.1:7374 }
 | | 한다 | 하지 않는다 |
 |---|---|---|
 | `install.sh` | node ≥ 20 · git 확인 · 계정 · 폴더 · 파일 배치(`manual/` 포함) · 유닛(node 경로 자동) · enable · healthz 확인 · 방화벽 **안내** · 끝에 `/setup` 주소와 **부트스트랩 코드** | git 자격 · 레포 · 명부 · 토큰 · 방화벽 실행 — 명부 · 토큰 · 레포는 `/setup` 과 콘솔이 |
-| `upgrade.sh` | 산출물 검증 · `.bak` · 교체 · restart · `built` 와 자산 해시 대조 · 실패 시 되돌림 | 명부 · 대장 · 레포 · git 자격 |
+| `upgrade.sh` | 산출물 검증 · `.bak`(bin · web · packages · manual 한 세대) · 교체 · restart · `built` 와 자산 해시 대조 · 실패 시 되돌림 | 명부 · 대장 · 레포 · git 자격 · 유닛. v0.9.0 명부의 관리자 승격은 사람이(설치절차 10장) |
 | `ctx serve doctor` | node · git · `auth.json` 권한/형식 · 레포마다 `_vocab` · git · upstream · **origin 도달 · push 자격** · web · data · packages · 포트/healthz | 고치지 않는다 — 말만 한다. fail 이면 exit 1 |
 | `ctx serve init` | 첫 사용자(`admin`) + 첫 토큰 (명부가 없을 때만) — 브라우저 `/setup` 마법사가 같은 일을 한다 | 둘째 사람부터는 콘솔 > 사용자 · 토큰(또는 `user add` · `token`) |
 | `ctx repo new` | 패키지 복사 · `git init` · `hooksPath` · 첫 커밋(훅) · `remote add` · `push -u` | origin 프로젝트를 만드는 것 — GitLab 웹에서 먼저 |

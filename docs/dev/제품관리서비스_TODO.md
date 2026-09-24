@@ -260,7 +260,7 @@ npm run verify         ✓ 57  ✗ 0  – 17   (§10 69줄 + 제품화 70~77)
 | | 무엇 | 왜 사람인가 |
 |---|---|---|
 | 1 | `git push` · 태그 `v0.10.0` | push 는 사람이 — 결정 그대로 |
-| 2 | 실서버 `10.10.20.188` — `upgrade.sh` 로 올린 뒤 `ctx serve user set --name kjsa --role admin`(v1.1 명부라 관리자가 0명) · 브라우저 `/console` | 실서버 · 셸 |
+| 2 | 실서버 `10.10.20.188` — 절차는 [`ops/deploy/설치절차.md`](../../ops/deploy/설치절차.md) 10장 「갱신 — v0.9.0 → v0.10.0」 · 관리자 설명서 9.1: `upgrade.sh` → `ctx serve user set --name kjsa --role admin`(v1.1 명부라 관리자가 0명) → 관리자 토큰 재발급 → 브라우저 `/` · `/console` | 실서버 · 셸 |
 | 3 | 소개 · 설명서를 한 번 읽고 문구를 다듬는다 — 사내 IP 예시를 자리표시자로 바꿀지 | 문서 정리 |
 | 4 | ⑦ 을 정한다 — origin 맞추기 · 금고 · PAT 만료 메모 | D13 |
 
