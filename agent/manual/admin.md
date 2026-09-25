@@ -562,6 +562,7 @@ git config --global credential.helper manager
 | 앱에 문서 0건 | 경로가 지식 레포가 아니다 | `_vocab.md` 가 있는 폴더를 지정 |
 | 앱이 안 뜬다 · 콘솔 창도 없다 | 콘솔 없는 앱이다 | 로그를 본다 (아래) |
 | `ff 불가` | 원격이 앞서 있고 로컬에도 커밋이 있다 | 터미널에서 `git pull --rebase`. **기계가 섞지 않는다** |
+| **서버형** — 콘솔 지식 레포의 `밀림 N · 사유` · `origin 앞섬` · `갈림` · `트리 더러움` | 미러 push 실패(사유: 인증 · 망 · non-ff …) · 누군가 서버 밖에서 origin 에 씀 · 서버와 origin 이 서로 모르는 커밋 · 서버 트리에 미커밋 변경(save 거절) | 콘솔 단추 셋 — 「다시 보내기」 · 「origin 과 맞추기」(ff-only) · 「트리 되돌리기」. 갈라졌으면 셸에서 `sudo -u cdp -H git -C <레포> pull --rebase` 뒤 「다시 보내기」. **기계가 섞지 않는다** |
 | exe 빌드 `EBUSY` | `cdp.exe` 가 떠 있다 | `taskkill /F /IM cdp.exe` |
 | exe 는 있는데 `Cannot find module 'ctx'` | **SEA blob 주입 전에 죽은 반쪽 파일** | 지우고 다시 빌드. 지금 빌드는 스스로 막는다 |
 

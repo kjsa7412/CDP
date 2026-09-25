@@ -26,7 +26,7 @@ description: 관리 문서(테이블정의서·화면설계서·코드정의서 
 > | 시작 | `git pull --ff-only` | **생략.** 서버가 언제나 origin HEAD 다 |
 > | 고치기 | Write · Edit 로 파일에 | **메모리에 준비해 사람에게 보인다.** 파일을 안 만든다 |
 > | 끝 | `git commit` → 커밋 훅이 검사 | `save({ work, sections, vocab })` **한 번.** 서버가 검사하고 커밋한다. `sections[].body` 는 `section` 의 **`content`**(헤딩 · applied 없이) — 헤딩을 넣으면 E_INPUT |
-> | 충돌 | 훅이 막는다 | `E_CONFLICT` 면 `section` 을 **다시 읽고 다시** 만든다 |
+> | 충돌 | 훅이 막는다 | `E_CONFLICT` 의 `detail.content`(지금 본문) 위에 **다시 만들어** `applied` 에 `detail.current` 를 넣어 보낸다 — `section` 을 다시 부르지 않는다(`truncated` 일 때만) |
 >
 > 훅은 모드 A 에서만 돈다. 모드 B 는 클라이언트에 작업 트리가 없다.
 

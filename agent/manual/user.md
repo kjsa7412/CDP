@@ -644,6 +644,7 @@ pull 안 하고 cdp-save 를 돌리면
 | **쓰는 skill 시작** (`cdp-save`·`cdp-import`·`cdp-edit`·`cdp-managed`) | **`pull --ff-only` 필수.** 실패하면 멈춘다 |
 | **읽는 skill 시작** (`cdp-work` ② · `cdp-load`) | **`ctx sync` 로 확인.** 받을 것이 있으면 알리고 묻는다 |
 | `⬇ 원격 N건 받기` 를 누름 | `pull --ff-only` |
+| **서버형**(`save` 도구가 있다) | pull 이 없다 — 서버 트리가 정본이다. 대신 `save` 의 `applied` 가 잠금이다: 읽은 뒤 남이 갱신했으면 `E_CONFLICT` 로 거절되고, 그 `detail.content`(지금 본문) 위에 다시 만들어 보낸다. 미러 · 트리 이상은 `save` 의 `warnings` 와 `brief` 가 말한다 — 고치는 것은 관리자(콘솔) |
 
 ### 읽기에는 왜 강제하지 않나
 

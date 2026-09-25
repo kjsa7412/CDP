@@ -180,6 +180,9 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 - 읽기 도구는 교체된 객체를 읽을 뿐 상태를 바꾸지 않는다 — 동시 실행 허용.
 - `save`(모드 B)는 레포당 뮤텍스. 직렬화된다.
 
+> **정정(v0.12.0 · 동시 기록 검토 v0.1)** — 뮤텍스는 `core/lock.js` 하나이고 **미러 push 큐 · 「origin 과 맞추기」 · 「트리 되돌리기」 가 같은 줄에 선다**(D1 · D4 · D5). 실측(2026-09-25) — 다른 섹션 5건 · 10건 동시 `save` 전부 커밋 · 트리 깨끗 · 건당 약 1.8초 직렬(`loadRepo` 셋 — 다음 판). 캐시 둘(스탬프 · `Store`)의 정합은 맞았다 — `save` 직후 `section` 이 새 applied 를 준다. 스탬프의 `.git/HEAD` mtime 조각은 커밋에 반응하지 않는다(커밋은 `refs/heads/*` 를 쓴다) — `docs/` · `work/` 의 count + mtime 이 잡아 준다.
+> 미러 push 는 **레포당 큐 하나**(`core/mirror.js`) — 도는 중에 또 오면 끝난 뒤 한 번 더. 전에는 fire-and-forget 이라 겹치면 origin 이 `cannot lock ref` 로 하나를 거절했다(실측 M11).
+
 ### 2.7 입력 검증 · 경로
 
 - `coord`: `/^[a-z][a-z0-9_-]*:[^\s\x00-\x1f]{1,200}$/` · `..` 포함 금지.
@@ -381,6 +384,9 @@ Node ≥ 20 필수. `cdp.exe` 는 서버 모드를 지원하지 않는다. `--bi
   함수(`core/reponew.js`)를 부른다. origin 이 없는 패키지도 이제 서버에 설 수 있다.
 - 서버가 **유일한 작성자**다. 서버 트리에서 사람이 커밋하지 않는다.
 - `--mirror`: 커밋 뒤 `git push origin HEAD` 를 비동기로. 실패는 로그 + `sync.mirror = lag`. 사람은 origin 을 **읽기 전용으로 clone** 해 폴더로 읽는다.
+
+> **정정(v0.12.0 · 동시 기록 검토 v0.1 D2 · D4 · D5 · D9)** — 미러 상태는 **다섯 값** `off · ok · lag · diverged · behind` 이고 판정은 `core/mirror.stateOf` 하나다. `lag` 에는 사유가 붙는다(`classifyPushError` — `non-ff · auth · net · protected · locked · no-upstream · unknown`). "서버가 유일한 작성자" 는 그대로지만 **origin 을 서버 밖에서 바꾸는 것(혼용)은 막지 않고 보이게 한다** — doctor 가 `ls-remote` 로 origin 이 앞선 것을 알아내고(fetch 없이), 콘솔 > 지식 레포의 **「origin 과 맞추기」**(재인증 · `runSync` 를 save 뮤텍스 안에서 · ff-only · `auth.log`)가 서버 트리를 맞춘다. 갈라졌으면(`diverged`) 거절하고 셸의 rebase 문장을 낸다 — 기계는 merge 하지 않는다(불변조건 10). 서버는 `save` 마다 fetch 하지 않는다(사내망 19.5초) — push 가 non-ff 로 거부될 때 한 번 fetch 해 `ahead/behind` 를 채운다.
+> **더러운 서버 트리는 `save` 가 거절한다**(`E_GIT { reason: 'dirty', paths }`) — 전에는 사람의 미커밋 줄이 다음 `save` 의 작성자 이름으로 커밋됐다(실측 M8). 「트리 되돌리기」(재인증 · `checkout -- . && clean -fd` · 버린 경로를 `auth.log` 에)가 푼다. doctor 에 `트리` · `origin` · `push`(사유) 줄. 자동 push 확대(주기 · 시작 시)는 없다(불변조건 11).
 - 레포마다 `.claude/skills/` · `CLAUDE.md` 등 kit 파일이 있어야 `prompts` 와 `GET /kit` 가 동작한다(모드 A 와 같은 레포 구성).
 
 ### 4.3 엔드포인트
@@ -587,6 +593,10 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 
 규칙 — 기존 `work/*.md` 는 수정·삭제하지 않는다(정정은 `supersedes` 를 단 새 기록). 어휘 삭제 없음(폐기는 사람이 `deprecated` 표기). `_managed.md` 는 `save` 로 바꾸지 않는다.
 
+> **정정(v0.12.0 · 동시 기록 검토 v0.1 D3 · D5 · D6 · D7)** — 처리 순서에 **3.5 트리** 가 들어갔다: `git status` 한 번 → 커밋 안 된 변경이 있으면 `E_GIT { reason: 'dirty', dirty, paths }` 로 거절(뮤텍스 안 · 파일을 만지기 전). **6 섹션** 의 `E_CONFLICT` detail 은 `{ coord, expected, current, currentWork: { id, title, author, date }, content, truncated }` — 지금 본문(8,000자)이 실려 `section` 을 다시 부르지 않고 그 위에 다시 만든다. 등록부의 `—`(문서 전체) 규칙은 **문서 첫 줄의 `<!-- applied: … -->`** 가 applied 이고 치환은 파일 전체다(`frontmatter.topApplied` · 전에는 정규식 예외로 `E_REPO`). **11 미러** 는 뮤텍스 밖 · 큐 · 1.5초까지 기다린다 — 응답 `mirror` 는 `off · ok · queued · lag · diverged` 이고 `mirrorReason` · `mirrorLast { state, reason, at, ahead, behind }` · 이상이면 `warnings` 에 한 줄. 응답 예시 —
+> `{ "commit": "a1b2c3d", "id": "…", "sections": 1, "vocab": 0, "warnings": [], "mirror": "ok", "mirrorReason": null, "mirrorLast": { "state": "ok", … } }`.
+> `serve.log` 의 `save` 줄은 key = `work.id` · 결과 코드 · 도구 시간이다(전에는 `-` · 200 · 핸들러 시각).
+
 ### 4.6 읽기 도구 — 모드 B 차이
 
 `sync` 만 다르다(§2.2). 나머지 12종은 동일. `prompts` 는 §2.5 규칙 그대로. `repos` 는 **그 사용자가
@@ -646,7 +656,11 @@ CLI 까지 쓸 수 있다.
 > 한다. 고치려면 `save` 에서 `work` 를 선택으로 풀거나(섹션만 보내는 경우) 따라잡기
 > 전용 쓰기 도구를 하나 더 두는 것 둘 중 하나다 — **정하지 않았다.**
 
+> **정정(v0.12.0 · 동시 기록 검토 v0.1 D8) — 정했다: 둘 다 아니다. 「파생 정리 기록」 규약이다.** 따라잡기의 **판단**은 사건이다 — 어느 기록을 근거로 그 섹션을 어떻게 채웠나. 그것을 작업 기록 한 건으로 `save` 한다: `id: YYYY-MMDD-파생정리-<좌표>` · `tags: [derive]` · `touches` = 치운 좌표 · 본문 `근거: <기록 id> … 판단: …` · `sections` = 치운 섹션(applied 는 `section` 값 그대로). 좌표 하나에 하나(모드 A 의 좌표 단위 커밋과 같다). 모드 A 는 그 판단을 커밋 메시지 한 줄에만 남겼는데 이쪽이 더 많이 남긴다. **없는 사건을 지어내는 것이 아니다** — 근거 기록의 내용을 새 사건인 양 옮겨 적지 않는다. `work/` 불변(3) · `save` 의 "출처 있는 변경" 규칙 · 판정 코드 전부 그대로다 — 코드 변경 0. `where` 가 그 좌표의 최신 기록으로 이 기록을 내는 것은 사실이다(섹션이 여기서 갱신됐다) — 본문 첫 줄 `근거:` 와 `tags` 가 표식이다. 위 표의 **cdp-managed ④** 행은 `save({ work: 파생 정리 기록, sections })` 로 읽는다. 제품화 검토 R15 도 같이 정정했다.
+
 ### 4.9 배포
+
+> **정정(v0.12.0 · 동시 기록 검토 v0.1)** — `--mirror` 의 뜻: `save` 뒤 큐로 push 하고, 실패 사유를 기억한다. **프로세스가 재시작되면 마지막 사유를 잊는다** — 그때 `ahead` 는 git 이 알고(`lag`) 사유는 doctor 가 다시 낸다(콘솔 칩에 "사유는 진단에서"). 상태 파일을 두지 않는다. 시작할 때 더러운 레포는 `serve.log` 에 `경고: 레포 … 트리에 커밋 안 된 변경 N건` 한 줄. `/healthz` 의 `mirror` 집계에 `diverged` · `behind` 가 더해졌다(옛 세 칸은 그대로 · 갈라진 것은 `lag` 에도 센다).
 
 **LaunchAgent** (`~/Library/LaunchAgents/com.cdp.serve.plist`)
 
@@ -1319,6 +1333,18 @@ POST /workrepos/<id>/applied   Bearer
 □ 서버 모드에 지식 레포 · 작업 레포 탭이 없고 동기화에 pull · push 버튼이 없다
 □ loopback 경고가 사라지고 그 자리에 user · 로그아웃이 있다
 □ 레포가 하나뿐인 서버에서는 전환 UI 가 나오지 않는다
+```
+
+**동시 기록**(v0.12.0 · 동시 기록 검토 v0.1 — 하네스 91~97 · `--mirror` 서버 하나 더 · bare origin)
+```
+□ 다른 섹션 5건을 Promise.all 로 save — 전부 커밋 · 트리 깨끗 · applied 5 · origin = local · 겹친 push 0
+□ 같은 섹션 둘 동시 — 하나는 E_CONFLICT 이고 detail 에 currentWork(author · date) · content · 문장에 누가 언제
+□ 로컬형이 origin 에 먼저 push 한 뒤 save — 커밋은 되고 mirror diverged · mirrorReason non-ff · /repos · overview(bad) · doctor(origin fail · push 사유) · brief 한 줄 · sync 도구
+□ 「origin 과 맞추기」 — 갈라졌으면 409 + rebase 문장 · 트리 안 만짐 · origin 만 앞서면 200 pulled N · 그 뒤 save · push ok
+□ 사람이 셸에서 rebase 뒤 「다시 보내기」 — ok · auth.log 에 admin repo sync|push 줄
+□ 더러운 트리 — save 가 E_GIT dirty 로 거절 · 커밋 0 · /repos dirty · overview(bad) · doctor 트리 fail · 「트리 되돌리기」 → 깨끗 · save ok · auth.log
+□ — (문서 전체) 규칙 — save 가 문서 첫 줄에 applied 를 쓰고 section 이 그것을 읽고 check 가 통과한다
+□ /admin/overview.saves — 최근 id · 결과 · 24h 거부 집계 · serve.log 의 save 줄에 id 와 결과 코드
 ```
 
 ---

@@ -35,7 +35,7 @@ description: **이 세션에서 한 작업**이 끝났을 때 지식 레포에 �
 > | 시작 | `git pull --ff-only` | **생략.** 서버가 언제나 origin HEAD 다 |
 > | 고치기 | Write · Edit 로 파일에 | **메모리에 준비해 사람에게 보인다.** 파일을 안 만든다 |
 > | 끝 | `git commit` → 커밋 훅이 검사 | `save({ work, sections, vocab })` **한 번.** 서버가 검사하고 커밋한다. `sections[].body` 는 `section` 의 **`content`**(헤딩 · applied 없이) — 헤딩을 넣으면 E_INPUT |
-> | 충돌 | 훅이 막는다 | `E_CONFLICT` 면 `section` 을 **다시 읽고 다시** 만든다 |
+> | 충돌 | 훅이 막는다 | `E_CONFLICT` 의 `detail.content`(지금 본문) 위에 **다시 만들어** `applied` 에 `detail.current` 를 넣어 보낸다 — `section` 을 다시 부르지 않는다(`truncated` 일 때만) |
 >
 > 훅은 모드 A 에서만 돈다. 모드 B 는 클라이언트에 작업 트리가 없다.
 
@@ -471,7 +471,7 @@ where 도 조용했다(2026-09-23). 지금은 서버가 `E_INPUT`(헤딩 줄이 
 
 | | |
 |---|---|
-| `E_CONFLICT` | **`section` 을 다시 읽고 ④ 를 다시 만든다.** 남이 쓴 내용 위에 다시 얹는 것이라, 옛 본문을 그대로 재전송하면 그 사람의 갱신이 사라진다 |
+| `E_CONFLICT` | 그 사이 남이 같은 섹션을 갱신했다. 거절에 **재료가 실려 온다** — `detail.currentWork { id, title, author, date }`(누가 · 언제 · 어느 기록으로) · `detail.content`(지금 본문 · 헤딩 · applied 없이) · `detail.current`(지금 applied). **`content` 위에 ④ 를 다시 만들고 `applied` 에 `current` 를 넣어 다시 보낸다.** 옛 본문을 그대로 재전송하면 그 사람의 갱신이 사라진다. `truncated: true`(8,000자 초과)일 때만 `section` 을 다시 읽는다 |
 | `E_FORBIDDEN` | 그 레포에 쓰기 권한이 없다. 관리자에게 말한다 |
 | `E_INPUT` | 스키마다. 메시지의 `field` 를 본다. "헤딩 줄이 있다" 면 `body` 에 `## …` 를 넣은 것 — `section` 의 `content` 를 보낸다 |
 | 검사 실패 | 「커밋이 거부되면」 의 표와 **같은 오류들**이다. 고치고 다시 `save` |
@@ -483,12 +483,15 @@ where 도 조용했다(2026-09-23). 지금은 서버가 `E_INPUT`(헤딩 줄이 
 
 ```
 { commit: "1bc1eec", id: "…", sections: 2, vocab: 1,
-  mirror: "queued", warnings: [...] }
+  mirror: "ok", mirrorReason: null, mirrorLast: { state, reason, at, ahead, behind }, warnings: [...] }
 ```
 
-`mirror: "queued"` 는 정상이다 — push 는 비동기이고, 늦거나 실패해도 커밋은
-서버 트리에 있다. 못 간 것은 다음 push 가 가져간다. `warnings` 가 있으면
-사람에게 그대로 전한다(커밋은 이미 됐다).
+`mirror` 는 origin 미러의 **실제 상태**다 — `ok`(갔다) · `queued`(아직 가는 중 — 1.5초 안에 안 끝났다) ·
+`lag`(못 갔다 — `mirrorReason` 이 사유: `auth` 는 PAT · `net` 은 망) · `diverged`(origin 에 서버가 모르는
+커밋이 있다 — 관리자가 맞춘다) · `off`(원격 없음). 어느 경우든 **커밋은 서버 트리에 있다.** `ok` 가 아니면
+`warnings` 의 그 줄을 사람에게 그대로 전한다 — 고치는 것은 관리자(콘솔 > 지식 레포)이지 이 절차가 아니다.
+`E_GIT` 에 `detail.reason: 'dirty'` 면 서버 트리에 커밋 안 된 변경이 있어 거절된 것이다 — 관리자에게
+「트리 되돌리기」 를 청한다. 다시 보낼 것은 그대로다.
 
 ### push 는 사람이 누르지 않는다
 

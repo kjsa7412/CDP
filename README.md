@@ -12,6 +12,7 @@
 | 용어 | [`docs/용어.md`](docs/용어.md) — `.mjs` · SEA · 번들 · exit 127. **고치는 사람의 말이다** |
 | 그림 | [`docs/그림/`](docs/그림) — 세 레포 · 설치 5단계 · `ctx setup` · 빌드 · 실행 |
 | **제품화** | [`docs/design/CDP_제품화_검토_v1.0.md`](docs/design/CDP_제품화_검토_v1.0.md) — 손을 타는 자리와 자동화 · [`docs/dev/제품화_TODO.md`](docs/dev/제품화_TODO.md) — 실행 항목 |
+| **동시 기록** | [`docs/design/CDP_동시기록_검토_v0.1.md`](docs/design/CDP_동시기록_검토_v0.1.md) — 여럿이 같은 관리 문서에 쓸 때 · 미러 · 서버 트리 ↔ origin · [`docs/dev/동시기록_TODO.md`](docs/dev/동시기록_TODO.md) — 단계 · 실측 |
 | 바뀐 것 | [`CHANGELOG.md`](CHANGELOG.md) — 태그마다 한 절. 릴리스 노트가 여기서 나온다 |
 | `docs/` 의 판정 | [`docs/README.md`](docs/README.md) — **보존되는가.** 작업 메모(`dev/`)는 보존 대상이 아니다 |
 
@@ -88,7 +89,7 @@ node viewer/server/index.js --repo <경로> --dev http://localhost:5173 --no-ope
 | **`npm run release`** | **원클릭.** 화면 → ctx → exe → `ops/release/v<버전>/`. `-- --no-build` 는 조립만 |
 | **`npm run release:server`** | 서버 산출물 `cdp-server-v<버전>.tar.gz` — `install.sh` · `upgrade.sh` 가 이것을 받는다 |
 | **`npm test`** | 단위 테스트 (`node:test` · `test/`) |
-| **`npm run verify`** | 검증 하네스 — MCP 설계서 §10 + 제품화 70~74 를 한 자리에서 |
+| **`npm run verify`** | 검증 하네스 — MCP 설계서 §10 + 제품화 70~77 + 제품관리서비스 78~90 + 동시 기록 91~97 을 한 자리에서 |
 | `npm run check:packages` | 패키지마다 부어서 `ctx check` (= `ctx package check --all`) |
 | `npm run seed:kit` | fixture 의 `.claude/` 를 `agent/` 에서 (Python 없이) |
 | `npm run dev` · `dev:server` | 화면 / 서버 개발 |

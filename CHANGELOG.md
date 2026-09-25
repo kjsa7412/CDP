@@ -3,6 +3,40 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.12.0
+
+동시 기록 — [`docs/design/CDP_동시기록_검토_v0.1.md`](docs/design/CDP_동시기록_검토_v0.1.md) · [`docs/dev/동시기록_TODO.md`](docs/dev/동시기록_TODO.md)
+
+**save · 미러** — `core/save.js` · `core/mirror.js`(새) · `core/lock.js`(새) · `core/git.js` · `core/frontmatter.js` · `core/managed.js`
+- 미러 push 가 **레포당 큐 하나**로 직렬화된다 — 겹치면 끝난 뒤 한 번 더. 실패 사유를 `classifyPushError` 로 가른다(`non-ff · auth · net · protected · locked · no-upstream · unknown`) — 전에는 첫 줄 `To <원격>` 만 남았다
+- `save` 응답 `mirror` 가 실제 상태를 말한다 — `off · ok · queued · lag · diverged` + `mirrorReason` · `mirrorLast` · 이상이면 `warnings` 한 줄(1.5초까지 기다린다 · 뮤텍스 밖)
+- **더러운 서버 트리는 `save` 가 거절한다** — `E_GIT { reason: 'dirty', dirty, paths }`(전에는 사람의 미커밋 줄이 다음 `save` 의 이름으로 커밋됐다)
+- `E_CONFLICT` detail 에 `currentWork { id, title, author, date }` · `content`(지금 본문 · 8,000자 · `truncated`) · 문장에 누가 언제 — `section` 을 다시 부르지 않고 그 위에 다시 만든다
+- 등록부 `—`(문서 전체) 규칙 — 문서 첫 줄의 `<!-- applied: … -->` 가 applied · 전체 치환 · 헤딩 검사 생략(전에는 정규식 예외로 `E_REPO`)
+- `git.status` 에 `dirtyPaths`(한글 경로 그대로 · `core.quotepath=false` · `-uall`) · `restoreTree` · `listRepos` 에 `branch · behind · dirty`(프로세스 넷 → 둘)
+
+**서버** — `viewer/bin/ctx-mcp-serve.mjs` · `ctx-serve-doctor.mjs` · `ctx-mcp.mjs`
+- `GET /repos` · `/admin/repos` 행에 `mirror`(다섯 값) · `mirrorReason` · `ahead` · `behind` · `dirty` · `note` (`/admin/repos` 는 `dirtyPaths` · `mirrorMessage` · `mirrorAt` 도)
+- **`POST /admin/repos/<name>/sync · push · restore`** — 「origin 과 맞추기」(fetch → ff-only → 재스캔 · 갈라졌으면 409 + rebase 문장) · 「다시 보내기」 · 「트리 되돌리기」(버린 경로). 재인증 · `save` 와 같은 뮤텍스 · `auth.log` 에 `admin repo sync|push|restore · <누가> · <레포> · …`
+- `/admin/overview` — 경고 넷(더러움 · 갈림 bad · 밀림+사유 · origin 앞섬 warn) · `repos.mirror` 집계에 `diverged` · `behind` · **`saves`**(최근 10 · 24h 거부 집계) · `/healthz` · `/site/info` 집계도 같다
+- doctor 레포 줄 셋 — `트리`(dirty → fail) · `origin`(ls-remote 로 origin 앞섬 warn · 갈림 fail — fetch 없이) · `push` 는 분류 사유
+- `serve.log` 의 `save` 줄에 `work.id` · 결과 코드 · 도구 시간(전에는 `-` · 200 · 핸들러 시각) · 시작할 때 더러운 레포 경고 한 줄
+- MCP `sync`(서버형)에 `mirrorReason · ahead · behind · dirty · note` · `brief` 에 `[CDP] 미러: …` 한 줄(이상일 때만)
+
+**화면** — `viewer/src/console/Repos.jsx` · `Overview.jsx` · `components/StatusBar.jsx` · `components/admin/Overview.jsx` · `RepoServer.jsx` · `lib/api.js`
+- 콘솔 › 지식 레포 — 칩 `최신 · 밀림 N · <사유> · 갈림 · origin 앞섬 · 트리 더러움 N` · 진단 줄(트리 · origin · push · 60초 캐시 · 동작 뒤 새로) · 행 단추 셋(재인증 · 되돌리기는 버릴 경로를 보여 주는 확인 모달)
+- 콘솔 › 현황 — 경고 넷 · 「최근 기록」 카드(시각 · 사람 · 레포 · id · 결과 · ms · 24h 거부 집계)
+- 레포 화면 상태바(서버형) — 이상이 있을 때만 한 줄(`미러 밀림 N · 사유` · `origin 과 갈림 N/M` · `origin 앞섬` · `트리 더러움`). 로컬형의 pull/push 단추 · 감시 · 다시 스캔은 서버형에서 내지 않는다
+- 레포 관리 › 현황(서버형) — 미러 카드에 상태 · 사유 · 작업 레포 카드는 대장(`/workrepos`)으로("읽는 중…" 고정이 없어졌다) · 마지막 스캔 줄 없음
+
+**스킬 · 설명서 · 설계서**
+- `cdp-save` ⑤B — `E_CONFLICT` 행(재료로 다시) · 「무엇이 돌아오나」(`mirror` 값 · `E_GIT dirty`) · 모드 표 「충돌」 행 — `cdp-managed` · `cdp-edit` · `cdp-import` 도 같은 행
+- **`cdp-managed` ④ 모드 B — 「파생 정리 기록」 규약**(`tags: [derive]` · 좌표 하나에 `save` 하나 · 코드 변경 0) — 전에는 "길이 없다 · 멈춘다"
+- 사용자 6.5 · 7.3 · 9.2 · 10.2 · 관리자 7.6(콘솔의 칩 · 단추 셋 · 셸 대응) · 10.1 · 11(「자동 merge」 와 「서버의 자동 pull · 자동 push 확대」 를 갈라 적고 「섹션 점유 화면」 추가) · 개발자 2.1 · 5.1 · 5.2 · 7.2 · 7.4 · 8.4 · `agent/manual/user.md` · `admin.md` 한 행씩
+- MCP 설계서 §2.6 · §4.2 · §4.5 · §4.8 · §4.9 · §10 정정 상자 · 제품관리서비스 검토 D13 닫음 · 제품화 검토 R15 정정 · 시스템설계서 제3부 주석 · `docs/README.md` · `README.md`
+
+**검증** — 테스트 100(`git` 3 · `save` 10 신설) · 하네스 91~97(`--mirror` 서버 하나 더 · 동시 5 · 같은 섹션 · non-ff → 사유 · 맞추기 · dirty → 되돌리기 · `—` 규칙 · 최근 기록) — ✓ 82 ✗ 0 – 16 · 잡은 것 — 하네스 56 이 서버 트리를 더럽힌 채 두던 것(이제 `save` 가 거절한다) · 한글 경로의 `core.quotepath`
+
 ## v0.11.0
 
 화면 UX — [`docs/design/CDP_화면_UX_검토_v0.1.md`](docs/design/CDP_화면_UX_검토_v0.1.md) · [`docs/dev/화면_UX_TODO.md`](docs/dev/화면_UX_TODO.md) · 목업 `docs/dev/화면_UX_목업/` · 그림 `docs/dev/화면_UX_검토_그림/`(전 · 후)
