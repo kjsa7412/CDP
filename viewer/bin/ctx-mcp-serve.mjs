@@ -22,7 +22,8 @@ import { kitHash, mergeClaude, mcpEntryServer, mergeMcpJson } from '../../core/s
 import { Store } from '../../core/store.js'
 import { handleRead, MIME } from '../server/adapter/read-api.js'
 import { hereDir } from '../server/runtime.js'
-import { buildServer, makeRepoCache, mirrorOf, BUILT } from './ctx-mcp.mjs'
+import { buildServer, makeRepoCache, BUILT } from './ctx-mcp.mjs'
+import * as mirror from '../../core/mirror.js'
 import { newRepo, cloneRepo, REPO_NAME_RE } from '../../core/reponew.js'
 import { listPackages as listPackageDirs } from '../../core/packages.js'
 import { resolvePackages, materializePackage } from './ctx-package.mjs'
@@ -382,11 +383,58 @@ function peek(buf) {
     const one = Array.isArray(m) ? m[0] : m
     const tool = one?.method === 'tools/call' ? one?.params?.name : null
     const a = one?.params?.arguments || {}
-    const key = tool === 'search' ? `words:${(a.words || []).length}` : a.coord || a.id || null
+    // `save` 의 열쇠는 `work.id` 다 — 전에는 `-` 로 남아 누가 무엇을 기록했는지 로그가 몰랐다(동시 기록 검토 v0.1 B9)
+    const key = tool === 'search' ? `words:${(a.words || []).length}` : a.coord || a.id || a.work?.id || null
     return { method: one?.method || null, tool, key }
   } catch {
     return { method: null, tool: null, key: null }
   }
+}
+
+// 미러 집계 — `/healthz` · `/site/info` · `/admin/overview` 가 같은 통을 쓴다. 옛 세 칸(ok · lag · off)은
+// 그대로이고 `diverged` · `behind` 가 더해졌다(동시 기록 검토 v0.1 D4). 갈라진 것은 밀린 것이기도 하다(`lag` 에도 센다).
+async function mirrorCounts(list) {
+  const c = { ok: 0, lag: 0, off: 0, diverged: 0, behind: 0 }
+  for (const r of list) {
+    const m = await mirror.summary(r.root)
+    if (m.state === 'off') c.off++
+    else if (m.state === 'lag') c.lag++
+    else if (m.state === 'diverged') {
+      c.lag++
+      c.diverged++
+    } else if (m.state === 'behind') {
+      c.ok++
+      c.behind++
+    } else c.ok++
+  }
+  return c
+}
+
+// `save` 의 흐름 — `serve.log` 의 `save` 줄만 읽는다(누가 · 언제 · 어느 레포 · 어느 id · 결과 · 걸린 시간).
+// 본문 · 검색어는 원래 로그에 없다(§2.8). 새 로그 파일을 만들지 않는다(동시 기록 검토 v0.1 D10).
+async function saveStats(dataDir, { now = Date.now(), recent = 10 } = {}) {
+  const out = { recent: [], rejected24h: {}, total24h: 0 }
+  if (!dataDir) return out
+  const rows = []
+  for (const name of ['serve.log.1', 'serve.log']) {
+    const body = await fs.readFile(path.join(dataDir, 'logs', name), 'utf8').catch(() => null)
+    if (!body) continue
+    for (const line of body.split(NL)) {
+      const f = line.split(' · ')
+      if (f.length < 8 || !f[0].startsWith('20') || f[4].trim() !== 'save') continue
+      const code = f[7].trim()
+      rows.push({ at: f[0].trim(), user: f[1].trim(), repo: f[2].trim(), id: f[5].trim() === '-' ? null : f[5].trim(), result: code === '200' ? 'ok' : code, ms: Number(String(f[6]).replace('ms', '')) || null })
+    }
+  }
+  out.recent = rows.slice(-recent).reverse()
+  const since = now - 24 * 3600 * 1000
+  for (const r of rows) {
+    const t = new Date(r.at).getTime()
+    if (!(t >= since)) continue
+    out.total24h++
+    if (r.result !== 'ok') out.rejected24h[r.result] = (out.rejected24h[r.result] || 0) + 1
+  }
+  return out
 }
 
 const json = (res, status, obj) => {
@@ -547,17 +595,26 @@ export async function runServe(opt = {}) {
         notice,
         // `save` 는 토큰의 사용자로 author 를 채운다. 클라이언트가 보내면
         // 거절한다 — 보낼 수 있으면 남의 이름으로 기록이 남는다(§4.5).
-        saver: (name, input) => {
+        saver: async (name, input) => {
           const r = repos.find((x) => x.name === name)
-          return doSave(r.root, input, {
-            user: a.user,
-            write: a.write,
-            mirror: !!opt.mirror,
-            log: (m) => log.line(m),
-          }).then((out) => {
+          // 결과를 요청 맥락에 남긴다 — MCP 의 도구 오류는 HTTP 200 이라 로그 줄이 결과를 몰랐고,
+          // `ms` 는 핸들러가 스트림을 연 시각이라 도구 시간이 아니었다(동시 기록 검토 v0.1 B9).
+          const t0 = Date.now()
+          const ctxStore = CTX.getStore()
+          try {
+            const out = await doSave(r.root, input, {
+              user: a.user,
+              write: a.write,
+              mirror: !!opt.mirror,
+              log: (m) => log.line(m),
+            })
             store.reload(name) // 화면이 방금 커밋한 것을 봐야 한다
+            if (ctxStore) ctxStore.outcome = { code: null, ms: Date.now() - t0, key: input?.work?.id ?? null }
             return out
-          })
+          } catch (e) {
+            if (ctxStore) ctxStore.outcome = { code: e?.code || 'E_REPO', ms: Date.now() - t0, key: input?.work?.id ?? null }
+            throw e
+          }
         },
       })
     },
@@ -608,11 +665,7 @@ export async function runServe(opt = {}) {
       // §4.6 을 앞문으로 깨지 않게.
       if (url.pathname === '/healthz' && req.method === 'GET') {
         const list = await store.list()
-        const mirror = { ok: 0, lag: 0, off: 0 }
-        for (const r of list) {
-          mirror[mirrorOf(await git.status(r.root).catch(() => null))]++
-        }
-        return json(res, 200, { ok: true, built: BUILT, repos: list.length, mirror })
+        return json(res, 200, { ok: true, built: BUILT, repos: list.length, mirror: await mirrorCounts(list) })
       }
 
       // 화면 자산 — **인증 앞에서 낸다.**
@@ -638,15 +691,13 @@ export async function runServe(opt = {}) {
 
       if (url.pathname === '/site/info' && req.method === 'GET') {
         const list = await store.list()
-        const mirror = { ok: 0, lag: 0, off: 0 }
-        for (const r of list) mirror[mirrorOf(await git.status(r.root).catch(() => null))]++
         const who = await pageAuth()
         const db = authenticate.db()
         return json(res, 200, {
           version: VERSION,
           built: BUILT,
           repos: list.length,
-          mirror,
+          mirror: await mirrorCounts(list),
           setupNeeded: !!opt.auth && !!dataDir && db.users.length === 0,
           privatePages,
           manuals: manuals.list(),
@@ -910,14 +961,28 @@ export async function runServe(opt = {}) {
           // 현황 — 카드 넷의 숫자와 경고 목록. 한 번의 왕복이다.
           if (sub === '/overview' && req.method === 'GET') {
             const list = await store.list()
-            const mirror = { ok: 0, lag: 0, off: 0 }
+            const counts = { ok: 0, lag: 0, off: 0, diverged: 0, behind: 0 }
             const lag = []
+            const diverged = []
+            const behind = []
+            const dirty = []
             const kits = {}
             for (const r of list) {
-              const st = await git.status(r.root).catch(() => null)
-              const m = mirrorOf(st)
-              mirror[m]++
-              if (m === 'lag') lag.push({ name: r.name, ahead: st?.ahead ?? null })
+              const m = await mirror.summary(r.root)
+              if (m.state === 'off') counts.off++
+              else if (m.state === 'ok') counts.ok++
+              else if (m.state === 'behind') {
+                counts.ok++
+                counts.behind++
+                behind.push({ name: r.name, behind: m.behind })
+              } else {
+                counts.lag++
+                if (m.state === 'diverged') {
+                  counts.diverged++
+                  diverged.push({ name: r.name, ahead: m.ahead, behind: m.behind })
+                } else lag.push({ name: r.name, ahead: m.ahead, reason: m.reason })
+              }
+              if (m.dirty > 0) dirty.push({ name: r.name, dirty: m.dirty })
               kits[r.name] = (await kitHash(r.root).catch(() => ({ hash: null }))).hash
             }
             const users = auth.userList(db)
@@ -931,17 +996,23 @@ export async function runServe(opt = {}) {
             const alerts = []
             if (!admins.length) alerts.push({ level: 'bad', text: '관리자가 없다 — 셸에서 ctx serve user set --name <이름> --role admin', to: 'users' })
             if (soon.length) alerts.push({ level: 'warn', text: `7일 안에 만료되는 토큰 ${soon.length} — ${soon.map((t) => `${t.user}(${t.id} · ${t.daysLeft}일)`).join(' · ')}`, to: 'tokens' })
-            if (lag.length) alerts.push({ level: 'warn', text: `미러가 밀린 레포 ${lag.length} — ${lag.map((l) => `${l.name} ${l.ahead ?? '?'}건`).join(' · ')}`, to: 'repos' })
+            // 미러 · 트리 경고 — 사실만 · 갈라짐과 더러움은 bad(save 가 막히거나 origin 이 못 받는다) · 밀림은 사유와 함께
+            if (dirty.length) alerts.push({ level: 'bad', text: `트리에 커밋 안 된 변경이 있는 레포 ${dirty.length} — ${dirty.map((d) => `${d.name} ${d.dirty}건`).join(' · ')} · save 가 거절된다 → 「트리 되돌리기」`, to: 'repos' })
+            if (diverged.length) alerts.push({ level: 'bad', text: `origin 과 갈라진 레포 ${diverged.length} — ${diverged.map((d) => `${d.name}(서버 ${d.ahead} · origin ${d.behind ?? '?'})`).join(' · ')} · 기계는 합치지 않는다 → 셸에서 rebase 뒤 「다시 보내기」`, to: 'repos' })
+            if (lag.length) alerts.push({ level: 'warn', text: `미러가 밀린 레포 ${lag.length} — ${lag.map((l) => `${l.name} ${l.ahead ?? '?'}건${l.reason ? ' · ' + (mirror.REASON_TEXT[l.reason] || l.reason) : ''}`).join(' · ')}`, to: 'repos' })
+            if (behind.length) alerts.push({ level: 'warn', text: `origin 이 앞선 레포 ${behind.length} — ${behind.map((b) => `${b.name} ${b.behind}건`).join(' · ')} · 누군가 서버 밖에서 썼다 → 「origin 과 맞추기」`, to: 'repos' })
             if (doctorCache.res?.fails) alerts.push({ level: 'bad', text: `진단 fail ${doctorCache.res.fails} — ${doctorCache.res.rows.filter((r) => r.state === 'fail').map((r) => r.what).join(' · ')}`, to: 'server' })
             if (!list.length) alerts.push({ level: 'warn', text: '지식 레포가 없다 — 지식 레포에서 세우거나 origin 에서 받아 온다', to: 'repos' })
             const audit = await tailLog(dataDir, 'auth.log', 5)
+            const saves = await saveStats(dataDir)
             okLog('/overview', '-')
             return json(res, 200, {
               version: VERSION,
               built: BUILT,
               startedAt,
               node: process.version,
-              repos: { count: list.length, mirror, lag },
+              repos: { count: list.length, mirror: counts, lag, diverged, behind, dirty },
+              saves,
               users: { count: users.length, active: users.filter((u) => u.active).length, admins: admins.length },
               tokens: { active: active.length, soon: soon.length, revoked: tokens.length - active.length },
               workrepos: { count: wrows.length, ...byState },
@@ -1027,7 +1098,7 @@ export async function runServe(opt = {}) {
           if (sub === '/repos' && req.method === 'GET') {
             const rows = []
             for (const r of await store.list()) {
-              const st = await git.status(r.root).catch(() => null)
+              const m = await mirror.summary(r.root)
               let info = {}
               try {
                 info = (await store.view(r.name))?.repoInfo?.() || {}
@@ -1035,10 +1106,18 @@ export async function runServe(opt = {}) {
               rows.push({
                 name: r.name,
                 title: await titleOf(r.root),
-                head: st?.head ?? null,
-                branch: st?.branch ?? null,
-                ahead: st?.ahead ?? 0,
-                mirror: mirrorOf(st),
+                head: m.head,
+                branch: m.branch,
+                upstream: m.upstream,
+                ahead: m.ahead,
+                behind: m.behind,
+                dirty: m.dirty,
+                dirtyPaths: m.dirtyPaths,
+                mirror: m.state,
+                mirrorReason: m.reason,
+                mirrorMessage: m.message,
+                mirrorAt: m.at,
+                note: mirror.describe(m),
                 docs: info.docs ?? null,
                 coords: info.coords ?? null,
                 users: visibleTo(r.name),
@@ -1066,6 +1145,33 @@ export async function runServe(opt = {}) {
             }
             okLog('/repos', name, out.status)
             return json(res, out.status, out.body)
+          }
+          // ── 레포 하나의 복구 셋 — 「origin 과 맞추기」 · 「다시 보내기」 · 「트리 되돌리기」(동시 기록 검토 v0.1 D4 · D5).
+          // 전부 재인증 뒤(위의 GET 아님 → cdp_su) · `save` 와 같은 뮤텍스 · `auth.log`. 판정은 `core/mirror.js` 하나다.
+          const rm = /^\/repos\/([^/]+)\/(sync|push|restore)$/.exec(sub)
+          if (rm && req.method === 'POST') {
+            const name = decodeURIComponent(rm[1])
+            await store.ensure(name)
+            const found = (await store.list()).find((x) => x.name === name)
+            if (!found) return fail(new auth.AuthError('E_NOT_FOUND', '그런 레포가 없다', { name }))
+            if (rm[2] === 'sync') {
+              const r = await mirror.syncWithOrigin(found.root, { rescan: () => store.reload(name) })
+              await auth.audit(dataDir, `admin repo sync · ${a.user} · ${name} · ${r.ok ? 'pulled=' + (r.pulled ?? 0) : 'fail=' + r.reason}`)
+              okLog('/repos/sync', name, r.ok ? 200 : 409)
+              // 결과의 `reason`(diverged · dirty) 과 미러 요약의 `reason`(push 실패 사유)은 다른 것이다 — 요약은 `mirror` 아래에
+              return json(res, r.ok ? 200 : 409, { ok: r.ok, pulled: r.pulled ?? 0, reason: r.reason ?? null, message: r.message ?? null, mirror: await mirror.summary(found.root) })
+            }
+            if (rm[2] === 'push') {
+              const r = await mirror.enqueuePush(found.root, { log: (m) => log.line(m) })
+              await auth.audit(dataDir, `admin repo push · ${a.user} · ${name} · ${r?.ok ? 'ok' : 'fail=' + (r?.reason || '?')}`)
+              okLog('/repos/push', name, r?.ok ? 200 : 409)
+              return json(res, r?.ok ? 200 : 409, { ok: !!r?.ok, reason: r?.reason ?? null, message: r?.message ?? null, mirror: await mirror.summary(found.root) })
+            }
+            const r = await mirror.restore(found.root)
+            if (r.ok && r.discarded.length) await store.reload(name)
+            await auth.audit(dataDir, `admin repo restore · ${a.user} · ${name} · discarded=${r.discarded?.length ?? 0}${r.discarded?.length ? ' · ' + r.discarded.slice(0, 10).join(',') : ''}`)
+            okLog('/repos/restore', name, r.ok ? 200 : 409)
+            return json(res, r.ok ? 200 : 409, { ok: r.ok, discarded: r.discarded || [], reason: r.reason ?? null, message: r.message ?? null, mirror: await mirror.summary(found.root) })
           }
 
           // ── 작업 레포 — 대장 전부(레포 무관). 등록 · 꾸러미는 그 레포의 관리 화면에서(§4.7).
@@ -1165,13 +1271,19 @@ export async function runServe(opt = {}) {
         const list = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
         const rows = []
         for (const r of list) {
-          const st = await git.status(r.root).catch(() => null)
+          // 상태 한 값 + 사유 — 레포 화면의 상태바와 스킬이 "밀렸는데 왜" 를 볼 수 있어야 한다(동시 기록 검토 v0.1 D3 · D12)
+          const m = await mirror.summary(r.root)
           rows.push({
             name: r.name,
             title: await titleOf(r.root),
-            head: st?.head ?? null,
-            branch: st?.branch ?? null,
-            mirror: mirrorOf(st),
+            head: m.head,
+            branch: m.branch,
+            mirror: m.state,
+            mirrorReason: m.reason,
+            ahead: m.ahead,
+            behind: m.behind,
+            dirty: m.dirty,
+            note: mirror.describe(m),
           })
         }
         log.req({ ip, user: a.user, method: 'GET', tool: '/repos', ms: Date.now() - t0, status: 200 })
@@ -1383,30 +1495,38 @@ export async function runServe(opt = {}) {
           if (a.allow && !a.allow(r.name)) continue
           repos.push({ name: r.name, root: r.root, title: await titleOf(r.root) })
         }
-        const out = await CTX.run({ auth: a, repos }, () => handler.fetch(request)).catch((e) => {
+        const ctxStore = { auth: a, repos, outcome: null }
+        const out = await CTX.run(ctxStore, () => handler.fetch(request)).catch((e) => {
           log.line('fetch: ' + (e?.message || e))
           return new Response(JSON.stringify({ error: { code: 'E_REPO', message: String(e?.message || e) } }), { status: 500 })
         })
 
+        // 로그는 **몸통을 다 흘려보낸 뒤** 쓴다 — 도구는 스트림을 열어 둔 채 돈다. 앞에서 쓰면
+        // `save` 가 1초 걸려도 6ms 로 남고 결과도 모른다(동시 기록 검토 v0.1 B9).
+        res.writeHead(out.status, Object.fromEntries(out.headers))
+        if (out.body) {
+          const reader = out.body.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            res.write(Buffer.from(value))
+          }
+        }
+        res.end()
+        const oc = ctxStore.outcome
         log.req({
           ip,
           user: a.user,
           repo: /^\/mcp\/([^/]+)/.exec(url.pathname)?.[1] || '-',
           method: seen.method,
           tool: seen.tool,
-          key: seen.key,
-          ms: Date.now() - t0,
+          key: seen.key || oc?.key || null,
+          ms: oc?.ms ?? Date.now() - t0,
           status: out.status,
+          code: oc?.code || null,
+          tid: a.tokenId,
         })
-        res.writeHead(out.status, Object.fromEntries(out.headers))
-        if (!out.body) return res.end()
-        const reader = out.body.getReader()
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          res.write(Buffer.from(value))
-        }
-        return res.end()
+        return
       }
 
       // `/r` → 볼 수 있는 첫 레포로. 없으면 화면이 빈 상태를 그린다(관리자면 콘솔로 가는 길) —
@@ -1470,6 +1590,12 @@ export async function runServe(opt = {}) {
   await new Promise((resolve) => server.listen(port, bind, resolve))
   const list = await store.list()
   log.line(`시작 · ${bind}:${port} · root ${root} · 레포 ${list.length}개 (${list.map((r) => r.name).join(' · ') || '없음'}) · 번들 ${BUILT}`)
+  // 더러운 트리는 시작 뒤 한 줄 — `save` 가 거절될 레포를 관리자가 로그에서 먼저 본다(동시 기록 검토 v0.1 D5).
+  // 듣기 시작한 **뒤**에 돈다 — 레포마다 git 을 띄우는 일이라 기동을 늦추지 않는다.
+  for (const r of list) {
+    const st = await git.status(r.root).catch(() => null)
+    if (st?.dirty > 0) log.line(`경고: 레포 ${r.name} 트리에 커밋 안 된 변경 ${st.dirty}건 (${st.dirtyPaths.slice(0, 3).join(' · ')}) — save 가 거절된다. 콘솔 > 지식 레포 > 「트리 되돌리기」`)
+  }
 
   await new Promise((resolve) => {
     server.on('close', resolve)

@@ -15,7 +15,8 @@ import { api, gotoRepo, mode } from '../../lib/api.js'
 import Icon from '../Icon.jsx'
 import { Card, Row, Mono, Note, Btn } from './ui.jsx'
 
-const MIRROR = { ok: ['ok', '미러 최신'], lag: ['warn', '미러 밀림'], off: ['none', '원격 없음'] }
+// 상태 다섯 — 사실만. 고치는 단추는 콘솔(관리자 · 재인증)에 있다(동시 기록 검토 v0.1 §5.7).
+const MIRROR = { ok: ['ok', '미러 최신'], lag: ['warn', '미러 밀림'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 앞섬'], off: ['none', '원격 없음'] }
 
 export default function RepoServer({ say }) {
   const [me, setMe] = useState(null)
@@ -71,13 +72,16 @@ export default function RepoServer({ say }) {
           repos.map((r) => {
             const [mark, label] = MIRROR[r.mirror] || MIRROR.off
             return (
-              <Row key={r.name} label={r.name} mark={mark} stack>
+              <Row key={r.name} label={r.name} mark={r.dirty > 0 ? 'bad' : mark} stack>
                 <span className="wr-line">
                   <span className="wr-dim">{r.title || ''}</span>
                   <Mono>{r.head || '—'}</Mono>
                   <span className="wr-dim">
                     {r.branch || ''} · {label}
+                    {(r.mirror === 'lag' || r.mirror === 'diverged') && r.ahead ? ` ${r.ahead}` : ''}
+                    {r.dirty > 0 ? ` · 트리 더러움 ${r.dirty}` : ''}
                   </span>
+                  {r.note && <span className="wr-dim">{r.note}</span>}
                   {r.name !== mode.repo && (
                     <Btn onClick={() => gotoRepo(r.name)}>
                       <Icon name="doc" size={13} /> 열기
@@ -89,8 +93,8 @@ export default function RepoServer({ say }) {
           })
         )}
         <Note>
-          커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. <b>미러 밀림</b>이 계속되면 origin 자격이나
-          보호 브랜치를 봅니다(설치절차 10장).
+          커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 밀림 · origin 앞섬 · 갈림 · 트리 더러움은 여기서는
+          보이기만 합니다 — 맞추기 · 다시 보내기 · 되돌리기는 <b>콘솔 › 지식 레포</b>(관리자 · 재인증)에 있습니다.
         </Note>
       </Card>
 

@@ -260,6 +260,10 @@ export const admin = {
   tokenSet: (id, b) => A('/tokens/' + encodeURIComponent(id), J('PATCH', b)),
   repos: () => A('/repos'),
   repoNew: (b) => A('/repos', J('POST', b)),
+  // 레포 하나의 복구 셋(동시 기록 검토 v0.1 D4 · D5) — 재인증 뒤. 거절(409)도 읽어야 하는 답이다(갈라짐 · 더러움의 문장)
+  repoSync: (name) => A(`/repos/${encodeURIComponent(name)}/sync`, { ...J('POST', {}), allowStatus: [409] }),
+  repoPush: (name) => A(`/repos/${encodeURIComponent(name)}/push`, { ...J('POST', {}), allowStatus: [409] }),
+  repoRestore: (name) => A(`/repos/${encodeURIComponent(name)}/restore`, { ...J('POST', {}), allowStatus: [409] }),
   workrepos: () => A('/workrepos'),
   doctor: (fresh = false) => A('/doctor' + (fresh ? '?fresh=1' : '')),
   server: () => A('/server'),

@@ -16,6 +16,7 @@ import * as z from 'zod'
 import { loadRepo } from '../../core/repo.js'
 import * as T from '../../core/tools.js'
 import { CtxError, toError, guardSize } from '../../core/tools.js'
+import { stateOf, lastPush, summary as mirrorSummary, describe as mirrorLine } from '../../core/mirror.js'
 
 export const BUILT = '__CTX_BUILT__'
 
@@ -176,10 +177,18 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
   tool('derive', {}, (r) => T.toolDerive(r))
   tool('apply', { coord: z.string().max(240) }, (r, a) => T.toolApply(r, a))
   tool('check', {}, (r) => T.toolCheck(r))
-  tool('brief', {}, (r) => {
+  tool('brief', {}, async (r) => {
     // 번들 나이는 `toolBrief` 가 낸다 — CLI 와 같은 줄이다(§3.0 · 하네스 20번)
     const b = T.toolBrief(r, { built })
-    return notice ? { ...b, lines: [...b.lines, notice] } : b
+    const lines = [...b.lines]
+    // 서버형 — 미러 · 트리 이상이 있을 때만 한 줄(동시 기록 검토 v0.1 D3). 정상은 조용하다
+    if (mode === 'server') {
+      const m = await mirrorSummary(r.root).catch(() => null)
+      const d = mirrorLine(m)
+      if (d) lines.push('[CDP] 미러: ' + d)
+    }
+    if (notice) lines.push(notice)
+    return { ...b, lines }
   })
   tool('sync', {}, async (r) => syncOf(r, mode))
 
@@ -337,11 +346,11 @@ function instructions({ repos, fallback, mode, allow }) {
 // **받지 않는다.** `--pull` 은 도구가 아니다(§2.2 각주) -- 작업 트리를 바꾸는
 // 것은 사람의 승인 아래서만 한다.
 
-// 미러 상태 — 원격이 없으면 `off`, 안 보낸 커밋이 있으면 `lag`, 같으면 `ok`.
+// 미러 상태 — 판정은 `core/mirror.stateOf` 하나다(동시 기록 검토 v0.1 D2). 원격이 없으면 `off`,
+// 안 보낸 커밋이 있으면 `lag`, 서로 모르는 커밋이 있으면 `diverged`, origin 만 앞서면 `behind`, 같으면 `ok`.
 // **push 를 여기서 하지 않는다.** `sync` 는 받지도 보내지도 않는다(§2.2).
-export function mirrorOf(st) {
-  if (!st?.repo || !st.upstream) return 'off'
-  return st.ahead > 0 ? 'lag' : 'ok'
+export function mirrorOf(st, root = null) {
+  return stateOf(st, root ? lastPush(root) : null)
 }
 
 async function syncOf(r, mode) {
@@ -353,10 +362,16 @@ async function syncOf(r, mode) {
     // `CLAUDE.md` 의 `cdp:kit` 에서 읽는다.
     const { kitHash } = await import('../../core/setup.js')
     const kit = await kitHash(r.root).catch(() => null)
+    const m = await mirrorSummary(r.root, st)
     return {
       mode: 'server',
       head: st?.head ?? null,
-      mirror: mirrorOf(st),
+      mirror: m.state,
+      mirrorReason: m.reason,
+      ahead: m.ahead,
+      behind: m.behind,
+      dirty: m.dirty,
+      note: mirrorLine(m),
       kit: kit ? { hash: kit.hash, skills: kit.skills } : null,
     }
   }

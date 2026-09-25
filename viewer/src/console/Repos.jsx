@@ -9,9 +9,12 @@ import { admin } from '../lib/api.js'
 import { navigate } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
-import { PageHead, Note, Modal, Field, Chip, Mono } from './ui.jsx'
+import { PageHead, Note, Modal, Field, Chip, Mono, Confirm } from './ui.jsx'
 
-const MIRROR = { ok: [null, '최신'], lag: ['warn', '밀림'], off: ['off', '원격 없음'] }
+// 상태 다섯 — 사실만(동시 기록 검토 v0.1 D4 · §5.7). 갈라짐은 기계가 못 푸는 것이라 bad.
+const MIRROR = { ok: [null, '최신'], lag: ['warn', '밀림'], diverged: ['bad', '갈림'], behind: ['warn', 'origin 앞섬'], off: ['off', '원격 없음'] }
+// 사유 — 서버의 `core/mirror.REASON_TEXT` 와 같은 말. 칩에는 짧게, 문장은 `title` 로.
+const REASON = { 'non-ff': 'non-ff', auth: '인증 실패', net: '원격 불통', protected: '보호 브랜치', locked: 'ref 잠김', 'no-upstream': 'upstream 없음', unknown: '원인 미상' }
 
 export default function Repos({ say }) {
   const withSudo = useSudo()
@@ -22,15 +25,27 @@ export default function Repos({ say }) {
   // 다시 읽는 중 — 세운 직후 표가 "레포가 없다" 인 채 노트만 뜨던 것(화면 UX 검토 v0.1 P16). 레포마다 첫 스캔을
   // 하느라 목록이 1초를 넘게 걸린다 — 그 사이를 "읽는 중" 으로 둔다.
   const [loading, setLoading] = useState(false)
+  // 복구 단추 셋 — 어느 행이 도는 중인가 · 되돌리기 확인(버리는 경로를 보여 준 뒤에)
+  const [acting, setActing] = useState(null)
+  const [restoring, setRestoring] = useState(null)
 
+  // 진단의 레포 줄 — 서버는 fetch 를 안 하므로 "origin 이 앞서 있나" 는 doctor(ls-remote · 60초 캐시)만 안다.
+  // 표를 먼저 그리고 뒤따라 채운다 — 레포마다 origin 에 닿는 검사라 몇 초 걸린다.
+  const [doc, setDoc] = useState(null)
   const load = useCallback(() => {
     setLoading(true)
+    admin
+      .doctor()
+      .then((d) => setDoc(d.rows || []))
+      .catch(() => setDoc([]))
     return admin
       .repos()
       .then(setData)
       .catch((e) => say(e.message, 6000))
       .finally(() => setLoading(false))
   }, [say])
+  // 레포 이름 → 진단 줄(트리 · origin · push) 중 warn · fail 인 것
+  const docOf = (name) => (doc || []).filter((r) => r.state !== 'ok' && new RegExp(`^레포 ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`).test(r.what))
   useEffect(() => {
     load()
   }, [load])
@@ -48,6 +63,28 @@ export default function Repos({ say }) {
       if (e.message !== CANCELLED) say(e.message, 8000)
     } finally {
       setBusy(false)
+    }
+  }
+
+  // 복구 셋 — 서버가 판정하고(`core/mirror.js` · save 와 같은 뮤텍스 · auth.log) 여기는 결과 문장을 그대로 전한다.
+  const act = async (name, kind) => {
+    setActing(name + ':' + kind)
+    try {
+      const fn = kind === 'sync' ? admin.repoSync : kind === 'push' ? admin.repoPush : admin.repoRestore
+      const r = await withSudo(() => fn(name))
+      if (kind === 'sync') say(r.ok ? (r.pulled ? `${name} — origin 에서 ${r.pulled}건 받았다` : `${name} — 이미 origin 과 같다`) : r.message || '맞추지 못했다', r.ok ? 4000 : 12000)
+      else if (kind === 'push') say(r.ok ? `${name} — origin 에 보냈다` : `${name} — 보내지 못했다: ${r.message || r.reason || ''}`, r.ok ? 4000 : 10000)
+      else say(r.ok ? `${name} — 트리를 되돌렸다 · 버린 것 ${r.discarded.length}` : r.message || '되돌리지 못했다', r.ok ? 5000 : 10000)
+      await load()
+      // 진단 줄은 60초 캐시라 방금 고친 것이 남아 보인다 — 한 번은 새로 (레포마다 origin 에 닿으니 뒤따라 채운다)
+      admin
+        .doctor(true)
+        .then((d) => setDoc(d.rows || []))
+        .catch(() => {})
+    } catch (e) {
+      if (e.message !== CANCELLED) say(e.message, 8000)
+    } finally {
+      setActing(null)
     }
   }
 
@@ -82,6 +119,9 @@ export default function Repos({ say }) {
               )}
               {data.repos.map((r) => {
                 const [mk, ml] = MIRROR[r.mirror] || MIRROR.off
+                const notes = docOf(r.name)
+                // origin 이 앞선 것을 서버 상태(fetch 없음)는 모르고 진단은 안다 — 그때도 「origin 과 맞추기」 를 낸다
+                const originAhead = r.mirror === 'behind' || r.mirror === 'diverged' || notes.some((n) => /origin/.test(n.what) && /앞서/.test(n.note))
                 return (
                   <tr key={r.name}>
                     <td>
@@ -92,10 +132,44 @@ export default function Repos({ say }) {
                       {r.head || '—'} <span className="dim">{r.branch || ''}</span>
                     </td>
                     <td>
-                      <Chip kind={mk} icon={mk === 'warn' ? 'warn' : null}>
+                      <Chip kind={mk} icon={mk === 'warn' || mk === 'bad' ? 'warn' : null} title={r.note || undefined}>
                         {ml}
-                        {r.mirror === 'lag' && r.ahead ? ` ${r.ahead}` : ''}
+                        {(r.mirror === 'lag' || r.mirror === 'diverged') && r.ahead ? ` ${r.ahead}` : ''}
+                        {r.mirror === 'behind' && r.behind ? ` ${r.behind}` : ''}
+                        {r.mirrorReason ? ` · ${REASON[r.mirrorReason] || r.mirrorReason}` : ''}
                       </Chip>
+                      {r.dirty > 0 && (
+                        <>
+                          {' '}
+                          <Chip kind="bad" icon="warn" title={(r.dirtyPaths || []).join(' · ')}>
+                            트리 더러움 {r.dirty}
+                          </Chip>
+                        </>
+                      )}
+                      {notes.map((n, i) => (
+                        <div key={i} className="sub" style={{ marginTop: 3, color: n.state === 'fail' ? 'var(--danger)' : 'var(--warn)' }} title={n.note}>
+                          진단 · {n.what.replace(`레포 ${r.name}`, '').trim() || '레포'} — {n.note.split(' — ')[0].split('. ')[0]}
+                        </div>
+                      ))}
+                      {(r.mirror === 'lag' || r.mirror === 'diverged' || originAhead || r.dirty > 0) && (
+                        <div className="rowact" style={{ marginTop: 4 }}>
+                          {originAhead && (
+                            <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'sync')} title="fetch → 뒤처졌으면 ff-only → 재스캔. 갈라졌으면 거절하고 문장을 낸다">
+                              {acting === r.name + ':sync' ? '맞추는 중…' : 'origin 과 맞추기'}
+                            </button>
+                          )}
+                          {(r.mirror === 'lag' || r.mirror === 'diverged') && (
+                            <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'push')} title="밀린 커밋을 origin 에 한 번 더 보낸다">
+                              {acting === r.name + ':push' ? '보내는 중…' : '다시 보내기'}
+                            </button>
+                          )}
+                          {r.dirty > 0 && (
+                            <button className="abtn" disabled={!!acting} onClick={() => setRestoring(r)} title="커밋 안 된 변경을 버리고 HEAD 로 — 서버가 유일한 작성자라 누구의 것도 아니다">
+                              {acting === r.name + ':restore' ? '되돌리는 중…' : '트리 되돌리기'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="ar num">{r.docs ?? '—'}</td>
                     <td className="ar num">{r.coords ?? '—'}</td>
@@ -135,9 +209,24 @@ export default function Repos({ say }) {
         </Note>
       )}
       <Note>
-        커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. <b>밀림</b>이 계속되면 서버 &gt; 진단의 <code>레포 … push</code> 줄과 origin 자격(PAT · 셸)을 봅니다. 등록부 · 어휘를 서버 밖에서 고쳤으면 설명서 7.6.
+        커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. <b>밀림</b>은 사유와 함께 뜹니다(인증 실패면 PAT · 셸). <b>origin 앞섬</b>은 누군가 서버 밖에서 쓴 것 — 「origin 과 맞추기」(ff-only). <b>갈림</b>은 기계가 합치지 않습니다 — 셸에서 rebase 한 뒤 「다시 보내기」. <b>트리 더러움</b>은 <code>save</code> 가 거절되는 상태 — 「트리 되돌리기」. 전부 관리자 확인 뒤에 돌고 감사에 남습니다(설명서 7.6).
       </Note>
 
+      {restoring && (
+        <Confirm
+          title={`${restoring.name} — 트리를 되돌린다`}
+          text={`커밋 안 된 변경 ${restoring.dirty}건을 버리고 HEAD 로 돌립니다: ${(restoring.dirtyPaths || []).join(' · ')}${restoring.dirty > (restoring.dirtyPaths || []).length ? ' …' : ''}. 서버 트리의 유일한 작성자는 서버라 이것은 누구의 편집도 아닙니다 — 사람의 것은 origin 에 올립니다.`}
+          okLabel="되돌린다"
+          danger
+          busy={!!acting}
+          onClose={() => setRestoring(null)}
+          onOk={async () => {
+            const n = restoring.name
+            setRestoring(null)
+            await act(n, 'restore')
+          }}
+        />
+      )}
       {adding && <NewRepo data={data} busy={busy} onClose={() => setAdding(false)} onOk={create} />}
     </>
   )

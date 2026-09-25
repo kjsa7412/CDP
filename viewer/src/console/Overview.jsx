@@ -58,7 +58,7 @@ export default function Overview({ say }) {
         <Card title="서버" actions={<Btn onClick={() => navigate('/console/server')}>자세히</Btn>}>
           <div className="stats">
             <Stat n={d.repos.count} l="지식 레포" />
-            <Stat n={m.lag} l="미러 밀림" warn={m.lag > 0} />
+            <Stat n={m.lag} l={m.diverged ? `미러 밀림 · 갈림 ${m.diverged}` : '미러 밀림'} warn={m.lag > 0 && !m.diverged} bad={m.diverged > 0} />
             <Stat n={d.packages} l="패키지" />
           </div>
           <Row label="판">
@@ -106,6 +106,32 @@ export default function Overview({ say }) {
           )}
         </Card>
       </div>
+
+      {/* 기록의 흐름 — 누가 언제 어느 레포에 무엇을 기록했고 무엇이 거절됐나(동시 기록 검토 v0.1 D10).
+          serve.log 의 save 줄이 출처라 본문 · 검색어는 없다. 거절 집계는 24시간. */}
+      <Card
+        title="최근 기록"
+        hint={
+          d.saves
+            ? `save 24h ${d.saves.total24h}건 · 거절 ${Object.values(d.saves.rejected24h || {}).reduce((a, b) => a + b, 0)}${
+                Object.keys(d.saves.rejected24h || {}).length ? ' — ' + Object.entries(d.saves.rejected24h).map(([k, v]) => `${k} ${v}`).join(' · ') : ''
+              }`
+            : ''
+        }
+      >
+        {(!d.saves || d.saves.recent.length === 0) && <span className="amuted">아직 없다 — 첫 save 가 오면 여기 뜬다</span>}
+        {d.saves?.recent.map((s, i) => (
+          <div className="auditline" key={i}>
+            <time>{shortTime(s.at)}</time>
+            <span className="who2">{s.user}</span>
+            <span className="what">
+              <b>{s.repo}</b> · {s.id || '(id 없음)'} ·{' '}
+              {s.result === 'ok' ? <span>기록됨</span> : <span style={{ color: 'var(--warn)', fontWeight: 600 }}>{s.result}</span>}
+              {s.ms != null ? <span className="amuted"> · {s.ms}ms</span> : null}
+            </span>
+          </div>
+        ))}
+      </Card>
 
       <Card title="최근 감사" hint="auth.log 마지막 5줄" actions={<Btn onClick={() => navigate('/console/audit')}>전부 →</Btn>}>
         {d.audit.length === 0 && <span className="amuted">아직 없다</span>}

@@ -7,8 +7,13 @@
 //
 // 이 모듈이 하는 것과 안 하는 것을 분명히 한다.
 //
-//   한다      fetch · status · rev-list(ahead/behind) · pull --ff-only · push
-//   안 한다   merge · rebase · 충돌 해결 · reset · checkout · 자동 push
+//   한다      fetch · status · rev-list(ahead/behind) · pull --ff-only · push · 서버 트리 되돌리기(checkout -- . · clean)
+//   안 한다   merge · rebase · 충돌 해결 · reset · 자동 push
+//
+// **되돌리기는 서버형에만 있다**(동시 기록 검토 v0.1 D5). 서버 트리의 유일한
+// 작성자는 서버라 거기 남은 미커밋 변경은 언제나 사고(중단된 save · 사람의 손)이고,
+// HEAD 로 돌리는 것은 누구의 것도 버리지 않는다 — 사람의 것은 origin 에 올라간다.
+// 로컬형의 작업 트리에는 절대 쓰지 않는다: 그것은 사람이 편집 중인 파일이다.
 //
 // 안 하는 쪽이 중요하다. 되돌리기 어려운 연산은 사람이 터미널에서 한다
 // (뷰어 v0.2 §31 의 경계선). 앱이 rebase 를 시도하다 반쯤 실패하면
@@ -25,7 +30,9 @@ function run(cwd, args, { timeout = 20000 } = {}) {
   return new Promise((resolve) => {
     execFile(
       'git',
-      ['-C', cwd, ...args],
+      // **한글 경로를 그대로 낸다.** `core.quotepath` 기본값은 비 ASCII 를 `\354\240\225…` 로 적는다 —
+      // 더러운 경로 · 버린 경로 · 거절 문장에 그것이 그대로 실렸다(2026-09-25 콘솔 실측).
+      ['-C', cwd, '-c', 'core.quotepath=false', ...args],
       { timeout, windowsHide: true, encoding: 'utf8', maxBuffer: 4 << 20 },
       (e, stdout, stderr) => {
         resolve({
@@ -61,15 +68,23 @@ export async function gitAvailable() {
 export async function status(root) {
   if (!(await isRepo(root))) return { repo: false }
 
-  const [s, hooksPath] = await Promise.all([run(root, ['status', '--porcelain=v2', '--branch']), readHooksPath(root)])
+  // `-uall` — 미추적 폴더를 `work/` 로 접지 않고 파일로 낸다. 중단된 save 가 남긴 `work/<id>.md` 가 그대로 보여야
+  // 사람이 무엇을 버리는지 안다. 깨끗한 레포에서는 비용이 없다.
+  const [s, hooksPath] = await Promise.all([run(root, ['status', '--porcelain=v2', '--branch', '--untracked-files=all']), readHooksPath(root)])
   const head = {}
   let dirty = 0
+  // 더러운 경로 — 앞 10개. `save` 의 거절 문장과 콘솔이 "무엇이" 를 말할 수 있어야 한다
+  // (동시 기록 검토 v0.1 D5). porcelain v2 의 마지막 칸이 경로다(`?` 줄은 둘째 칸).
+  const dirtyPaths = []
   if (s.ok) {
     for (const line of s.out.split('\n')) {
       if (!line) continue
       const m = /^# branch\.(\S+) (.*)$/.exec(line)
       if (m) head[m[1]] = m[2]
-      else if (!line.startsWith('#')) dirty++
+      else if (!line.startsWith('#')) {
+        dirty++
+        if (dirtyPaths.length < 10) dirtyPaths.push(porcelainPath(line))
+      }
     }
   }
   // 커밋이 하나도 없는 새 레포는 oid 가 `(initial)` 이다. 오류가 아니다
@@ -84,6 +99,7 @@ export async function status(root) {
     // 검사가 **조용히 통과한다** -- 그래서 상태로 노출한다(§17).
     hooksPath,
     dirty,
+    dirtyPaths,
     ahead: 0,
     behind: 0,
     oldestUnpushed: null,
@@ -104,6 +120,12 @@ export async function status(root) {
     }
   }
   return st
+}
+
+// porcelain v2 한 줄의 경로 — `? <path>` · `1 … <path>` · `2 … <path>\t<orig>` · `u … <path>`.
+function porcelainPath(line) {
+  if (line.startsWith('?') || line.startsWith('!')) return line.slice(2)
+  return line.split('\t')[0].split(' ').pop()
 }
 
 // `core.hooksPath` — **설정 파일이 바뀌었을 때만** git 에 묻는다.
@@ -257,7 +279,57 @@ export async function push(root) {
   if (st.ahead === 0) return { ok: true, skipped: 'nothing-to-push', status: st }
 
   const r = await run(root, ['push', '--quiet'], { timeout: 60000 })
-  return r.ok ? { ok: true, status: await status(root) } : { ok: false, reason: 'failed', message: firstLine(r.err) }
+  if (r.ok) return { ok: true, status: await status(root) }
+  // **첫 줄을 남기지 않는다.** git 의 첫 줄은 `To <원격>` 이고 사유는 그 다음 줄이다 —
+  // 실측(2026-09-25)에서 로그 · doctor · 콘솔이 전부 `To C:\…` 만 들고 있었다.
+  const c = classifyPushError(r.err || r.out)
+  return { ok: false, reason: c.reason, message: c.line, stderr: r.err }
+}
+
+// push 가 왜 실패했나 — **순수 함수 하나.** 로그 · save 응답 · 콘솔 · doctor 가
+// 같은 것을 부른다(동시 기록 검토 v0.1 D2). 자리마다 정규식을 두면 반드시 갈라진다.
+//
+//   non-ff       origin 에 서버가 모르는 커밋이 있다 — 사람이 맞춘다(콘솔 「origin 과 맞추기」 · 갈라졌으면 rebase)
+//   auth         자격 — PAT 만료가 가장 흔하다(관리자 설명서 10.1)
+//   net          망 — 기다리거나 원격 주소를 본다
+//   protected    보호 브랜치 · pre-receive 훅이 거절
+//   locked       같은 ref 를 동시에 밀었다 — 큐가 막지만 남이 밀었을 수도 있다
+//   no-upstream  보낼 곳이 없다
+//   unknown      위 어느 것도 아니다 — `line` 을 그대로 보인다
+//
+// 문장은 2026-09-25 실측에서 받은 것 그대로다(테스트 `test/git.test.mjs`).
+export function classifyPushError(text) {
+  const t = String(text || '')
+  const lines = t.split('\n').map((l) => l.trim()).filter(Boolean)
+  // 사유가 실린 줄 — `!` 로 시작하는 거절 줄 · error/fatal/remote 줄 · 그도 없으면 첫 줄
+  const line = lines.find((l) => l.startsWith('!')) || lines.find((l) => /^(fatal|error|remote: error):/i.test(l)) || lines[0] || null
+  let reason = 'unknown'
+  if (!lines.length) reason = 'unknown'
+  else if (/\[rejected\][^\n]*\((fetch first|non-fast-forward)\)/i.test(t) || /Updates were rejected because the remote contains work/i.test(t) || /non-fast-forward/i.test(t)) reason = 'non-ff'
+  else if (/cannot lock ref|failed to update ref|index\.lock|Unable to create .*\.lock/i.test(t)) reason = 'locked'
+  else if (/pre-receive hook declined|protected branch|GH006|You are not allowed to push/i.test(t)) reason = 'protected'
+  else if (/Authentication failed|could not read Username|Permission denied \(publickey\)|invalid credentials|HTTP 403|returned error: 403|Invalid username or password|access denied|HTTP 401|returned error: 401/i.test(t)) reason = 'auth'
+  else if (/Could not resolve host|Connection refused|Connection timed out|timed out|unable to access|Network is unreachable|Could not connect|no route to host|Connection reset/i.test(t)) reason = 'net'
+  else if (/no upstream|has no upstream branch|The current branch .* has no upstream/i.test(t)) reason = 'no-upstream'
+  return { reason, line }
+}
+
+// 서버 트리를 HEAD 로 되돌린다 — **서버형 콘솔의 「트리 되돌리기」 만 부른다.**
+//
+// 서버가 유일한 작성자라 미커밋 변경은 언제나 사고다(중단된 save · 사람의 손).
+// 무엇을 버렸는지 돌려준다 — 감사 로그에 남는다. 버릴 것이 없으면 아무것도 안 한다.
+export async function restoreTree(root) {
+  if (!(await isRepo(root))) return { ok: false, reason: 'not-a-repo' }
+  const st = await status(root)
+  if (!st.dirty) return { ok: true, discarded: [], status: st }
+  // v2 로 읽는다 — v1 은 첫 줄의 앞 공백이 `run` 의 trim 에 잘려 `docs/t.md` 가 `ocs/t.md` 가 됐다(테스트가 잡았다)
+  const porcelain = await run(root, ['status', '--porcelain=v2', '--untracked-files=all'])
+  const discarded = porcelain.ok ? porcelain.out.split('\n').filter((l) => l && !l.startsWith('#')).map(porcelainPath) : st.dirtyPaths
+  const co = await run(root, ['checkout', '--', '.'])
+  if (!co.ok) return { ok: false, reason: 'failed', message: firstLine(co.err), discarded: [] }
+  const cl = await run(root, ['clean', '-fd'])
+  if (!cl.ok) return { ok: false, reason: 'failed', message: firstLine(cl.err), discarded: [] }
+  return { ok: true, discarded, status: await status(root) }
 }
 
 // 모드 B 의 서버가 커밋한다. MCP 설계서 §4.5 의 10단계.

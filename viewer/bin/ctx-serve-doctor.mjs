@@ -19,6 +19,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import * as auth from '../../core/auth.js'
 import { listRepos } from '../../core/reponew.js'
+import { classifyPushError } from '../../core/git.js'
+import { REASON_TEXT } from '../../core/mirror.js'
 import { resolvePackages } from './ctx-package.mjs'
 import { hereDir } from '../server/runtime.js'
 
@@ -147,18 +149,35 @@ export async function doctorRows(opt) {
           fail(`레포 ${r.name}`, 'git 레포가 아니다 — save 가 커밋할 수 없다')
           continue
         }
+        // 더러운 트리 — save 가 거절된다(동시 기록 검토 v0.1 D5). 전에는 doctor 가 보지 않았다(실측 M8)
+        if (r.dirty > 0) fail(`레포 ${r.name} 트리`, `커밋 안 된 변경 ${r.dirty}건 — save 가 거절된다. 콘솔 > 지식 레포 > 「트리 되돌리기」 (셸: git -C ${r.path} checkout -- . && git clean -fd)`)
         if (!r.upstream) warn(`레포 ${r.name}`, `upstream 없음 — 미러가 off 다 (head ${r.head})`)
         else {
           // origin 도달 · push 자격 — 아무것도 보내지 않는다
           const ls = await git(r.path, ['ls-remote', '--exit-code', '-h', 'origin'], 10000)
           if (!ls.ok) fail(`레포 ${r.name} origin`, ls.killed ? '10초 안에 닿지 않았다' : (ls.err || '닿지 않는다').split(NL)[0])
           else {
+            // **origin 이 앞서 있나** — fetch 없이 안다(동시 기록 검토 v0.1 D4 · D9). ls-remote 가 이미 받아 온 origin 의
+            // 브랜치 sha 를 마지막 fetch 의 `origin/<branch>` 와 견준다. 다르면 누군가 서버 밖에서 썼다.
+            const branch = (r.upstream.split('/').slice(1).join('/') || r.branch || '').trim()
+            const remoteSha = ls.out
+              .split(NL)
+              .map((l) => l.split(/\s+/))
+              .find(([, ref]) => ref === 'refs/heads/' + branch)?.[0]
+            const localUp = (await git(r.path, ['rev-parse', r.upstream], 5000)).out
+            const moved = !!remoteSha && !!localUp && remoteSha !== localUp
+            const originAhead = moved || r.behind > 0
+            if (originAhead && r.ahead > 0) fail(`레포 ${r.name} origin`, `갈라졌다 — 서버 ${r.ahead}건 · origin 이 앞섬. 기계는 합치지 않는다: 셸에서 sudo -u cdp -H git -C ${r.path} pull --rebase 뒤 콘솔 「다시 보내기」`)
+            else if (originAhead) warn(`레포 ${r.name} origin`, `origin 이 앞서 있다 — 누군가 서버 밖에서 썼다. 콘솔 > 지식 레포 > 「origin 과 맞추기」(ff-only)`)
             const dry = await git(r.path, ['push', '--dry-run', 'origin', 'HEAD'], 15000)
             if (dry.ok) ok(`레포 ${r.name}`, `head ${r.head} · ${r.upstream} · push 자격 있음${r.ahead ? ' · 미러 밀림 ' + r.ahead + '건' : ''}`)
-            else fail(`레포 ${r.name} push`, (dry.err || '거부').split(NL).find((l) => l.trim()) || '거부')
+            else {
+              const c = classifyPushError(dry.err || dry.out)
+              fail(`레포 ${r.name} push`, `${REASON_TEXT[c.reason] || c.reason}${c.line ? ' — ' + c.line : ''}`)
+            }
           }
         }
-        if (r.ahead > 0) warn(`레포 ${r.name} 미러`, `${r.ahead}건이 origin 에 안 갔다`)
+        if (r.ahead > 0) warn(`레포 ${r.name} 미러`, `${r.ahead}건이 origin 에 안 갔다 — 콘솔 > 지식 레포 > 「다시 보내기」`)
       }
     }
   }

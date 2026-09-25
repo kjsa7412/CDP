@@ -197,7 +197,25 @@ export function parseDoc(path, text) {
   if (layer === 'managed') {
     doc.managedSections = parseManagedSections(body)
     doc.sectionCount = doc.managedSections.filter((s) => s.hasAppliedComment || s.level === 2).length
+    doc.appliedTop = topApplied(body)
   }
 
   return doc
+}
+
+// 문서 머리의 applied — 등록부의 `—`(문서 전체) 규칙이 읽는 값.
+//
+// 문서 전체가 좌표 하나의 상태이면 applied 주석은 섹션 아래가 아니라 **파일 첫 줄**에 있다.
+// 첫 3줄 안 · 첫 헤딩 전까지만 본다 — `## 첫 섹션` 바로 아래의 주석을 문서의 것으로 읽지 않게
+// (`parseManagedSections` 가 같은 이유로 다음 제목을 넘어가지 않는다). `sliceSection` 이 앞 3줄의
+// 주석을 걷어 내는 규칙과 짝이다. 전에는 아무도 읽지 않아 `—` 섹션이 늘 `applied: null` 이었다
+// (동시 기록 검토 v0.1 M5).
+export function topApplied(text) {
+  const lines = String(text || '').split('\n')
+  for (let i = 0; i < Math.min(3, lines.length); i++) {
+    if (/^#{1,6}\s/.test(lines[i])) break
+    const m = /<!--\s*applied\s*:\s*(.*?)\s*-->/i.exec(lines[i])
+    if (m) return m[1] && m[1] !== 'null' && m[1] !== '-' ? m[1] : null
+  }
+  return null
 }

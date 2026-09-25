@@ -18,6 +18,7 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { CtxError } from './tools.js'
+import { status as gitStatus } from './git.js'
 
 export const REPO_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
@@ -162,19 +163,25 @@ export async function listRepos(root) {
     const vocab = await fs.access(path.join(dir, '_vocab.md')).then(() => true).catch(() => false)
     const isGit = await isDir(path.join(dir, '.git'))
     let head = null
+    let branch = null
     let upstream = null
     let ahead = 0
+    let behind = 0
+    let dirty = 0
     let hooksPath = null
     if (isGit) {
-      head = (await git(dir, ['rev-parse', '--short', 'HEAD'])).out || null
-      upstream = (await git(dir, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])).out || null
-      hooksPath = (await git(dir, ['config', '--get', 'core.hooksPath'])).out || null
-      if (upstream) {
-        const c = await git(dir, ['rev-list', '--left-right', '--count', `${upstream}...HEAD`])
-        if (c.ok) ahead = Number(c.out.split(/\s+/)[1]) || 0
-      }
+      // `core/git.status` 하나 — 프로세스 넷이 둘로 줄고, `behind` · `dirty` 가 같이 온다
+      // (doctor 의 「트리」 · 「origin」 줄 · 동시 기록 검토 v0.1 D5 · D9).
+      const st = await gitStatus(dir).catch(() => ({ repo: false }))
+      head = st.head ?? null
+      branch = st.branch ?? null
+      upstream = st.upstream ?? null
+      ahead = st.ahead ?? 0
+      behind = st.behind ?? 0
+      dirty = st.dirty ?? 0
+      hooksPath = st.hooksPath ?? null
     }
-    out.push({ name: e.name, path: dir, vocab, git: isGit, head, upstream, ahead, hooksPath })
+    out.push({ name: e.name, path: dir, vocab, git: isGit, head, branch, upstream, ahead, behind, dirty, hooksPath })
   }
   return out
 }

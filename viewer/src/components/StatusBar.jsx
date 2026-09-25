@@ -18,14 +18,27 @@
 // 근거 없는 경고이고, §13-① 의 나이/유효성 혼동과 같은 오류다.
 
 import { useEffect, useState } from 'react'
-import { api } from '../lib/api.js'
+import { api, isServer, mode } from '../lib/api.js'
 import { clockTime } from '../lib/format.js'
 import Icon from './Icon.jsx'
+
+// 서버형 한 줄 — 이상이 있을 때만(동시 기록 검토 v0.1 D12). 정상은 조용하다. 사유 말은 `core/mirror.REASON_TEXT` 와 같다.
+const REASON = { 'non-ff': 'non-ff', auth: '인증 실패', net: '원격 불통', protected: '보호 브랜치', locked: 'ref 잠김', 'no-upstream': 'upstream 없음', unknown: '원인 미상' }
+function serverLine(m) {
+  if (!m) return null
+  const parts = []
+  if (m.mirror === 'lag') parts.push(`미러 밀림 ${m.ahead}${m.mirrorReason ? ' · ' + (REASON[m.mirrorReason] || m.mirrorReason) : ''}`)
+  else if (m.mirror === 'diverged') parts.push(`origin 과 갈림 ${m.ahead}/${m.behind ?? '?'}`)
+  else if (m.mirror === 'behind') parts.push(`origin 앞섬 ${m.behind}`)
+  if (m.dirty > 0) parts.push(`트리 더러움 ${m.dirty}`)
+  return parts.length ? parts.join(' · ') : null
+}
 
 export default function StatusBar({ repo, scanning, onRescanned, onCheck = () => {}, onSay }) {
   const [busy, setBusy] = useState(false)
   const [git, setGit] = useState(null)
   const [gitBusy, setGitBusy] = useState(null)
+  const [mine, setMine] = useState(null)
 
   // git 상태 — **두 단계로 읽는다.**
   //
@@ -44,8 +57,18 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
     const put = (g) => {
       if (!dead) setGit(g)
     }
-    const local = () => api.git(false).then(put).catch(() => put(null))
-    const remote = () => api.git(true).then(put).catch(() => {})
+    // 서버형 — `/api/<레포>/git` 은 로컬형 문법(받을 것 · 보낼 것 · pull/push)이라 쓰지 않는다. `/repos` 의
+    // 자기 행이 상태 한 값과 사유를 준다. 이상이 있을 때만 한 줄 — 없으면 아무것도 안 그린다.
+    const local = isServer
+      ? () =>
+          api
+            .repos()
+            .then((rows) => {
+              if (!dead) setMine((rows || []).find((r) => r.name === mode.repo) || null)
+            })
+            .catch(() => {})
+      : () => api.git(false).then(put).catch(() => put(null))
+    const remote = isServer ? () => Promise.resolve() : () => api.git(true).then(put).catch(() => {})
 
     local().then(() => remote())
     const t = setInterval(remote, 5 * 60 * 1000)
@@ -111,10 +134,17 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
         </button>
       )}
 
+      {/* 서버형 — 미러 · 갈림 · 더러움 한 줄. 이상이 있을 때만. 단추는 콘솔(관리자)에 있다 */}
+      {isServer && serverLine(mine) && (
+        <span className="is-warn" title={mine.note || undefined}>
+          <Icon name="warn" size={12} /> {serverLine(mine)}
+        </span>
+      )}
+
       {/* git — 유일한 수신 채널이다(§1). 안 보내면 남에게는 없는 것과 같다.
           **여기는 할 일이 있을 때만 말한다** — `원격 동기` 를 늘 띄우던 자리는
-          아무 행동도 없는 자리였다. */}
-      {git?.repo && (
+          아무 행동도 없는 자리였다. 서버형에는 pull/push 단추가 없다(라우트도 없다). */}
+      {!isServer && git?.repo && (
         <>
           {git.behind > 0 && (
             <button className="is-warn" onClick={() => gitAct('pull')} disabled={gitBusy}>
@@ -156,8 +186,9 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
         </span>
       )}
 
-      {/* 감시 생존 여부는 추측이 아니라 표시로 확인돼야 한다 */}
-      {scanning ? (
+      {/* 감시 생존 여부는 추측이 아니라 표시로 확인돼야 한다.
+          서버형에는 감시도 수동 스캔도 없다(`save` 뒤 서버가 재스캔) — 없는 상태를 그리지 않는다(불변조건 7) */}
+      {isServer ? null : scanning ? (
         <span>스캔 중…</span>
       ) : !repo.watchEnabled ? (
         <>

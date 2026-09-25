@@ -218,10 +218,13 @@ export function buildManagedIndex(registry, managedDocs) {
       if (!doc) return { ...hit, docMissing: true, section: null }
 
       if (hit.whole) {
+        // 문서 전체가 좌표의 상태 — applied 는 문서 첫 줄의 주석(`frontmatter.topApplied`).
+        // 전에는 `null` 고정이라 한 번 건드린 좌표가 영원히 파생 누락이었다(동시 기록 검토 v0.1 M5).
+        const applied = doc.appliedTop ?? null
         return {
           ...hit,
           docMissing: false,
-          section: { level: 0, title: doc.title, value: hit.value, line: 0, end: 0, applied: null, hasAppliedComment: false, empty: false, whole: true },
+          section: { level: 0, title: doc.title, value: hit.value, line: 0, end: 0, applied, hasAppliedComment: applied != null, empty: false, whole: true },
         }
       }
 

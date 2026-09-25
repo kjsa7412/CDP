@@ -18,10 +18,18 @@ import { runBuiltinCheck } from './check.js'
 import { resolveCoord } from './managed.js'
 import { renderIndex, renderByCoord } from './indexes.js'
 import * as git from './git.js'
-import { CtxError, checkCoord, checkId } from './tools.js'
+import { CtxError, checkCoord, checkId, sliceSection } from './tools.js'
+import { withLock } from './lock.js'
+import { enqueuePush, lastPush, describe as mirrorLine } from './mirror.js'
+import { topApplied } from './frontmatter.js'
 
 const NL = String.fromCharCode(10)
 const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
+// 미러 push 를 응답 전에 기다리는 상한 — **뮤텍스 밖**이다. 빠른 원격(파일 · 사내 GitLab 이
+// 멀쩡할 때)은 실제 결과를 답하고, 느리면 `queued` 로 답하고 다음 save 가 `mirrorLast` 로 말한다.
+export const MIRROR_WAIT_MS = 1500
+// E_CONFLICT 에 싣는 지금 본문의 상한 — 응답 크기를 지킨다. 넘으면 `truncated` 이고 그때만 `section` 을 다시 부른다.
+export const CONFLICT_CONTENT_MAX = 8000
 
 // ── 되돌리기 ────────────────────────────────────────────────────────────────
 //
@@ -58,21 +66,10 @@ class Snap {
 //
 // 레포마다 하나. 읽기는 상태를 바꾸지 않으므로 동시에 돌지만 `save` 는
 // 직렬화된다 — 두 `save` 가 같은 섹션을 동시에 고치면 `applied` 대조가
-// 무의미해진다.
+// 무의미해진다. 실물은 `core/lock.js` — 미러 큐 · 「origin 과 맞추기」 ·
+// 「트리 되돌리기」 가 같은 줄에 선다(동시 기록 검토 v0.1 D4 · D5).
 
-const locks = new Map()
-export function withLock(key, fn) {
-  const prev = locks.get(key) || Promise.resolve()
-  const next = prev.then(fn, fn)
-  locks.set(
-    key,
-    next.then(
-      () => {},
-      () => {}
-    )
-  )
-  return next
-}
+export { withLock }
 
 // ── 스키마 (2단계) ──────────────────────────────────────────────────────────
 
@@ -148,6 +145,15 @@ function addVocab(text, entries) {
 // 클라이언트가 보내면 2단계에서 거절했다.
 
 function replaceSection(text, { value, level, applied, body, id, heading }) {
+  // 등록부의 `—`(문서 전체) 규칙 — level 0. **파일 전체가 그 좌표의 상태**다.
+  // applied 는 문서 첫 줄의 주석이고(`topApplied` — `section` 이 읽는 것과 같은 규칙), 본문은 통째로 갈린다.
+  // 전에는 `^#{0}\s+값` 이 아무 줄에도 안 걸려 문서 끝에 ` 값` 줄을 붙였고, 그 앞의 헤딩 검사가
+  // `#{1,0}` 으로 정규식 예외를 내 `E_REPO` 로 죽었다(동시 기록 검토 v0.1 M5).
+  if (level === 0) {
+    const current = topApplied(text)
+    const next = [APPLIED_MARK + ' ' + id + ' -->', '', ...body.replace(/\s+$/, '').split(NL)]
+    return { text: next.join(NL) + NL, created: false, current }
+  }
   const lines = text.split(NL)
   const re = new RegExp('^#{' + level + '}\\s+' + value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)')
   const at = lines.findIndex((l) => re.test(l))
@@ -187,8 +193,8 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
-export async function save(root, input, { user, write = false, mirror = false, now = Date.now(), log = null } = {}) {
-  return withLock(path.resolve(root), async () => {
+export async function save(root, input, { user, write = false, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS } = {}) {
+  const out = await withLock(path.resolve(root), async () => {
     const r = await run(root, input, { user, write, now })
 
     // 10 커밋 — 바뀐 경로만. 실패하면 되돌린다.
@@ -198,28 +204,37 @@ export async function save(root, input, { user, write = false, mirror = false, n
       throw new CtxError('E_GIT', '커밋하지 못했다 — 되돌렸다', { reason: c.reason, message: c.message })
     }
 
-    // 11 미러 — **비동기다.** push 가 늦거나 실패해도 `save` 는 이미 끝났다.
-    // 커밋은 서버 트리에 있고, 못 간 것은 다음 push 가 가져간다(§4.4 배포).
-    let mirrorState = 'off'
-    if (mirror) {
-      mirrorState = 'queued'
-      git
-        .push(root)
-        .then((p) => {
-          if (!p.ok && p.reason !== 'no-upstream') log?.(`미러 실패 ${path.basename(root)}: ${p.message || p.reason}`)
-        })
-        .catch((e) => log?.('미러 오류: ' + (e?.message || e)))
-    }
-
     return {
       commit: c.commit,
       id: r.id,
       sections: r.sections,
       vocab: r.vocab,
       warnings: r.warnings,
-      mirror: mirrorState,
+      mirror: 'off',
     }
   })
+
+  // 11 미러 — **뮤텍스 밖 · 큐 하나.** push 가 늦거나 실패해도 커밋은 서버 트리에 있고,
+  // 못 간 것은 다음 push 가 가져간다. 겹치는 push 는 큐가 합친다(검토 D1).
+  //
+  // 상한(1.5초)까지는 기다려 **실제 결과**를 답한다 — 빠른 원격에서 `queued` 는 아무것도
+  // 알리지 않는 말이었다. 넘으면 `queued` 이고 마지막 실제 상태를 `mirrorLast` 로 싣는다(D3).
+  if (mirror) {
+    const p = enqueuePush(root, { log }).catch((e) => {
+      log?.('미러 오류: ' + (e?.message || e))
+      return null
+    })
+    const r = await Promise.race([p, new Promise((res) => setTimeout(() => res(undefined), mirrorWaitMs))])
+    const last = r === undefined ? lastPush(root) : r
+    out.mirror = r === undefined ? 'queued' : r ? r.state : 'queued'
+    out.mirrorReason = r && !r.ok ? r.reason : null
+    out.mirrorLast = last ? { state: last.state, reason: last.reason, at: last.at, ahead: last.ahead, behind: last.behind } : null
+    if (last && !last.ok && last.state !== 'off') {
+      const line = mirrorLine({ state: last.state, ahead: last.ahead, behind: last.behind, reason: last.reason, dirty: 0 })
+      if (line) out.warnings = [...out.warnings, line]
+    }
+  }
+  return out
 }
 
 async function run(root, input, { user, write, mirror, now }) {
@@ -244,6 +259,19 @@ async function run(root, input, { user, write, mirror, now }) {
     .then(() => true)
     .catch(() => false)
   if (exists) throw new CtxError('E_EXISTS', '그 id 의 작업 기록이 이미 있다', { id: w.id })
+
+  // 3.5 트리 — **더러우면 거절한다.** 서버가 유일한 작성자라 미커밋 변경은 언제나 사고다
+  // (중단된 save · 사람의 손). 전에는 그 위에서 섹션을 치환해 남의 줄이 이 사람의 이름으로
+  // 커밋됐다(동시 기록 검토 v0.1 M8 — P0). git 한 번(≈80ms)이 그 값이다.
+  const st = await git.status(root).catch(() => ({ repo: false }))
+  if (st.repo && st.dirty > 0) {
+    throw new CtxError(
+      'E_GIT',
+      `서버 트리에 커밋 안 된 변경 ${st.dirty}건이 있어 save 를 거절했다 (${st.dirtyPaths.slice(0, 5).join(' · ')}${st.dirty > 5 ? ' …' : ''}). ` +
+        '콘솔 > 지식 레포 > 「트리 되돌리기」, 또는 셸에서 git -C <레포> checkout -- . && git clean -fd',
+      { reason: 'dirty', dirty: st.dirty, paths: st.dirtyPaths }
+    )
+  }
 
   try {
     // 4 어휘 (메모리 → 파일)
@@ -273,7 +301,8 @@ async function run(root, input, { user, write, mirror, now }) {
       // 파서가 둘째 헤딩을 새 섹션 시작으로 읽어 이 좌표의 섹션은 두 줄만 남고 빈다 —
       // 그리고 save 는 성공하고 check 도 where 도 조용했다(2026-09-23 실측). applied 주석은
       // 2단계에서 막는데 헤딩은 안 막았다. 같은 자리다. 보낼 것은 `section` 의 `content` 다.
-      {
+      // `—`(문서 전체 · level 0) 는 본문에 헤딩이 있는 것이 정상이라 보지 않는다.
+      if (hit.level > 0) {
         const splitRe = new RegExp('^#{1,' + hit.level + '}\\s')
         const at = s.body.split(NL).findIndex((l) => splitRe.test(l))
         if (at >= 0) {
@@ -292,12 +321,23 @@ async function run(root, input, { user, write, mirror, now }) {
         heading: s.heading,
       })
       // **읽은 뒤 바뀌었으면 거절한다.** 덮어쓰면 남의 갱신이 조용히 사라진다.
+      //
+      // 거절에 **다시 만들 재료**를 싣는다(동시 기록 검토 v0.1 D6) — 누가 · 언제 · 어느 기록으로
+      // 바꿨고 지금 본문(`content`)이 무엇인지. 전에는 세 값뿐이라 `section` 을 한 번 더 부르고
+      // 처음부터 다시 만들었다. 8,000자를 넘으면 자르고 `truncated` — 그때만 `section` 을 다시.
       const sent = s.applied ?? null
       if (!res.created && res.current !== sent) {
-        throw new CtxError('E_CONFLICT', '섹션이 읽은 뒤 바뀌었다', {
+        const cw = res.current ? r0.byId.get(res.current) : null
+        const cut = sliceSection(r0, s.coord)
+        const content = cut && !cut.missing ? String(cut.content ?? '') : null
+        const who = cw ? `${cw.author || '(작성자 없음)'} 가 ${cw.date || '(날짜 없음)'} 에 ${cw.id} 로 갱신했다` : res.current ? `${res.current} 로 갱신됐다` : '섹션이 만들어졌다'
+        throw new CtxError('E_CONFLICT', `섹션이 읽은 뒤 바뀌었다 — ${who}. detail.content(지금 본문) 위에 다시 만들어 applied 에 current 를 넣어 보낸다`, {
           coord: s.coord,
           expected: sent,
           current: res.current,
+          currentWork: cw ? { id: cw.id, title: cw.title, author: cw.author ?? null, date: cw.date ?? null } : null,
+          content: content == null ? null : content.slice(0, CONFLICT_CONTENT_MAX),
+          truncated: content != null && content.length > CONFLICT_CONTENT_MAX,
         })
       }
       byDoc.set(hit.doc, res.text)

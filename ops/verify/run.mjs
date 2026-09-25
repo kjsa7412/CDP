@@ -742,6 +742,9 @@ await check(53, '꾸러미에 토큰 원문이 없다', async () => {
 
 await check(56, '서버 kit 을 바꾸면 대장이 낡음으로', async () => {
   await fs.appendFile(path.join(F.repos, 'alpha', '.claude', 'skills', 'cdp-load', 'SKILL.md'), '\n<!-- 바꾼다 -->\n')
+  // 커밋한다 — 실제로 kit 은 커밋으로 바뀌고, 더러운 트리는 이제 save 가 거절한다(동시 기록 검토 v0.1 D5 · 76번이 걸렸다)
+  await run('git', ['-C', path.join(F.repos, 'alpha'), 'add', '-A'])
+  await run('git', ['-C', path.join(F.repos, 'alpha'), '-c', 'user.name=h', '-c', 'user.email=h@x', 'commit', '-qm', 'kit 변경'])
   await wait(50)
   const rows = (await (await H.call('/workrepos', { headers: { authorization: 'Bearer ' + TK3 } })).json()).repos
   const me = rows.find((r) => r.id === WRID)
@@ -1382,6 +1385,229 @@ await check(90, '권한 밖 · 없는 레포 — /r/<x>/ 가 말없이 첫 레�
   return '302 /r?from=beta · 302 /r?from=zeta · 200 · /r → alpha'
 })
 
+// ── 동시 기록 검토 v0.1 (2026-09-25) — 91~97. `--mirror` 서버를 하나 더(PORT + 3) · bare origin · `—` 규칙 ────────────
+//
+// 판은 fixture 를 `mu` 로 다시 복사해 세운다 — `note:*` → `docs/회의록.md` `—`(문서 전체) 규칙과 `## note` 타입을
+// 더한 것만 alpha 와 다르다. 명부는 같은 auth.json(kjsa admin · 새 writer mw).
+const MPORT = PORT + 9 // 7386 — PORT+3 은 개발용 서버(7380)와 겹친다
+const MROOT = path.join(TMP, 'mirror', 'repos')
+const MDATA = path.join(TMP, 'mirror', 'data')
+const MU = path.join(MROOT, 'mu')
+const MBARE = path.join(TMP, 'mirror', 'origin.git')
+await fs.mkdir(MROOT, { recursive: true })
+await fs.cp(path.join(ROOT, 'viewer', 'fixture'), MU, { recursive: true })
+await fs.appendFile(path.join(MU, '_vocab.md'), NL + '## note' + NL + NL + '- `note:회의` — 회의' + NL)
+{
+  const m = await fs.readFile(path.join(MU, '_managed.md'), 'utf8')
+  await fs.writeFile(path.join(MU, '_managed.md'), m.replace('| `scenario:*` | `docs/테스트시나리오.md` | `## {값}` |', '| `scenario:*` | `docs/테스트시나리오.md` | `## {값}` |' + NL + '| `note:*` | `docs/회의록.md` | `—` |'))
+}
+await run('git', ['-C', MU, 'init', '-q'])
+await run('git', ['-C', MU, 'add', '-A'])
+await run('git', ['-C', MU, '-c', 'user.name=seed', '-c', 'user.email=s@x', 'commit', '-qm', 'seed'])
+await run('git', ['init', '-q', '--bare', MBARE])
+await run('git', ['-C', MU, 'remote', 'add', 'origin', MBARE])
+await run('git', ['-C', MU, 'push', '-q', '-u', 'origin', 'HEAD'])
+await ctx('serve', 'user', 'add', '--auth', F.auth, '--name', 'mw', '--repos', '*', '--role', 'writer', '--data', F.data)
+const TMW = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'mw', '--data', F.data)).stdout.trim()
+const SM = serve(['--root', MROOT, '--port', String(MPORT), '--auth', F.auth, '--data', MDATA, '--mirror', '--web', path.join(ROOT, 'ops/out/web')])
+await wait(2500)
+const HM = http(`http://127.0.0.1:${MPORT}`)
+const AM = (p, opt = {}) => fetch(`http://127.0.0.1:${MPORT}${p}`, { redirect: 'manual', ...opt })
+const mtool = async (name, args, tk) => payload((await HM.rpc('/mcp/mu', 'tools/call', { name, arguments: { repo: 'mu', ...args } }, tk)).j)
+const gitq = (...a) => run('git', ['-C', MU, '-c', 'core.quotepath=false', ...a]).then((r) => r.stdout.trim())
+const mrepo = async (tk = TKA) => (await (await AM('/repos', { headers: { authorization: 'Bearer ' + tk } })).json()).find((r) => r.name === 'mu')
+// 미러 큐가 끝날 때까지 — `/repos` 의 행이 조건을 만족할 때까지 기다린다(최대 ms). 문자열이면 그 상태(사유까지 실린 뒤)
+const untilMirror = async (want, ms = 10000) => {
+  const t0 = Date.now()
+  const ok = typeof want === 'function' ? want : (r) => r.mirror === want && (want === 'ok' || want === 'off' || !!r.mirrorReason)
+  for (;;) {
+    const r = await mrepo()
+    if (ok(r)) return r
+    if (Date.now() - t0 > ms) return r
+    await wait(300)
+  }
+}
+let SUM = null
+
+try {
+  await check(91, '동시 save 5건(다른 섹션 · Promise.all · --mirror) — 전부 커밋 · 트리 깨끗 · applied 5 · origin = local · 겹친 push 0', async () => {
+    const coords = ['api:/adapter/a10/expense-slip', 'api:/adapter/a10/budget-sync', 'api:/rp/project/search', 'table:rp_rsch_prj_mst', 'table:rp_prj_rcpt_mst']
+    const secs = await Promise.all(coords.map((c) => mtool('section', { coord: c }, TKA)))
+    const n0 = Number(await gitq('rev-list', '--count', 'HEAD'))
+    const out = await Promise.all(
+      coords.map((c, i) => mtool('save', { work: { id: `2026-0925-동시-${i + 1}`, title: `동시 ${i + 1}`, date: `2026-09-25 10:0${i}`, touches: [c], body: `동시 기록 ${i + 1}` }, sections: [{ coord: c, applied: secs[i].applied, body: `**정의** 동시 ${i + 1}.` }] }, i % 2 ? TMW : TKA))
+    )
+    for (const o of out) must(o.commit, JSON.stringify(o.error))
+    eq(Number(await gitq('rev-list', '--count', 'HEAD')), n0 + 5, '커밋 수')
+    eq(await gitq('status', '--porcelain'), '', '트리가 더럽다')
+    const after = await Promise.all(coords.map((c) => mtool('section', { coord: c }, TKA)))
+    for (let i = 0; i < 5; i++) eq(after[i].applied, `2026-0925-동시-${i + 1}`, 'applied ' + coords[i])
+    const r = await untilMirror('ok')
+    eq(r.mirror, 'ok', 'mirror')
+    eq((await run('git', ['-C', MBARE, 'rev-parse', 'HEAD'])).stdout.trim(), await gitq('rev-parse', 'HEAD'), 'origin = local')
+    must(!SM.err().includes('cannot lock ref'), 'push 가 겹쳤다')
+    const authors = (await gitq('log', '-5', '--format=%an')).split(/\r?\n/).sort().join(',')
+    eq(authors, 'kjsa,kjsa,kjsa,mw,mw', '작성자')
+    return `커밋 ${n0}→${n0 + 5} · applied 5 · origin = local · mirror ${out.map((o) => o.mirror).join('/')}`
+  })
+
+  await check(92, '같은 섹션 둘 동시 — 하나는 E_CONFLICT · detail 에 currentWork(author · date) · content · 문장에 누가 언제', async () => {
+    const c = 'api:/adapter/a10/expense-slip'
+    const s = await mtool('section', { coord: c }, TKA)
+    const [a, b] = await Promise.all(
+      [
+        [TKA, 'kjsa'],
+        [TMW, 'mw'],
+      ].map(([tk, u], i) => mtool('save', { work: { id: `2026-0925-같은-${u}`, title: `같은 ${u}`, date: `2026-09-25 11:0${i}`, touches: [c], body: `같은 섹션 ${u}` }, sections: [{ coord: c, applied: s.applied, body: `**정의** ${u} 가 쓴 본문.` }] }, tk))
+    )
+    const ok = a.commit ? a : b
+    const bad = a.commit ? b : a
+    must(ok.commit && bad.error, '하나만 성공해야 한다')
+    eq(bad.error.code, 'E_CONFLICT', '충돌')
+    const d = bad.error.detail
+    eq(d.current, ok.id, 'current = 성공한 id')
+    must(d.currentWork && ['kjsa', 'mw'].includes(d.currentWork.author) && d.currentWork.date, 'currentWork')
+    must(typeof d.content === 'string' && /가 쓴 본문/.test(d.content), 'content')
+    must(/로 갱신했다/.test(bad.error.message), '문장')
+    eq(await gitq('status', '--porcelain'), '', '트리')
+    return `${d.currentWork.author} · ${d.currentWork.date} · content ${d.content.length}자`
+  })
+
+  await check(93, '미러 non-ff — 로컬형이 origin 에 먼저 push → save 는 되고 mirror diverged · 사유 non-ff · /repos · overview · doctor · brief · sync 는 rebase 문장으로 거절 · 사람이 rebase 뒤 「다시 보내기」 ok', async () => {
+    const C = path.join(TMP, 'mirror', 'clone')
+    await run('git', ['clone', '-q', MBARE, C])
+    await fs.appendFile(path.join(C, 'README.md'), NL + '로컬형이 origin 에 먼저.' + NL)
+    await run('git', ['-C', C, 'add', '-A'])
+    await run('git', ['-C', C, '-c', 'user.name=local', '-c', 'user.email=l@x', 'commit', '-qm', '로컬형'])
+    await run('git', ['-C', C, 'push', '-q'])
+    const s = await mtool('section', { coord: 'table:rp_plnd_mst' }, TMW)
+    const o = await mtool('save', { work: { id: '2026-0925-nonff', title: 'non-ff', date: '2026-09-25 12:00', touches: ['table:rp_plnd_mst'], body: 'non-ff 실측' }, sections: [{ coord: 'table:rp_plnd_mst', applied: s.applied, body: '**정의** non-ff.' }] }, TMW)
+    must(o.commit, JSON.stringify(o.error))
+    must(['diverged', 'queued'].includes(o.mirror), 'mirror ' + o.mirror)
+    const r = await untilMirror((x) => x.mirror === 'diverged' && x.mirrorReason === 'non-ff' && x.behind >= 1)
+    eq(r.mirror, 'diverged', 'mirror')
+    eq(r.mirrorReason, 'non-ff', '사유')
+    must(r.ahead >= 1 && r.behind >= 1, `ahead ${r.ahead} behind ${r.behind}`)
+    must(/갈라짐/.test(r.note || ''), 'note')
+    const brief = await mtool('brief', {}, TMW)
+    must(brief.lines.some((l) => /\[CDP\] 미러: .*갈라짐/.test(l)), 'brief 줄: ' + JSON.stringify(brief.lines))
+    const sy = await mtool('sync', {}, TMW)
+    eq(sy.mirror, 'diverged', 'sync.mirror')
+    eq(sy.mirrorReason, 'non-ff', 'sync.mirrorReason')
+    must(SM.err().includes('미러 실패 mu: origin 에 서버가 모르는 커밋이 있다'), '로그 사유: ' + SM.err().split(NL).filter((l) => l.includes('미러')).join(' | '))
+    const ov = await (await AM('/admin/overview', ADM(TKA))).json()
+    must(ov.alerts.some((x) => x.level === 'bad' && /origin 과 갈라진 레포 1/.test(x.text)), 'overview 경고: ' + JSON.stringify(ov.alerts))
+    eq(ov.repos.mirror.diverged, 1, 'overview 집계')
+    const doc = await (await AM('/admin/doctor?fresh=1', ADM(TKA))).json()
+    must(doc.rows.some((x) => x.what === '레포 mu origin' && x.state === 'fail' && /갈라졌다/.test(x.note)), 'doctor origin 줄: ' + JSON.stringify(doc.rows.filter((x) => /mu/.test(x.what))))
+    must(doc.rows.some((x) => x.what === '레포 mu push' && /non-ff/.test(x.note)), 'doctor push 줄 사유')
+    // 재인증 → 「origin 과 맞추기」 는 갈라져서 거절 · 서버용 문장
+    const su = await AM('/admin/sudo', { method: 'POST', ...ADM(TKA), ...jbody({ token: TKA }) })
+    eq(su.status, 200, 'sudo')
+    SUM = /cdp_su=[^;]*/.exec(su.headers.get('set-cookie') || '')?.[0]
+    const sync = await AM('/admin/repos/mu/sync', { method: 'POST', ...ADM(TKA, { cookie: SUM }), ...jbody({}) })
+    eq(sync.status, 409, 'sync 거절')
+    const sj = await sync.json()
+    eq(sj.reason, 'diverged', 'sync.reason')
+    must(/pull --rebase/.test(sj.message), 'rebase 문장')
+    eq(await gitq('status', '--porcelain'), '', '거절이 트리를 안 만졌다')
+    // 사람이 셸에서 rebase → 「다시 보내기」
+    await run('git', ['-C', MU, '-c', 'user.name=cdp', '-c', 'user.email=c@x', 'pull', '--rebase', '-q'])
+    const push = await AM('/admin/repos/mu/push', { method: 'POST', ...ADM(TKA, { cookie: SUM }), ...jbody({}) })
+    eq(push.status, 200, 'push')
+    eq((await push.json()).mirror.state, 'ok', 'state')
+    eq((await mrepo()).mirror, 'ok', '/repos ok')
+    const log = await fs.readFile(path.join(MDATA, 'logs', 'auth.log'), 'utf8')
+    must(/admin repo sync · kjsa · mu · fail=diverged/.test(log) && /admin repo push · kjsa · mu · ok/.test(log), 'auth.log')
+    return `diverged · non-ff · ahead ${r.ahead} behind ${r.behind} · overview bad · doctor fail · sync 409 → rebase → push ok`
+  })
+
+  await check(94, 'origin 만 앞서 있을 때 — doctor warn 「origin 이 앞서 있다」 · 「origin 과 맞추기」 200 pulled 1 · 그 뒤 save · push ok', async () => {
+    const C = path.join(TMP, 'mirror', 'clone')
+    await run('git', ['-C', C, 'pull', '--rebase', '-q'])
+    await fs.appendFile(path.join(C, 'README.md'), '등록부를 밖에서 고쳤다.' + NL)
+    await run('git', ['-C', C, 'add', '-A'])
+    await run('git', ['-C', C, '-c', 'user.name=local', '-c', 'user.email=l@x', 'commit', '-qm', '밖에서'])
+    await run('git', ['-C', C, 'push', '-q'])
+    const doc = await (await AM('/admin/doctor?fresh=1', ADM(TKA))).json()
+    must(doc.rows.some((x) => x.what === '레포 mu origin' && x.state === 'warn' && /origin 이 앞서 있다/.test(x.note)), 'doctor: ' + JSON.stringify(doc.rows.filter((x) => /mu/.test(x.what))))
+    const sync = await AM('/admin/repos/mu/sync', { method: 'POST', ...ADM(TKA, { cookie: SUM }), ...jbody({}) })
+    eq(sync.status, 200, 'sync')
+    const sj = await sync.json()
+    eq(sj.pulled, 1, 'pulled')
+    eq(sj.mirror.state, 'ok', 'state')
+    must((await fs.readFile(path.join(MU, 'README.md'), 'utf8')).includes('등록부를 밖에서 고쳤다'), '서버 트리에 들어왔다')
+    const s = await mtool('section', { coord: 'table:rp_plnd_chg_mst' }, TMW)
+    const o = await mtool('save', { work: { id: '2026-0925-맞춘뒤', title: '맞춘 뒤', date: '2026-09-25 13:00', touches: ['table:rp_plnd_chg_mst'], body: '맞춘 뒤' }, sections: [{ coord: 'table:rp_plnd_chg_mst', applied: s.applied, body: '**정의** 맞춘 뒤.' }] }, TMW)
+    must(o.commit, JSON.stringify(o.error))
+    const r = await untilMirror('ok')
+    eq(r.mirror, 'ok', 'mirror 뒤')
+    eq((await run('git', ['-C', MBARE, 'rev-parse', 'HEAD'])).stdout.trim(), await gitq('rev-parse', 'HEAD'), 'origin = local')
+    return `warn → sync pulled 1 → save ${o.commit} → origin = local`
+  })
+
+  await check(95, '더러운 트리 — save 가 E_GIT dirty 로 거절 · /repos dirty · overview bad · doctor fail · 「트리 되돌리기」 → save ok · auth.log', async () => {
+    await fs.appendFile(path.join(MU, 'docs', '테이블정의서.md'), NL + '사람이 서버 셸에서 고친 줄' + NL)
+    await fs.writeFile(path.join(MU, 'stray.txt'), 'x')
+    const n0 = Number(await gitq('rev-list', '--count', 'HEAD'))
+    const bad = await mtool('save', { work: { id: '2026-0925-더러움', title: '더러움', date: '2026-09-25 14:00', body: '더러운 트리' } }, TMW)
+    eq(bad.error?.code, 'E_GIT', '거절')
+    eq(bad.error.detail.reason, 'dirty', 'reason')
+    eq(bad.error.detail.dirty, 2, 'dirty 수')
+    must(/트리 되돌리기/.test(bad.error.message), '문장')
+    eq(Number(await gitq('rev-list', '--count', 'HEAD')), n0, '커밋 0')
+    eq((await mrepo(TMW)).dirty, 2, '/repos dirty')
+    const ov = await (await AM('/admin/overview', ADM(TKA))).json()
+    must(ov.alerts.some((x) => x.level === 'bad' && /트리에 커밋 안 된 변경/.test(x.text)), 'overview')
+    const doc = await (await AM('/admin/doctor?fresh=1', ADM(TKA))).json()
+    must(doc.rows.some((x) => x.what === '레포 mu 트리' && x.state === 'fail'), 'doctor 트리 줄')
+    const rs = await AM('/admin/repos/mu/restore', { method: 'POST', ...ADM(TKA, { cookie: SUM }), ...jbody({}) })
+    eq(rs.status, 200, 'restore')
+    const rj = await rs.json()
+    eq(rj.discarded.length, 2, '버린 경로')
+    eq(await gitq('status', '--porcelain'), '', '깨끗')
+    const ok = await mtool('save', { work: { id: '2026-0925-되돌린뒤', title: '되돌린 뒤', date: '2026-09-25 14:10', body: '되돌린 뒤' } }, TMW)
+    must(ok.commit, JSON.stringify(ok.error))
+    const log = await fs.readFile(path.join(MDATA, 'logs', 'auth.log'), 'utf8')
+    must(/admin repo restore · kjsa · mu · discarded=2/.test(log), 'auth.log')
+    return `E_GIT dirty 2 · 커밋 0 · restore 2 · save ${ok.commit}`
+  })
+
+  await check(96, '`—`(문서 전체) 규칙 — save 가 문서 머리에 applied 를 쓰고 · section 이 그것을 읽고 · check 통과', async () => {
+    const s0 = await mtool('section', { coord: 'note:회의' }, TMW)
+    eq(s0.applied, null, '처음은 null')
+    eq(s0.anchor, '(문서 전체)', 'anchor')
+    const o = await mtool('save', { work: { id: '2026-0925-회의-전체', title: '회의 전체', date: '2026-09-25 15:00', touches: ['note:회의'], body: '회의 기록' }, sections: [{ coord: 'note:회의', applied: null, body: '# 회의록' + NL + NL + '## 9월' + NL + NL + '새 본문 전체.' }] }, TMW)
+    must(o.commit, JSON.stringify(o.error))
+    const doc = await fs.readFile(path.join(MU, 'docs', '회의록.md'), 'utf8')
+    must(doc.startsWith('<!-- applied: 2026-0925-회의-전체 -->'), '머리 주석: ' + doc.slice(0, 60))
+    const s1 = await mtool('section', { coord: 'note:회의' }, TMW)
+    eq(s1.applied, '2026-0925-회의-전체', 'applied')
+    must(!s1.content.includes('applied:'), 'content 에 주석 없음')
+    const ck = await mtool('check', {}, TMW)
+    eq(ck.errors, 0, 'check')
+    return `머리 주석 · applied ${s1.applied} · check 0`
+  })
+
+  await check(97, '기록의 흐름 — /admin/overview.saves 에 최근 id · 결과 · 거부 집계(E_CONFLICT · E_GIT) · serve.log 의 save 줄에 id 와 결과', async () => {
+    await wait(300)
+    const ov = await (await AM('/admin/overview', ADM(TKA))).json()
+    must(ov.saves && Array.isArray(ov.saves.recent) && ov.saves.recent.length >= 5, 'recent')
+    eq(ov.saves.recent[0].id, '2026-0925-회의-전체', '마지막 id')
+    eq(ov.saves.recent[0].result, 'ok', '결과')
+    eq(ov.saves.recent[0].user, 'mw', '사람')
+    must(ov.saves.rejected24h.E_CONFLICT >= 1 && ov.saves.rejected24h.E_GIT >= 1, '거부 집계: ' + JSON.stringify(ov.saves.rejected24h))
+    must(ov.saves.recent.some((s) => s.result === 'E_CONFLICT'), 'recent 에 거부')
+    const log = await fs.readFile(path.join(MDATA, 'logs', 'serve.log'), 'utf8')
+    must(/· mw · mu · tools\/call · save · 2026-0925-회의-전체 · \d+ms · 200 ·/.test(log), 'serve.log 줄')
+    must(/· save · 2026-0925-더러움 · \d+ms · E_GIT ·/.test(log), 'serve.log 거부 줄')
+    return `recent ${ov.saves.recent.length} · 거부 ${JSON.stringify(ov.saves.rejected24h)}`
+  })
+} finally {
+  SM.kill()
+  await fs.writeFile(path.join(TMP, 'mirror', 'server.stderr.log'), SM.err()).catch(() => {})
+}
+
 await check(85, '/login 속도 제한 — 21번째 안에 429 (마지막에 돈다 — 이 뒤로 로그인 없음)', async () => {
   let got = null
   for (let i = 1; i <= 21; i++) {
@@ -1428,6 +1654,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)
