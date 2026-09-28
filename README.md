@@ -12,6 +12,7 @@
 | 용어 | [`docs/용어.md`](docs/용어.md) — `.mjs` · SEA · 번들 · exit 127. **고치는 사람의 말이다** |
 | 그림 | [`docs/그림/`](docs/그림) — 세 레포 · 설치 5단계 · `ctx setup` · 빌드 · 실행 |
 | **제품화** | [`docs/design/CDP_제품화_검토_v1.0.md`](docs/design/CDP_제품화_검토_v1.0.md) — 손을 타는 자리와 자동화 · [`docs/dev/제품화_TODO.md`](docs/dev/제품화_TODO.md) — 실행 항목 |
+| **화면 · 권한** | [`docs/design/CDP_화면_권한_검토_v0.1.md`](docs/design/CDP_화면_권한_검토_v0.1.md) — 관리(레포 하나) 對 콘솔(서버 전부) · viewer/writer/admin 별 화면과 API 경계 · SPA 전환 깜빡임의 근본 원인과 권장안. **구현은 새 세션(칩 · 페르소나 `cdp-screen-engineer`)** |
 | **동시 기록** | [`docs/design/CDP_동시기록_검토_v0.1.md`](docs/design/CDP_동시기록_검토_v0.1.md) — 여럿이 같은 관리 문서에 쓸 때 · 미러 · 서버 트리 ↔ origin · [`docs/dev/동시기록_TODO.md`](docs/dev/동시기록_TODO.md) — 단계 · 실측 |
 | 바뀐 것 | [`CHANGELOG.md`](CHANGELOG.md) — 태그마다 한 절. 릴리스 노트가 여기서 나온다 |
 | `docs/` 의 판정 | [`docs/README.md`](docs/README.md) — **보존되는가.** 작업 메모(`dev/`)는 보존 대상이 아니다 |
