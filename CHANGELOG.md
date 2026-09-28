@@ -3,6 +3,25 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## 다음
+
+git 자격 — [`docs/dev/git자격_TODO.md`](docs/dev/git자격_TODO.md). 비밀(개인 키 · PAT)은 브라우저를 건너지 않는다 — 제품관리서비스 검토 D8 그대로
+
+**SSH 배포 키 — 콘솔 › 서버 › git 자격** — `core/gitauth.js`(새) · `viewer/bin/ctx-mcp-serve.mjs` · `viewer/src/console/GitAuth.jsx`(새) · `Server.jsx` · `Repos.jsx`
+- 「배포 키 만들기」(`POST /admin/gitauth/key` · ed25519 · `<data>/ssh/` · 화면에는 공개 키 · 지문만 · 「새로 만들기」 는 옛 키를 `.old-<시각>` 으로) — 만들면 ssh 원격 레포에 바로 건다
+- 「호스트 키 받기」 → 지문 → 「이 지문을 믿는다」(`/admin/gitauth/scan` · `/trust` — 믿을 때 다시 받아 같은 지문만 쓴다 · 다르면 409 `E_CHANGED`) · 「접속 확인」(`/admin/gitauth/test` · `ls-remote`)
+- 키는 **레포마다 로컬 `core.sshCommand`**(`IdentitiesOnly` · 전용 `known_hosts` · `StrictHostKeyChecking=yes` · `BatchMode`) — 전역 ssh · git 설정은 그대로. 연결 · clone · 세우기가 ssh 주소면 건다
+- 「origin 연결」 창이 이 주소로 모자란 자격(키 없음 · 호스트 안 믿음 · 그 호스트의 PAT 없음)을 누르기 전에 말한다
+- `GET /admin/gitauth` — 키 · 믿는 호스트 · PAT 가 저장된 호스트와 계정(비밀 없음) · 레포마다 ssh 인가 · 키가 걸렸나
+
+**PAT — `ctx serve git-auth`** — `viewer/bin/ctx-gitauth.mjs`(새) · `ctx-cli.mjs`
+- `--host <h:p> --user <계정> [--scheme] [--file] [--test <url>] [--yes]` — 숨김 입력(또는 파이프 한 줄) · `.git-credentials` 600 · `credential.helper store --file=…` · 같은 호스트 줄은 바꾼다 · 다른 helper 가 있으면 멈춘다
+- `--ssh --data <dir> [--rotate]`(콘솔과 같은 키) · `--list [--data]`
+
+**그 밖** — `core/git.maskUrl` 이 ssh 계정(`ssh://git@…`)은 남긴다(비밀이 아니다 · 전에는 `ssh://***@`) · 세우기 · clone · 연결의 push 가 자격 프롬프트에서 멈추지 않는다(`GIT_TERMINAL_PROMPT=0`)
+
+**문서** — 관리자 설명서 3.3 「SSH 배포 키(콘솔) · PAT(명령 한 줄)」
+
 ## v0.14.0
 
 연결 · 삭제 · 내려받기 — [`docs/dev/레포_연결_삭제_내려받기_TODO.md`](docs/dev/레포_연결_삭제_내려받기_TODO.md)

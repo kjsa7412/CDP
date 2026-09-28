@@ -26,6 +26,7 @@ import { buildServer, makeRepoCache, BUILT } from './ctx-mcp.mjs'
 import * as mirror from '../../core/mirror.js'
 import { newRepo, cloneRepo, connectOrigin, trashRepo, REPO_NAME_RE } from '../../core/reponew.js'
 import { withLock } from '../../core/lock.js'
+import * as gitauth from '../../core/gitauth.js'
 import { listPackages as listPackageDirs } from '../../core/packages.js'
 import { resolvePackages, materializePackage } from './ctx-package.mjs'
 import { parseCidrs, ipInCidrs, makeLimiter } from '../../core/net.js'
@@ -538,6 +539,8 @@ export async function runServe(opt = {}) {
   // 레포 화면의 `POST /repos`(writer) 는 없앴다 — 세우는 것은 admin 한 곳(화면 · 권한 검토 v0.1 R1 · Q3).
   // 등록 = 폴더를 두는 것(§4.2). 길이 둘 — 패키지에서 세우기 · origin 에서 clone(검토 D9).
   // 판정은 `core/reponew.js` 하나 — CLI `ctx repo new` 와 같은 함수다.
+  // 서버의 SSH 배포 키가 있으면 그 한 줄 — ssh 원격을 쓰는 연결 · clone · 세우기가 레포 로컬 설정으로 건다(git 자격 TODO G2)
+  const sshCmd = async () => (dataDir && (await gitauth.keyInfo(dataDir).catch(() => null))?.exists ? gitauth.sshCommand(dataDir) : null)
   const buildRepo = async ({ name, pkgName = '', origin = null, clone = null, actor }) => {
     if (!REPO_NAME_RE.test(name)) return { status: 400, body: { error: { code: 'E_INPUT', message: '레포 이름 형식이 아니다 (영문·숫자·._-)' } } }
     if ((await store.list()).some((r) => r.name === name) || (await fs.stat(path.join(root, name)).catch(() => null))) {
@@ -545,7 +548,7 @@ export async function runServe(opt = {}) {
     }
     if (clone) {
       try {
-        const r = await cloneRepo({ url: clone, dest: path.join(root, name) })
+        const r = await cloneRepo({ url: clone, dest: path.join(root, name), sshCommand: await sshCmd() })
         await store.refresh()
         await auth.audit(dataDir, `admin repo clone · ${actor} · ${name} · origin=${clone}`)
         return { status: 200, body: { name, commit: r.commit, origin: clone, cloned: true } }
@@ -568,7 +571,7 @@ export async function runServe(opt = {}) {
       }
     }
     try {
-      const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor })
+      const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor, sshCommand: await sshCmd() })
       await store.refresh()
       await auth.audit(dataDir, `admin repo new · ${actor} · ${name} · package=${pkgName}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
       return { status: 200, body: { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null } }
@@ -1163,6 +1166,58 @@ export async function runServe(opt = {}) {
             okLog('/repos', name, out.status)
             return json(res, out.status, out.body)
           }
+          // ── git 자격 — 서버가 origin 에 닿는 길(git 자격 TODO G1~G8). **비밀은 브라우저를 건너지 않는다** —
+          // 오가는 것은 공개 키 · 지문 · 결과뿐이다. 개인 키는 `<data>/ssh/` 밖으로 안 나가고, PAT 는 여기서 받지 않는다(D8 · 셸의 `ctx serve git-auth`).
+          if (sub === '/gitauth' && req.method === 'GET') {
+            const cred = await gitauth.credentialState().catch(() => ({ helper: null, store: false, file: null }))
+            const rows = []
+            for (const r of await store.list()) rows.push({ name: r.name, ...(await gitauth.repoSshState(r.root, dataDir).catch(() => ({ remote: null, ssh: false, applied: false }))) })
+            okLog('/gitauth', '-')
+            return json(res, 200, {
+              ssh: await gitauth.keyInfo(dataDir),
+              knownHosts: await gitauth.knownHosts(dataDir).catch(() => []),
+              // 호스트 · 계정만 — 비밀은 읽어서 버린다
+              https: { helper: cred.helper, store: cred.store, file: cred.file, entries: await gitauth.listCredentials(cred.file).catch(() => []) },
+              repos: rows,
+            })
+          }
+          const gm = /^\/gitauth\/(key|scan|trust|test)$/.exec(sub)
+          if (gm && req.method === 'POST') {
+            const body = (await readJson()) || {}
+            const url = String(body.url || '').trim()
+            const bad = (e, status = null) => {
+              okLog('/gitauth/' + gm[1], '-', status || (e?.code === 'E_EXISTS' || e?.code === 'E_CHANGED' ? 409 : 400))
+              return json(res, status || (e?.code === 'E_EXISTS' || e?.code === 'E_CHANGED' ? 409 : 400), { error: { code: e?.code || 'E_INPUT', message: e.message, detail: e.detail } })
+            }
+            try {
+              if (gm[1] === 'key') {
+                const k = await gitauth.createKey(dataDir, { rotate: !!body.rotate })
+                // 이미 ssh 원격인 레포에 건다 — 키를 만든 뒤 레포마다 따로 누를 일이 없게
+                const applied = []
+                for (const r of await store.list()) if (await withLock(path.resolve(r.root), () => gitauth.applyToRepo(r.root, dataDir)).catch(() => false)) applied.push(r.name)
+                await auth.audit(dataDir, `admin gitauth key · ${a.user} · ${k.fingerprint}${k.rotated ? ' · rotated' : ''}${applied.length ? ' · applied=' + applied.join(',') : ''}`)
+                okLog('/gitauth/key', k.fingerprint || '-')
+                const { path: _p, ...pub } = k
+                return json(res, 200, { ...pub, rotated: !!k.rotated, applied })
+              }
+              if (gm[1] === 'scan') {
+                const r = await gitauth.scanHost(url)
+                okLog('/gitauth/scan', r.hostKey)
+                return json(res, 200, r)
+              }
+              if (gm[1] === 'trust') {
+                const r = await gitauth.trustHost(dataDir, url, String(body.fingerprint || ''))
+                await auth.audit(dataDir, `admin gitauth trust · ${a.user} · ${r.hostKey} · ${r.type} ${r.fingerprint}`)
+                okLog('/gitauth/trust', r.hostKey)
+                return json(res, 200, r)
+              }
+              const r = await gitauth.testRemote(url, { dataDir })
+              okLog('/gitauth/test', r.ok ? 'ok' : r.reason)
+              return json(res, 200, { ...r, reasonText: r.reason ? (r.reason === 'hostkey' ? '호스트 키를 믿지 않았다 — 「호스트 키 받기」' : mirror.REASON_TEXT[r.reason] || r.reason) : null })
+            } catch (e) {
+              return bad(e)
+            }
+          }
           // ── 레포 하나를 원격에 잇는다 — 세울 때 origin 을 빠뜨렸거나 GitLab 프로젝트를 나중에 만든 경우(연결 · 삭제 · 내려받기 TODO K1~K4).
           // 재인증 뒤 · save 와 같은 뮤텍스 · `auth.log`. 강제 push 없음 — 원격이 비어 있지 않으면 non-ff 로 거절되고 사유가 간다.
           const om = /^\/repos\/([^/]+)\/origin$/.exec(sub)
@@ -1175,7 +1230,8 @@ export async function runServe(opt = {}) {
             if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
             let r
             try {
-              r = await withLock(path.resolve(found.root), () => connectOrigin({ root: found.root, url: String(body.url || ''), push: body.push !== false }))
+              const sshCommand = await sshCmd()
+              r = await withLock(path.resolve(found.root), () => connectOrigin({ root: found.root, url: String(body.url || ''), push: body.push !== false, sshCommand }))
             } catch (e) {
               okLog('/repos/origin', name, 400)
               return json(res, 400, { error: { code: e?.code || 'E_INPUT', message: e.message, detail: e.detail } })

@@ -19,6 +19,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { CtxError } from './tools.js'
 import { status as gitStatus, classifyPushError, maskUrl } from './git.js'
+import { isSsh } from './gitauth.js'
 
 export const REPO_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
@@ -58,8 +59,9 @@ async function copyTree(src, dst) {
  * @param push     origin 에 첫 커밋을 보낼지
  * @param author   첫 커밋의 작성자 이름 (기본 cdp)
  * @param dry      무엇을 할지만 낸다
+ * @param sshCommand  origin 이 ssh 면 레포 로컬 설정으로 거는 한 줄(서버의 배포 키 · git 자격 TODO G2). 없으면 ssh 기본값
  */
-export async function newRepo({ from, dest, origin = null, push = false, author = 'cdp', dry = false }) {
+export async function newRepo({ from, dest, origin = null, push = false, author = 'cdp', dry = false, sshCommand = null }) {
   const src = path.resolve(from)
   const dst = path.resolve(dest)
   const name = path.basename(dst)
@@ -114,8 +116,9 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
     if (origin) {
       r = await git(dst, ['remote', 'add', 'origin', origin])
       if (!r.ok) throw new CtxError('E_GIT', 'remote add 실패 — ' + r.err, { origin })
+      if (sshCommand && isSsh(origin)) await git(dst, ['config', 'core.sshCommand', sshCommand])
       if (push) {
-        r = await git(dst, ['push', '-q', '-u', 'origin', 'HEAD'], { timeout: 120000 })
+        r = await git(dst, ['push', '-q', '-u', 'origin', 'HEAD'], { timeout: 120000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
         if (!r.ok) {
           // push 실패는 레포를 지울 이유가 아니다 — 세워진 것은 세워진 것이고,
           // 미러가 밀린 것은 `sync.mirror = lag` 로 보인다. 다만 사실을 알린다.
@@ -135,7 +138,7 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
 // origin 에서 받아 온다 — 등록의 **다른 길**(제품관리서비스 검토 D9). `git clone` 뒤 지식 레포인지
 // (`_vocab.md`) 본다. 아니면 지운다 — 남의 레포를 <root> 에 두지 않는다. 훅 경로도 건다(로컬형 clone
 // 과 같은 세 줄). 콘솔 `POST /admin/repos { clone }` 가 부른다.
-export async function cloneRepo({ url, dest, timeout = 120000 }) {
+export async function cloneRepo({ url, dest, timeout = 120000, sshCommand = null }) {
   const dst = path.resolve(dest)
   if (!url || !ORIGIN_RE.test(String(url))) {
     throw new CtxError('E_INPUT', 'origin 주소 형식이 아니다', { url })
@@ -143,7 +146,8 @@ export async function cloneRepo({ url, dest, timeout = 120000 }) {
   const st = await fs.stat(dst).catch(() => null)
   if (st && (!st.isDirectory() || (await fs.readdir(dst)).length)) throw new CtxError('E_EXISTS', '그 자리에 이미 무엇이 있다', { dest: dst })
   await fs.mkdir(path.dirname(dst), { recursive: true })
-  const r = await git(path.dirname(dst), ['clone', '-q', String(url), dst], { timeout })
+  const ssh = sshCommand && isSsh(url) ? ['-c', 'core.sshCommand=' + sshCommand] : []
+  const r = await git(path.dirname(dst), [...ssh, 'clone', '-q', String(url), dst], { timeout, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
   if (!r.ok) {
     await fs.rm(dst, { recursive: true, force: true }).catch(() => {})
     throw new CtxError('E_GIT', 'clone 실패 — ' + ((r.err || r.out).split('\n').find((l) => l.trim()) || '거부'), { url })
@@ -153,6 +157,7 @@ export async function cloneRepo({ url, dest, timeout = 120000 }) {
     throw new CtxError('E_CHECK', 'clone 은 됐지만 지식 레포가 아니다(_vocab.md 없음) — 지웠다', { url })
   }
   await git(dst, ['config', 'core.hooksPath', '.githooks'])
+  if (ssh.length) await git(dst, ['config', 'core.sshCommand', sshCommand])
   const head = await git(dst, ['rev-parse', '--short', 'HEAD'])
   return { dest: dst, commit: head.out || null, origin: String(url) }
 }
@@ -166,7 +171,7 @@ export async function cloneRepo({ url, dest, timeout = 120000 }) {
 //
 // push 가 실패해도 원격은 남긴다 — 흔한 실패는 자격(PAT · 키)이고, 고친 뒤 주소를 다시 칠 일이 없게.
 // **잠그지 않는다** — 부르는 쪽(서버)이 save 와 같은 뮤텍스 안에서 부른다.
-export async function connectOrigin({ root, url, push = true, timeout = 120000 }) {
+export async function connectOrigin({ root, url, push = true, timeout = 120000, sshCommand = null }) {
   const dir = path.resolve(root)
   const u = String(url || '').trim()
   if (!u || !ORIGIN_RE.test(u) || /\s/.test(u)) throw new CtxError('E_INPUT', 'origin 주소 형식이 아니다 — http(s):// · ssh:// · git@… · 경로', { url: maskUrl(u) })
@@ -180,6 +185,9 @@ export async function connectOrigin({ root, url, push = true, timeout = 120000 }
     const r = await git(dir, ['remote', 'set-url', 'origin', u])
     if (!r.ok) throw new CtxError('E_GIT', 'remote set-url 실패 — ' + r.err, { url: maskUrl(u) })
   }
+  // ssh 면 서버의 배포 키를 이 레포에 건다(로컬 설정 · G2). http 로 바꿨으면 옛 줄을 뗀다
+  if (isSsh(u) && sshCommand) await git(dir, ['config', 'core.sshCommand', sshCommand])
+  else if (!isSsh(u)) await git(dir, ['config', '--unset', 'core.sshCommand'])
   const res = { url: maskUrl(u), before: before === null ? null : maskUrl(before), changed: before !== u, pushed: false, reason: null, message: null }
   if (!push) return res
   const branch = (await git(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])).out || 'HEAD'

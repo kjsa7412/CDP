@@ -57,6 +57,8 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx serve --root <폴더>    MCP 서버 + 관리 서비스 (HTTP). 상주 프로세스
   ctx serve user add|set|list --auth <f> [--role viewer|writer|admin]   명부 — 권한은 여기 붙는다
   ctx serve token [list|reissue|set|revoke] --auth <f>   토큰 — 신원만 증명한다. 폐기는 상태로 남는다
+  ctx serve git-auth --host <h[:p]> --user <계정> [--test <url>]   origin 자격 — PAT 를 숨김 입력으로(.git-credentials 600)
+  ctx serve git-auth --ssh --data <dir> [--rotate] | --list      SSH 배포 키(공개 키를 GitLab 에) · 지금 상태
   ctx serve doctor --root … --auth … --data …   서버 준비물 검사 (fail 이면 exit 1)
   ctx serve init --auth <f> --name <이름>       첫 관리자 + 토큰을 한 번에 (명부가 없을 때만 · 브라우저 /setup 과 같은 일)
   ctx package list|show|check|new|rename    패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로 · 이름 바꿈
@@ -128,6 +130,13 @@ function parseArgs(argv) {
     else if (a === '--desktop') out.desktop = true
     else if (a === '--also') (out.also ||= []).push(argv[++i])
     else if (a === '--built-at') out.builtAt = argv[++i]
+    else if (a === '--host') out.host = argv[++i]
+    else if (a === '--scheme') out.scheme = argv[++i]
+    else if (a === '--file') out.file = argv[++i]
+    else if (a === '--test') out.test = argv[++i]
+    else if (a === '--ssh') out.ssh = true
+    else if (a === '--rotate') out.rotate = true
+    else if (a === '--list') out.list = true
     else if (a === '-h' || a === '--help' || a === 'help') out.cmd = out.cmd || 'help'
     else if (!out.cmd) out.cmd = a
     else out.args.push(a)
@@ -909,6 +918,11 @@ export async function main(argv = process.argv.slice(2)) {
     }
     // `serve user …` · `serve token …` 는 명부를 고치고 끝난다. 서버를 띄우지
     // 않으므로 여기서 갈라진다.
+    // `serve git-auth` — origin 자격(PAT · SSH 배포 키). 서버를 띄우지 않는다
+    if (opt.args[0] === 'git-auth') {
+      const { runGitAuth } = await import('./ctx-gitauth.mjs')
+      return runGitAuth(opt)
+    }
     if (opt.args[0] === 'user' || opt.args[0] === 'token') {
       const { runAuthCmd } = await import('./ctx-mcp-serve.mjs')
       return runAuthCmd({ ...opt, repos: opt.repos2 })

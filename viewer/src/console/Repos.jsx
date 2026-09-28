@@ -13,6 +13,7 @@ import { invalidate, put, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
 import { useSession } from '../lib/session.jsx'
+import { missingFor } from './GitAuth.jsx'
 import { PageHead, Note, Modal, Field, Chip, Mono, Confirm } from './ui.jsx'
 
 // 원격 주소 두 모양 — 창의 예시. 어느 쪽이 되는지는 서버의 자격(PAT · 키)이 정한다
@@ -401,6 +402,9 @@ function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
   const [url, setUrl] = useState('')
   const u = url.trim()
   const ok = ORIGIN_RE.test(u) && !/\s/.test(u)
+  // 서버가 이 주소에 닿을 자격이 있나 — 없으면 누르기 전에 말한다(git 자격 TODO). 막지는 않는다 — 판정은 push 가 한다
+  const { data: g } = useResource('/admin/gitauth', admin.gitauth)
+  const miss = ok ? missingFor(u, g) : null
   return (
     <Modal
       title={`${repo.name} — origin ${repo.remote ? '바꾸기 · 다시 보내기' : '연결'}`}
@@ -426,9 +430,15 @@ function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
         <input className="mono" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} autoFocus placeholder={ORIGIN_EX[0]} />
       </Field>
       <div className="anote" style={{ fontSize: 12, lineHeight: 1.7 }}>
-        두 모양 다 받는다 — <Mono>{ORIGIN_EX[0]}</Mono> 은 서버 cdp 사용자의 <b>PAT</b>(credential helper) 로,{' '}
-        <Mono>{ORIGIN_EX[1]}</Mono> 은 cdp 사용자의 <b>SSH 키</b>로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
+        두 모양 다 받는다 — <Mono>{ORIGIN_EX[0]}</Mono> 은 서버에 넣은 <b>PAT</b>(셸의 <code>ctx serve git-auth</code>) 로,{' '}
+        <Mono>{ORIGIN_EX[1]}</Mono> 은 서버의 <b>SSH 배포 키</b>(콘솔 › 서버 › git 자격)로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
       </div>
+      {miss && (
+        <div className="anote anote--warn" style={{ fontSize: 12 }}>
+          {miss}.{' '}
+          <Link className="abtn" to="/console/server#gitauth" onClick={onClose}>git 자격</Link>
+        </div>
+      )}
       {mirrorOn === false && (
         <div className="anote anote--warn" style={{ fontSize: 12 }}>
           이 서버는 <code>--mirror</code> 없이 떠 있다 — 첫 push 는 지금 되지만 그 뒤 <code>save</code> 의 커밋은 자동으로 가지 않는다(「다시 보내기」 로 민다).

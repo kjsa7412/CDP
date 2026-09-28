@@ -229,8 +229,12 @@ export async function setHooksPath(root) {
 }
 
 // 자격 증명이 새어 나갈 수 있는 유일한 문자열이 원격 주소다.
+// ssh 의 계정(`ssh://git@…`)은 비밀이 아니라 남긴다 — 가리면 화면에 `ssh://***@` 가 떠서 주소를 못 알아본다.
+// http 는 계정 자리에 PAT 를 넣기도 해서 통째로 가린다. 문장 속 주소(오류 줄)도 전부.
 export function maskUrl(u) {
-  return String(u || '').replace(/\/\/[^/@]+@/, '//***@')
+  return String(u || '').replace(/([a-z][a-z0-9+.-]*:)?\/\/([^/@\s]+)@/gi, (m, scheme, info) =>
+    /^ssh:$/i.test(scheme || '') && !info.includes(':') ? m : `${scheme || ''}//***@`
+  )
 }
 
 // fetch 는 작업 트리를 건드리지 않으므로 자동으로 해도 안전하다.

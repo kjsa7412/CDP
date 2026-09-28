@@ -1,13 +1,15 @@
 // 서버 — 이 프로세스가 무엇으로 떠 있나 · 진단 · 패키지 · 갱신 · 로그. 제품관리서비스 검토 §4.7.
 //
-// **전부 읽기다.** 고치는 것은 셸이다(D7 · D8) — 갱신은 upgrade.sh, 비밀은 셸에서. 여기는
+// **거의 읽기다.** 고치는 것은 셸이다(D7 · D8) — 갱신은 upgrade.sh, PAT 는 셸에서. 여기는
 // 그 명령과 지금 값을 보이는 자리. 파일 위치 · 로그는 관리자에게만 보인다.
+// 하나 예외 — 「git 자격」(`GitAuth.jsx`)의 SSH 배포 키 · 호스트 키 · 접속 확인. 비밀이 브라우저를 건너지 않는 것만 여기서 한다.
 
 import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { put, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 import { PageHead, Card, Row, Mono, Note, Btn, Cmd, Search, when } from './ui.jsx'
+import GitAuth from './GitAuth.jsx'
 
 const MARK = { ok: ['check', 'var(--text-3)'], warn: ['warn', 'var(--warn)'], fail: ['block', 'var(--danger)'] }
 
@@ -24,7 +26,8 @@ export default function Server({ say, route }) {
   }, [error, say])
   // 현황의 진단 카드 「자세히」 가 `#doctor` 를 들고 온다 — 표가 선 뒤 그 카드로
   useEffect(() => {
-    if (route?.hash === '#doctor' && sv) document.getElementById('doctor')?.scrollIntoView({ block: 'start' })
+    // 연결 창의 「git 자격」 안내는 `#gitauth` 를 들고 온다
+    if ((route?.hash === '#doctor' || route?.hash === '#gitauth') && sv) document.getElementById(route.hash.slice(1))?.scrollIntoView({ block: 'start' })
   }, [route?.hash, sv])
 
   const recheck = async () => {
@@ -122,6 +125,8 @@ export default function Server({ say, route }) {
           </div>
         )}
       </Card>
+
+      <GitAuth say={say} prefix={prefix} />
 
       <div className="agrid">
         <Card title="갱신" hint="셸의 일이다 — 여기는 판과 명령">

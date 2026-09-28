@@ -306,6 +306,12 @@ export const admin = {
   repoOrigin: (name, url) => A(`/repos/${encodeURIComponent(name)}/origin`, { ...J('POST', { url }), allowStatus: [409] }),
   // 치운다 — 휴지통(<data>/trash)으로 옮긴다. 확인 이름이 레포 이름과 같아야 한다
   repoDelete: (name, confirm) => A(`/repos/${encodeURIComponent(name)}`, J('DELETE', { confirm })),
+  // git 자격 — 공개 키 · 지문 · 결과만 오간다(비밀 없음). PAT 는 여기 없다 — 셸의 `ctx serve git-auth`(D8)
+  gitauth: () => A('/gitauth'),
+  gitKey: (rotate = false) => A('/gitauth/key', J('POST', { rotate })),
+  gitScan: (url) => A('/gitauth/scan', J('POST', { url })),
+  gitTrust: (url, fingerprint) => A('/gitauth/trust', J('POST', { url, fingerprint })),
+  gitTest: (url) => A('/gitauth/test', J('POST', { url })),
   workrepos: () => A('/workrepos'),
   doctor: (fresh = false) => A('/doctor' + (fresh ? '?fresh=1' : '')),
   server: () => A('/server'),
