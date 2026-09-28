@@ -81,6 +81,7 @@ ssh            절차 없음 — cdp 사용자의 키 · known_hosts 를 사람�
 | `ctx serve git-auth --host 127.0.0.1:2900 --user kjsa --test <bare>`(파이프) | 저장 · helper `store --file=…` · 「접속 확인 — 빈 프로젝트」 · 두 번째는 「같은 호스트의 옛 줄을 바꿨다」 · `--ssh` 공개 키 · `--list` · 인자 없으면 사용법 rc 2 |
 | 이 PC 의 전역 git 설정 | 바뀌지 않았다(`credential.helper` · `core.sshCommand` 없음 그대로 · 테스트는 `GIT_CONFIG_GLOBAL` 임시) |
 | `node --test test/*.test.mjs` | **111 / 111**(`gitauth` 여덟 추가) |
+| `npm run verify`(커밋 311a9c0 만 든 임시 worktree · 혼자 돌림) | **✓ 88 ✗ 0 – 16** — v0.14.0 과 같다. 다른 세션의 변경이 섞인 작업 트리에서 다른 일과 겹쳐 돌렸을 때는 ✗ 6(93 의 하네스 자체 push 가 미러 push 와 겹친 경쟁 → 94~97 이 연쇄 · 73)이었다 — 이 작업의 것이 아니다 |
 
 **못 본 것 — 진짜 ssh 서버로 push.** 이 PC 에서 `10.10.20.250:443` 은 TCP 는 받지만 8초 안에 SSH 배너가 없었다(`ssh-keyscan` 0줄 ·
 http 2900 은 302 로 답한다). 방화벽 · 프록시일 수도, 443 이 ssh 가 아닐 수도 있다. **CDP 서버(10.10.20.188)에서 「호스트 키 받기」 가 첫 확인이다** —
