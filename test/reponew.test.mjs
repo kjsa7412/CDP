@@ -12,7 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { newRepo, cloneRepo, listRepos, REPO_NAME_RE } from '../core/reponew.js'
+import { newRepo, cloneRepo, connectOrigin, trashRepo, listRepos, REPO_NAME_RE } from '../core/reponew.js'
 
 const run = promisify(execFile)
 const HOOK = `#!/bin/sh
@@ -167,6 +167,90 @@ test('cloneRepo — origin 에서 받아 온다 · hooksPath · 자리에 무엇
     await assert.rejects(cloneRepo({ url: 'not a url', dest: path.join(d, 'root', 'k3') }), /형식/)
     await assert.rejects(cloneRepo({ url: path.join(d, 'nowhere'), dest: path.join(d, 'root', 'k4') }), /clone 실패/)
     assert.equal(await fs.stat(path.join(d, 'root', 'k4')).catch(() => null), null, '실패해도 폴더를 남기지 않는다')
+  } finally {
+    await fs.rm(d, { recursive: true, force: true })
+  }
+})
+
+test('connectOrigin — 원격 없이 세운 레포를 잇고 첫 push · 같은 주소면 다시 민다 · 주소 형식', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-co-'))
+  try {
+    const from = await completedFolder(d)
+    const dest = path.join(d, 'out', 'dpms_wiki')
+    const made = await newRepo({ from, dest })
+    assert.equal((await listRepos(path.join(d, 'out')))[0].upstream, null, '처음엔 원격 없음')
+    await assert.rejects(connectOrigin({ root: dest, url: 'not a url' }), /형식/)
+    await assert.rejects(connectOrigin({ root: dest, url: 'http://x/a b.git' }), /형식/)
+
+    const bare = path.join(d, 'origin.git')
+    await run('git', ['init', '-q', '--bare', bare])
+    const r = await connectOrigin({ root: dest, url: bare })
+    assert.equal(r.pushed, true)
+    assert.equal(r.before, null)
+    assert.equal((await run('git', ['-C', bare, 'rev-parse', '--short', 'HEAD'])).stdout.trim(), made.commit, '원격이 첫 커밋을 받았다')
+    const row = (await listRepos(path.join(d, 'out')))[0]
+    assert.ok(row.upstream, 'upstream 이 잡혔다')
+    assert.equal(row.ahead, 0)
+    // 같은 주소 다시 — 바꾸지 않고 다시 민다(보낼 것이 없어도 성공)
+    const again = await connectOrigin({ root: dest, url: bare })
+    assert.equal(again.changed, false)
+    assert.equal(again.pushed, true)
+  } finally {
+    await fs.rm(d, { recursive: true, force: true })
+  }
+})
+
+test('connectOrigin — 원격에 남의 커밋이 있으면 non-ff 로 거절 · 원격 주소는 남는다(강제 push 없음)', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-co-'))
+  try {
+    const from = await completedFolder(d)
+    const dest = path.join(d, 'out', 'k')
+    await newRepo({ from, dest })
+    // 비어 있지 않은 원격 — 다른 이력 하나
+    const other = path.join(d, 'other')
+    await fs.mkdir(other)
+    await fs.writeFile(path.join(other, 'x.txt'), 'x')
+    await run('git', ['-C', other, 'init', '-q'])
+    await run('git', ['-C', other, 'add', '-A'])
+    await run('git', ['-C', other, '-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-qm', 'someone'])
+    const bare = path.join(d, 'busy.git')
+    await run('git', ['clone', '-q', '--bare', other, bare])
+    const theirs = (await run('git', ['-C', bare, 'rev-parse', 'HEAD'])).stdout.trim()
+    // 브랜치 이름을 맞춘다 — 서로 다른 기본 브랜치면 거절이 아니라 새 브랜치가 된다
+    const br = (await run('git', ['-C', dest, 'rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+    await run('git', ['-C', bare, 'branch', '-f', br, theirs]).catch(() => {})
+    const r = await connectOrigin({ root: dest, url: bare })
+    assert.equal(r.pushed, false)
+    assert.equal(r.reason, 'non-ff')
+    assert.equal((await run('git', ['-C', dest, 'remote', 'get-url', 'origin'])).stdout.trim(), bare, '원격은 남는다')
+    assert.equal((await run('git', ['-C', bare, 'rev-parse', br])).stdout.trim(), theirs, '남의 이력을 덮지 않았다')
+  } finally {
+    await fs.rm(d, { recursive: true, force: true })
+  }
+})
+
+test('trashRepo — 휴지통으로 옮긴다 · 원래 자리는 빈다 · 지식 레포가 아니면 거절', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-tr-'))
+  try {
+    const from = await completedFolder(d)
+    const dest = path.join(d, 'out', 'gone')
+    await newRepo({ from, dest })
+    const trash = path.join(d, 'data', 'trash')
+    const r = await trashRepo({ root: dest, trashDir: trash, now: new Date(2026, 8, 28, 9, 5, 7) })
+    assert.equal(path.basename(r.to), 'gone-20260928-090507')
+    assert.equal(await fs.stat(dest).catch(() => null), null, '원래 자리는 비었다')
+    assert.ok(await fs.stat(path.join(r.to, '_vocab.md')), '옮긴 자리에 있다')
+    assert.ok(await fs.stat(path.join(r.to, '.git')), 'git 이력째')
+    // 같은 초에 같은 이름을 또 치우면 뒤에 번호
+    await newRepo({ from, dest })
+    const r2 = await trashRepo({ root: dest, trashDir: trash, now: new Date(2026, 8, 28, 9, 5, 7) })
+    assert.equal(path.basename(r2.to), 'gone-20260928-090507-2')
+    // 지식 레포가 아닌 폴더 · 없는 폴더
+    const plain = path.join(d, 'out', 'plain')
+    await fs.mkdir(plain, { recursive: true })
+    await assert.rejects(trashRepo({ root: plain, trashDir: trash }), /지식 레포가 아니다/)
+    assert.ok(await fs.stat(plain), '남의 폴더는 그대로')
+    await assert.rejects(trashRepo({ root: path.join(d, 'out', 'none'), trashDir: trash }), /없다/)
   } finally {
     await fs.rm(d, { recursive: true, force: true })
   }

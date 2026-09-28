@@ -3,6 +3,23 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## 다음
+
+연결 · 삭제 · 내려받기 — [`docs/dev/레포_연결_삭제_내려받기_TODO.md`](docs/dev/레포_연결_삭제_내려받기_TODO.md)
+
+**콘솔 › 지식 레포** — `core/reponew.js` · `viewer/bin/ctx-mcp-serve.mjs` · `viewer/src/console/Repos.jsx`
+- **「origin 연결」** — `POST /admin/repos/<이름>/origin { url }`(admin · 재인증 · save 뮤텍스 · `auth.log`). `remote add`/`set-url` → `push -u origin HEAD` · 강제 push 없음(원격에 커밋이 있으면 non-ff 로 거절) · push 가 실패해도 원격은 남는다 · 표에 원격 주소(자격 가림)와 「이었지만 못 보냄」 칩
+- **「삭제」** — `DELETE /admin/repos/<이름> { confirm }`. 이름을 쳐야 열린다 · `<data>/trash/<이름>-<시각>/` 로 **옮긴다**(영구 삭제 없음) · 명부 할당에서 뺀다 · 작업 레포 대장은 남긴다
+- `core/reponew.js` — `connectOrigin` · `trashRepo` · `ORIGIN_RE`(세우기 · 받아 오기 · 잇기가 같은 주소 모양) · `core/git.js` — `originUrl` · `maskUrl` 내보냄
+
+**내려받기** — `viewer/server/adapter/read-api.js`(로컬 뷰어 · 서버 공통) · `components/DocView.jsx` · `components/admin/Overview.jsx`
+- `/file?path=…&download=1` — 파일로(한글 이름 RFC 5987) · 문서 화면 「복사」 줄에 「내려받기 (.md)」
+- `/archive?layer=managed|work` — zip(`<레포>-관리문서-<날짜>.zip` · `docs/**/*.md` / `work/` 전부 · 첨부 포함) · 관리 › 현황에 「내려받기」 카드. 읽기 권한이면 누구나 · 권한 밖 레포 404
+
+**캐시** — `viewer/src/lib/cache.js`: 쓰기 뒤 `refresh()`(force)가 **쓰기 전에 떠난 요청**을 같이 받지 않는다 — 끝난 뒤 새로 읽는다(치운 레포가 표에 되살아나던 것)
+
+**문서** — 관리자 설명서 3.4 「세운 뒤 — origin 연결 · 삭제」 · 사용자 설명서 8.5 「내려받기」
+
 ## v0.13.0
 
 화면 · 권한 — [`docs/design/CDP_화면_권한_검토_v0.1.md`](docs/design/CDP_화면_권한_검토_v0.1.md) · [`docs/dev/화면_권한_TODO.md`](docs/dev/화면_권한_TODO.md) · 그림 `docs/dev/화면_권한_검토_그림/`(「후」)

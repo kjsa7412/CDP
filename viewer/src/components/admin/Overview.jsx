@@ -177,6 +177,25 @@ export default function Overview({ repo, sync, diag, me = null, onGo, onCheck, o
         )}
       </Card>
 
+      {/* 내려받기 — 읽을 수 있는 사람이면 누구나(연결 · 삭제 · 내려받기 TODO K8 · K9). 레포 안의 상대 경로 그대로 묶여서 풀면 레포와 같은 모양이다 */}
+      <Card title="내려받기" hint="zip — 레포 안의 경로 그대로">
+        <Row label="관리 문서">
+          <a className="abtn" href={api.archiveUrl('managed')} download>
+            <Icon name="doc" size={12} /> docs/ 전부 받기
+          </a>
+          {status?.managedDocs != null && <span className="amuted"> · {status.managedDocs}개</span>}
+        </Row>
+        <Row label="작업 문서">
+          <a className="abtn" href={api.archiveUrl('work')} download>
+            <Icon name="doc" size={12} /> work/ 전부 받기
+          </a>
+          <span className="amuted">{status?.works != null ? ` · 기록 ${status.works}건` : ''} · 첨부(work/assets) 포함</span>
+        </Row>
+        <Row label="문서 하나">
+          <span className="amuted">문서 화면 맨 아래 「복사」 줄의 「내려받기 (.md)」</span>
+        </Row>
+      </Card>
+
       <Note>
         이 화면은 <b>사람이 열었을 때만 말합니다.</b> 알림을 띄우지 않습니다 — 무시되기 시작하면
         되돌릴 수 없고, 그때 <i>"알림이 안 왔으니 없는 것"</i> 이라는 더 나쁜 오해가 자리 잡습니다.

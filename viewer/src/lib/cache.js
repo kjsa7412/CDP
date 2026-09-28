@@ -58,6 +58,12 @@ export function clearAll() {
 export function load(key, fetcher, { ttl = 10_000, force = false } = {}) {
   const e = entry(key)
   if (!force && e.data !== undefined && Date.now() - e.at < ttl) return Promise.resolve(e.data)
+  // `force` 는 **쓰기 뒤**다 — 그 전에 떠난 요청의 답은 쓰기 전 상태일 수 있다. 같이 받지 않고 끝난 뒤 새로 읽는다.
+  // (콘솔에서 레포를 치운 직후, 치우기 전에 떠난 `/admin/repos` 5초짜리 답이 표에 그 레포를 되살렸다 — 2026-09-28 실측)
+  if (e.promise && force) {
+    const again = () => load(key, fetcher, { ttl, force: true })
+    return e.promise.then(again, again)
+  }
   if (e.promise) return e.promise
   e.promise = Promise.resolve()
     .then(fetcher)

@@ -3,6 +3,8 @@
 // 등록 = 폴더를 두는 것(§4.2). 두는 길이 둘 — 패키지에서 세우기 · origin 에서 clone(D9).
 // 세우면서 접근을 준다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다. 같은 함수(`buildRepo`)를 CLI `ctx repo new` 도 쓴다.
 // **세우는 자리는 여기 하나다** — 레포 화면의 관리 › 지식 레포(`POST /repos` · writer)는 없앴다(화면 · 권한 검토 v0.1 R1).
+// 세운 뒤의 둘도 여기다 — 「origin 연결」(세울 때 빠뜨린 원격 · 강제 push 없음) · 「삭제」(휴지통으로 옮김 · 이름을 쳐야 열림).
+// 연결 · 삭제 · 내려받기 TODO K1~K7.
 
 import { useCallback, useEffect, useState } from 'react'
 import { admin } from '../lib/api.js'
@@ -10,7 +12,13 @@ import { Link, navigate } from '../lib/router.jsx'
 import { invalidate, put, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
+import { useSession } from '../lib/session.jsx'
 import { PageHead, Note, Modal, Field, Chip, Mono, Confirm } from './ui.jsx'
+
+// 원격 주소 두 모양 — 창의 예시. 어느 쪽이 되는지는 서버의 자격(PAT · 키)이 정한다
+const ORIGIN_EX = ['http://<gitlab>/<그룹>/<프로젝트>.git', 'ssh://git@<gitlab>:<포트>/<그룹>/<프로젝트>.git']
+// 서버 `core/reponew.ORIGIN_RE` 와 같은 모양
+const ORIGIN_RE = /^(https?:\/\/|ssh:\/\/|git@|file:\/\/|\/|[A-Za-z]:[\\/])/
 
 // 상태 다섯 — 사실만(동시 기록 검토 v0.1 D4 · §5.7). 갈라짐은 기계가 못 푸는 것이라 bad.
 const MIRROR = { ok: [null, '최신'], lag: ['warn', '밀림'], diverged: ['bad', '갈림'], behind: ['warn', 'origin 앞섬'], off: ['off', '원격 없음'] }
@@ -19,6 +27,8 @@ const REASON = { 'non-ff': 'non-ff', auth: '인증 실패', net: '원격 불통'
 
 export default function Repos({ say }) {
   const withSudo = useSudo()
+  // 치운 뒤 — 상단 「레포 ▾」 · /me 의 볼 수 있는 레포 목록이 사라진 이름을 들고 있지 않게
+  const session = useSession()
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(null)
@@ -35,6 +45,12 @@ export default function Repos({ say }) {
   // 복구 단추 셋 — 어느 행이 도는 중인가 · 되돌리기 확인(버리는 경로를 보여 준 뒤에)
   const [acting, setActing] = useState(null)
   const [restoring, setRestoring] = useState(null)
+  // 세운 뒤의 둘 — 원격 잇기 · 치우기
+  const [linking, setLinking] = useState(null)
+  const [removing, setRemoving] = useState(null)
+  const [gone, setGone] = useState(null)
+  // `--mirror` 가 꺼져 있으면 이어도 save 뒤 자동 push 는 없다 — 창이 그 한 줄을 낸다
+  const { data: srv } = useResource('/admin/server', admin.server)
 
   // 진단의 레포 줄 — 서버는 fetch 를 안 하므로 "origin 이 앞서 있나" 는 doctor(ls-remote · 60초 캐시)만 안다.
   // 표를 먼저 그리고 뒤따라 채운다 — 레포마다 origin 에 닿는 검사라 몇 초 걸린다.
@@ -89,6 +105,42 @@ export default function Repos({ say }) {
     }
   }
 
+  // 원격 잇기 — 거절(409)도 답이다. 원격은 남으니 자격을 고친 뒤 같은 단추로 다시 민다(K3)
+  const link = async (name, url) => {
+    setActing(name + ':origin')
+    try {
+      const r = await withSudo(() => admin.repoOrigin(name, url))
+      if (r.ok) {
+        say(`${name} — origin 에 이었다 · ${r.url}${r.pushed ? ' · 첫 push 완료' : ''}`, 6000)
+        setLinking(null)
+      } else say(`${name} — 원격은 적었지만 push 가 안 됐다: ${r.reasonText || r.reason || ''}${r.message ? ' — ' + r.message : ''}`, 14000)
+      invalidate('/admin/')
+      await load()
+    } catch (e) {
+      if (e.message !== CANCELLED) say(e.message, 8000)
+    } finally {
+      setActing(null)
+    }
+  }
+  // 치우기 — 휴지통으로 옮긴다(K5). 레포 얼굴의 「레포 ▾」 도 같은 목록을 보니 `/repos` · `/me` 까지 무효로
+  const remove = async (name) => {
+    setActing(name + ':delete')
+    try {
+      const r = await withSudo(() => admin.repoDelete(name, name))
+      setRemoving(null)
+      setGone(r)
+      setDone(null)
+      say(`${name} — 휴지통으로 옮겼다`, 6000)
+      invalidate('/admin/')
+      session?.refresh?.()
+      await load()
+    } catch (e) {
+      if (e.message !== CANCELLED) say(e.message, 8000)
+    } finally {
+      setActing(null)
+    }
+  }
+
   if (!data) return <span className="amuted">읽는 중…</span>
   return (
     <>
@@ -133,8 +185,8 @@ export default function Repos({ say }) {
                       {r.head || '—'} <span className="dim">{r.branch || ''}</span>
                     </td>
                     <td>
-                      <Chip kind={mk} icon={mk === 'warn' || mk === 'bad' ? 'warn' : null} title={r.note || undefined}>
-                        {ml}
+                      <Chip kind={mk} icon={mk === 'warn' || mk === 'bad' ? 'warn' : null} title={r.note || r.remote || undefined}>
+                        {r.mirror === 'off' && r.remote ? '이었지만 못 보냄' : ml}
                         {(r.mirror === 'lag' || r.mirror === 'diverged') && r.ahead ? ` ${r.ahead}` : ''}
                         {r.mirror === 'behind' && r.behind ? ` ${r.behind}` : ''}
                         {r.mirrorReason ? ` · ${REASON[r.mirrorReason] || r.mirrorReason}` : ''}
@@ -191,6 +243,12 @@ export default function Repos({ say }) {
                           <Icon name="doc" size={12} /> 열기
                         </Link>
                         <button className="abtn" onClick={() => navigate('/console/users#matrix')}>접근</button>
+                        <button className="abtn" disabled={!!acting} onClick={() => setLinking(r)} title={r.remote ? `origin: ${r.remote} — 바꾸거나 다시 보낸다` : '원격 저장소에 잇고 첫 push 를 한다'}>
+                          {acting === r.name + ':origin' ? '잇는 중…' : r.remote ? 'origin' : 'origin 연결'}
+                        </button>
+                        <button className="abtn" disabled={!!acting} onClick={() => setRemoving(r)} title="휴지통(서버 data/trash)으로 옮긴다 — 영구 삭제는 없다">
+                          삭제
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -207,6 +265,13 @@ export default function Repos({ say }) {
           {done.origin ? (done.cloned ? '' : done.pushed ? ' · origin 에 보냈다' : ` · origin push 실패: ${done.pushError || ''}`) : ''}
           {done.granted?.length ? ` · 접근 ${done.granted.join(', ')}` : ''}{' '}
           <Link className="abtn" to={'/r/' + encodeURIComponent(done.name) + '/'}>열기</Link>
+        </Note>
+      )}
+      {gone && (
+        <Note tone="accent">
+          <b>{gone.name}</b> — 휴지통으로 옮겼다 · <Mono>{gone.trash}</Mono>
+          {gone.revoked?.length ? ` · 접근을 뺀 사람 ${gone.revoked.join(', ')}` : ''}
+          {gone.workrepos ? ` · 작업 레포 등록 ${gone.workrepos}건은 기록으로 남는다` : ''}. 되살리려면 셸에서 그 폴더를 서버 root 로 되돌려 놓는다.
         </Note>
       )}
       <Note>
@@ -228,6 +293,8 @@ export default function Repos({ say }) {
           }}
         />
       )}
+      {linking && <Origin repo={linking} busy={acting === linking.name + ':origin'} mirrorOn={srv ? !!srv.mirror : null} onClose={() => setLinking(null)} onOk={(url) => link(linking.name, url)} />}
+      {removing && <Remove repo={removing} busy={acting === removing.name + ':delete'} onClose={() => setRemoving(null)} onOk={() => remove(removing.name)} />}
       {adding && <NewRepo data={data} busy={busy} onClose={() => setAdding(false)} onOk={create} />}
     </>
   )
@@ -325,6 +392,78 @@ function NewRepo({ data, busy, onClose, onOk }) {
           </div>
         </Field>
       </div>
+    </Modal>
+  )
+}
+
+// 원격 잇기 — 주소 하나. 세울 때 빠뜨렸거나 GitLab 프로젝트를 나중에 만든 경우(K1~K4).
+function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
+  const [url, setUrl] = useState('')
+  const u = url.trim()
+  const ok = ORIGIN_RE.test(u) && !/\s/.test(u)
+  return (
+    <Modal
+      title={`${repo.name} — origin ${repo.remote ? '바꾸기 · 다시 보내기' : '연결'}`}
+      onClose={onClose}
+      wide
+      foot={
+        <>
+          <span className="amuted" style={{ fontSize: 11.5 }}>remote → push -u origin HEAD · 강제 push 없음 · auth.log · 재인증</span>
+          <span className="sp" />
+          <button className="abtn" onClick={onClose}>취소</button>
+          <button className="abtn abtn--accent" disabled={busy || !ok} onClick={() => onOk(u)}>
+            {busy ? '잇는 중…' : '잇고 보내기'}
+          </button>
+        </>
+      }
+    >
+      {repo.remote && (
+        <div className="anote" style={{ fontSize: 12 }}>
+          지금 origin — <Mono>{repo.remote}</Mono>. 같은 주소를 넣으면 다시 보내고, 다른 주소면 바꾼 뒤 보낸다.
+        </div>
+      )}
+      <Field label="origin 주소" hint="GitLab 에서 빈 프로젝트를 먼저 만든다 — 서버는 프로젝트를 만들 수 없다. 원격에 커밋이 있으면 거절된다(남의 이력을 덮지 않는다).">
+        <input className="mono" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} autoFocus placeholder={ORIGIN_EX[0]} />
+      </Field>
+      <div className="anote" style={{ fontSize: 12, lineHeight: 1.7 }}>
+        두 모양 다 받는다 — <Mono>{ORIGIN_EX[0]}</Mono> 은 서버 cdp 사용자의 <b>PAT</b>(credential helper) 로,{' '}
+        <Mono>{ORIGIN_EX[1]}</Mono> 은 cdp 사용자의 <b>SSH 키</b>로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
+      </div>
+      {mirrorOn === false && (
+        <div className="anote anote--warn" style={{ fontSize: 12 }}>
+          이 서버는 <code>--mirror</code> 없이 떠 있다 — 첫 push 는 지금 되지만 그 뒤 <code>save</code> 의 커밋은 자동으로 가지 않는다(「다시 보내기」 로 민다).
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+// 치우기 — 이름을 그대로 쳐야 열린다(K6). 원격에 없는 커밋이 있으면 그것을 먼저 말한다.
+function Remove({ repo, busy, onClose, onOk }) {
+  const [v, setV] = useState('')
+  const only = repo.mirror === 'off' ? '원격에 올라간 적이 없다 — 이 서버의 사본이 유일하다.' : repo.ahead > 0 ? `origin 에 못 간 커밋이 ${repo.ahead}건 있다.` : null
+  return (
+    <Modal
+      title={`${repo.name} — 삭제`}
+      onClose={onClose}
+      small
+      foot={
+        <>
+          <span className="sp" />
+          <button className="abtn" onClick={onClose} disabled={busy}>취소</button>
+          <button className="abtn abtn--warn" disabled={busy || v.trim() !== repo.name} onClick={onOk}>
+            {busy ? '옮기는 중…' : '휴지통으로 옮긴다'}
+          </button>
+        </>
+      }
+    >
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.65 }}>
+        서버 root 에서 빼서 <code>data/trash/</code> 로 옮긴다 — 영구 삭제는 없다. 화면 · MCP 에서 사라지고, 명부의 할당에서 이 이름이 빠진다(전체 * 인 사람은 그대로).
+      </p>
+      {only && <div className="anote anote--warn" style={{ fontSize: 12 }}>{only} 휴지통의 폴더가 남은 사본이다.</div>}
+      <Field label={`확인 — 레포 이름 ${repo.name} 을 그대로 친다`}>
+        <input className="mono" value={v} onChange={(e) => setV(e.target.value)} spellCheck={false} autoFocus />
+      </Field>
     </Modal>
   )
 }

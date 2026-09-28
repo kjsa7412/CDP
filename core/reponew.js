@@ -18,9 +18,12 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { CtxError } from './tools.js'
-import { status as gitStatus } from './git.js'
+import { status as gitStatus, classifyPushError, maskUrl } from './git.js'
 
 export const REPO_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+
+// 원격 주소의 모양 — http(s) · ssh · scp 꼴(`git@host:…`) · 파일. 세우기 · 받아 오기 · 잇기가 같은 것을 본다.
+export const ORIGIN_RE = /^(https?:\/\/|ssh:\/\/|git@|file:\/\/|\/|[A-Za-z]:[\\/])/
 
 const SKIP = new Set(['_package.json', 'convert'])
 
@@ -70,7 +73,7 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
     const ents = await fs.readdir(dst)
     if (ents.length) throw new CtxError('E_EXISTS', '그 자리에 이미 무엇이 있다 — 빈 폴더거나 없어야 한다', { dest: dst })
   }
-  if (origin && !/^(https?:\/\/|ssh:\/\/|git@|file:\/\/|\/|[A-Za-z]:[\\/])/.test(origin)) {
+  if (origin && !ORIGIN_RE.test(origin)) {
     throw new CtxError('E_INPUT', 'origin 주소 형식이 아니다', { origin })
   }
 
@@ -134,7 +137,7 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
 // 과 같은 세 줄). 콘솔 `POST /admin/repos { clone }` 가 부른다.
 export async function cloneRepo({ url, dest, timeout = 120000 }) {
   const dst = path.resolve(dest)
-  if (!url || !/^(https?:\/\/|ssh:\/\/|git@|file:\/\/|[A-Za-z]:[\\/]|\/)/.test(String(url))) {
+  if (!url || !ORIGIN_RE.test(String(url))) {
     throw new CtxError('E_INPUT', 'origin 주소 형식이 아니다', { url })
   }
   const st = await fs.stat(dst).catch(() => null)
@@ -152,6 +155,67 @@ export async function cloneRepo({ url, dest, timeout = 120000 }) {
   await git(dst, ['config', 'core.hooksPath', '.githooks'])
   const head = await git(dst, ['rev-parse', '--short', 'HEAD'])
   return { dest: dst, commit: head.out || null, origin: String(url) }
+}
+
+// 이미 선 레포를 원격에 잇는다 — 세울 때 origin 을 빠뜨렸거나 GitLab 프로젝트를 나중에 만든 경우.
+// 전에는 셸의 두 줄(`remote add` · `push -u`)이었다. 콘솔 `POST /admin/repos/<이름>/origin` 이 부른다.
+//
+//   0  주소 모양 — 세우기 · 받아 오기와 같은 `ORIGIN_RE`
+//   1  origin 이 없으면 add · 다르면 set-url · 같으면 그대로 (다시 누르면 다시 민다)
+//   2  push -u origin HEAD — **강제하지 않는다.** 원격이 비어 있지 않으면 non-ff 로 거절되고 사유를 낸다
+//
+// push 가 실패해도 원격은 남긴다 — 흔한 실패는 자격(PAT · 키)이고, 고친 뒤 주소를 다시 칠 일이 없게.
+// **잠그지 않는다** — 부르는 쪽(서버)이 save 와 같은 뮤텍스 안에서 부른다.
+export async function connectOrigin({ root, url, push = true, timeout = 120000 }) {
+  const dir = path.resolve(root)
+  const u = String(url || '').trim()
+  if (!u || !ORIGIN_RE.test(u) || /\s/.test(u)) throw new CtxError('E_INPUT', 'origin 주소 형식이 아니다 — http(s):// · ssh:// · git@… · 경로', { url: maskUrl(u) })
+  if (!(await isDir(path.join(dir, '.git')))) throw new CtxError('E_GIT', 'git 레포가 아니다', { root: dir })
+  const cur = await git(dir, ['remote', 'get-url', 'origin'])
+  const before = cur.ok ? cur.out : null
+  if (before === null) {
+    const r = await git(dir, ['remote', 'add', 'origin', u])
+    if (!r.ok) throw new CtxError('E_GIT', 'remote add 실패 — ' + r.err, { url: maskUrl(u) })
+  } else if (before !== u) {
+    const r = await git(dir, ['remote', 'set-url', 'origin', u])
+    if (!r.ok) throw new CtxError('E_GIT', 'remote set-url 실패 — ' + r.err, { url: maskUrl(u) })
+  }
+  const res = { url: maskUrl(u), before: before === null ? null : maskUrl(before), changed: before !== u, pushed: false, reason: null, message: null }
+  if (!push) return res
+  const branch = (await git(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])).out || 'HEAD'
+  const p = await git(dir, ['-c', 'core.quotepath=false', 'push', '-u', 'origin', 'HEAD'], {
+    timeout,
+    // 자격을 묻는 프롬프트에서 멈추지 않는다 — 서버에는 답할 사람이 없다. 없으면 바로 auth 로 떨어진다
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+  })
+  if (p.ok) return { ...res, pushed: true, branch }
+  const c = classifyPushError(p.err || p.out)
+  return { ...res, branch, reason: c.reason, message: c.line ? maskUrl(c.line) : null }
+}
+
+// 레포를 **휴지통으로 옮긴다** — 영구 삭제는 없다. 원격에 없는 커밋이 있으면 그것이 유일한 사본이라서다.
+// `<trashDir>/<이름>-<YYYYMMDD-HHMMSS>/` 로 옮기고 그 자리를 돌려준다. 되살리기는 셸에서 폴더를 되돌려 놓는 것.
+// 지식 레포(`_vocab.md`)가 아니면 거절한다 — 남의 폴더를 치우지 않는다. **잠그지 않는다** — 부르는 쪽이 잠근다.
+export async function trashRepo({ root, trashDir, now = new Date() }) {
+  const src = path.resolve(root)
+  if (!(await isDir(src))) throw new CtxError('E_NOT_FOUND', '그런 레포가 없다', { root: src })
+  if (!(await fs.access(path.join(src, '_vocab.md')).then(() => true).catch(() => false))) {
+    throw new CtxError('E_INPUT', '지식 레포가 아니다(_vocab.md 없음) — 치우지 않는다', { root: src })
+  }
+  const p2 = (n) => String(n).padStart(2, '0')
+  const stamp = `${now.getFullYear()}${p2(now.getMonth() + 1)}${p2(now.getDate())}-${p2(now.getHours())}${p2(now.getMinutes())}${p2(now.getSeconds())}`
+  await fs.mkdir(trashDir, { recursive: true })
+  let dst = path.join(path.resolve(trashDir), `${path.basename(src)}-${stamp}`)
+  for (let i = 2; await isDir(dst); i++) dst = path.join(path.resolve(trashDir), `${path.basename(src)}-${stamp}-${i}`)
+  try {
+    await fs.rename(src, dst)
+  } catch (e) {
+    // 휴지통이 다른 장치에 있으면 rename 이 안 된다 — 복사하고 원래 것을 지운다
+    if (e?.code !== 'EXDEV') throw new CtxError('E_REPO', '옮기지 못했다 — ' + (e?.message || e), { root: src })
+    await fs.cp(src, dst, { recursive: true })
+    await fs.rm(src, { recursive: true, force: true })
+  }
+  return { from: src, to: dst }
 }
 
 // 서버 `<root>` 의 레포 목록 — 이름 · 판정 파일 · head. `doctor` 와 `ctx repo list` 가 쓴다.

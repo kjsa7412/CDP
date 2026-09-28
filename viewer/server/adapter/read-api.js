@@ -13,6 +13,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { resolveInside } from './security.js'
+import { zip } from '../../../core/zip.js'
 
 // 화면 자산도 이 표를 쓴다(관리 서비스의 `serveWeb`). **`.js` 가 빠지면
 // 브라우저가 모듈 실행을 거부한다** — 화면이 통째로 안 뜬다.
@@ -127,11 +128,65 @@ export async function handleRead({ p, method, url, res, send, store }) {
       return true
     }
     const ext = path.extname(r.abs).toLowerCase()
-    send(res, 200, await fs.readFile(r.abs), { 'content-type': MIME[ext] || 'application/octet-stream' })
+    // `download=1` — 새 탭에 여는 대신 파일로 받는다(연결 · 삭제 · 내려받기 TODO K9). 한글 이름은 RFC 5987 로
+    const dl = url.searchParams.get('download') === '1' ? { 'content-disposition': attachment(path.basename(r.abs)) } : {}
+    send(res, 200, await fs.readFile(r.abs), { 'content-type': MIME[ext] || 'application/octet-stream', ...dl })
+    return true
+  }
+
+  // 묶어서 받는다 — `layer=managed`(docs/ 의 관리 문서) · `layer=work`(work/ 전부 — 첨부 포함). zip 하나, 레포 안의
+  // 상대 경로 그대로라 풀면 레포와 같은 모양이다. **읽기다** — 화면에서 이미 읽을 수 있는 것을 파일로 줄 뿐이다(K8).
+  if (p === '/archive' && method === 'GET') {
+    const layer = url.searchParams.get('layer')
+    if (!ARCHIVE[layer]) {
+      send(res, 400, { error: { code: 'E_INPUT', message: 'layer 는 managed · work 중 하나다' } })
+      return true
+    }
+    const { dir, keep, label } = ARCHIVE[layer]
+    const files = []
+    await walk(store.root, dir, (rel) => keep(rel) && files.push(rel))
+    if (!files.length) {
+      send(res, 404, { error: { code: 'E_NOT_FOUND', message: `${label}가 없다` } })
+      return true
+    }
+    const entries = []
+    for (const rel of files.sort()) entries.push({ name: rel, data: await fs.readFile(path.join(store.root, rel)) })
+    const buf = await zip(entries)
+    const d = new Date()
+    const day = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+    send(res, 200, buf, {
+      'content-type': 'application/zip',
+      'content-length': buf.length,
+      'content-disposition': attachment(`${path.basename(store.root)}-${label}-${day}.zip`),
+    })
     return true
   }
 
   return false
+}
+
+// 묶음 두 층 — 경로 규칙은 `core/frontmatter.layerOf` 와 같은 자리(docs/ · work/)다. 관리 문서는 .md 만(등록부 밖의 그림 ·
+// 원본은 관리 문서가 아니다), 작업 문서는 첨부(`work/assets/`)까지 — 기록이 가리키는 것이 같이 가야 읽힌다.
+const ARCHIVE = {
+  managed: { dir: 'docs', label: '관리문서', keep: (rel) => /\.md$/i.test(rel) },
+  work: { dir: 'work', label: '작업문서', keep: (rel) => !/(^|\/)\.gitkeep$/.test(rel) },
+}
+
+// 폴더 아래 파일 전부 — 숨김(.git 등)은 건너뛴다. 심볼릭 링크는 따라가지 않는다(레포 밖으로 나갈 수 있다).
+async function walk(root, rel, fn) {
+  const ents = await fs.readdir(path.join(root, rel), { withFileTypes: true }).catch(() => [])
+  for (const e of ents) {
+    const r = rel + '/' + e.name
+    if (e.name.startsWith('.') && e.name !== '.gitkeep') continue
+    if (e.isDirectory()) await walk(root, r, fn)
+    else if (e.isFile()) fn(r)
+  }
+}
+
+// 내려받을 이름 — ASCII 대체 이름 하나 + UTF-8 이름(RFC 5987). 브라우저는 뒤의 것을 쓴다.
+function attachment(name) {
+  const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`
 }
 
 export { MIME }

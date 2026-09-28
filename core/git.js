@@ -189,6 +189,12 @@ export async function readConfig(root) {
   }
 }
 
+// origin 의 주소 하나 — 가려서. 없으면 null. 콘솔의 지식 레포 표가 「원격 없음」 과 「이었는데 아직 못 보냄」 을 가른다.
+export async function originUrl(root) {
+  const r = await run(root, ['remote', 'get-url', 'origin'])
+  return r.ok && r.out ? maskUrl(r.out) : null
+}
+
 // 마지막 fetch 시각 — git 이 따로 안 알려준다. `.git/FETCH_HEAD` 의 mtime 이
 // 유일한 근거다. **추정하지 않는다** — 파일이 없으면 "한 번도 안 함" 이다.
 export async function lastFetchAt(root) {
@@ -223,7 +229,7 @@ export async function setHooksPath(root) {
 }
 
 // 자격 증명이 새어 나갈 수 있는 유일한 문자열이 원격 주소다.
-function maskUrl(u) {
+export function maskUrl(u) {
   return String(u || '').replace(/\/\/[^/@]+@/, '//***@')
 }
 

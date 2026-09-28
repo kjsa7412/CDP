@@ -263,6 +263,10 @@ export const api = {
   rescan: () => req('/rescan', { method: 'POST' }),
   fileUrl: (p) =>
     `${base()}/file?path=${encodeURIComponent(p)}` + (isServer() ? '' : `&t=${encodeURIComponent(token)}`),
+  // 내려받기 — 문서 하나(`download=1` → 새 탭 대신 파일) · 묶음(zip · `managed` 관리 문서 · `work` 작업 문서). 읽기 권한이면 된다
+  downloadUrl: (p) => api.fileUrl(p) + '&download=1',
+  archiveUrl: (layer) =>
+    `${base()}/archive?layer=${encodeURIComponent(layer)}` + (isServer() ? '' : `&t=${encodeURIComponent(token)}`),
   probeExternal: (p) => req(`/probe-external?path=${encodeURIComponent(p)}`),
   open: (p) => req('/open', { method: 'POST', body: JSON.stringify({ path: p }) }),
   heartbeat: () => req('/heartbeat', { method: 'POST' }).catch(() => {}),
@@ -298,6 +302,10 @@ export const admin = {
   repoSync: (name) => A(`/repos/${encodeURIComponent(name)}/sync`, { ...J('POST', {}), allowStatus: [409] }),
   repoPush: (name) => A(`/repos/${encodeURIComponent(name)}/push`, { ...J('POST', {}), allowStatus: [409] }),
   repoRestore: (name) => A(`/repos/${encodeURIComponent(name)}/restore`, { ...J('POST', {}), allowStatus: [409] }),
+  // 원격에 잇는다 — 세울 때 빠뜨린 origin. push 거절(409)도 답이다(사유 · 문장). 강제 push 는 없다
+  repoOrigin: (name, url) => A(`/repos/${encodeURIComponent(name)}/origin`, { ...J('POST', { url }), allowStatus: [409] }),
+  // 치운다 — 휴지통(<data>/trash)으로 옮긴다. 확인 이름이 레포 이름과 같아야 한다
+  repoDelete: (name, confirm) => A(`/repos/${encodeURIComponent(name)}`, J('DELETE', { confirm })),
   workrepos: () => A('/workrepos'),
   doctor: (fresh = false) => A('/doctor' + (fresh ? '?fresh=1' : '')),
   server: () => A('/server'),

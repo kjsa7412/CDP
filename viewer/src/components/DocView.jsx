@@ -291,6 +291,8 @@ export default function DocView({
               <button style={{ color: 'var(--accent)' }} onClick={() => copy('경로', doc.path)}>상대 경로</button>
               <button style={{ color: 'var(--accent)' }} onClick={() => copy('원문', doc.raw)}>본문 원문</button>
               <button style={{ color: 'var(--accent)' }} onClick={() => window.print()}>인쇄</button>
+              {/* 파일로 받는다 — 레포 안의 그 파일 그대로(프론트매터 포함). 묶음은 관리 › 현황의 「내려받기」 */}
+              <a style={{ color: 'var(--accent)' }} href={api.downloadUrl(doc.path)} download>내려받기 (.md)</a>
             </div>
           </section>
         </div>

@@ -24,7 +24,8 @@ import { handleRead, MIME } from '../server/adapter/read-api.js'
 import { hereDir } from '../server/runtime.js'
 import { buildServer, makeRepoCache, BUILT } from './ctx-mcp.mjs'
 import * as mirror from '../../core/mirror.js'
-import { newRepo, cloneRepo, REPO_NAME_RE } from '../../core/reponew.js'
+import { newRepo, cloneRepo, connectOrigin, trashRepo, REPO_NAME_RE } from '../../core/reponew.js'
+import { withLock } from '../../core/lock.js'
 import { listPackages as listPackageDirs } from '../../core/packages.js'
 import { resolvePackages, materializePackage } from './ctx-package.mjs'
 import { parseCidrs, ipInCidrs, makeLimiter } from '../../core/net.js'
@@ -184,6 +185,14 @@ export function makeStore(root, log) {
       return pr
     },
     refresh,
+    // 레포를 치운 뒤 — 같은 이름으로 다시 세우면 옛 스캔 · 캐시가 살아나지 않게 전부 잊는다
+    forget(name) {
+      Promise.resolve(views.get(name)?.stop?.()).catch(() => {})
+      views.delete(name)
+      caches.delete(name)
+      loading.delete(name)
+      repos = repos.filter((r) => r.name !== name)
+    },
   }
 }
 
@@ -1119,6 +1128,8 @@ export async function runServe(opt = {}) {
                 behind: m.behind,
                 dirty: m.dirty,
                 dirtyPaths: m.dirtyPaths,
+                // 원격 주소(가림) — 「원격 없음」 과 「이었는데 아직 못 보냄(upstream 없음)」 을 가른다
+                remote: await git.originUrl(r.root).catch(() => null),
                 mirror: m.state,
                 mirrorReason: m.reason,
                 mirrorMessage: m.message,
@@ -1151,6 +1162,64 @@ export async function runServe(opt = {}) {
             }
             okLog('/repos', name, out.status)
             return json(res, out.status, out.body)
+          }
+          // ── 레포 하나를 원격에 잇는다 — 세울 때 origin 을 빠뜨렸거나 GitLab 프로젝트를 나중에 만든 경우(연결 · 삭제 · 내려받기 TODO K1~K4).
+          // 재인증 뒤 · save 와 같은 뮤텍스 · `auth.log`. 강제 push 없음 — 원격이 비어 있지 않으면 non-ff 로 거절되고 사유가 간다.
+          const om = /^\/repos\/([^/]+)\/origin$/.exec(sub)
+          if (om && req.method === 'POST') {
+            const name = decodeURIComponent(om[1])
+            await store.ensure(name)
+            const found = (await store.list()).find((x) => x.name === name)
+            if (!found) return fail(new auth.AuthError('E_NOT_FOUND', '그런 레포가 없다', { name }))
+            const body = await readJson()
+            if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
+            let r
+            try {
+              r = await withLock(path.resolve(found.root), () => connectOrigin({ root: found.root, url: String(body.url || ''), push: body.push !== false }))
+            } catch (e) {
+              okLog('/repos/origin', name, 400)
+              return json(res, 400, { error: { code: e?.code || 'E_INPUT', message: e.message, detail: e.detail } })
+            }
+            await auth.audit(dataDir, `admin repo origin · ${a.user} · ${name} · ${r.url}${r.before && r.changed ? ' (전 ' + r.before + ')' : ''} · ${r.pushed ? 'pushed' : body.push === false ? 'no-push' : 'fail=' + (r.reason || '?')}`)
+            if (!r.pushed && r.reason) log.line(`origin 연결 ${name}: push 실패 — ${mirror.REASON_TEXT[r.reason] || r.reason}${r.message ? ' — ' + r.message : ''}`)
+            okLog('/repos/origin', name, r.pushed || body.push === false ? 200 : 409)
+            return json(res, r.pushed || body.push === false ? 200 : 409, { ok: r.pushed || body.push === false, ...r, reasonText: r.reason ? mirror.REASON_TEXT[r.reason] || r.reason : null, mirror: await mirror.summary(found.root) })
+          }
+          // ── 레포 하나를 치운다 — **휴지통으로 옮긴다**(`<data>/trash/<이름>-<시각>/` · K5~K7). 영구 삭제는 없다.
+          // 본문 `{ confirm: <이름> }` 이 맞아야 한다. 명부의 할당에서 그 이름을 뺀다(`*` 는 그대로) · 작업 레포 대장 행은 기록이라 남긴다.
+          const dm = /^\/repos\/([^/]+)$/.exec(sub)
+          if (dm && req.method === 'DELETE') {
+            const name = decodeURIComponent(dm[1])
+            await store.ensure(name)
+            const found = (await store.list()).find((x) => x.name === name)
+            if (!found) return fail(new auth.AuthError('E_NOT_FOUND', '그런 레포가 없다', { name }))
+            const body = await readJson()
+            if (!body || String(body.confirm || '') !== name) {
+              okLog('/repos/delete', name, 400)
+              return json(res, 400, { error: { code: 'E_INPUT', message: '확인 이름이 레포 이름과 같아야 한다' } })
+            }
+            const m0 = await mirror.summary(found.root)
+            let r
+            try {
+              r = await withLock(path.resolve(found.root), () => trashRepo({ root: found.root, trashDir: path.join(dataDir, 'trash') }))
+            } catch (e) {
+              okLog('/repos/delete', name, 400)
+              return json(res, 400, { error: { code: e?.code || 'E_REPO', message: e.message, detail: e.detail } })
+            }
+            store.forget(name)
+            const revoked = []
+            for (const u of db.users) {
+              if ((u.repos || []).includes(name)) {
+                auth.userSet(db, u.name, { repos: u.repos.filter((x) => x !== name) })
+                revoked.push(u.name)
+              }
+            }
+            if (revoked.length) await auth.store(authenticate.file, db)
+            const left = (await wr.load(dataDir)).repos.filter((w) => w.knowledge === name).length
+            await auth.audit(dataDir, `admin repo delete · ${a.user} · ${name} · trash=${r.to}${revoked.length ? ' · revoked=' + revoked.join(',') : ''}${m0.state !== 'ok' ? ' · mirror=' + m0.state + (m0.ahead ? ' ahead=' + m0.ahead : '') : ''}`)
+            log.line(`레포 치움 ${name} → ${r.to}`)
+            okLog('/repos/delete', name)
+            return json(res, 200, { ok: true, name, trash: r.to, revoked, workrepos: left, mirror: m0.state, ahead: m0.ahead })
           }
           // ── 레포 하나의 복구 셋 — 「origin 과 맞추기」 · 「다시 보내기」 · 「트리 되돌리기」(동시 기록 검토 v0.1 D4 · D5).
           // 전부 재인증 뒤(위의 GET 아님 → cdp_su) · `save` 와 같은 뮤텍스 · `auth.log`. 판정은 `core/mirror.js` 하나다.
