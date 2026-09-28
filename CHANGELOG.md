@@ -3,6 +3,34 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.13.0
+
+화면 · 권한 — [`docs/design/CDP_화면_권한_검토_v0.1.md`](docs/design/CDP_화면_권한_검토_v0.1.md) · [`docs/dev/화면_권한_TODO.md`](docs/dev/화면_권한_TODO.md) · 그림 `docs/dev/화면_권한_검토_그림/`(「후」)
+
+**역할 경계** — `viewer/bin/ctx-mcp-serve.mjs` · `viewer/server/adapter/read-api.js` · `http.js` · `core/auth.js` · `core/mirror.js`
+- 레포 화면의 **`POST /repos`(writer · 지식 레포 세우기) 삭제** — 404. 세우는 길은 콘솔 `POST /admin/repos`(admin · 재인증 · 볼 사람 지정 · clone)와 셸 `ctx repo new`
+- `GET /workrepos` 의 `users`(명부 이름)는 write 에게만 · 서버 모드 공유 읽기 API 에서 `/git` · `/git/config` 를 뺐다(로컬 뷰어만 — `/api/<레포>/git` 404)
+- `POST /logout` JSON 200(화면이 pushState 로 소개로 · `GET` 302 는 그대로) · `__CDP_SERVER__` 주입이 `<head>` 첫 줄
+- 세션 쿠키에 토큰 id(`tid` · 해시 앞 8자 · 비밀 아님) — `/me` 의 `expiresInDays` · `tokenExpires` 가 브라우저에서도 실제 값. 판정은 그대로 명부만
+- `/repos` 행의 `note` — 콘솔에 못 들어가는 사람에게는 「콘솔 > 지식 레포 > 「…」」 대신 「관리자에게(콘솔 「…」)」
+- 역할 문구 — writer 는 「save · 작업 레포 등록」(콘솔 사용자 페이지 · 설명서)
+
+**관리 · 상단 바** — `viewer/src/components/admin/*` · `components/TopBar.jsx` · `App.jsx`
+- 서버 모드 관리 메뉴 **셋 — 현황 · 작업 레포 · 정보**(전에는 다섯 + 콘솔 · 문서로 돌아가기). `RepoServer.jsx` 삭제 · 「진단 · 정보」 → **「정보」**(`Info.jsx` — 판 · 빌드 · 내 계정 · 역할 · 할 수 있는 것 · 토큰 만료 D-n · 볼 수 있는 레포 수 · 단축키 · 설명서 · 요청 0). 로컬 다섯은 그대로
+- 상단 스위처 셋(설명서 · 레포 ▾ · 콘솔) — 「소개」 탭 제거(표식 = 소개 · 소개에서 표식에 `aria-current` · 좁은 화면 표식 메뉴에는 「소개」 줄) · ⋯ 메뉴의 「관리 —」 줄 제거 · 콘솔 현황 진단 카드 「자세히」 → `/console/server#doctor`
+- 조작 수 — 상단 바 admin 12 → 11 · writer 10 · ⋯ 15 → 14 · 관리 메뉴 6 → 3
+
+**껍데기 하나 · 세션 · 캐시 · 주소 · 테마** — `viewer/src/Shell.jsx`(새) · `lib/session.jsx` · `lib/cache.js` · `lib/slots.js` · `lib/keys.js`(새) · `lib/api.js` · `lib/router.jsx` · `main.jsx` · `index.html` · `styles/*`
+- `main.jsx` 는 `<Shell/>` 하나 — 라우트가 매 렌더 얼굴을 고르고 `TopBar` 는 한 번(얼굴 사이에 살아남는다) · 레포 도구는 포털 · `<App key={repo}>`. **얼굴 순회 12정거장이 문서 교체 0**(전에는 얼굴 · 레포를 넘는 31곳이 전부 교체)
+- `api.js` 의 모드 상수 → `getMode()` · `isServer()` · `currentRepo()` · `req()` 가 부르는 시점의 레포 · 얼굴 밖 `<a href>` 21곳 → `Link` · `location.href` 0(로컬의 레포 경로 바꾸기도 문서 교체 없이 다시 세운다)
+- 세션 하나(`/site/info` + `/me` 한 번 · 상단 바가 두 번 그려지지 않는다) · `useResource`(stale-while-revalidate · 같은 키는 요청 하나) — 두 번째 방문 「읽는 중…」 0(관리 · 콘솔 7 · 설명서 · 검사 · 문서) · 전환은 `startTransition`
+- 주소가 상태 — `/r/<레포>/` · `/graph` · `/manage/<overview|work|info>`(로컬은 `/…`) · 콘솔 → 「레포」 가 마지막 경로로(보던 관리 탭)
+- 첫 페인트 전 테마 — `index.html` head 의 CSS 앞 인라인 스크립트(`cdp.theme` + OS → `data-theme` · `data-face` · `color-scheme` meta) · `html` 배경 `--bg` · `color-scheme` · 죽은 `auto-dark` 셀렉터 삭제
+
+**문서** — 사용자 설명서 8.1 · 8.8 · 8.9(「v0.13.0 에서 달라진 것」) · 관리자 설명서 3.4 (다) · 3.7 · 5.2 · 6.1 · 개발자 설명서 7 · 8.5 · 9 · 10.1 · 11.3 · 부록 C · MCP 설계서 §6.6.3 · 제품관리서비스 검토 §4.8 · 화면 UX 검토 §5.5 에 정정 상자 · 검토 v0.1 머리 「구현 완료」 · §2.7 「후」 표
+
+**검증** — 하네스 98~103(writer `POST /repos` 404 · writer `POST /admin/repos` 403 · viewer `/workrepos` users `[]` · viewer `/api/<r>/git` 404 · 인라인 테마 스크립트가 stylesheet 앞 · `POST /logout` 200) · 71 · 72 는 `ctx repo new` 로 · 테스트(`auth` tid · `save` describe) · Playwright 실측(TODO 「나온 것」)
+
 ## v0.12.0
 
 동시 기록 — [`docs/design/CDP_동시기록_검토_v0.1.md`](docs/design/CDP_동시기록_검토_v0.1.md) · [`docs/dev/동시기록_TODO.md`](docs/dev/동시기록_TODO.md)
