@@ -468,7 +468,7 @@ export async function runServe(opt = {}) {
 
   const store = makeStore(root, log)
   await store.refresh()
-  // 패키지 — `POST /repos` 가 여기서 복사한다(검토 §3.5). 없어도 서버는 돈다.
+  // 패키지 — 콘솔의 `POST /admin/repos` 가 여기서 복사한다(검토 §3.5 · 화면 · 권한 검토 v0.1 R1). 없어도 서버는 돈다.
   const pk = await resolvePackages({ explicit: opt.packages, binDir: hereDir(import.meta.url) })
   log.line(pk ? `패키지: ${pk.dir} (${pk.how})` : '패키지: 없음 — 화면에서 레포를 세우려면 --packages')
   const authenticate = makeAuth({ authFile: opt.auth, log })
@@ -525,7 +525,8 @@ export async function runServe(opt = {}) {
     return { at: doctorCache.at, ...r }
   }
 
-  // 지식 레포를 둔다 — `POST /repos`(writer) 와 콘솔 `POST /admin/repos`(admin) 가 **같은 것**을 부른다.
+  // 지식 레포를 둔다 — 콘솔 `POST /admin/repos`(admin · 재인증 · grant) 와 CLI `ctx repo new` 가 **같은 것**을 부른다.
+  // 레포 화면의 `POST /repos`(writer) 는 없앴다 — 세우는 것은 admin 한 곳(화면 · 권한 검토 v0.1 R1 · Q3).
   // 등록 = 폴더를 두는 것(§4.2). 길이 둘 — 패키지에서 세우기 · origin 에서 clone(검토 D9).
   // 판정은 `core/reponew.js` 하나 — CLI `ctx repo new` 와 같은 함수다.
   const buildRepo = async ({ name, pkgName = '', origin = null, clone = null, actor }) => {
@@ -835,6 +836,9 @@ export async function runServe(opt = {}) {
       }
       if (url.pathname === '/logout') {
         clearCookies(res, { secure: secureCookie })
+        // 화면(SPA)은 POST 로 부르고 JSON 을 받아 pushState 안에서 소개로 간다 — 서버 왕복이 필요한 유일한 전환이
+        // 문서 교체를 만들지 않게(화면 · 권한 검토 v0.1 R7 · Q6). GET 302 는 옛 링크 · 주소창의 것으로 남긴다.
+        if (req.method === 'POST') return json(res, 200, { ok: true })
         res.writeHead(302, { location: '/' })
         return res.end()
       }
@@ -1245,28 +1249,6 @@ export async function runServe(opt = {}) {
         })
       }
 
-      // POST /repos { name, package, origin? } — 지식 레포를 **세운다**(검토 §3.5 · R6).
-      //
-      // 등록 = 폴더를 두는 것(설계서 §4.2)은 그대로다. clone 이 한 길이고 이것이
-      // 다른 길이다. `write` 가 있어야 한다 — origin 에 커밋을 만드는 일이다.
-      // 실물은 `buildRepo` — 콘솔의 `POST /admin/repos` 와 같은 함수다.
-      if (url.pathname === '/repos' && req.method === 'POST') {
-        if (!a.write) {
-          log.req({ ip, user: a.user, method: 'POST', tool: '/repos', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
-          return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '쓰기 권한이 없다 — 레포를 세우는 것은 write 인 사람만' } })
-        }
-        let body
-        try {
-          body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
-        } catch {
-          return json(res, 400, { error: { code: 'E_INPUT', message: '본문이 JSON 이 아니다' } })
-        }
-        const name = String(body.name || '').trim()
-        const out = await buildRepo({ name, pkgName: String(body.package || '').trim(), origin: body.origin ? String(body.origin).trim() : null, actor: a.user })
-        log.req({ ip, user: a.user, method: 'POST', tool: '/repos', key: name, ms: Date.now() - t0, status: out.status, code: out.body?.error?.code, tid: a.tokenId })
-        return json(res, out.status, out.body)
-      }
-
       if (url.pathname === '/repos' && req.method === 'GET') {
         const list = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
         const rows = []
@@ -1303,7 +1285,9 @@ export async function runServe(opt = {}) {
             const rows = wr.list(db, { kits }).filter((r) => mine.some((m) => m.name === r.knowledge))
             // `write` 를 같이 낸다 -- 화면이 등록 칸을 낼지 말지 정해야 하는데,
             // 못 할 일을 띄워 놓고 누른 뒤에 403 을 내는 것은 화면이 아니다.
-            return json(res, 200, { repos: rows, users: await usersOf(opt.auth), write: !!a.write })
+            // 명부 이름(`users`)은 등록 칸(담당자 select)의 재료라 **write 에게만** 낸다 — viewer 화면은 안 쓰는데 API 만 열려
+            // 있던 모양(화면 · 권한 검토 v0.1 P4 · R4).
+            return json(res, 200, { repos: rows, users: a.write ? await usersOf(opt.auth) : [], write: !!a.write })
           }
           // **등록·삭제는 `write` 가 있어야 한다.**
           //
@@ -1963,7 +1947,8 @@ async function serveWeb({ req, res, url, webDir, log, status = 200 }) {
   }
   // **같은 번들이 로컬 뷰어에서도 돈다**(§6.8). `/r/` 밖의 경로(`/` · `/manual` · `/console`)에서
   // 화면이 자기가 서버에서 왔는지 알 길이 없어 한 줄을 심는다 — 왕복 없이 첫 렌더에서 갈린다.
-  if (rel === '/index.html') buf = Buffer.from(buf.toString('utf8').replace('</head>', '<script>window.__CDP_SERVER__=true</script></head>'), 'utf8')
+  // `<head>` 의 **첫 줄**에 심는다 — 그 뒤에 오는 인라인 테마 스크립트(index.html · CSS 앞)와 모듈 스크립트가 먼저 본다.
+  if (rel === '/index.html') buf = Buffer.from(buf.toString('utf8').replace('<head>', '<head><script>window.__CDP_SERVER__=true</script>'), 'utf8')
   res.writeHead(rel === '/index.html' ? status : 200, {
     'content-type': MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream',
     'cache-control': rel === '/index.html' ? 'no-store' : 'public, max-age=31536000, immutable',

@@ -27,6 +27,7 @@ import Palette from './components/Palette.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import AdminView from './components/admin/AdminView.jsx'
 import { isServer, mode as appMode, gotoRepo } from './lib/api.js'
+import { KEYS } from './lib/keys.js'
 import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
@@ -109,7 +110,7 @@ export default function App() {
     setState(s)
     setManagedList(m || [])
     setOthers(d.others || [])
-    if (isServer) api.me().then(setMe).catch(() => {})
+    if (isServer()) api.me().then(setMe).catch(() => {})
     return { r, d, v, s, m: m || [] }
   }, [])
 
@@ -118,7 +119,7 @@ export default function App() {
       .then(({ r, d, s, m }) => {
         // **서버 모드에는 첫 실행 분기가 없다**(§6.6.3). 고를 레포 경로가
         // 없고, 로그인 뒤 바로 문서다.
-        if (!isServer && (!s.repoPath || r.docs === 0)) {
+        if (!isServer() && (!s.repoPath || r.docs === 0)) {
           if (!s.repoPath) setNeedSetup(true)
         }
         // 첫 화면 — 마지막에 읽던 문서를 그대로 연다. 시작점도 거기서 잡는다.
@@ -159,7 +160,7 @@ export default function App() {
       if (ev.type === 'sync') {
         setSync((s) => ({ ...(s || {}), phase: ev.phase, startedAt: ev.startedAt ?? s?.startedAt ?? null, last: ev.last ?? s?.last ?? null }))
         // 끝났으면 이력까지 다시 읽는다. 그 한 줄이 표에 남아야 한다.
-        if (ev.phase === 'idle' && !isServer) api.sync().then(setSync).catch(() => {})
+        if (ev.phase === 'idle' && !isServer()) api.sync().then(setSync).catch(() => {})
         return
       }
       if (ev.type !== 'changed') return
@@ -179,7 +180,7 @@ export default function App() {
       // SSE 가 붙었다. 그 전에 지나간 상태 변화를 여기서 한 번 맞춘다.
       api.repo().then(setRepo).catch(() => {})
       // 모드 B 에는 `/sync` 가 없다 — 부르면 404 만 쌓인다.
-      if (!isServer) api.sync().then(setSync).catch(() => {})
+      if (!isServer()) api.sync().then(setSync).catch(() => {})
     })
   }, [reload])
 
@@ -462,7 +463,6 @@ export default function App() {
           sync={null}
           onSync={() => {}}
           onCheck={() => {}}
-          onClose={() => {}}
           firstRun
           onOpened={() => {
             setNeedSetup(false)
@@ -503,11 +503,11 @@ export default function App() {
           서버 모드에서 하나여도 메뉴다(제품관리서비스 검토 §4.8) — 볼 수 있는 레포와 내 권한이 보이고, 관리자에게는
           이 서버의 레포 전부가 더 붙는다. 로컬은 얼굴이 하나라 스위처 없이 레포 이름표만 선다. */}
       <TopBar
-        face={isServer ? 'repo' : 'local'}
-        me={isServer ? me : null}
-        repoName={isServer ? appMode.repo : repoName}
+        face={isServer() ? 'repo' : 'local'}
+        me={isServer() ? me : null}
+        repoName={isServer() ? appMode.repo : repoName}
         repoMenu={
-          isServer && me
+          isServer() && me
             ? {
                 open: repoMenu,
                 onToggle: () => setRepoMenu((v) => !v),
@@ -562,7 +562,7 @@ export default function App() {
         center={
           <>
             {/* loopback 경고는 **로컬만의 것**이다. 원격에서는 늘 참이라 경고가 아니다(§6.6.3). */}
-            {!isServer && repo.hostWarning && (
+            {!isServer() && repo.hostWarning && (
               <span className="hostwarn"><Icon name="warn" size={13} /> loopback 아님</span>
             )}
 
@@ -591,7 +591,7 @@ export default function App() {
 
             {/* 동기화 — **하루에 제일 먼저 누르는 것이다.** 도는 동안 단계와 경과 초가 이 버튼에 뜬다.
                 로컬만 — 서버는 언제나 origin HEAD 이고 받을 것이 없다(§4.8). */}
-            {!isServer && <SyncButton sync={sync} onSync={syncNow} />}
+            {!isServer() && <SyncButton sync={sync} onSync={syncNow} />}
 
             {/* 검증 — **아침에 제일 먼저 보는 값이다.** 0건이면 조용하다. */}
             {c.error > 0 ? (
@@ -670,13 +670,7 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <div className="menu__hr" />
-            {/* 설정은 팝오버가 아니라 **화면**이다. 줄은 남긴다 — 여기서 찾던
-                사람이 계속 여기서 찾는다. */}
-            <button className="menu__row" onClick={() => { setMenuOpen(false); setTopMode('admin') }}>
-              <span className="menu__ico"><Icon name="gear" size={15} /></span>
-              관리 — 레포 · 동기화 · 에이전트 설치
-            </button>
+            {/* 「관리 —」 줄은 뺐다 — 세그의 「관리」 와 같은 일을 하는 단추 둘이었다(화면 · 권한 검토 v0.1 R5 · 부록 C) */}
           </div>
         </>
       )}
@@ -701,7 +695,7 @@ export default function App() {
           sync={sync}
           onSync={syncNow}
           onCheck={() => setCheckOpen(true)}
-          onClose={() => setTopMode('doc')}
+          repoName={isServer() ? appMode.repo : repoName}
           say={(m) => say(m, 6000)}
         />
       ) : topMode === 'graph' ? (
@@ -998,18 +992,7 @@ function Help({ docs = [], onOpen, onClose }) {
 
           <div className="help__cap">단축키</div>
           <dl className="help__keys">
-            {[
-              [['⌘K'], '검색 · 이동 — 자연어를 정본 좌표로 대조한다'],
-              [['\\'], '왼쪽 전환 — 목록 ↔ 뻗어나가기'],
-              [['⌘.'], '읽기 모드 — 왼쪽을 접는다'],
-              [['⌘+', '⌘-', '⌘0'], '본문 글자 크기'],
-              [['j', 'k'], '작업문서 목록 위아래'],
-              [['x'], '읽음 표시 토글'],
-              [['⇧C'], '요약 복사 — AI 세션에 붙여넣는 형식 그대로'],
-              [['⌥←', '⌥→'], '방문 이력'],
-              [['?'], '이 창'],
-              [['esc'], '닫기 — 겹쳐 있으면 위에서부터 하나씩'],
-            ].map(([keys, what]) => (
+            {KEYS.map(([keys, what]) => (
               <div className="help__row" key={what}>
                 <dt>{keys.map((k) => <span className="kbd" key={k}>{k}</span>)}</dt>
                 <dd>{what}</dd>
@@ -1017,7 +1000,7 @@ function Help({ docs = [], onOpen, onClose }) {
             ))}
           </dl>
 
-          {isServer && (
+          {isServer() && (
             <>
               <div className="help__cap">설명서</div>
               <a className="help__doc" href="/manual" style={{ textDecoration: 'none' }}>

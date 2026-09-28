@@ -10,7 +10,7 @@ import { PageHead, Card, Row, Mono, Note, Btn, Cmd, Search, when } from './ui.js
 
 const MARK = { ok: ['check', 'var(--text-3)'], warn: ['warn', 'var(--warn)'], fail: ['block', 'var(--danger)'] }
 
-export default function Server({ say }) {
+export default function Server({ say, route }) {
   const [sv, setSv] = useState(null)
   const [doc, setDoc] = useState(null)
   const [log, setLog] = useState(null)
@@ -25,6 +25,10 @@ export default function Server({ say }) {
   useEffect(() => {
     load()
   }, [load])
+  // 현황의 진단 카드 「자세히」 가 `#doctor` 를 들고 온다 — 표가 선 뒤 그 카드로
+  useEffect(() => {
+    if (route?.hash === '#doctor' && sv) document.getElementById('doctor')?.scrollIntoView({ block: 'start' })
+  }, [route?.hash, sv])
 
   const recheck = async () => {
     setBusy(true)
@@ -103,7 +107,7 @@ export default function Server({ say }) {
         </Card>
       </div>
 
-      <Card title="진단" hint={doc ? `ctx serve doctor 와 같은 줄 · ${when(new Date(doc.at).toISOString())} · 60초 캐시` : 'ctx serve doctor 와 같은 줄'} actions={doc && <span className="tcount">ok {doc.rows.length - doc.fails - doc.warns} · warn {doc.warns} · fail {doc.fails}</span>}>
+      <Card id="doctor" title="진단" hint={doc ? `ctx serve doctor 와 같은 줄 · ${when(new Date(doc.at).toISOString())} · 60초 캐시` : 'ctx serve doctor 와 같은 줄'} actions={doc && <span className="tcount">ok {doc.rows.length - doc.fails - doc.warns} · warn {doc.warns} · fail {doc.fails}</span>}>
         {!doc ? (
           <span className="amuted">{busy ? '검사 중…' : '아직 검사하지 않았다 — 다시 검사'}</span>
         ) : (

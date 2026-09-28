@@ -12,27 +12,30 @@
 // 매일 만지는 것과 평생 한 번 하는 것을 같은 스크롤에 두지 않는다. 그리고
 // 여기에 복제하지도 않는다: 같은 값을 고치는 자리가 둘이면 어느 쪽이 정본인지
 // 사람이 모른다.
+//
+// **서버 모드는 「이 레포 · 내 것」 셋 — 현황 · 작업 레포 · 정보**(화면 · 권한 검토 v0.1 R2 · R6). 지식 레포 목록은
+// 상단 「레포 ▾」 메뉴가, 세우기 · 복구는 콘솔(admin · 재인증)이 든다 — 같은 일을 하는 자리가 둘이면 어느 쪽이
+// 정본인지 사람이 모른다(P3). 「콘솔」 줄 · 「문서로 돌아가기」 줄도 뺐다 — 상단 스위처의 「콘솔」 · 세그의 「문서」 ·
+// Esc · 뒤로 가기(주소가 상태다 · R9)가 같은 일을 한다.
 
 import { useEffect, useState } from 'react'
-import { api } from '../../lib/api.js'
+import { api, isServer } from '../../lib/api.js'
 import Icon from '../Icon.jsx'
 import Overview from './Overview.jsx'
 import Repo from './Repo.jsx'
 import Sync from './Sync.jsx'
 import WorkRepos from './WorkRepos.jsx'
 import WorkReposServer from './WorkReposServer.jsx'
-import RepoServer from './RepoServer.jsx'
 import Diag from './Diag.jsx'
-import { isServer } from '../../lib/api.js'
+import Info from './Info.jsx'
 
 // 서버 모드에서는 **이 PC 를 만지는 화면이 없다**(MCP 설계서 §6.6.3).
 // 지우는 것이 아니라 내지 않는 것이다 — 라우트도 404 이므로 화면만 숨겨서
-// API 가 살아 있는 구멍이 생기지 않는다(§6.2).
-const MENU = [
+// API 가 살아 있는 구멍이 생기지 않는다(§6.2). `local: true` 는 로컬에만, `server: true` 는 서버에만.
+export const MENU = [
   { key: 'overview', icon: 'check', label: '현황', sub: '지금 쓸 수 있는 상태인가' },
-  // **서버에도 있다 — 다른 화면이다**(검토 §3.7). 로컬은 이 PC 의 경로를 고르고,
-  // 서버는 든 레포를 보이고 패키지에서 새 레포를 세운다(`POST /repos`).
-  { key: 'repo', icon: 'managed', label: '지식 레포', sub: '어디를 보고 있나 · 세운다' },
+  // 로컬 — 이 PC 의 경로를 고른다. 서버에는 고를 경로가 없고, 목록은 「레포 ▾」 · 세우기는 콘솔이다(R2).
+  { key: 'repo', icon: 'managed', label: '지식 레포', sub: '어디를 보고 있나', local: true },
   // **서버 모드에는 없다.** 모드 B 에서 git 을 도는 것은 서버 자신이다 —
   // `save` 가 커밋하고 `--mirror` 가 push 한다(§4.5). 사람이 브라우저에서
   // pull/push 를 누를 자리가 아니고, 실제로 `POST /git/pull` · `/git/push` ·
@@ -41,8 +44,12 @@ const MENU = [
   // **서버에도 있다 — 다른 화면이다**(§6.7.3). 로컬은 이 PC 에 깔고,
   // 서버는 등록하고 꾸러미를 내주고 결과를 추적한다.
   { key: 'work', icon: 'plug', label: '작업 레포', sub: '에이전트 설치' },
-  { key: 'diag', icon: 'info', label: '진단 · 정보', sub: '버전 · 경로 · 로그' },
+  { key: 'diag', icon: 'info', label: '진단 · 정보', sub: '버전 · 경로 · 로그', local: true },
+  // 서버 — 값만. `/api/<레포>/diag` 는 서버에 없다(P2) — 있는 것(세션)만 그린다.
+  { key: 'info', icon: 'info', label: '정보', sub: '판 · 내 계정 · 단축키', server: true },
 ]
+
+export const menuFor = (server) => MENU.filter((m) => (server ? !m.local : !m.server))
 
 export default function AdminView({
   tab,
@@ -53,23 +60,26 @@ export default function AdminView({
   sync,
   onSync,
   onCheck,
-  onClose,
   firstRun = false,
   onOpened,
   say,
   me = null,
+  built = null,
+  repoName = null,
 }) {
+  const server = isServer()
   const [diag, setDiag] = useState(null)
 
   // 진단 값은 여러 화면이 같이 쓴다(스캔 시각 · 번들 · 데이터 폴더).
-  // **한 번만 읽는다** — 화면을 옮길 때마다 다시 읽을 값이 아니다.
+  // **한 번만 읽는다** — 화면을 옮길 때마다 다시 읽을 값이 아니다. **로컬만** — 서버에는 그 라우트가 없다.
   useEffect(() => {
+    if (server) return
     api.diag().then(setDiag).catch(() => setDiag(null))
-  }, [repo?.root, sync?.phase])
+  }, [server, repo?.root, sync?.phase])
 
   // 서버 모드에는 첫 실행 분기가 없다 — 고를 레포 경로가 없다(§6.6.3).
-  const menu = MENU.filter((m) => !m.local || !isServer)
-  const cur = !isServer && firstRun ? 'repo' : menu.some((m) => m.key === tab) ? tab : 'overview'
+  const menu = menuFor(server)
+  const cur = !server && firstRun ? 'repo' : menu.some((m) => m.key === tab) ? tab : 'overview'
 
   return (
     <div className="admin">
@@ -91,28 +101,6 @@ export default function AdminView({
               </span>
             </button>
           ))}
-          {/* 관리자에게 — 콘솔로. 여기 넷은 레포 하나의 것이고, 사람 · 토큰 · 레포 전부 · 서버는 콘솔의 것이다
-              (제품관리서비스 검토 §4.8). */}
-          {isServer && me?.admin && (
-            <>
-              <div className="menu__hr" />
-              <a className="astep" href="/console" style={{ textDecoration: 'none' }} title="콘솔" aria-label="콘솔">
-                <Icon name="shield" size={15} />
-                <span className="astep__txt">
-                  <span className="astep__t">콘솔</span>
-                  <span className="astep__s">사람 · 토큰 · 레포 전부 · 서버</span>
-                </span>
-              </a>
-            </>
-          )}
-          <span className="topbar__spacer" style={{ flex: 1 }} />
-          <button className="astep astep--back" onClick={onClose} title="문서로 돌아가기" aria-label="문서로 돌아가기">
-            <Icon name="doc" size={15} />
-            <span className="astep__txt">
-              <span className="astep__t">문서로 돌아가기</span>
-              <span className="astep__s kbd">esc</span>
-            </span>
-          </button>
         </nav>
       )}
 
@@ -123,28 +111,19 @@ export default function AdminView({
               repo={repo}
               sync={sync}
               diag={diag}
+              me={me}
               onGo={onTab}
               onCheck={onCheck}
               onSync={onSync}
             />
           )}
-          {cur === 'repo' &&
-            (isServer ? (
-              <RepoServer say={say} />
-            ) : (
-              <Repo
-                state={state}
-                repo={repo}
-                diag={diag}
-                firstRun={firstRun}
-                onOpened={onOpened}
-                say={say}
-              />
-            ))}
+          {cur === 'repo' && !server && (
+            <Repo state={state} repo={repo} diag={diag} firstRun={firstRun} onOpened={onOpened} say={say} />
+          )}
           {cur === 'sync' && <Sync sync={sync} onSync={onSync} say={say} />}
-          {cur === 'work' &&
-            (isServer ? <WorkReposServer say={say} /> : <WorkRepos state={state} patch={patch} say={say} />)}
+          {cur === 'work' && (server ? <WorkReposServer say={say} /> : <WorkRepos state={state} patch={patch} say={say} />)}
           {cur === 'diag' && <Diag diag={diag} repo={repo} say={say} />}
+          {cur === 'info' && <Info me={me} built={built} repoName={repoName} />}
         </div>
       </div>
     </div>

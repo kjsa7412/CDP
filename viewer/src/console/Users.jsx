@@ -13,7 +13,7 @@ import { PageHead, Toolbar, Search, Card, Note, Modal, Field, Seg, Chip, RoleChi
 
 const ROLE_OPTS = [
   ['viewer', 'viewer', '읽기'],
-  ['writer', 'writer', 'save · 레포 세우기'],
+  ['writer', 'writer', 'save · 작업 레포 등록'],
   ['admin', 'admin', '콘솔'],
 ]
 
@@ -238,7 +238,7 @@ export default function Users({ me, say, route }) {
             <Seg value={editRole.role} onChange={(v) => setEditRole({ ...editRole, role: v })} options={ROLE_OPTS} />
           </Field>
           <Note>
-            <b>writer</b> 는 save 로 기록을 만들고 레포를 세우고 작업 레포를 등록한다. <b>admin</b> 은 콘솔에 들어온다. 마지막 admin 은 내릴 수 없다.
+            <b>writer</b> 는 save 로 기록을 만들고 작업 레포를 등록한다. 지식 레포를 세우는 것은 <b>admin</b>(콘솔 › 지식 레포)만 — <b>admin</b> 은 콘솔에 들어온다. 마지막 admin 은 내릴 수 없다.
           </Note>
         </Modal>
       )}

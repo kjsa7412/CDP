@@ -3,7 +3,7 @@
 // "복사하면 그게 지식 레포다"(install.md ③)가 사람 손이었다 — xcopy · git init ·
 // hooksPath 세 줄. 로컬에서는 그것으로 족하지만 서버에는 복사할 사람이 없다.
 // 그래서 그 세 줄을 함수로 만들고, CLI(`ctx repo new`)와 관리 서비스
-// (`POST /repos`)가 **같은 것을** 부른다.
+// (콘솔의 `POST /admin/repos`)가 **같은 것을** 부른다.
 //
 //   0  dest 가 없거나 빈 폴더여야 한다.  남의 폴더에 쓰지 않는다
 //   1  from 을 복사한다.  exe · _package.json 은 담지 않는다

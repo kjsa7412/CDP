@@ -113,19 +113,9 @@ export async function handleRead({ p, method, url, res, send, store }) {
     return true
   }
 
-  // git — GET 은 읽기만 한다. `?fetch=1` 은 fetch 까지 하는데 작업 트리를
-  // 건드리지 않으므로 안전하다. **pull · push 는 여기 없다** — 그것은
-  // 로컬 뷰어의 것이고 관리 서비스에서는 404 다(§6.2).
-  if (p === '/git' && method === 'GET') {
-    send(res, 200, await store.gitStatus({ fetch: url.searchParams.get('fetch') === '1' }))
-    return true
-  }
-
-  if (p === '/git/config' && method === 'GET') {
-    const { readConfig } = await import('../../../core/git.js')
-    send(res, 200, await readConfig(store.root))
-    return true
-  }
+  // git(`/git` · `/git/config`)은 **여기 없다** — 로컬 뷰어(`http.js`)의 것이다. 받을 것 · 보낼 것 · pull/push 는
+  // 로컬형 문법이고 서버 화면은 어디서도 안 쓴다(동기화 메뉴가 `local: true`). 허용 레포의 viewer 에게 origin 호스트 ·
+  // 커밋 신원 · hooksPath 가 나가던 것을 「없는 것」 으로(화면 · 권한 검토 v0.1 P5 · R4 · Q7).
 
   // 레포 안의 파일 하나. **`root` 밖은 열지 않는다** — 경로 검사는
   // `resolveInside` 한 곳에만 있다.

@@ -144,6 +144,17 @@ async function handleApi({ req, res, url, send, store, appState, clients, broadc
   // 로컬 전용 라우트는 이 PC 를 만지는 것들이다(§6.2).
   if (await handleRead({ p, method, url, res, send, store })) return
 
+  // git — GET 은 읽기만 한다. `?fetch=1` 은 fetch 까지 하는데 작업 트리를 건드리지 않으므로 안전하다.
+  // **로컬 뷰어만의 것**이다 — 관리 서비스의 `/api/<레포>/git` 은 404 다(화면 · 권한 검토 v0.1 R4). 전에는
+  // `read-api.js` 의 공유 라우트였는데 서버 화면이 어디서도 안 쓰면서 origin 호스트 · 커밋 신원만 나갔다.
+  if (p === '/git' && method === 'GET') {
+    return send(res, 200, await store.gitStatus({ fetch: url.searchParams.get('fetch') === '1' }))
+  }
+  if (p === '/git/config' && method === 'GET') {
+    const { readConfig } = await import('../../../core/git.js')
+    return send(res, 200, await readConfig(store.root))
+  }
+
   // ── SSE ────────────────────────────────────────────────────────────────
   if (p === '/events') {
     res.writeHead(200, {

@@ -3,7 +3,7 @@
 //   ctx repo new  <경로> --package <이름> [--packages <dir>] [--origin <url>] [--push] [--dry]
 //   ctx repo list --root <폴더>
 //
-// **계산은 `core/reponew.js` 가 한다.** 관리 서비스의 `POST /repos` 가 같은
+// **계산은 `core/reponew.js` 가 한다.** 관리 서비스의 콘솔(`POST /admin/repos`)이 같은
 // 함수를 부른다 — CLI 로 세운 것과 화면에서 세운 것이 같은 모양이어야 한다.
 
 import path from 'node:path'

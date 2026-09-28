@@ -16,7 +16,7 @@ import { Card, Row, Mark, Mono, Note, Btn, when } from './ui.jsx'
 // 서버형의 미러 상태 다섯 — 사실만(동시 기록 검토 v0.1 §5.7). 고치는 것은 콘솔.
 const MIRROR = { ok: [null, '최신 — origin 과 같다'], lag: ['warn', '밀림'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 이 앞서 있다'], off: [null, '원격 없음'] }
 
-export default function Overview({ repo, sync, diag, onGo, onCheck, onSync }) {
+export default function Overview({ repo, sync, diag, me = null, onGo, onCheck, onSync }) {
   const [status, setStatus] = useState(null)
   const [git, setGit] = useState(null)
   const [work, setWork] = useState(null)
@@ -24,7 +24,7 @@ export default function Overview({ repo, sync, diag, onGo, onCheck, onSync }) {
 
   useEffect(() => {
     api.status().then(setStatus).catch(() => setStatus(null))
-    if (isServer) {
+    if (isServer()) {
       // 서버형 — 이 레포의 미러 상태는 `/repos` 의 자기 행(사유 포함). `/api/<레포>/git` 은 로컬형 문법이다
       api.repos().then((rows) => setMine((rows || []).find((r) => r.name === mode.repo) || null)).catch(() => setMine(null))
       // 작업 레포는 **대장**(`/workrepos`)의 이 레포 것 — `/api/<레포>/workrepos` 는 로컬 뷰어의 것이라 서버에 없다(404 → "읽는 중…" 고정 · 화면 UX TODO 의 열린 버그)
@@ -58,7 +58,7 @@ export default function Overview({ repo, sync, diag, onGo, onCheck, onSync }) {
             문서 <b className="num">{repo?.docs ?? 0}</b> · 좌표 <b className="num">{repo?.coords ?? 0}</b>
           </Row>
           {/* 서버형에는 감시도 스캔 시각도 없다(`save` 뒤 재스캔) — 없는 상태를 그리지 않는다(불변조건 7) */}
-          {!isServer && (
+          {!isServer() && (
             <Row label="마지막 스캔" mark={repo?.watchEnabled && !repo?.watchAlive ? 'warn' : null}>
               <span className="amuted">
                 {diag?.scannedAt ? when(diag.scannedAt) : '–'} ·{' '}
@@ -70,7 +70,7 @@ export default function Overview({ repo, sync, diag, onGo, onCheck, onSync }) {
 
         {/* **서버 모드는 버튼이 없다.** 미는 것은 서버 자신이다(§4.5) —
             여기서 보는 것은 상태 한 값과 사유다(동시 기록 검토 v0.1 D3). 고치는 단추는 콘솔(관리자 · 재인증). */}
-        {isServer ? (
+        {isServer() ? (
           <Card title="미러">
             <Row label="상태" mark={mine ? (mine.dirty > 0 ? 'bad' : (MIRROR[mine.mirror] || MIRROR.off)[0]) : null}>
               {mine ? (MIRROR[mine.mirror] || MIRROR.off)[1] : <span className="amuted">–</span>}
@@ -83,9 +83,10 @@ export default function Overview({ repo, sync, diag, onGo, onCheck, onSync }) {
                 <span className="awarn">{mine.note}</span>
               </Row>
             )}
+            {/* 못 들어가는 곳을 안내하지 않는다 — writer · viewer 에게는 「관리자에게」(화면 · 권한 검토 v0.1 P6 · R4) */}
             <Note>
-              커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 밀림 · 갈림 · 더러움을 푸는 단추는 <b>콘솔 › 지식 레포</b>에
-              있습니다(관리자).
+              커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 밀림 · 갈림 · 더러움을 푸는 단추는{' '}
+              {me?.admin ? <><b>콘솔 › 지식 레포</b>에 있습니다.</> : <><b>관리자</b>에게 있습니다(콘솔).</>}
             </Note>
           </Card>
         ) : (

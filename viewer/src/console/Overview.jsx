@@ -92,7 +92,8 @@ export default function Overview({ say }) {
           </Note>
         </Card>
 
-        <Card title="진단" hint="ctx serve doctor 와 같은 줄" actions={<Btn onClick={() => navigate('/console/server')}>자세히</Btn>}>
+        {/* 「자세히」 가 서버 카드와 같은 목적지로 둘 있었다 — 진단은 그 페이지의 진단 카드(#doctor)로(화면 · 권한 검토 v0.1 R6) */}
+        <Card title="진단" hint="ctx serve doctor 와 같은 줄" actions={<Btn onClick={() => navigate('/console/server#doctor')}>자세히</Btn>}>
           {d.doctor ? (
             <div className="stats">
               <Stat n={d.doctor.oks} l="ok" />

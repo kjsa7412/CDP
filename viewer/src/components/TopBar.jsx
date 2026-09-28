@@ -49,12 +49,14 @@ export default function TopBar({
   const last = face === 'repo' || face === 'local' ? repoName : lastRepo()
   const toRepo = face === 'repo' || face === 'local' ? (repoName ? '/r/' + encodeURIComponent(repoName) + '/' : '/r') : repoHref()
 
-  // 스위처 — 얼굴 넷. 순서는 사람이 만나는 순서다: 소개 → 설명서 → 레포 → 콘솔.
+  // 스위처 — 설명서 · 레포 · 콘솔. 「소개」 탭은 뺐다 — 표식 `C CDP` 가 이미 소개다(화면 · 권한 검토 v0.1 R5 · Q1).
+  // 소개에 있을 때는 표식에 `aria-current`. 좁은 화면의 표식 메뉴에는 「소개」 줄이 남는다 — 거기서는 표식이 메뉴 토글이라
+  // 그 줄이 소개로 가는 유일한 길이다.
+  const onIntro = face === 'site' && cur === 'intro'
   const items =
     face === 'local'
       ? [{ key: 'repo', label: '레포', sub: repoName || '', icon: 'managed', current: true, static: true }]
       : [
-          { key: 'intro', label: '소개', href: '/', icon: 'home', current: face === 'site' && cur === 'intro', same: face === 'site' },
           { key: 'manual', label: '설명서', href: '/manual', icon: 'book', current: face === 'site' && cur === 'manual', same: face === 'site' },
           ...(user && hasRepos ? [{ key: 'repo', label: '레포', sub: last || '', href: toRepo, icon: 'managed', current: face === 'repo' }] : []),
           ...(user && admin ? [{ key: 'console', label: '콘솔', href: '/console', icon: 'shield', current: face === 'console', same: face === 'console' }] : []),
@@ -86,11 +88,11 @@ export default function TopBar({
   return (
     <header className="topbar">
       {face === 'site' && Link ? (
-        <Link to="/" className="topbar__brand" onClick={onBrand} aria-haspopup={narrow ? 'menu' : undefined} aria-expanded={narrow ? open : undefined} title="CDP — 소개">
+        <Link to="/" className="topbar__brand" onClick={onBrand} aria-current={onIntro ? 'page' : undefined} aria-haspopup={narrow ? 'menu' : undefined} aria-expanded={narrow ? open : undefined} title="CDP — 소개">
           {brandInner}
         </Link>
       ) : (
-        <a href="/" className="topbar__brand" onClick={onBrand} aria-haspopup={narrow ? 'menu' : undefined} aria-expanded={narrow ? open : undefined} title="CDP — 소개">
+        <a href="/" className="topbar__brand" onClick={onBrand} aria-current={onIntro ? 'page' : undefined} aria-haspopup={narrow ? 'menu' : undefined} aria-expanded={narrow ? open : undefined} title="CDP — 소개">
           {brandInner}
         </a>
       )}
@@ -154,6 +156,15 @@ export default function TopBar({
           <div className="scrim" onMouseDown={() => setOpen(false)} />
           <div className="brandmenu" role="menu" aria-label="CDP">
             <div className="menu__cap">CDP · 어디로</div>
+            {face !== 'local' && (
+              <a className="menu__row" role="menuitem" href="/" aria-current={onIntro ? 'page' : undefined} onClick={() => setOpen(false)}>
+                <span className="menu__ico">
+                  <Icon name="home" size={14} />
+                </span>
+                소개
+                <span className="menu__hint">{onIntro ? '지금 여기' : ''}</span>
+              </a>
+            )}
             {items.map((it) => (
               <a key={it.key} className="menu__row" role="menuitem" href={it.href || toRepo} aria-current={it.current ? 'page' : undefined} onClick={() => setOpen(false)}>
                 <span className="menu__ico">

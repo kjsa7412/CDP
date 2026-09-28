@@ -7,9 +7,9 @@
 import { useState } from 'react'
 import Icon from '../Icon.jsx'
 
-export function Card({ title, hint, children, actions }) {
+export function Card({ title, hint, children, actions, id }) {
   return (
-    <section className="acard">
+    <section className="acard" id={id}>
       {(title || actions) && (
         <div className="acard__head">
           <span className="acard__title">{title}</span>
