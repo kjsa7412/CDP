@@ -18,7 +18,8 @@
 // 근거 없는 경고이고, §13-① 의 나이/유효성 혼동과 같은 오류다.
 
 import { useEffect, useState } from 'react'
-import { api, isServer, mode } from '../lib/api.js'
+import { api, isServer, currentRepo } from '../lib/api.js'
+import { useResource } from '../lib/cache.js'
 import { clockTime } from '../lib/format.js'
 import Icon from './Icon.jsx'
 
@@ -38,7 +39,10 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
   const [busy, setBusy] = useState(false)
   const [git, setGit] = useState(null)
   const [gitBusy, setGitBusy] = useState(null)
-  const [mine, setMine] = useState(null)
+  // 서버형 — 이 레포의 미러 한 값은 `/repos` 의 자기 행. **관리 현황과 같은 키**라 요청 하나를 나눠 받는다(화면 · 권한 검토 v0.1 R8)
+  const server = isServer()
+  const { data: rows, refresh: refreshRows } = useResource(server ? '/repos' : null, api.repos, { enabled: server, ttl: 15_000 })
+  const mine = server ? (rows || []).find((r) => r.name === currentRepo()) || null : null
 
   // git 상태 — **두 단계로 읽는다.**
   //
@@ -59,18 +63,13 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
     }
     // 서버형 — `/api/<레포>/git` 은 로컬형 문법(받을 것 · 보낼 것 · pull/push)이라 쓰지 않는다. `/repos` 의
     // 자기 행이 상태 한 값과 사유를 준다. 이상이 있을 때만 한 줄 — 없으면 아무것도 안 그린다.
-    const local = isServer()
-      ? () =>
-          api
-            .repos()
-            .then((rows) => {
-              if (!dead) setMine((rows || []).find((r) => r.name === mode.repo) || null)
-            })
-            .catch(() => {})
+    const local = server
+      ? () => refreshRows().catch(() => {})
       : () => api.git(false).then(put).catch(() => put(null))
-    const remote = isServer() ? () => Promise.resolve() : () => api.git(true).then(put).catch(() => {})
+    const remote = server ? () => Promise.resolve() : () => api.git(true).then(put).catch(() => {})
 
-    local().then(() => remote())
+    // 서버형은 마운트에서 캐시(useResource)가 읽었다 — 초점이 돌아올 때만 새로
+    if (!server) local().then(() => remote())
     const t = setInterval(remote, 5 * 60 * 1000)
     // 창을 오갈 때마다 묻지 않는다 — 에디터와 뷰어를 번갈아 보는 것이 이 도구의
     // 일상이라 포커스는 몇 초에 한 번씩 온다. 그때마다 서버가 git 을 띄웠다.
@@ -135,7 +134,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
       )}
 
       {/* 서버형 — 미러 · 갈림 · 더러움 한 줄. 이상이 있을 때만. 단추는 콘솔(관리자)에 있다 */}
-      {isServer() && serverLine(mine) && (
+      {server && serverLine(mine) && (
         <span className="is-warn" title={mine.note || undefined}>
           <Icon name="warn" size={12} /> {serverLine(mine)}
         </span>
@@ -144,7 +143,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
       {/* git — 유일한 수신 채널이다(§1). 안 보내면 남에게는 없는 것과 같다.
           **여기는 할 일이 있을 때만 말한다** — `원격 동기` 를 늘 띄우던 자리는
           아무 행동도 없는 자리였다. 서버형에는 pull/push 단추가 없다(라우트도 없다). */}
-      {!isServer() && git?.repo && (
+      {!server && git?.repo && (
         <>
           {git.behind > 0 && (
             <button className="is-warn" onClick={() => gitAct('pull')} disabled={gitBusy}>
@@ -188,7 +187,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
 
       {/* 감시 생존 여부는 추측이 아니라 표시로 확인돼야 한다.
           서버형에는 감시도 수동 스캔도 없다(`save` 뒤 서버가 재스캔) — 없는 상태를 그리지 않는다(불변조건 7) */}
-      {isServer() ? null : scanning ? (
+      {server ? null : scanning ? (
         <span>스캔 중…</span>
       ) : !repo.watchEnabled ? (
         <>

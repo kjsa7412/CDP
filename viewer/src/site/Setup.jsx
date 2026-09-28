@@ -167,9 +167,9 @@ export default function Setup({ info, onDone }) {
                 브라우저는 이미 로그인되어 있습니다. 다음은 콘솔 &gt; <b>지식 레포</b>에서 첫 레포를 세우는 것입니다(설치절차 4장).
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <a className="btn btn--accent" href="/console">
+                <Link className="btn btn--accent" to="/console">
                   콘솔로 <Icon name="arrowRight" size={14} />
-                </a>
+                </Link>
               </div>
             </div>
           </section>

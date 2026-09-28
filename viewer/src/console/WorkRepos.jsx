@@ -3,20 +3,21 @@
 // **읽기다.** 등록 · 꾸러미 · 설치 방법은 그 지식 레포의 관리 > 작업 레포에 있다 — 꾸러미가
 // 레포마다 다르기 때문이다(권장안 · 검토 결정). 여기서는 어느 코드 레포가 어느 판을 들고 있나를 한눈에.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
+import { Link } from '../lib/router.jsx'
+import { useResource } from '../lib/cache.js'
 import { PageHead, Toolbar, Note, Chip } from './ui.jsx'
 
 const STATE = { 최신: null, 낡음: 'warn', 미설치: 'off' }
 
 export default function WorkRepos({ say }) {
-  const [data, setData] = useState(null)
   const [k, setK] = useState('')
   const [st, setSt] = useState('')
-  const load = useCallback(() => admin.workrepos().then(setData).catch((e) => say(e.message, 6000)), [say])
+  const { data, error } = useResource('/admin/workrepos', admin.workrepos)
   useEffect(() => {
-    load()
-  }, [load])
+    if (error) say(error.message, 6000)
+  }, [error, say])
 
   const rows = useMemo(() => (data ? data.repos.filter((r) => (!k || r.knowledge === k) && (!st || r.state === st)) : []), [data, k, st])
   if (!data) return <span className="amuted">읽는 중…</span>
@@ -86,7 +87,7 @@ export default function WorkRepos({ say }) {
                   <td className="dim">{r.applied ? `${r.applied.at} · ${r.applied.by}` : '—'}</td>
                   <td>
                     <div className="rowact">
-                      <a className="abtn" href={'/r/' + encodeURIComponent(r.knowledge) + '/'}>그 레포로 →</a>
+                      <Link className="abtn" to={'/r/' + encodeURIComponent(r.knowledge) + '/'}>그 레포로 →</Link>
                     </div>
                   </td>
                 </tr>

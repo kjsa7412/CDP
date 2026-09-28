@@ -725,6 +725,7 @@
   .codeblock__copy {
     display: none !important;
   }
+  .shell,
   .app,
   .panes,
   .pane,

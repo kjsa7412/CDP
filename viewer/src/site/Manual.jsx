@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { site } from '../lib/api.js'
+import { useResource } from '../lib/cache.js'
 import { navigate, Link, useTitle } from '../lib/router.jsx'
 import { renderMarkdown, enhance } from '../lib/markdown.js'
 import Icon from '../components/Icon.jsx'
@@ -28,8 +29,10 @@ const ICON_OF = { 사용자_설명서: 'book', 관리자_설명서: 'shield', �
 
 export default function Manual({ info, id, hash }) {
   const books = info?.manuals || []
-  const [text, setText] = useState(null)
-  const [err, setErr] = useState(null)
+  // 원문은 캐시(화면 · 권한 검토 v0.1 R8) — 책을 오가도 「읽는 중…」 은 처음 한 번뿐이다. 판이 바뀌면 문서 교체가 오므로 오래 둬도 된다
+  const res = useResource(id ? '/site/manual/' + id : null, () => site.manual(id).then(String), { enabled: !!id, ttl: 5 * 60_000 })
+  const text = res.data ?? null
+  const err = res.error?.message || null
   const [cur, setCur] = useState(null)
   const bodyRef = useRef(null)
 
@@ -37,20 +40,6 @@ export default function Manual({ info, id, hash }) {
   useEffect(() => {
     if (!id && books.length) navigate('/manual/' + encodeURIComponent(books[0].id), { replace: true })
   }, [id, books])
-
-  useEffect(() => {
-    if (!id) return
-    let dead = false
-    setText(null)
-    setErr(null)
-    site
-      .manual(id)
-      .then((t) => !dead && setText(String(t)))
-      .catch((e) => !dead && setErr(e.message))
-    return () => {
-      dead = true
-    }
-  }, [id])
 
   const rendered = useMemo(() => (text != null ? renderMarkdown(text) : null), [text])
 

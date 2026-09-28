@@ -3,19 +3,22 @@
 // **한 번들이 세 얼굴에서 돈다**(MCP 설계서 §6.8 · 제품관리서비스 검토 §4.1). 빌드를
 // 나누면 유지비가 배고, 같은 화면이 갈라지면 한쪽만 고쳐진다.
 //
-// 얼굴은 **주소가 말해 준다.**
+// 얼굴은 **주소가 말해 준다**(`router.jsx` 의 `modeOf`).
 //
 //   로컬   /                → /api/…             세션 토큰 헤더 · SSE · 하트비트        face: local
 //   레포   /r/<repo>/       → /api/<repo>/…      세션 쿠키 · SSE 없음 · 하트비트 없음  face: repo
 //   사이트 / · /manual · /login · /setup · /r      face: site    ┐ 서버가 index.html 에 심은
 //   콘솔   /console/…                              face: console ┘ window.__CDP_SERVER__ 로 안다
 //
-// `/r/` 밖에서는 경로만으로 로컬과 서버를 가를 수 없다(둘 다 `/`). 그래서 서버가
-// `index.html` 을 낼 때 한 줄을 심는다 — 왕복 없이 첫 렌더에서 갈린다.
+// **모드 · 레포는 함수다** — `getMode()` · `isServer()` · `currentRepo()`. 전에는 모듈 상수(`mode · BASE · LS`)라
+// 다른 레포 · 다른 얼굴로 가려면 모듈을 다시 실행하는 수밖에 없었고, 그래서 얼굴을 넘거나 레포를 바꾸는 전환
+// 31곳이 전부 문서 교체였다(화면 · 권한 검토 v0.1 P7 · R7). 지금은 `req()` 가 **부르는 시점**의 레포로 주소를 만든다.
 //
 // 세션 토큰은 URL 의 ?t= 로 한 번 받아 sessionStorage 에 넣고 이후 헤더로
 // 보낸다. 외부 페이지는 sessionStorage 를 읽을 수 없다(설계서 §7.2).
-// 받은 뒤 URL 에서 지운다 — 주소창과 히스토리에 토큰을 남기지 않는다.
+// 받은 뒤 URL 에서 지운다 — 주소창과 히스토리에 토큰을 남기지 않는다. 라우터가 주소를 읽기 전(모듈 로드)이다.
+
+import { navigate, modeOf } from './router.jsx'
 
 const KEY = 'cdp.token'
 
@@ -39,28 +42,23 @@ function readToken() {
 
 export const token = readToken()
 
-// ── 모드 · 얼굴 ─────────────────────────────────────────────────────────────
+// ── 모드 · 얼굴 — 매번 주소를 본다 ────────────────────────────────────────────
 
-function readMode() {
-  const seg = location.pathname.split('/').filter(Boolean)
-  if (seg[0] === 'r' && seg[1]) return { server: true, repo: decodeURIComponent(seg[1]), face: 'repo' }
-  if (typeof window !== 'undefined' && window.__CDP_SERVER__) {
-    return { server: true, repo: null, face: seg[0] === 'console' ? 'console' : 'site' }
-  }
-  return { server: false, repo: null, face: 'local' }
+export const getMode = () => modeOf(location.pathname)
+export const isServer = () => getMode().server
+export const currentRepo = () => getMode().repo
+const base = () => {
+  const r = currentRepo()
+  return r ? `/api/${encodeURIComponent(r)}` : '/api'
 }
-
-export const mode = readMode()
-// 함수다 — 얼굴 · 레포가 주소를 따라 바뀌는 쪽으로 간다(화면 · 권한 검토 v0.1 R7). 읽는 자리가 `isServer()` 로 부른다.
-export const isServer = () => mode.server
-export const face = mode.face
-const BASE = mode.repo ? `/api/${encodeURIComponent(mode.repo)}` : '/api'
 
 // ── 얼굴 사이에서 같이 읽는 것 둘 — 마지막 레포 · 테마 (화면 UX 검토 v0.1 §5.2 · §5.6) ─────
 //
 // 같은 origin 의 세 얼굴이 같은 localStorage 를 본다. 서버에 두지 않는다(§6.8) — 사람마다 다르고
 // 잃어도 그만인 값이다. 이름뿐이라 비밀도 아니다.
 const LAST = 'cdp.lastRepo'
+// 마지막 **경로**도 — 콘솔에서 「레포」 로 돌아오면 보던 관리 탭이 열린다(화면 · 권한 검토 v0.1 P8 · R9)
+const LAST_PATH = 'cdp.lastPath'
 const THEME = 'cdp.theme'
 export function lastRepo() {
   try {
@@ -69,16 +67,29 @@ export function lastRepo() {
     return null
   }
 }
-export function rememberRepo(name) {
+export function rememberRepo(name, path = null) {
   try {
-    if (name) localStorage.setItem(LAST, name)
-    else localStorage.removeItem(LAST)
+    if (name) {
+      localStorage.setItem(LAST, name)
+      if (path) localStorage.setItem(LAST_PATH, path)
+      else localStorage.removeItem(LAST_PATH)
+    } else {
+      localStorage.removeItem(LAST)
+      localStorage.removeItem(LAST_PATH)
+    }
   } catch {}
 }
-// 레포 화면이 열렸다 = 그 레포를 볼 수 있다(볼 수 없으면 서버가 여기까지 보내지 않는다) — 기억한다
-if (mode.server && mode.repo) rememberRepo(mode.repo)
-// 「레포」 로 가는 주소 — 마지막에 보던 레포, 없으면 서버가 첫 레포를 고른다(/r)
-export const repoHref = () => (lastRepo() ? '/r/' + encodeURIComponent(lastRepo()) + '/' : '/r')
+// 「레포」 로 가는 주소 — 마지막에 보던 레포의 마지막 경로. 없으면 서버가 첫 레포를 고른다(/r)
+export function repoHref() {
+  const n = lastRepo()
+  if (!n) return '/r'
+  const root = '/r/' + encodeURIComponent(n) + '/'
+  let p = null
+  try {
+    p = localStorage.getItem(LAST_PATH)
+  } catch {}
+  return p && p.startsWith(root) ? p : root
+}
 export function getTheme() {
   try {
     const t = localStorage.getItem(THEME)
@@ -93,30 +104,49 @@ export function setTheme(t) {
     else localStorage.removeItem(THEME)
   } catch {}
 }
+// 테마를 붙인다 — `index.html` 의 인라인 스크립트가 첫 페인트 전에 같은 계산으로 한 번 붙였다(화면 · 권한 검토 v0.1 R9).
+// 여기서는 OS 변화 · 다른 탭의 변경 · 설정 변경을 따라간다. 값은 'dark' | 'light' 둘뿐이다.
+export function applyTheme(t = getTheme()) {
+  const dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const v = dark ? 'dark' : 'light'
+  if (document.documentElement.dataset.theme !== v) document.documentElement.dataset.theme = v
+  // 스크롤바 · 폼 컨트롤 · 문서 사이의 캔버스도 같은 테마로(index.html 의 meta 와 같은 값)
+  const m = document.querySelector('meta[name="color-scheme"]')
+  if (m && m.content !== v) m.content = v
+}
 
 // 레포를 바꾼다 = **주소를 바꾼다.** 화면 상태를 들고 가지 않는다(§6.6.2) —
-// 좌표 체계가 레포마다 다르므로 이어받을 수 있는 것이 없다.
+// 좌표 체계가 레포마다 다르므로 이어받을 수 있는 것이 없다. `<App key={repo}>` 가 상태를 새로 만든다.
 export function gotoRepo(name) {
-  location.href = '/r/' + encodeURIComponent(name) + '/'
+  navigate('/r/' + encodeURIComponent(name) + '/')
+}
+
+// 로그아웃 — 서버 왕복이 필요한 유일한 전환. JSON 으로 받고 화면이 소개로 간다(pushState) — 문서 교체 없음(Q6).
+export async function logout() {
+  try {
+    await fetch('/logout', { method: 'POST' })
+  } catch {}
 }
 
 // 서버 모드의 화면 상태는 **브라우저에 둔다**(§6.8). 서버 저장 0 —
 // 사람마다 다르고 잃어도 그만인 값이라 명부·설치 대장 옆에 둘 것이 아니다.
-const LS = 'cdp.state.' + (mode.repo || 'local')
+const lsKey = () => 'cdp.state.' + (currentRepo() || 'local')
 // 테마만은 레포별이 아니다 — alpha 에서 밝게 고정했는데 gamma · 콘솔 · 소개가 어둡던 것(검토 P12).
 function localState() {
   let st = {}
   try {
-    st = JSON.parse(localStorage.getItem(LS) || '{}')
+    st = JSON.parse(localStorage.getItem(lsKey()) || '{}')
   } catch {}
   return { ...st, theme: getTheme() }
 }
+// 지금 상태를 동기로 — 서버 모드는 브라우저에 있으니 첫 렌더부터 있다(App 의 「불러오는 중…」 을 줄인다 · R8). 로컬은 null
+export const stateNow = () => (isServer() ? localState() : null)
 function saveLocalState(patch) {
   if ('theme' in patch) setTheme(patch.theme)
   const { theme, ...rest } = patch
   const next = { ...localState(), ...rest }
   try {
-    localStorage.setItem(LS, JSON.stringify(next))
+    localStorage.setItem(lsKey(), JSON.stringify(next))
   } catch {}
   return { ...next, theme: getTheme() }
 }
@@ -130,15 +160,16 @@ function saveLocalState(patch) {
 //
 // 401 은 둘로 갈린다 — `E_REAUTH`(콘솔 쓰기에 관리자 확인이 필요하다)는 **던진다**
 // 부르는 쪽이 확인 모달을 띄우고 다시 시도한다. 나머지 401 은 세션이 끊긴 것이라
-// 보던 곳을 들고 로그인으로 간다(§6.6.1).
+// 보던 곳을 들고 로그인으로 간다(§6.6.1) — pushState 로. 그 뒤 던지는 오류는 화면이 그리지 않는다(`cache.js`).
 async function req(path, opts = {}) {
   const { allowStatus = [], absolute = false, ...init } = opts
-  const res = await fetch((absolute ? '' : BASE) + path, {
+  const server = isServer()
+  const res = await fetch((absolute ? '' : base()) + path, {
     ...init,
     headers: {
       ...(init.body ? { 'content-type': 'application/json' } : {}),
       // 서버 모드는 쿠키다 — 브라우저는 `Authorization` 을 스스로 달 수 없다(§6.4).
-      ...(token && !mode.server ? { authorization: `Bearer ${token}` } : {}),
+      ...(token && !server ? { authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
   })
@@ -149,9 +180,9 @@ async function req(path, opts = {}) {
       j = await res.json()
     } catch {}
     if (j?.error?.code === 'E_REAUTH') throw new ApiError(j.error.message, 401, 'E_REAUTH')
-    if (mode.server) {
-      location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search)
-      return new Promise(() => {}) // 이동 중 — 화면이 오류를 그리지 않게
+    if (server) {
+      navigate('/login?next=' + encodeURIComponent(location.pathname + location.search))
+      throw new ApiError('로그인이 필요합니다', 401, 'E_AUTH')
     }
     throw new ApiError('토큰이 없거나 만료되었습니다. 앱을 다시 실행하세요.', 401)
   }
@@ -196,11 +227,14 @@ export const api = {
   status: () => req('/status'),
   managed: () => req('/managed'),
   coord: (c) => req(`/coord?coord=${encodeURIComponent(c)}`),
-  state: () => (mode.server ? Promise.resolve(localState()) : req('/state')),
+  state: () => (isServer() ? Promise.resolve(localState()) : req('/state')),
   saveState: (patch) =>
-    mode.server ? Promise.resolve(saveLocalState(patch)) : req('/state', { method: 'POST', body: JSON.stringify(patch) }),
-  // 누구인가 · 무엇을 볼 수 있는가 · 역할. 서버 모드에만 있다.
-  me: () => (mode.server ? req('/me', { absolute: true }) : Promise.resolve(null)),
+    isServer() ? Promise.resolve(saveLocalState(patch)) : req('/state', { method: 'POST', body: JSON.stringify(patch) }),
+  // 누구인가 · 무엇을 볼 수 있는가 · 역할. 서버 모드에만 있다. `probe` 면 비로그인(401)을 null 로 — 로그인으로 보내지 않는다
+  me: ({ probe = false } = {}) =>
+    isServer()
+      ? req('/me', { absolute: true, allowStatus: probe ? [401] : [] }).then((j) => (j && !j.error ? j : null))
+      : Promise.resolve(null),
 
   // ── 설치 대장 (§6.7.2) — 서버 모드 전용. 로컬의 `/workrepos` 와 **다른
   // 것**이다: 로컬은 이 PC 에 깐 곳을, 서버는 등록과 추적을 든다(§6.2).
@@ -211,8 +245,8 @@ export const api = {
   registryAdd: (body) => req('/workrepos', { absolute: true, method: 'POST', body: JSON.stringify(body) }),
   registryDel: (id) => req('/workrepos/' + encodeURIComponent(id), { absolute: true, method: 'DELETE' }),
   // 설치 꾸러미. **토큰은 들어 있지 않다**(§6.7.3) — 브라우저가 그냥 받는다.
-  kitUrl: (id) => `/kit/${encodeURIComponent(mode.repo)}?workrepo=${encodeURIComponent(id)}`,
-  // git — GET 은 읽기만. pull/push 는 사람이 누른 것이어야 하므로 POST.
+  kitUrl: (id) => `/kit/${encodeURIComponent(currentRepo())}?workrepo=${encodeURIComponent(id)}`,
+  // git — GET 은 읽기만. pull/push 는 사람이 누른 것이어야 하므로 POST. **로컬만** — 서버에는 `/git` 이 없다(R4)
   git: (doFetch) => req('/git' + (doFetch ? '?fetch=1' : '')),
   gitPull: () => req('/git/pull', { method: 'POST', body: '{}', allowStatus: [409] }),
   gitPush: () => req('/git/push', { method: 'POST', body: '{}', allowStatus: [409] }),
@@ -228,7 +262,7 @@ export const api = {
   diag: () => req('/diag'),
   rescan: () => req('/rescan', { method: 'POST' }),
   fileUrl: (p) =>
-    `${BASE}/file?path=${encodeURIComponent(p)}` + (mode.server ? '' : `&t=${encodeURIComponent(token)}`),
+    `${base()}/file?path=${encodeURIComponent(p)}` + (isServer() ? '' : `&t=${encodeURIComponent(token)}`),
   probeExternal: (p) => req(`/probe-external?path=${encodeURIComponent(p)}`),
   open: (p) => req('/open', { method: 'POST', body: JSON.stringify({ path: p }) }),
   heartbeat: () => req('/heartbeat', { method: 'POST' }).catch(() => {}),
@@ -277,7 +311,7 @@ export const admin = {
 export function subscribe(onEvent, onOpen) {
   // 서버 모드에는 SSE 가 없다. 감시를 켜지 않으므로(§6.1) 보낼 이벤트도 없고,
   // 상주 서버에 탭마다 연결을 물릴 이유도 없다.
-  if (mode.server) return () => {}
+  if (isServer()) return () => {}
   const es = new EventSource(`/api/events?t=${encodeURIComponent(token)}`)
   es.onmessage = (e) => {
     try {
@@ -294,7 +328,7 @@ export function subscribe(onEvent, onOpen) {
 export function startHeartbeat() {
   // 하트비트는 **탭이 닫히면 서버를 끄는** 장치다(§5.2 ⑥). 상주 서버에서
   // 그것을 보내면 남의 화면까지 끄는 셈이 된다.
-  if (mode.server) return () => {}
+  if (isServer()) return () => {}
   const id = setInterval(() => api.heartbeat(), 30_000)
   api.heartbeat()
   return () => clearInterval(id)

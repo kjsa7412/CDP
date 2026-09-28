@@ -11,6 +11,8 @@
 /* height:auto — tokens.css 의 `#root{height:100%}` 를 푼다. 그것이 있으면 긴 페이지에서 상단 바가 flex 에
    눌려 56 → 34px 이 되고(화면 UX 검토 v0.1 P8) 바닥글이 설명서 목차를 덮었다(P13). */
 :root[data-face='site'] #root { height: auto; min-height: 100%; display: flex; flex-direction: column; }
+/* 껍데기(.shell)도 — 상단 바 + 사이트. 높이를 풀어 문서가 스크롤되게(화면 · 권한 검토 v0.1 R7) */
+:root[data-face='site'] .shell { flex: 1; height: auto; min-height: 100vh; }
 
 /* ── ② 사이트 — 읽는 면. 본문 종이(--surface) 위에 선다 ────────────── */
 
@@ -18,12 +20,11 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
   background: var(--surface);
   color: var(--text);
 }
 /* 상단은 세 얼굴이 같이 쓰는 .topbar(app.css) — 문서가 스크롤되는 면이라 위에 붙어 있다 */
-.site .topbar { position: sticky; top: 0; }
+:root[data-face='site'] .topbar { position: sticky; top: 0; }
 
 .wrap { width: min(1080px, 100% - 56px); margin: 0 auto; }
 

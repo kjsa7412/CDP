@@ -4,9 +4,10 @@
 // 삭제는 없다, 비활성이다(D6). 자기 자신의 역할 · 활성은 바꿀 수 없다(`E_SELF`) · 마지막 admin 은
 // 내릴 수 없다(`E_LAST_ADMIN`) — 서버가 거절하고 화면은 그 버튼을 흐린다.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { navigate } from '../lib/router.jsx'
+import { invalidate, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
 import { PageHead, Toolbar, Search, Card, Note, Modal, Field, Seg, Chip, RoleChip, Confirm, when } from './ui.jsx'
@@ -19,7 +20,6 @@ const ROLE_OPTS = [
 
 export default function Users({ me, say, route }) {
   const withSudo = useSudo()
-  const [data, setData] = useState(null)
   const [q, setQ] = useState('')
   const [role, setRole] = useState('')
   const [activeOnly, setActiveOnly] = useState(true)
@@ -28,10 +28,10 @@ export default function Users({ me, say, route }) {
   const [toggle, setToggle] = useState(null) // { name, active }
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(() => admin.users().then(setData).catch((e) => say(e.message, 6000)), [say])
+  const { data, error, refresh: load } = useResource('/admin/users', admin.users)
   useEffect(() => {
-    load()
-  }, [load])
+    if (error) say(error.message, 6000)
+  }, [error, say])
   // 매트릭스로 바로 — 지식 레포 페이지의 [접근] 이 여기로 온다
   useEffect(() => {
     if (route.hash === '#matrix' && data) document.getElementById('matrix')?.scrollIntoView({ block: 'start' })
@@ -42,6 +42,7 @@ export default function Users({ me, say, route }) {
     try {
       await withSudo(fn)
       if (ok) say(ok)
+      invalidate('/admin/')
       await load()
       return true
     } catch (e) {

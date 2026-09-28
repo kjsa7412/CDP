@@ -903,26 +903,25 @@ await check(70, 'GET /packages 가 패키지를 낸다 (권한과 무관)', asyn
 await ctx('serve', 'user', 'add', '--auth', F.auth, '--name', 'ro', '--repos', 'alpha', '--data', F.data)
 const TR = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'ro', '--data', F.data)).stdout.trim()
 
-await check(71, 'POST /repos — write 없음 403 · 이름 형식 400 · 중복 409', async () => {
-  const post = (body, t) =>
-    H.call('/repos', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + t }, body: JSON.stringify(body) })
-  eq((await post({ name: 'x', package: 'dpms' }, TR)).status, 403, 'write 없음')
-  eq((await post({ name: '한글 이름', package: 'dpms' }, TK3)).status, 400, '이름 형식')
-  eq((await post({ name: 'alpha', package: 'dpms' }, TK3)).status, 409, '이미 있는 레포')
-  eq((await post({ name: 'zeta', package: '없는패키지' }, TK3)).status, 404, '없는 패키지')
-  return '403 · 400 · 409 · 404'
+// 레포 화면의 `POST /repos`(writer)는 없앴다 — 세우는 길은 콘솔 `POST /admin/repos`(admin · 재인증 · 98~99) 와
+// CLI `ctx repo new` 다. 둘 다 `core/reponew.js` 하나를 부른다(화면 · 권한 검토 v0.1 R1). 판정은 CLI 로 잰다.
+const PKGS = path.join(ROOT, 'agent', 'packages')
+await check(71, 'ctx repo new — 이름 형식 · 중복 · 없는 패키지를 거절한다 (콘솔 POST /admin/repos 와 같은 core/reponew)', async () => {
+  const fail = async (args) => (await ctx('repo', 'new', ...args).catch((e) => e)).stderr || ''
+  must(/이름 형식/.test(await fail([path.join(F.repos, '한글 이름'), '--package', 'dpms', '--packages', PKGS])), '이름 형식')
+  must(/있다|exists|E_EXISTS/.test(await fail([path.join(F.repos, 'alpha'), '--package', 'dpms', '--packages', PKGS])), '이미 있는 레포')
+  must(/패키지/.test(await fail([path.join(F.repos, 'zeta'), '--package', '없는패키지', '--packages', PKGS])), '없는 패키지')
+  must((await fs.stat(path.join(F.repos, 'zeta')).catch(() => null)) === null, '거절한 것은 남기지 않는다')
+  return '이름 형식 · 중복 · 없는 패키지'
 })
 
-await check(72, 'POST /repos 가 패키지로 레포를 세우고 다음 요청부터 목록에 든다', async () => {
-  const r = await H.call('/repos', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TK3 },
-    body: JSON.stringify({ name: 'delta', package: 'dpms' }),
-  })
-  const j = await r.json()
-  eq(r.status, 200, JSON.stringify(j).slice(0, 200))
-  must(/^[0-9a-f]{7,}$/.test(j.commit || ''), '첫 커밋이 없다 — 훅이 막았나')
-  must(j.files > 40, `파일 ${j.files}`)
+await check(72, 'ctx repo new 로 세운 레포가 다음 요청부터 MCP · 목록에 든다 (서버 재시작 없음)', async () => {
+  const o = await ctx('repo', 'new', path.join(F.repos, 'delta'), '--package', 'dpms', '--packages', PKGS)
+  const j = { commit: /[0-9a-f]{7,40}/.exec(o.stdout)?.[0] || '', files: Number(/파일\s*(\d+)/.exec(o.stdout)?.[1] || 0) }
+  must(/^[0-9a-f]{7,}$/.test(j.commit || ''), '첫 커밋이 없다 — 훅이 막았나 · ' + o.stdout.slice(0, 160))
+  // 서버는 새 폴더를 그 이름으로 가는 첫 요청에서 알아본다(관리자 설명서 3.4)
+  const tl0 = (await H.rpc('/mcp/delta', 'tools/list', {}, TK3)).j?.result?.tools?.length
+  eq(tl0, 13, '첫 요청에서 알아본다')
   const list = await (await H.call('/repos', { headers: { authorization: 'Bearer ' + TK3 } })).json()
   must(list.some((x) => x.name === 'delta'), '목록에 없다')
   const tl = (await H.rpc('/mcp/delta', 'tools/list', {}, TK3)).j.result.tools.length
@@ -932,7 +931,7 @@ await check(72, 'POST /repos 가 패키지로 레포를 세우고 다음 요청�
   must(b.managedDocs >= 40, `관리 문서 ${b.managedDocs}`)
   const hp = (await run('git', ['-C', path.join(F.repos, 'delta'), 'config', '--get', 'core.hooksPath'])).stdout.trim()
   eq(hp, '.githooks', '훅 경로')
-  return `commit ${j.commit} · 파일 ${j.files} · 도구 13 · 관리 문서 ${b.managedDocs}`
+  return `commit ${j.commit} · 도구 13 · 관리 문서 ${b.managedDocs}`
 })
 
 await check(73, '세운 레포에 save 가 한 번 성공한다 (등록부 · 어휘 · 훅이 살아 있다)', async () => {
@@ -1385,6 +1384,73 @@ await check(90, '권한 밖 · 없는 레포 — /r/<x>/ 가 말없이 첫 레�
   return '302 /r?from=beta · 302 /r?from=zeta · 200 · /r → alpha'
 })
 
+// ── 화면 · 권한 검토 v0.1 (2026-09-28) — 98~103. 역할 경계 · 첫 페인트 전 테마 · 로그아웃 JSON ────────────────────
+await ctx('serve', 'user', 'add', '--auth', F.auth, '--name', 'wr', '--repos', 'alpha', '--role', 'writer', '--data', F.data)
+const TW = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'wr', '--note', '검증 98', '--data', F.data)).stdout.trim()
+const TV = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'qa', '--note', '검증 100', '--data', F.data)).stdout.trim()
+await wait(80)
+const BR = (t) => ({ authorization: 'Bearer ' + t, 'content-type': 'application/json' })
+
+await check(98, 'writer 의 POST /repos → 404 — 레포 화면의 세우기는 「막은 것이 아니라 없는 것」', async () => {
+  const r = await A('/repos', { method: 'POST', headers: BR(TW), body: JSON.stringify({ name: 'zz-writer', package: 'dpms' }) })
+  eq(r.status, 404, 'writer')
+  eq((await A('/repos', { method: 'POST', headers: BR(TKA), body: JSON.stringify({ name: 'zz-admin', package: 'dpms' }) })).status, 404, 'admin 도 — 길은 콘솔 하나')
+  must((await fs.stat(path.join(F.repos, 'zz-writer')).catch(() => null)) === null, '아무것도 만들지 않았다')
+  return 'writer 404 · admin 404'
+})
+
+await check(99, 'writer 의 POST /admin/repos → 403 — 지식 레포를 세우는 것은 admin(콘솔 · 재인증)', async () => {
+  eq((await A('/admin/repos', { method: 'POST', headers: BR(TW), body: JSON.stringify({ name: 'zz', package: 'dpms' }) })).status, 403, 'writer')
+  eq((await A('/admin/repos', { method: 'POST', headers: BR(TKA), body: JSON.stringify({ name: 'zz', package: 'dpms' }) })).status, 401, 'admin 도 재인증 없이는 401 E_REAUTH')
+  return 'writer 403 · admin 재인증 401'
+})
+
+await check(100, 'viewer 의 GET /workrepos — users(명부 이름) 없음 · writer 에게만', async () => {
+  const v = await (await A('/workrepos', { headers: BR(TV) })).json()
+  eq(v.users, [], 'viewer 의 users')
+  eq(v.write, false, 'viewer write')
+  const w = await (await A('/workrepos', { headers: BR(TW) })).json()
+  must(Array.isArray(w.users) && w.users.includes('wr'), 'writer 는 담당자 select 재료를 받는다')
+  return `viewer [] · writer ${w.users.length}명`
+})
+
+await check(101, 'viewer 의 GET /api/<레포>/git · /git/config → 404 — 서버 모드에 없는 로컬형 문법', async () => {
+  eq((await A('/api/alpha/git', { headers: BR(TV) })).status, 404, '/git')
+  eq((await A('/api/alpha/git/config', { headers: BR(TV) })).status, 404, '/git/config')
+  eq((await A('/api/alpha/git', { headers: BR(TKA) })).status, 404, 'admin 도')
+  eq((await A('/api/alpha/repo', { headers: BR(TV) })).status, 200, '읽기 API 는 그대로')
+  return '404 · 404 · 404 · /repo 200'
+})
+
+await check(102, 'GET /r/<레포>/ 의 index.html — 서버 표식이 <head> 첫 줄 · 인라인 테마 <script> 가 <link rel=stylesheet> 앞', async () => {
+  const HV = http(`http://127.0.0.1:${PORT}`)
+  eq((await HV.call('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: TV }) })).status, 200, '로그인')
+  const r = await HV.call('/r/alpha/', { headers: { accept: 'text/html' } })
+  eq(r.status, 200, 'status')
+  const html = await r.text()
+  const head = html.indexOf('<head>')
+  const marker = html.indexOf('<script>window.__CDP_SERVER__=true</script>')
+  const theme = html.indexOf("localStorage.getItem('cdp.theme')")
+  const css = html.indexOf('rel="stylesheet"')
+  must(marker === head + '<head>'.length, '표식이 <head> 첫 줄이 아니다')
+  must(theme > marker && css > 0 && theme < css, `테마 ${theme} · css ${css}`)
+  must(/<meta name="color-scheme" content="light dark"/.test(html), 'color-scheme meta')
+  return `표식 @${marker} · 테마 @${theme} · css @${css}`
+})
+
+await check(103, 'POST /logout → 200 JSON · 쿠키를 지운다 · GET /logout 302 는 남는다', async () => {
+  const HL = http(`http://127.0.0.1:${PORT}`)
+  eq((await HL.call('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: TV }) })).status, 200, '로그인')
+  eq((await HL.call('/me')).status, 200, '세션')
+  const r = await fetch(`http://127.0.0.1:${PORT}/logout`, { method: 'POST', headers: { cookie: HL.cookie() }, redirect: 'manual' })
+  eq(r.status, 200, 'POST')
+  eq((await r.json()).ok, true, 'JSON')
+  must(/cdp_s=;|cdp_s=[^;]*;[^,]*Max-Age=0/i.test(r.headers.get('set-cookie') || ''), '쿠키 지움')
+  const g = await fetch(`http://127.0.0.1:${PORT}/logout`, { redirect: 'manual' })
+  eq(g.status, 302, 'GET 302')
+  return 'POST 200 {ok} · 쿠키 지움 · GET 302'
+})
+
 // ── 동시 기록 검토 v0.1 (2026-09-25) — 91~97. `--mirror` 서버를 하나 더(PORT + 3) · bare origin · `—` 규칙 ────────────
 //
 // 판은 fixture 를 `mu` 로 다시 복사해 세운다 — `note:*` → `docs/회의록.md` `—`(문서 전체) 규칙과 `## note` 타입을
@@ -1638,8 +1704,8 @@ skip(63, '전환 메뉴에 권한 밖 레포가 없다', '6.2 브라우저 실�
 skip(64, '레포를 바꾸면 화면 상태 초기화', '6.2 브라우저 실측 — 전환이 주소 이동이라 구조적으로 성립')
 skip(65, '/r/<repo>/doc/<id> 를 새 창에 붙여넣으면 열린다', '6.2 브라우저 실측')
 skip(66, '⌘K 가 다른 레포의 좌표를 안 낸다', '6.2 — 모든 호출이 /api/<repo> 기준(45번이 경로를 덮는다)')
-skip(67, '서버 모드 관리 메뉴 — 현황 · 지식 레포 · 작업 레포 · 진단 넷 + 관리자에게 「콘솔」', '6.2 브라우저 실측 — 2026-09-23 확인 · 2026-09-24 화면 UX 로 이름만 「콘솔」')
-skip(68, '공통 상단 바 — 표식(→ 소개) · 소개 · 설명서 · 레포 · 콘솔(관리자) · 이름 · 역할 칩 · 로그아웃', '브라우저 실측 — 2026-09-24 화면 UX 검토 v0.1 (그림 14 · 20 · 21 의 「후」)')
+skip(67, '서버 모드 관리 메뉴 — 현황 · 작업 레포 · 정보 셋(「콘솔」 · 「문서로 돌아가기」 없음)', '브라우저 실측 — 2026-09-28 화면 · 권한 검토 v0.1 R2(TODO 「나온 것」 · kjsa · hong 둘 다 3)')
+skip(68, '공통 상단 바 — 표식(→ 소개) · 설명서 · 레포 · 콘솔(관리자) · 이름 · 역할 칩 · 로그아웃 · 얼굴을 넘어도 같은 문서', '브라우저 실측 — 2026-09-28 화면 · 권한 검토 v0.1 R5 · R7(얼굴 순회 navigation 1 · timeOrigin 불변)')
 skip(69, '레포 메뉴는 서버 모드에서 항상 — 쓰기/읽기 칩 · 관리자에게 콘솔 › 지식 레포 줄', '6.2 브라우저 실측 — 2026-09-23 확인 (레포 하나여도 메뉴)')
 
 // ── 보고 ────────────────────────────────────────────────────────────────────
@@ -1654,6 +1720,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

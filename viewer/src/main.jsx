@@ -1,17 +1,14 @@
-// 진입 — **얼굴을 고른다.** 한 번들이 셋에서 돈다(MCP 설계서 §6.8 · 제품관리서비스 검토 §4.1).
+// 진입 — **껍데기 하나.** `Shell` 이 매 렌더 주소로 얼굴을 고른다(화면 · 권한 검토 v0.1 R7).
 //
 //   local    로컬 뷰어(트레이 앱) · repo  /r/<레포>/   →  App
 //   site     / · /manual · /login · /setup · /r      →  Site
 //   console  /console/…                              →  Console
 //
-// 얼굴은 `lib/api.js` 의 `face` 가 주소와 서버의 표식(`window.__CDP_SERVER__`)으로 정한다.
-// 왕복이 없다 — 첫 렌더에서 갈린다.
+// 전에는 여기서 얼굴을 한 번 고정해(`face` 상수) 얼굴 사이가 전부 문서 교체였다. 이제 얼굴을 넘는 이동도 pushState 다.
 
 import { createRoot } from 'react-dom/client'
-import { face, getTheme } from './lib/api.js'
-import App from './App.jsx'
-import Site from './site/Site.jsx'
-import Console from './console/Console.jsx'
+import { applyTheme } from './lib/api.js'
+import Shell from './Shell.jsx'
 import './styles/font.css'
 import './styles/tokens.css'
 import './styles/app.css'
@@ -20,21 +17,11 @@ import './styles/doc.css'
 import './styles/site.css'
 import './styles/console.css'
 
-document.documentElement.dataset.face = face
+// 테마 — **얼굴 무관 한 곳.** 첫 페인트 전에는 `index.html` 의 인라인 스크립트가 같은 계산(`cdp.theme` + OS)으로
+// 붙였다(R9 · P10). 여기서는 OS 변화 · 다른 탭의 설정 변경을 따라간다. 레포 화면의 설정 세그는 같은 키에 쓰고
+// `applyTheme` 를 부른다.
+applyTheme()
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme())
+window.addEventListener('storage', (e) => e.key === 'cdp.theme' && applyTheme())
 
-// 테마 — **세 얼굴이 한 키(cdp.theme)를 본다**(화면 UX 검토 v0.1 P12). 레포 화면의 설정이 그 키에 쓰고,
-// 사이트 · 콘솔은 읽기만 한다. 기본은 OS 따라가기(§16.4). 앱(레포 · 로컬)은 state.theme 으로 같은 값을
-// 받아 App 이 맡는다.
-if (face === 'site' || face === 'console') {
-  const mq = window.matchMedia('(prefers-color-scheme: dark)')
-  const apply = () => {
-    const t = getTheme()
-    document.documentElement.dataset.theme = t === 'dark' || (t === 'system' && mq.matches) ? 'dark' : 'light'
-  }
-  apply()
-  mq.addEventListener('change', apply)
-  window.addEventListener('storage', (e) => e.key === 'cdp.theme' && apply())
-}
-
-const Root = face === 'console' ? Console : face === 'site' ? Site : App
-createRoot(document.getElementById('root')).render(<Root />)
+createRoot(document.getElementById('root')).render(<Shell />)

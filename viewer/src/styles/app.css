@@ -3,10 +3,18 @@
  * **왼쪽 | 문서** 2분할. 왼쪽은 한 번에 하나만 한다(목록 · 뻗어나가기).
  * 읽을 때는 ⌘. 로 왼쪽을 통째로 접는다(§27.5). */
 
+/* 껍데기 — 상단 바 하나 + 얼굴 하나(화면 · 권한 검토 v0.1 R7). 상단 바는 얼굴 밖에 서서 얼굴을 넘어도 살아남는다.
+ * 레포 · 콘솔은 창 높이에 맞추고 안에서 스크롤, 사이트는 문서가 스크롤된다(site.css). */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 .app {
   display: grid;
-  grid-template-rows: var(--topbar-h) 1fr var(--statusbar-h);
-  height: 100%;
+  grid-template-rows: 1fr var(--statusbar-h);
+  flex: 1;
+  min-height: 0;
 }
 
 /* 패널 배치는 flex 로 한다.
@@ -175,7 +183,7 @@
 /* 읽기 모드는 상태바까지 접는다(§27.5). 그런데 감시가 끊기면 화면이 낡았을
  * 수 있고, 그때 조용한 화면으로 읽고 있으면 안 되므로 되살린다(§23.3). */
 .app[data-mode='focus'][data-force-status='0'] {
-  grid-template-rows: var(--topbar-h) 1fr 0;
+  grid-template-rows: 1fr 0;
 }
 .app[data-mode='focus'][data-force-status='0'] .statusbar {
   display: none;
@@ -1580,6 +1588,8 @@ a.repomenu__row, a.repomenu__row:hover { text-decoration: none; color: inherit; 
 .faces .topbar__repo { display: inline-flex; }
 .faces .repomenu { top: calc(100% + 8px); left: 0; }
 .topbar__center { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; justify-content: center; }
+/* 포털 자리 — Shell 이 만든 노드(.topbar__center · .topbar__right)를 담는 host. 상자를 만들지 않아 flex 줄에 그대로 선다 */
+.topbar__centerhost, .topbar__righthost, .topbar__right { display: contents; }
 /* 좁은 화면 — 스위처가 표식 메뉴로 접힌다. **라벨이 남는다** — 아이콘만 남기지 않는다(P19) */
 .brandmenu {
   position: absolute;

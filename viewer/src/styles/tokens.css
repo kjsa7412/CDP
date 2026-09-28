@@ -99,8 +99,8 @@
     monospace;
 }
 
-:root[data-theme='dark'],
-:root[data-theme='auto-dark'] {
+/* 어두운 테마 — 값은 'dark' | 'light' 둘뿐이다(`api.js` applyTheme · index.html 인라인). 옛 'auto-dark' 셀렉터는 쓰는 곳이 없어 뺐다 */
+:root[data-theme='dark'] {
   --bg: #0e1116;
   --surface: #161a21;
   --surface-2: #1a1f27;
@@ -126,6 +126,7 @@
   --shadow-3: 0 4px 10px -2px rgba(0, 0, 0, 0.55), 0 24px 56px -12px rgba(0, 0, 0, 0.7);
   --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
   --scrim: rgba(3, 6, 12, 0.6);
+  color-scheme: dark;
 }
 
 * {
@@ -137,6 +138,15 @@ body,
 #root {
   height: 100%;
   margin: 0;
+}
+
+/* 첫 페인트 — 인라인 스크립트(index.html)가 CSS 보다 먼저 data-theme 을 붙이고, 여기서 html 이 --bg 를 칠한다.
+ * body 가 서기 전 · 문서 교체 사이의 빈 캔버스도 그 테마다. color-scheme 이 스크롤바 · 폼 컨트롤을 맞춘다(화면 · 권한 검토 v0.1 R9 · P10) */
+:root {
+  color-scheme: light;
+}
+html {
+  background: var(--bg);
 }
 
 body {

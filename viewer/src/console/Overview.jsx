@@ -3,24 +3,25 @@
 // 카드 넷에 답이 있고, 각 카드는 자기 페이지로 간다. 여기서 고치지 않는다.
 // 경고 띠는 이상이 있을 때만 — 정상이면 카드와 감사 다섯 줄뿐이다(정상은 조용하다).
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { admin } from '../lib/api.js'
+import { invalidate, useResource } from '../lib/cache.js'
 import { Link, navigate } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
 import { PageHead, Card, Row, Note, Btn, when, parseAudit, shortTime } from './ui.jsx'
 
 export default function Overview({ say }) {
-  const [d, setD] = useState(null)
   const [busy, setBusy] = useState(false)
-  const load = useCallback(() => admin.overview().then(setD).catch((e) => say(e.message, 6000)), [say])
+  const { data: d, error, refresh: load } = useResource('/admin/overview', admin.overview)
   useEffect(() => {
-    load()
-  }, [load])
+    if (error) say(error.message, 6000)
+  }, [error, say])
 
   const recheck = async () => {
     setBusy(true)
     try {
       await admin.doctor(true)
+      invalidate('/admin/')
       await load()
     } catch (e) {
       say(e.message, 6000)

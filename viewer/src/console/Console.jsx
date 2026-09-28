@@ -1,16 +1,16 @@
 // 콘솔 — 관리자의 자리. 제품관리서비스 검토 §4.7.
 //
-// 상단은 세 얼굴이 같이 쓰는 `TopBar`(화면 UX 검토 v0.1 §5.1) · 왼쪽 메뉴는 관리 화면의 .astep — 같은 프로그램의
-// 다른 얼굴이다. admin 이 아니면 문장 하나로 멈춘다(D4 — 403 을 화면에서도 같은 말로).
+// 상단은 Shell 이 한 번 그리는 `TopBar`(화면 · 권한 검토 v0.1 R7) · 왼쪽 메뉴는 관리 화면의 .astep — 같은 프로그램의
+// 다른 얼굴이다. 세션은 `SessionProvider` 가 이미 읽었다(R8 — 콘솔 문서마다 `/me` 를 다시 읽던 것). admin 이 아니면 문장 하나로 멈춘다(D4 — 403 을 화면에서도 같은 말로).
 //
 // **재인증은 끼어드는 모달이다.** 쓰기 동작이 `E_REAUTH` 를 받으면 뜨고, 통과하면 하던 동작을
 // 이어 한다(D5). 관리자가 미리 재인증할 필요가 없다 — `withSudo(fn)` 하나로 페이지가 부른다.
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { api, admin, ApiError, repoHref } from '../lib/api.js'
+import { admin, ApiError, repoHref } from '../lib/api.js'
 import { useRoute, Link, navigate, useTitle } from '../lib/router.jsx'
+import { useSession } from '../lib/session.jsx'
 import Icon from '../components/Icon.jsx'
-import TopBar from '../components/TopBar.jsx'
 import { Modal, Field } from './ui.jsx'
 import Overview from './Overview.jsx'
 import Users from './Users.jsx'
@@ -37,17 +37,18 @@ export const CANCELLED = '취소했습니다'
 
 export default function Console() {
   const route = useRoute()
-  const [me, setMe] = useState(null)
-  const [err, setErr] = useState(null)
+  const session = useSession()
+  const me = session.me
   const [toast, setToast] = useState(null)
   const say = useCallback((m, ms = 3200) => {
     setToast(m)
     setTimeout(() => setToast(null), ms)
   }, [])
 
+  // 세션이 없으면 로그인으로 — 직접 진입은 서버가 302 로 보냈고, 화면 안(로그아웃 뒤 뒤로 가기 등)에서는 여기서
   useEffect(() => {
-    api.me().then(setMe).catch((e) => setErr(e.message))
-  }, [])
+    if (!me) navigate('/login?next=' + encodeURIComponent(route.path + (route.hash || '')), { replace: true })
+  }, [me, route.path, route.hash])
 
   // 없는 페이지(`/console/없음`)는 현황으로 — 주소를 고쳐 놓아야 왼쪽 메뉴의 현재 표시가 맞는다(검토 P6 · P22)
   const seg = route.segs[1] || null
@@ -58,15 +59,13 @@ export default function Console() {
   const label = MENU.find(([k]) => k === page)?.[2] || '현황'
   useTitle(`콘솔 — ${label} · CDP`)
 
-  if (err) return <Bare>{err}</Bare>
-  if (!me) return <Bare>불러오는 중…</Bare>
+  if (!me) return null
   if (!me.admin) return <NoAdmin me={me} />
   const Page = PAGES[page] || Overview
 
   return (
     <SudoProvider>
       <div className="con">
-        <TopBar face="console" me={me} hasRepos={(me.repos || []).length > 0} Link={Link} />
         <div className="admin">
           <nav className="admin__menu" aria-label="콘솔">
             {MENU.map(([k, icon, t, s]) => (
@@ -179,21 +178,10 @@ function SudoProvider({ children }) {
   )
 }
 
-// 불러오는 중 · 못 읽음 — 상단 바는 그대로 선다(얼굴을 떠나는 길이 언제나 있어야 한다)
-function Bare({ children }) {
-  return (
-    <div className="con">
-      <TopBar face="console" me={null} hideLogin Link={Link} />
-      <div className="empty" style={{ paddingTop: '20vh' }}>{children}</div>
-    </div>
-  )
-}
-
 // admin 이 아닌 사람 — v1.1 명부를 그대로 올린 서버가 정확히 이 상태다(관리자 0명).
 function NoAdmin({ me }) {
   return (
     <div className="con">
-      <TopBar face="console" me={me} hasRepos={(me.repos || []).length > 0} Link={Link} />
       <div className="empty-page">
         <section className="acard">
           <div className="acard__head">
@@ -211,8 +199,8 @@ function NoAdmin({ me }) {
             </div>
             <div className="apre">ctx serve user set --auth /opt/cdp/auth.json --data /opt/cdp/data --name {me.user} --role admin</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-              <a className="btn btn--sm" href={repoHref()}>레포</a>
-              <a className="btn btn--sm" href="/manual/관리자_설명서">설명서 › 관리자 6장</a>
+              <Link className="btn btn--sm" to={repoHref()}>레포</Link>
+              <Link className="btn btn--sm" to="/manual/관리자_설명서">설명서 › 관리자 6장</Link>
             </div>
           </div>
         </section>

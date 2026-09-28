@@ -4,15 +4,15 @@
 // 잃었다 → **재발급 한 동작**(폐기 + 발급). 폐기한 행은 회색으로 남는다 — 이력이다.
 // 원문 보관 · 재배정은 없다(D6).
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
+import { invalidate, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
 import { PageHead, Toolbar, Search, Note, Modal, Field, Seg, Chip, Confirm, Prompt, TokenReveal, when, daysText } from './ui.jsx'
 
 export default function Tokens({ me, say, route }) {
   const withSudo = useSudo()
-  const [data, setData] = useState(null)
   const [q, setQ] = useState('')
   const [activeOnly, setActiveOnly] = useState(false)
   const [issuing, setIssuing] = useState(null) // { user }
@@ -21,10 +21,10 @@ export default function Tokens({ me, say, route }) {
   const [prompt, setPrompt] = useState(null) // { kind: 'note'|'expires', t }
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(() => admin.tokens().then(setData).catch((e) => say(e.message, 6000)), [say])
+  const { data, error, refresh: load } = useResource('/admin/tokens', admin.tokens)
   useEffect(() => {
-    load()
-  }, [load])
+    if (error) say(error.message, 6000)
+  }, [error, say])
   // 사용자 페이지의 [발급] 이 `?user=` 를 들고 온다
   useEffect(() => {
     const u = route.query.get('user')
@@ -36,6 +36,7 @@ export default function Tokens({ me, say, route }) {
     try {
       const r = await withSudo(fn)
       if (ok) say(ok)
+      invalidate('/admin/')
       await load()
       return r || true
     } catch (e) {

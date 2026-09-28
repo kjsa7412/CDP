@@ -282,6 +282,10 @@ test('mirror — origin 만 앞서 있으면 stateOf 는 behind · syncWithOrigi
     await g(R.r, 'fetch', '-q')
     assert.equal(stateOf(await status(R.r)), 'behind')
     assert.match(describe(await summary(R.r)), /origin 이 1건 앞서 있다/)
+    // 콘솔에 못 들어가는 사람에게는 단추 이름 대신 「관리자에게」(화면 · 권한 검토 v0.1 R4)
+    assert.match(describe(await summary(R.r)), /콘솔 > 지식 레포 > 「origin 과 맞추기」/)
+    assert.match(describe(await summary(R.r), { admin: false }), /관리자에게\(콘솔 「origin 과 맞추기」\)/)
+    assert.doesNotMatch(describe(await summary(R.r), { admin: false }), /콘솔 > /)
     let rescanned = 0
     const s = await syncWithOrigin(R.r, { rescan: async () => rescanned++ })
     assert.equal(s.ok, true)

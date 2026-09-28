@@ -101,6 +101,7 @@ export function decide(db, rawToken, now = Date.now()) {
     // 만료가 가까우면 알린다(§4.4.2). 만료된 뒤에 아는 것은 늦다 --
     // 그때는 이미 붙어 있던 세션이 끊긴 뒤다.
     expiresInDays: daysLeft(rec, now),
+    tokenExpires: rec.expires || 'never',
     tokenId: rec.sha256.slice(0, 8),
   }
 }
@@ -432,10 +433,13 @@ export async function loadSecret(dataDir) {
 
 const b64u = (b) => Buffer.from(b).toString('base64url')
 
-export function signSession(secret, user, { now = Date.now(), hours = SESSION_HOURS, minutes = null, kind = 'session' } = {}) {
+// `tid` — 로그인한 토큰의 id(해시 앞 8자 · 비밀이 아니다). 권한을 담는 것이 아니라 **화면이 그 토큰의 만료를 말하게**
+// 하는 표지다(화면 · 권한 검토 v0.1 R3 — 관리 › 정보의 「토큰 만료 D-n」). 판정(decideSession)은 그대로 명부만 본다.
+export function signSession(secret, user, { now = Date.now(), hours = SESSION_HOURS, minutes = null, kind = 'session', tid = null } = {}) {
   const ttl = minutes != null ? minutes * 60_000 : hours * 3600_000
   const body = { user, exp: now + ttl }
   if (kind !== 'session') body.kind = kind
+  if (tid) body.tid = String(tid).slice(0, 8)
   const payload = b64u(JSON.stringify(body))
   const mac = crypto.createHmac('sha256', secret).update(payload).digest('base64url')
   return payload + '.' + mac
@@ -455,7 +459,7 @@ export function readSession(secret, cookie, now = Date.now(), { kind = 'session'
     const j = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (!j?.user || !j.exp || now > j.exp) return null
     if ((j.kind || 'session') !== kind) return null
-    return { user: j.user, exp: j.exp }
+    return { user: j.user, exp: j.exp, tid: j.tid || null }
   } catch {
     return null
   }
@@ -464,12 +468,14 @@ export function readSession(secret, cookie, now = Date.now(), { kind = 'session'
 // 쿠키를 들고 온 요청의 권한. **`decide` 의 3~5단계를 그대로 탄다**(§4.4) —
 // 토큰 조회와 만료(1·2)는 로그인 때 이미 했고, 명부 조회·`active`·권한은
 // 매 요청 다시 본다.
-export function decideSession(db, sess) {
+export function decideSession(db, sess, now = Date.now()) {
   if (!sess) return { ok: false, status: 401, code: 'E_AUTH', message: '세션이 없다' }
   const u = (db.users || []).find((x) => x.name === sess.user)
   if (!u) return { ok: false, status: 401, code: 'E_AUTH', message: '명부에 없는 사용자' }
   if (u.active === false) return { ok: false, status: 401, code: 'E_AUTH', message: '사용 중지된 사용자' }
-  return { ok: true, ...grantOf(u), expiresInDays: null }
+  // 만료는 **말하기만** 한다 — 로그인한 그 토큰의 것. 모르면(옛 쿠키 · 폐기 · 다른 사람의 것) null — 없는 값을 지어내지 않는다
+  const rec = sess.tid ? (db.tokens || []).find((t) => t.user === u.name && t.status !== 'revoked' && String(t.sha256 || '').startsWith(sess.tid)) : null
+  return { ok: true, ...grantOf(u), expiresInDays: rec ? daysLeft(rec, now) : null, tokenExpires: rec ? rec.expires || 'never' : null, tokenId: rec ? sess.tid : null }
 }
 
 export function parseCookies(header) {

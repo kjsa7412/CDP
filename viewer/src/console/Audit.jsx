@@ -3,8 +3,9 @@
 // 콘솔의 모든 쓰기가 여기 `admin <행위> · <행위자> · <대상> · <바뀐 값>` 으로 남는다. 셸의 것은
 // 행위자가 없다 — CLI 와 콘솔이 같은 파일에 같은 모양으로 남긴다.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
+import { useResource } from '../lib/cache.js'
 import { PageHead, Toolbar, Search, Note, parseAudit, shortTime } from './ui.jsx'
 
 const KINDS = [
@@ -18,14 +19,13 @@ const KINDS = [
 ]
 
 export default function Audit({ say }) {
-  const [data, setData] = useState(null)
   const [q, setQ] = useState('')
   const [kind, setKind] = useState('')
   const [limit, setLimit] = useState(200)
-  const load = useCallback(() => admin.audit(limit).then(setData).catch((e) => say(e.message, 6000)), [say, limit])
+  const { data, error } = useResource('/admin/audit?' + limit, () => admin.audit(limit))
   useEffect(() => {
-    load()
-  }, [load])
+    if (error) say(error.message, 6000)
+  }, [error, say])
 
   const rows = useMemo(() => {
     if (!data) return []

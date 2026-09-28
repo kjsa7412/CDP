@@ -133,13 +133,17 @@ export async function summary(root, st = null) {
 }
 
 // 사람의 한 줄. **정상이면 null.** 이상이 둘이면 둘 다(` · ` 로).
-export function describe(m) {
+//
+// `admin: false` — 콘솔에 못 들어가는 사람(writer · viewer)에게는 콘솔의 단추 이름 대신 「관리자에게」 를 말한다.
+// 못 들어가는 곳을 안내하지 않는다(화면 · 권한 검토 v0.1 P6 · R4). 사실(무엇이 이상한가)은 같다.
+export function describe(m, { admin = true } = {}) {
   if (!m) return null
+  const fix = (what) => (admin ? `콘솔 > 지식 레포 > 「${what}」` : `관리자에게(콘솔 「${what}」)`)
   const parts = []
   if (m.state === 'lag') parts.push(`미러 밀림 ${m.ahead}건${m.reason ? ' · ' + (REASON_TEXT[m.reason] || m.reason) : ' · 사유는 진단(doctor)에서'}`)
   else if (m.state === 'diverged') parts.push(`origin 과 갈라짐 — 서버 ${m.ahead}건 · origin ${m.behind ?? '?'}건. 기계는 합치지 않는다 — 관리자가 셸에서 rebase 한 뒤 「다시 보내기」`)
-  else if (m.state === 'behind') parts.push(`origin 이 ${m.behind}건 앞서 있다 — 누군가 서버 밖에서 썼다 · 콘솔 > 지식 레포 > 「origin 과 맞추기」`)
-  if (m.dirty > 0) parts.push(`트리에 커밋 안 된 변경 ${m.dirty}건 — save 가 거절된다 · 콘솔 > 지식 레포 > 「트리 되돌리기」`)
+  else if (m.state === 'behind') parts.push(`origin 이 ${m.behind}건 앞서 있다 — 누군가 서버 밖에서 썼다 · ${fix('origin 과 맞추기')}`)
+  if (m.dirty > 0) parts.push(`트리에 커밋 안 된 변경 ${m.dirty}건 — save 가 거절된다 · ${fix('트리 되돌리기')}`)
   return parts.length ? parts.join(' · ') : null
 }
 

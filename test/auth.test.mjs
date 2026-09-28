@@ -272,6 +272,21 @@ test('세션 쿠키 — 서명 왕복 · 위조 · 만료 · 권한은 매 요�
   auth.userSet(db, 'qa', { active: false })
   assert.equal(auth.decideSession(db, s).message, '사용 중지된 사용자')
   assert.equal(auth.decideSession(db, null).status, 401)
+  auth.userSet(db, 'qa', { active: true })
+
+  // 쿠키의 tid — 권한이 아니라 만료를 말하는 표지다. 모르면 null(지어내지 않는다)
+  assert.equal(auth.decideSession(db, s).expiresInDays, null, 'tid 없는 옛 쿠키')
+  assert.equal(auth.decideSession(db, s).tokenExpires, null)
+  const { rec } = auth.issue(db, { user: 'qa', expiresDays: 30, now: NOW })
+  const c2 = auth.signSession(secret, 'qa', { now: NOW, tid: rec.sha256.slice(0, 8) })
+  const s2 = auth.readSession(secret, c2, NOW)
+  assert.equal(s2.tid, rec.sha256.slice(0, 8))
+  const d2 = auth.decideSession(db, s2, NOW)
+  assert.equal(d2.tokenExpires, rec.expires)
+  assert.equal(typeof d2.expiresInDays, 'number')
+  auth.revoke(db, { id: rec.sha256.slice(0, 8) })
+  assert.equal(auth.decideSession(db, s2, NOW).tokenExpires, null, '폐기한 토큰의 만료는 말하지 않는다')
+  assert.equal(auth.decideSession(db, s2, NOW).ok, true, '판정은 그대로 명부만 본다')
 
   // 재인증 쿠키 — 15분 · kind: sudo. 세션 자리에 내밀어도 안 통하고, 그 반대도 같다
   const su = auth.signSession(secret, 'kjsa', { now: NOW, minutes: auth.SUDO_MINUTES, kind: 'sudo' })

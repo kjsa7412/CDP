@@ -6,8 +6,9 @@
 // 브라우저는 사용자 PC 에 파일을 쓸 수 없다. 그 제약을 우회하지 않고, 대신
 // 사람이 자기 PC 에서 할 일을 zip 하나 푸는 것으로 줄였다.
 
-import { useCallback, useEffect, useState } from 'react'
-import { api } from '../../lib/api.js'
+import { useState } from 'react'
+import { api, currentRepo } from '../../lib/api.js'
+import { useResource } from '../../lib/cache.js'
 import Icon from '../Icon.jsx'
 import { Card, Row, Mono, Note, Btn, Cmd } from './ui.jsx'
 
@@ -15,23 +16,18 @@ import { Card, Row, Mono, Note, Btn, Cmd } from './ui.jsx'
 const MARK = { 최신: 'ok', 낡음: 'warn', 미설치: 'none' }
 
 export default function WorkReposServer({ say }) {
-  const [data, setData] = useState(null)
+  // 대장은 캐시(화면 · 권한 검토 v0.1 R8) — 관리 현황의 작업 레포 카드와 같은 키. 등록 · 삭제 뒤 refresh 가 둘 다 갱신한다
+  const { data, error, refresh: load } = useResource('/workrepos', api.registry)
   const [open, setOpen] = useState(null)
   const [form, setForm] = useState({ name: '', owner: '', note: '' })
   const [busy, setBusy] = useState(false)
-
-  const load = useCallback(() => api.registry().then(setData).catch(() => setData(null)), [])
-  useEffect(() => {
-    load()
-  }, [load])
 
   const submit = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return
     setBusy(true)
     try {
-      const repo = location.pathname.split('/').filter(Boolean)[1]
-      await api.registryAdd({ name: form.name.trim(), knowledge: decodeURIComponent(repo), owner: form.owner || null, note: form.note || null })
+      await api.registryAdd({ name: form.name.trim(), knowledge: currentRepo(), owner: form.owner || null, note: form.note || null })
       setForm({ name: '', owner: '', note: '' })
       await load()
       say?.('등록했습니다')
@@ -42,7 +38,7 @@ export default function WorkReposServer({ say }) {
     }
   }
 
-  if (!data) return <Note>대장을 읽는 중입니다…</Note>
+  if (!data) return <Note>{error ? '대장을 읽지 못했습니다 — ' + error.message : '대장을 읽는 중입니다…'}</Note>
 
   return (
     <>

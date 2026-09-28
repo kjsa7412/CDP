@@ -9,6 +9,8 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
+import { navigate } from '../../lib/router.jsx'
+import { clearAll } from '../../lib/cache.js'
 import Icon from '../Icon.jsx'
 import { Card, Row, Mark, Mono, PathText, Note, Btn, when } from './ui.jsx'
 
@@ -47,9 +49,13 @@ export default function Repo({ state, repo, diag, firstRun = false, onOpened, sa
     try {
       await api.setRepo(path.trim())
       // 레포가 바뀌면 캐시·읽음 표시·좌표 인덱스가 전부 달라진다.
-      // 부분 갱신으로 맞추려 들지 않는다 — 다시 읽는 쪽이 정확하다.
+      // 부분 갱신으로 맞추려 들지 않는다 — 다시 읽는 쪽이 정확하다. 문서를 교체하지 않고 캐시를 비워 App 을 새로 세운다
       if (firstRun) onOpened?.()
-      else location.reload()
+      else {
+        clearAll()
+        navigate('/')
+        window.dispatchEvent(new Event('cdp:remount'))
+      }
     } catch (e) {
       say?.(e?.message || '열 수 없습니다')
       setBusy(false)

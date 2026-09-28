@@ -5,7 +5,8 @@
 // 않는다 — 읽는 사람의 자리를 빼앗지 않는다(§13-⑥).
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { api } from '../lib/api.js'
+import { api, currentRepo } from '../lib/api.js'
+import { load, peek } from '../lib/cache.js'
 import { renderMarkdown, enhance, sectionSlug } from '../lib/markdown.js'
 import { summaryText } from '../lib/format.js'
 import ValidityBlock from './ValidityBlock.jsx'
@@ -26,7 +27,9 @@ export default function DocView({
   tocOpen = true,
   onToggleToc,
 }) {
-  const [doc, setDoc] = useState(null)
+  // 본문은 캐시(화면 · 권한 검토 v0.1 R8) — 관리 · 그래프 · 콘솔에 갔다 돌아오면 「불러오는 중…」 없이 그 자리다
+  const docKey = (id) => 'api:' + (currentRepo() || 'local') + '/docs/' + id
+  const [doc, setDoc] = useState(() => (docId ? peek(docKey(docId)) || null : null))
   const [error, setError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [staleNote, setStaleNote] = useState(false)
@@ -41,8 +44,10 @@ export default function DocView({
     if (!docId) return
     let dead = false
     setError(null)
-    api
-      .doc(docId)
+    const hit = peek(docKey(docId))
+    if (hit) setDoc(hit)
+    // 디스크가 바뀌어 다시 읽는 것(reloadKey)은 캐시를 건너뛴다
+    load(docKey(docId), () => api.doc(docId), { ttl: 30_000, force: reloadKey > 0 })
       .then((d) => {
         if (dead) return
         setDoc(d)

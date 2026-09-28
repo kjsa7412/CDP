@@ -18,45 +18,95 @@
 // 필요하다. 상단 `그래프` 로 들어가면 창 전체를 쓰고 `Esc` 로 돌아온다.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, admin, subscribe, startHeartbeat, ApiError } from './lib/api.js'
+import { createPortal } from 'react-dom'
+import { api, subscribe, startHeartbeat, ApiError, isServer, currentRepo, rememberRepo, stateNow, getTheme, setTheme, applyTheme } from './lib/api.js'
+import { useRoute, modeOf, navigate, Link } from './lib/router.jsx'
+import { useSession } from './lib/session.jsx'
+import { useSlots } from './lib/slots.js'
+import { load, peek, put } from './lib/cache.js'
 import { buildCoordIndex } from './lib/markdown.js'
 import { summaryText } from './lib/format.js'
 import DocView from './components/DocView.jsx'
 import CheckView from './components/CheckView.jsx'
 import Palette from './components/Palette.jsx'
 import StatusBar from './components/StatusBar.jsx'
-import AdminView from './components/admin/AdminView.jsx'
-import { isServer, mode as appMode, gotoRepo } from './lib/api.js'
+import AdminView, { menuFor } from './components/admin/AdminView.jsx'
 import { KEYS } from './lib/keys.js'
 import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
 import Icon from './components/Icon.jsx'
-import TopBar from './components/TopBar.jsx'
 
 // 왼쪽 폭 — 하는 일에 따라 다르다. 목록은 제목 한 줄이면 되고, 뻗어나가기는
 // 열이 둘 이상 들어가야 "가로로 뻗는다"가 성립한다.
 const W_LIST = 340
 const W_XP = 560
 
+// 첫 화면 — 마지막에 읽던 문서를 그대로 연다. 시작점도 거기서 잡는다.
+//
+// **관리 문서도 찾는다.** 전에는 `d.docs`(작업 기록)에서만 찾아서,
+// 어제 마지막으로 본 것이 테이블정의서였으면 복원이 조용히 실패했다 --
+// 빈 화면으로 열리고 뻗어나가기도 꺼진 채였다.
+//
+// **왼쪽은 목록으로 연다.** 어제 뻗던 자리를 복원하면, 오늘 처음 보는
+// 화면이 어디서 왔는지 모를 열 몇 개가 된다.
+function restoreOf(s, d, m) {
+  if (!s?.lastDoc || !d) return null
+  const work = d.docs.find((x) => x.id === s.lastDoc)
+  if (work) return { docId: s.lastDoc, root: { kind: 'work', key: s.lastDoc, label: work.title, open: s.lastDoc } }
+  const man = (m || []).find((x) => x.path === s.lastDoc)
+  if (man) return { docId: s.lastDoc, root: { kind: 'managed', key: man.path, label: man.name, open: man.path } }
+  return null
+}
+
 export default function App() {
-  const [state, setState] = useState(null)
-  const [repo, setRepo] = useState(null)
-  const [docs, setDocs] = useState([])
-  const [tree, setTree] = useState(null)
-  const [managedList, setManagedList] = useState([])
+  // 이 레포의 캐시 키 — `<App key={repo}>` 라 마운트 동안 바뀌지 않는다(화면 · 권한 검토 v0.1 R8).
+  // 콘솔 · 설명서에 갔다 돌아오면 마지막 값으로 **즉시** 그리고 뒤에서 다시 읽는다 — 「불러오는 중…」 이 없다.
+  const RK = currentRepo() || 'local'
+  const ck = useCallback((p) => 'api:' + RK + p, [RK])
+  const [boot] = useState(() => {
+    const k = (p) => 'api:' + RK + p
+    const s = stateNow() || peek(k('/state')) || null
+    const d = peek(k('/docs'))
+    const m = peek(k('/managed'))
+    return { r: peek(k('/repo')) || null, d, v: peek(k('/vocab')) || null, m, s, at: restoreOf(s, d, m) }
+  })
+  const [state, setState] = useState(boot.s)
+  const [repo, setRepo] = useState(boot.r)
+  const [docs, setDocs] = useState(boot.d?.docs || [])
+  const [tree, setTree] = useState(boot.v)
+  const [managedList, setManagedList] = useState(boot.m || [])
   // 레포 안의 그 밖 문서 — MANUAL.md · README.md · CLAUDE.md 등.
   // **레포마다 있을 수도 없을 수도 있다.** 없는 것을 버튼으로 내밀지 않는다.
-  const [others, setOthers] = useState([])
+  const [others, setOthers] = useState(boot.d?.others || [])
   // 뻗어나가기의 뿌리. 목록에서 고른 것 하나. { kind, key, label }
-  const [root, setRoot] = useState(null)
-  const [docId, setDocId] = useState(null)
+  const [root, setRoot] = useState(boot.at?.root || null)
+  const [docId, setDocId] = useState(boot.at?.docId || null)
   // 문서 안에서 갈 자리 — { value, seq }. 섹션(좌표) 줄을 눌러 왔을 때만 있다.
   const [docAt, setDocAt] = useState(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  // 관리 화면에서 지금 보고 있는 메뉴. **화면을 나갔다 와도 그 자리다** —
-  // 동기화를 보다 문서로 갔다가 다시 들어오면 동기화여야 한다.
-  const [adminTab, setAdminTab] = useState('overview')
+  // 화면 전체 모드 · 관리 메뉴는 **주소다**(화면 · 권한 검토 v0.1 R9 · P8) — `/r/<레포>/` 문서 · `/graph` · `/manage/<탭>`
+  // (로컬은 `/` · `/graph` · `/manage/<탭>`). 뒤로 가기 · 새로고침 · 링크 · 콘솔 → 「레포」 가 그 자리로 온다.
+  // 관리 화면에서 보던 메뉴는 **화면을 나갔다 와도 그 자리다** — 동기화를 보다 문서로 갔다가 다시 들어오면 동기화여야 한다.
+  const route = useRoute()
+  const here = modeOf(route.path)
+  const rest = here.rest || []
+  const topMode = rest[0] === 'graph' ? 'graph' : rest[0] === 'manage' ? 'admin' : 'doc'
+  const baseHref = here.server ? '/r/' + encodeURIComponent(here.repo) + '/' : '/'
+  const [lastTab, setLastTab] = useState('overview')
+  const adminTab = topMode === 'admin' && rest[1] ? rest[1] : lastTab
+  useEffect(() => {
+    if (topMode === 'admin' && rest[1]) setLastTab(rest[1])
+  }, [topMode, rest[1]])
+  // 없는 관리 탭(`/manage/없음` · 서버에서 `/manage/repo`)은 현황으로 — 주소를 고쳐 둬야 메뉴의 현재 표시가 맞는다
+  useEffect(() => {
+    if (topMode === 'admin' && rest[1] && !menuFor(here.server).some((m) => m.key === rest[1])) navigate(baseHref + 'manage/overview', { replace: true })
+  }, [topMode, rest[1], here.server, baseHref])
+  const setTopMode = useCallback(
+    (mode) => navigate(mode === 'graph' ? baseHref + 'graph' : mode === 'admin' ? baseHref + 'manage/' + lastTab : baseHref),
+    [baseHref, lastTab]
+  )
+  const setAdminTab = useCallback((t) => navigate(baseHref + 'manage/' + t), [baseHref])
   // 동기화 진행 — **서버가 갖고 SSE 로 온다.** 이 컴포넌트가 들고 있으면
   // 탭이 둘일 때 한쪽만 알게 된다. { phase, startedAt, last, log }
   const [sync, setSync] = useState(null)
@@ -70,20 +120,18 @@ export default function App() {
   const [scanning, setScanning] = useState(false)
   const [fatal, setFatal] = useState(null)
   const [needSetup, setNeedSetup] = useState(false)
-  // 서버 모드의 나 — 누구인가 · 무엇을 볼 수 있는가(§6.6.2). 로컬은 null.
-  const [me, setMe] = useState(null)
-  const [repoMenu, setRepoMenu] = useState(false)
-  // 관리자에게만 — 이 서버의 레포 전부. 권한 밖 레포를 회색으로 보인다(검토 v0.1 D6). 메뉴를 열 때 한 번 읽는다.
-  const [allRepos, setAllRepos] = useState(null)
+  // 서버 모드의 나 — 누구인가 · 무엇을 볼 수 있는가(§6.6.2). **Shell 의 세션 하나**를 쓴다(R8). 로컬은 null.
+  const session = useSession()
+  const me = session?.me || null
+  const slots = useSlots()
+  // 역할 · 레포 할당이 바뀌었을 수 있다 — 레포 화면을 열 때 세션이 오래됐으면 뒤에서 한 번(화면은 그대로 선다)
   useEffect(() => {
-    if (repoMenu && me?.admin && allRepos === null) admin.repos().then((r) => setAllRepos(r.repos || [])).catch(() => setAllRepos([]))
-  }, [repoMenu, me?.admin, allRepos])
+    session?.refreshIfStale?.()
+  }, [])
   // 검사 결과는 뷰가 아니라 **오버레이**다.
   //
   // 오류는 커밋을 막으므로 **무엇이 막았는지**로 가는 길이 항상 있어야 한다.
   const [checkOpen, setCheckOpen] = useState(false)
-  // 화면 전체 모드 — 'doc'(왼쪽|문서) · 'graph'(창 전체)
-  const [topMode, setTopMode] = useState('doc')
   // 왼쪽이 지금 하는 일 — 'list'(고른다) · 'explore'(뻗는다). **둘이 같이 있지 않다.**
   const [leftMode, setLeftMode] = useState('list')
   // L2 대상 — 'managed' · 'work' · 'coord'.
@@ -100,9 +148,15 @@ export default function App() {
   const readMap = state?.read || {}
 
   // ── 초기 로드 ──────────────────────────────────────────────────────────
+  // 언제나 새로 읽는다(force) — 캐시로 이미 그렸으면 이것이 「뒤에서 갱신」 이다. 받은 것은 캐시에도 둔다.
   const reload = useCallback(async () => {
+    const f = { force: true }
     const [r, d, v, s, m] = await Promise.all([
-      api.repo(), api.docs(), api.vocab(), api.state(), api.managed().catch(() => []),
+      load(ck('/repo'), api.repo, f),
+      load(ck('/docs'), api.docs, f),
+      load(ck('/vocab'), api.vocab, f),
+      api.state(),
+      load(ck('/managed'), () => api.managed().catch(() => []), f),
     ])
     setRepo(r)
     setDocs(d.docs)
@@ -110,9 +164,8 @@ export default function App() {
     setState(s)
     setManagedList(m || [])
     setOthers(d.others || [])
-    if (isServer()) api.me().then(setMe).catch(() => {})
     return { r, d, v, s, m: m || [] }
-  }, [])
+  }, [ck])
 
   useEffect(() => {
     reload()
@@ -122,26 +175,22 @@ export default function App() {
         if (!isServer() && (!s.repoPath || r.docs === 0)) {
           if (!s.repoPath) setNeedSetup(true)
         }
-        // 첫 화면 — 마지막에 읽던 문서를 그대로 연다. 시작점도 거기서 잡는다.
-        //
-        // **관리 문서도 찾는다.** 전에는 `d.docs`(작업 기록)에서만 찾아서,
-        // 어제 마지막으로 본 것이 테이블정의서였으면 복원이 조용히 실패했다 --
-        // 빈 화면으로 열리고 뻗어나가기도 꺼진 채였다.
-        //
-        // **왼쪽은 목록으로 연다.** 어제 뻗던 자리를 복원하면, 오늘 처음 보는
-        // 화면이 어디서 왔는지 모를 열 몇 개가 된다.
-        const work = s.lastDoc && d.docs.find((x) => x.id === s.lastDoc)
-        const man = s.lastDoc && (m || []).find((x) => x.path === s.lastDoc)
-        if (work) {
-          setDocId(s.lastDoc)
-          setRoot({ kind: 'work', key: s.lastDoc, label: work.title, open: s.lastDoc })
-        } else if (man) {
-          setDocId(s.lastDoc)
-          setRoot({ kind: 'managed', key: man.path, label: man.name, open: man.path })
+        // 첫 화면 — 마지막에 읽던 문서(restoreOf). 캐시로 이미 열었으면 그대로 둔다
+        if (!boot.at) {
+          const at = restoreOf(s, d, m)
+          if (at) {
+            setDocId(at.docId)
+            setRoot(at.root)
+          }
         }
         api.saveState({ lastVisit: new Date().toISOString() })
       })
       .catch((e) => {
+        // 서버 — 401 은 api.js 가 이미 로그인으로 보냈다. 404(없는 레포 · 권한 밖)는 서버 판정 그대로 `/r?from=` 화면으로(D4)
+        if (isServer()) {
+          if (e instanceof ApiError && e.status === 404) navigate('/r?from=' + encodeURIComponent(RK), { replace: true })
+          return
+        }
         if (e instanceof ApiError && e.status === 401) setFatal(e.message)
         else setNeedSetup(true)
       })
@@ -204,18 +253,23 @@ export default function App() {
     document.documentElement.style.setProperty('--w-find', `${w}px`)
   }, [leftMode, state?.panes?.list, state?.panes?.explore])
 
-  // 테마 — OS 따라가기 기본(§16.4)
+  // 테마 — OS 따라가기 기본(§16.4). **바꿀 때만 쓴다**(화면 · 권한 검토 v0.1 R9) — 첫 페인트 전에 `index.html` 의
+  // 인라인 스크립트가 `cdp.theme` 로 이미 붙였고, OS 변화는 `main.jsx` 가 따라간다. 여기서는 설정 세그로 고른 값
+  // (로컬은 서버 파일의 값)이 localStorage 와 다를 때 그 키에 쓰고 붙인다. 같은 값이면 DOM 을 건드리지 않는다.
   useEffect(() => {
-    const theme = state?.theme || 'system'
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = () => {
-      const dark = theme === 'dark' || (theme === 'system' && mq.matches)
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light'
-    }
-    apply()
-    mq.addEventListener('change', apply)
-    return () => mq.removeEventListener('change', apply)
+    if (!state) return
+    const t = state.theme || 'system'
+    if (t !== getTheme()) setTheme(t)
+    applyTheme(t)
   }, [state?.theme])
+  // 로컬 상태는 캐시에도 — 같은 모양으로 둔다(서버 모드는 브라우저에 있으니 stateNow 가 바로 준다)
+  useEffect(() => {
+    if (state && !isServer()) put(ck('/state'), state)
+  }, [state, ck])
+  // 마지막에 보던 레포 · 경로를 기억한다 — 열렸다 = 볼 수 있다(아니면 404 로 위에서 `/r?from=`). 콘솔 → 「레포」 가 여기로 온다
+  useEffect(() => {
+    if (repo && here.server && here.repo) rememberRepo(here.repo, route.path)
+  }, [repo, here.server, here.repo, route.path])
 
   // ── 상태 저장 ─────────────────────────────────────────────────────────
   const patch = useCallback((p) => {
@@ -499,67 +553,10 @@ export default function App() {
       data-nodoc={docId ? '0' : '1'}
       data-force-status={repo.watchEnabled && !repo.watchAlive ? '1' : '0'}
     >
-      {/* 상단 — 세 얼굴이 같이 쓰는 TopBar(화면 UX 검토 v0.1 §5.1). 표식은 소개로, 「레포」 탭이 레포 메뉴다.
-          서버 모드에서 하나여도 메뉴다(제품관리서비스 검토 §4.8) — 볼 수 있는 레포와 내 권한이 보이고, 관리자에게는
-          이 서버의 레포 전부가 더 붙는다. 로컬은 얼굴이 하나라 스위처 없이 레포 이름표만 선다. */}
-      <TopBar
-        face={isServer() ? 'repo' : 'local'}
-        me={isServer() ? me : null}
-        repoName={isServer() ? appMode.repo : repoName}
-        repoMenu={
-          isServer() && me
-            ? {
-                open: repoMenu,
-                onToggle: () => setRepoMenu((v) => !v),
-                content: (
-                  <>
-                    <div className="scrim" onMouseDown={() => setRepoMenu(false)} />
-                    <div className="repomenu" role="menu">
-                      <div className="repomenu__cap">볼 수 있는 레포 {me.repos.length}</div>
-                      {me.repos.map((r) => (
-                        <button
-                          key={r.name}
-                          className="repomenu__row"
-                          role="menuitem"
-                          aria-current={r.name === appMode.repo}
-                          onClick={() => r.name !== appMode.repo && gotoRepo(r.name)}
-                        >
-                          <b>{r.name}</b>
-                          <span>{r.title || ''}</span>
-                          <span className={me.write ? 'chip' : 'chip chip--off'}>{me.write ? '쓰기' : '읽기'}</span>
-                        </button>
-                      ))}
-                      {me.admin && (allRepos || []).some((r) => !me.repos.some((m) => m.name === r.name)) && (
-                        <>
-                          <div className="repomenu__hr" />
-                          <div className="repomenu__cap">관리자만 — 이 서버의 레포 {allRepos.length}</div>
-                          {allRepos
-                            .filter((r) => !me.repos.some((m) => m.name === r.name))
-                            .map((r) => (
-                              <a key={r.name} className="repomenu__row" href="/console/repos" style={{ opacity: 0.7 }}>
-                                <b>{r.name}</b>
-                                <span>{r.title || ''} · 볼 수 있는 사람 {r.users?.length ?? 0}</span>
-                                <span className="chip chip--off">콘솔에서 할당 →</span>
-                              </a>
-                            ))}
-                        </>
-                      )}
-                      {me.admin && (
-                        <>
-                          <div className="repomenu__hr" />
-                          <a className="repomenu__row" href="/console/repos">
-                            <b>콘솔 › 지식 레포</b>
-                            <span>세우기 · clone · 접근</span>
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  </>
-                ),
-              }
-            : null
-        }
-        center={
+      {/* 상단 — Shell 이 한 번 그리는 TopBar(화면 · 권한 검토 v0.1 R7) 안의 두 자리에 이 레포의 도구를 포털로 넣는다.
+          상태와 핸들러는 여기 남고, 얼굴을 넘어도 상단 바 DOM 은 그대로다. 「레포 ▾」 메뉴는 TopBar 가 든다(세션 · 라우트만 쓴다). */}
+      {slots &&
+        createPortal(
           <>
             {/* loopback 경고는 **로컬만의 것**이다. 원격에서는 늘 참이라 경고가 아니다(§6.6.3). */}
             {!isServer() && repo.hostWarning && (
@@ -607,14 +604,16 @@ export default function App() {
                 <Icon name="check" size={13} /> 검사
               </button>
             )}
-          </>
-        }
-        right={
+          </>,
+          slots.center
+        )}
+      {slots &&
+        createPortal(
           <button className="iconbtn" aria-expanded={menuOpen} onClick={() => setMenuOpen((m) => !m)} title="더보기" aria-label="더보기">
             <Icon name="more" size={16} />
-          </button>
-        }
-      />
+          </button>,
+          slots.right
+        )}
 
       {/* 더보기 — 하루에 몇 번 안 누르는 것들. 상단바에 늘 펴 둘 이유가 없다.
           전에는 동기화·매뉴얼·읽기모드·비율 4개·설정이 전부 상단바에 있었다.
@@ -695,7 +694,8 @@ export default function App() {
           sync={sync}
           onSync={syncNow}
           onCheck={() => setCheckOpen(true)}
-          repoName={isServer() ? appMode.repo : repoName}
+          repoName={isServer() ? here.repo : repoName}
+          built={session?.info?.built || null}
           say={(m) => say(m, 6000)}
         />
       ) : topMode === 'graph' ? (
@@ -1003,9 +1003,9 @@ function Help({ docs = [], onOpen, onClose }) {
           {isServer() && (
             <>
               <div className="help__cap">설명서</div>
-              <a className="help__doc" href="/manual" style={{ textDecoration: 'none' }}>
+              <Link className="help__doc" to="/manual" style={{ textDecoration: 'none' }}>
                 <Icon name="book" size={14} /> 제품 설명서 — 사용자 · 관리자 · 개발자
-              </a>
+              </Link>
             </>
           )}
           {manuals.length > 0 && (

@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { admin } from '../lib/api.js'
-import { navigate } from '../lib/router.jsx'
+import { Link, navigate } from '../lib/router.jsx'
+import { invalidate, put, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
 import { PageHead, Note, Modal, Field, Chip, Mono, Confirm } from './ui.jsx'
@@ -18,38 +19,36 @@ const REASON = { 'non-ff': 'non-ff', auth: '인증 실패', net: '원격 불통'
 
 export default function Repos({ say }) {
   const withSudo = useSudo()
-  const [data, setData] = useState(null)
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(null)
   // 다시 읽는 중 — 세운 직후 표가 "레포가 없다" 인 채 노트만 뜨던 것(화면 UX 검토 v0.1 P16). 레포마다 첫 스캔을
   // 하느라 목록이 1초를 넘게 걸린다 — 그 사이를 "읽는 중" 으로 둔다.
   const [loading, setLoading] = useState(false)
+  // 표 · 진단 줄은 캐시(R8) — 두 번째 방문은 즉시 그리고 뒤에서 갱신한다
+  const { data, error, refresh } = useResource('/admin/repos', admin.repos)
+  const { data: docData, refresh: refreshDoc } = useResource('/admin/doctor', () => admin.doctor(), { ttl: 60_000 })
+  const doc = docData?.rows || null
+  useEffect(() => {
+    if (error) say(error.message, 6000)
+  }, [error, say])
   // 복구 단추 셋 — 어느 행이 도는 중인가 · 되돌리기 확인(버리는 경로를 보여 준 뒤에)
   const [acting, setActing] = useState(null)
   const [restoring, setRestoring] = useState(null)
 
   // 진단의 레포 줄 — 서버는 fetch 를 안 하므로 "origin 이 앞서 있나" 는 doctor(ls-remote · 60초 캐시)만 안다.
   // 표를 먼저 그리고 뒤따라 채운다 — 레포마다 origin 에 닿는 검사라 몇 초 걸린다.
-  const [doc, setDoc] = useState(null)
   const load = useCallback(() => {
     setLoading(true)
-    admin
-      .doctor()
-      .then((d) => setDoc(d.rows || []))
-      .catch(() => setDoc([]))
-    return admin
-      .repos()
-      .then(setData)
+    refreshDoc().catch(() => {})
+    // 레포 얼굴의 「레포 ▾」 · 상태바 · 관리 현황이 같은 목록을 본다 — 다음 마운트에서 다시 읽게
+    invalidate('/repos')
+    return refresh()
       .catch((e) => say(e.message, 6000))
       .finally(() => setLoading(false))
-  }, [say])
+  }, [refresh, refreshDoc, say])
   // 레포 이름 → 진단 줄(트리 · origin · push) 중 warn · fail 인 것
   const docOf = (name) => (doc || []).filter((r) => r.state !== 'ok' && new RegExp(`^레포 ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`).test(r.what))
-  useEffect(() => {
-    load()
-  }, [load])
-
   const create = async (body) => {
     setBusy(true)
     setDone(null)
@@ -58,6 +57,7 @@ export default function Repos({ say }) {
       setDone(r)
       say(`${r.name} 을 ${r.cloned ? '받아 왔다' : '세웠다'}`)
       setAdding(false)
+      invalidate('/admin/')
       await load()
     } catch (e) {
       if (e.message !== CANCELLED) say(e.message, 8000)
@@ -75,11 +75,12 @@ export default function Repos({ say }) {
       if (kind === 'sync') say(r.ok ? (r.pulled ? `${name} — origin 에서 ${r.pulled}건 받았다` : `${name} — 이미 origin 과 같다`) : r.message || '맞추지 못했다', r.ok ? 4000 : 12000)
       else if (kind === 'push') say(r.ok ? `${name} — origin 에 보냈다` : `${name} — 보내지 못했다: ${r.message || r.reason || ''}`, r.ok ? 4000 : 10000)
       else say(r.ok ? `${name} — 트리를 되돌렸다 · 버린 것 ${r.discarded.length}` : r.message || '되돌리지 못했다', r.ok ? 5000 : 10000)
+      invalidate('/admin/')
       await load()
       // 진단 줄은 60초 캐시라 방금 고친 것이 남아 보인다 — 한 번은 새로 (레포마다 origin 에 닿으니 뒤따라 채운다)
       admin
         .doctor(true)
-        .then((d) => setDoc(d.rows || []))
+        .then((d) => put('/admin/doctor', d))
         .catch(() => {})
     } catch (e) {
       if (e.message !== CANCELLED) say(e.message, 8000)
@@ -186,9 +187,9 @@ export default function Repos({ say }) {
                     </td>
                     <td>
                       <div className="rowact">
-                        <a className="abtn" href={'/r/' + encodeURIComponent(r.name) + '/'}>
+                        <Link className="abtn" to={'/r/' + encodeURIComponent(r.name) + '/'}>
                           <Icon name="doc" size={12} /> 열기
-                        </a>
+                        </Link>
                         <button className="abtn" onClick={() => navigate('/console/users#matrix')}>접근</button>
                       </div>
                     </td>
@@ -205,7 +206,7 @@ export default function Repos({ say }) {
           {done.files ? ` · 파일 ${done.files}` : ''}
           {done.origin ? (done.cloned ? '' : done.pushed ? ' · origin 에 보냈다' : ` · origin push 실패: ${done.pushError || ''}`) : ''}
           {done.granted?.length ? ` · 접근 ${done.granted.join(', ')}` : ''}{' '}
-          <a className="abtn" href={'/r/' + encodeURIComponent(done.name) + '/'}>열기</a>
+          <Link className="abtn" to={'/r/' + encodeURIComponent(done.name) + '/'}>열기</Link>
         </Note>
       )}
       <Note>

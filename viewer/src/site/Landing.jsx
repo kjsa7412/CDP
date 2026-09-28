@@ -37,9 +37,9 @@ export default function Landing({ info }) {
               갱신 누락은 상태가 아니라 오류다 — 그래서 "밀림" 이 없다.
             </p>
             <div className="hero__cta">
-              <a className="btn btn--accent" href={enter}>
+              <Link className="btn btn--accent" to={enter}>
                 {info?.user ? '레포 열기' : '로그인'} <Icon name="arrowRight" size={14} />
-              </a>
+              </Link>
               <Link className="btn" to="/manual">
                 <Icon name="book" size={14} /> 설명서
               </Link>

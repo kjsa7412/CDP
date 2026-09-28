@@ -7,8 +7,9 @@
 // 커밋 시점에 막는 이유를 "작성자가 맥락을 쥐고 있어 1초면 고친다"로 설명했다.
 // 훅이 안 걸린 PC 에서는 이 화면이 그 1초를 대신한다.
 
-import { useEffect, useState } from 'react'
-import { api } from '../lib/api.js'
+import { useState } from 'react'
+import { api, currentRepo } from '../lib/api.js'
+import { useResource } from '../lib/cache.js'
 import Icon from './Icon.jsx'
 
 const SEV = {
@@ -18,18 +19,17 @@ const SEV = {
 }
 
 export default function CheckView({ onOpen }) {
-  const [data, setData] = useState(null)
+  // 결과는 캐시(화면 · 권한 검토 v0.1 R8) — 오버레이를 다시 열면 지난 결과를 즉시 그리고 뒤에서 다시 돈다
+  const { data, refresh } = useResource('api:' + (currentRepo() || 'local') + '/check', api.check, { ttl: 0 })
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState('')
 
   const run = () => {
     setBusy(true)
-    api
-      .check()
-      .then(setData)
+    refresh()
+      .catch(() => {})
       .finally(() => setBusy(false))
   }
-  useEffect(run, [])
 
   if (!data) return <div className="empty">불러오는 중…</div>
 

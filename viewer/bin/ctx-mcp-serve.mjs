@@ -780,7 +780,7 @@ export async function runServe(opt = {}) {
           log.req({ ip, user: u.name, method: 'POST', tool: '/setup', ms: Date.now() - t0, status: 200 })
           // 브라우저는 이 자리에서 로그인된다 — 원문을 한 번 더 넣게 하지 않는다. 재인증(15분)도 같이 —
           // 첫 레포를 세우는 첫 쓰기에서 방금 본 토큰을 다시 묻지 않는다(화면 UX 검토 v0.1 P18).
-          setSessionAndSudo(res, { session: auth.signSession(secret, u.name), sudo: auth.signSession(secret, u.name, { minutes: auth.SUDO_MINUTES, kind: 'sudo' }) }, { secure: secureCookie })
+          setSessionAndSudo(res, { session: auth.signSession(secret, u.name, { tid: rec.sha256.slice(0, 8) }), sudo: auth.signSession(secret, u.name, { minutes: auth.SUDO_MINUTES, kind: 'sudo' }) }, { secure: secureCookie })
           return json(res, 200, { user: u.name, raw, id: rec.id, expires: rec.expires })
         } catch (e) {
           return json(res, 400, { error: { code: e?.code || 'E_INPUT', message: e.message, detail: e.detail } })
@@ -828,7 +828,7 @@ export async function runServe(opt = {}) {
             res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
             return res.end(loginPage({ next, failed: true }))
           }
-          setCookie(res, auth.signSession(secret, d.user), { secure: secureCookie })
+          setCookie(res, auth.signSession(secret, d.user, { tid: d.tokenId }), { secure: secureCookie })
           if (isJson) return json(res, 200, { ok: true, user: d.user, role: d.role, next })
           res.writeHead(302, { location: next })
           return res.end()
@@ -898,6 +898,8 @@ export async function runServe(opt = {}) {
           write: !!a.write,
           sudo: !!(su && su.user === a.user),
           expiresInDays: a.expiresInDays ?? null,
+          // 'never' · 'YYYY-MM-DD' · null(모름) — 화면이 「무기한」 과 「모름」 을 가른다(관리 › 정보 · R3)
+          tokenExpires: a.tokenExpires ?? null,
           version: VERSION,
           repos: rows,
         })
@@ -1265,7 +1267,8 @@ export async function runServe(opt = {}) {
             ahead: m.ahead,
             behind: m.behind,
             dirty: m.dirty,
-            note: mirror.describe(m),
+            // 콘솔 단추 이름은 admin 에게만(R4)
+            note: mirror.describe(m, { admin: !!a.admin }),
           })
         }
         log.req({ ip, user: a.user, method: 'GET', tool: '/repos', ms: Date.now() - t0, status: 200 })

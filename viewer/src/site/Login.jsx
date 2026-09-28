@@ -6,10 +6,13 @@
 
 import { useState } from 'react'
 import { site, lastRepo, repoHref } from '../lib/api.js'
-import { Link, useTitle } from '../lib/router.jsx'
+import { Link, navigate, useTitle } from '../lib/router.jsx'
+import { useSession } from '../lib/session.jsx'
+import { clearAll } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 
 export default function Login({ next = '/r' }) {
+  const session = useSession()
   const [tok, setTok] = useState('')
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -25,9 +28,12 @@ export default function Login({ next = '/r' }) {
     try {
       const r = await site.login(t, next)
       if (r?.ok) {
-        // 얼굴이 바뀐다(사이트 → 레포 · 콘솔) — 새로 연다. 갈 곳이 그냥 /r 이면 마지막에 보던 레포로(P7).
+        // 얼굴이 바뀐다(사이트 → 레포 · 콘솔) — 세션을 새로 읽고 pushState 로 간다(문서 교체 없음 · 화면 · 권한 검토 v0.1 R7).
+        // 다른 사람이었을 수 있으니 캐시는 비운다. 갈 곳이 그냥 /r 이면 마지막에 보던 레포로(P7) — 없으면 `/r` 화면이 첫 레포를 고른다.
+        clearAll()
+        await session.refresh()
         const to = r.next || next
-        location.href = to === '/r' && lastRepo() ? repoHref() : to
+        navigate(to === '/r' && lastRepo() ? repoHref() : to)
         return
       }
       setMsg(r?.error?.message || '토큰을 확인하세요.')

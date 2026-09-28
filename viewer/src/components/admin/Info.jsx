@@ -10,7 +10,9 @@ import { Link } from '../../lib/router.jsx'
 import { KEYS } from '../../lib/keys.js'
 import { Card, Row, Mono, Note } from './ui.jsx'
 
-export default function Info({ me, built = null, repoName = null }) {
+export default function Info({ me, built: builtRaw = null, repoName = null }) {
+  // 소스에서 띄운 서버는 번들 시각이 자리표시(`__CTX_BUILT__`)다 — 없는 값을 그리지 않는다(불변조건 7)
+  const built = builtRaw && !/^__/.test(builtRaw) ? builtRaw : null
   const can = me?.admin
     ? '읽기 · save · 작업 레포 등록 · 콘솔(사람 · 토큰 · 레포 전부 · 서버)'
     : me?.write
@@ -41,15 +43,17 @@ export default function Info({ me, built = null, repoName = null }) {
         <Row label="이 레포에서">
           <span className="amuted">{can}</span>
         </Row>
-        {/* 만료가 있는 토큰만 — 무기한(null)은 그 사실을 말한다. 임박(≤7)만 소리를 낸다 */}
+        {/* 로그인한 그 토큰의 만료 — 모르면(옛 쿠키) 모른다고 말한다. 무기한과 모름을 섞지 않는다(불변조건 7). 임박(≤7)만 소리를 낸다 */}
         <Row label="토큰 만료" mark={typeof days === 'number' && days <= 7 ? 'warn' : null}>
           {typeof days === 'number' ? (
             <span className={days <= 7 ? 'awarn' : 'amuted'}>
-              D-<b className="num">{days}</b>
+              D-<b className="num">{days}</b> · {me.tokenExpires}
               {days <= 7 ? ' — 관리자에게 재발급을 받는다' : ''}
             </span>
-          ) : (
+          ) : me?.tokenExpires === 'never' ? (
             <span className="amuted">무기한</span>
+          ) : (
+            <span className="amuted">이 세션에서는 모른다 — 다시 로그인하면 보인다</span>
           )}
         </Row>
         <Note>

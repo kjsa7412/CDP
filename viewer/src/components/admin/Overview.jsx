@@ -8,8 +8,9 @@
 //
 // **알림을 만들지 않는다**(설계서 제4부). 이 화면은 사람이 열었을 때 말한다.
 
-import { useEffect, useState } from 'react'
-import { api, isServer, mode } from '../../lib/api.js'
+import { useEffect } from 'react'
+import { api, isServer, currentRepo } from '../../lib/api.js'
+import { useResource } from '../../lib/cache.js'
 import Icon from '../Icon.jsx'
 import { Card, Row, Mark, Mono, Note, Btn, when } from './ui.jsx'
 
@@ -17,26 +18,33 @@ import { Card, Row, Mark, Mono, Note, Btn, when } from './ui.jsx'
 const MIRROR = { ok: [null, '최신 — origin 과 같다'], lag: ['warn', '밀림'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 이 앞서 있다'], off: [null, '원격 없음'] }
 
 export default function Overview({ repo, sync, diag, me = null, onGo, onCheck, onSync }) {
-  const [status, setStatus] = useState(null)
-  const [git, setGit] = useState(null)
-  const [work, setWork] = useState(null)
-  const [mine, setMine] = useState(null)
-
+  // 전부 캐시(화면 · 권한 검토 v0.1 R8) — 탭을 오가도 「읽는 중…」 이 다시 뜨지 않는다. 키는 레포 + 경로.
+  // 서버형 — 이 레포의 미러 상태는 `/repos` 의 자기 행(사유 포함 · 상태바와 **같은 키** — 요청 하나). `/api/<레포>/git` 은 로컬형 문법이다.
+  // 작업 레포는 **대장**(`/workrepos`)의 이 레포 것 — 관리 › 작업 레포와 같은 키.
+  const server = isServer()
+  const rk = currentRepo() || 'local'
+  const st = useResource('api:' + rk + '/status', api.status)
+  const rows = useResource('/repos', api.repos, { enabled: server, ttl: 15_000 })
+  const reg = useResource('/workrepos', api.registry, { enabled: server })
+  const gitR = useResource('api:local/git', () => api.git(false), { enabled: !server })
+  const wrL = useResource('api:local/workrepos', api.workRepos, { enabled: !server })
+  // 로컬 — 동기화가 끝나면 받을 것 · 설치 상태가 바뀐다
   useEffect(() => {
-    api.status().then(setStatus).catch(() => setStatus(null))
-    if (isServer()) {
-      // 서버형 — 이 레포의 미러 상태는 `/repos` 의 자기 행(사유 포함). `/api/<레포>/git` 은 로컬형 문법이다
-      api.repos().then((rows) => setMine((rows || []).find((r) => r.name === mode.repo) || null)).catch(() => setMine(null))
-      // 작업 레포는 **대장**(`/workrepos`)의 이 레포 것 — `/api/<레포>/workrepos` 는 로컬 뷰어의 것이라 서버에 없다(404 → "읽는 중…" 고정 · 화면 UX TODO 의 열린 버그)
-      api
-        .registry()
-        .then((d) => setWork({ repos: (d?.repos || []).filter((r) => r.knowledge === decodeURIComponent(mode.repo || '')), server: true }))
-        .catch(() => setWork({ repos: [], server: true, failed: true }))
-    } else {
-      api.git(false).then(setGit).catch(() => setGit(null))
-      api.workRepos().then(setWork).catch(() => setWork(null))
-    }
+    if (server || !sync?.phase || sync.phase !== 'idle') return
+    gitR.refresh().catch(() => {})
+    wrL.refresh().catch(() => {})
+    st.refresh().catch(() => {})
   }, [sync?.phase])
+  const status = st.data || null
+  const git = gitR.data || null
+  const mine = server ? (rows.data || []).find((r) => r.name === rk) || null : null
+  const work = server
+    ? reg.data
+      ? { repos: (reg.data.repos || []).filter((r) => r.knowledge === rk), server: true }
+      : reg.error
+        ? { repos: [], server: true, failed: true }
+        : null
+    : wrL.data || null
 
   const c = repo?.checkCounts || { error: 0, warn: 0, info: 0 }
   const running = sync && sync.phase && sync.phase !== 'idle'

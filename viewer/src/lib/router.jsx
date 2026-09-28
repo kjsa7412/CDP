@@ -1,13 +1,16 @@
 // 라우터 — 손으로 짠 것. 의존성 0(제품관리서비스 검토 D12).
 //
-// 뷰어(`/r/<레포>/`)는 라우터가 없다 — URL 이 상태가 되면 `?t=` 토큰과 섞이는 로컬의
-// 이유였다. 사이트(`/` · `/manual`)와 콘솔(`/console`)은 **주소가 상태다**(§6.6.2) —
-// 새로고침 · 북마크 · 남에게 링크로 보내기가 되어야 한다. 그래서 여기만 `pushState` 를 쓴다.
+// **주소가 상태다**(§6.6.2) — 사이트(`/` · `/manual`) · 콘솔(`/console`) · 레포(`/r/<레포>/` · `/graph` ·
+// `/manage/<탭>`) · 로컬(`/` · `/graph` · `/manage/<탭>`) 전부. 새로고침 · 북마크 · 남에게 링크로 보내기 ·
+// 뒤로 가기가 된다.
 //
-// 얼굴을 넘는 이동(사이트 → 레포 · 콘솔 → 레포)은 `location.href` 다 — `main.jsx` 가
-// 첫 렌더에서 얼굴을 고르므로 그 사이는 pushState 로 건널 수 없다.
+// 얼굴을 넘는 이동도 `pushState` 다 — `Shell` 이 매 렌더 `modeOf(path)` 로 얼굴을 고른다(화면 · 권한 검토 v0.1 R7).
+// 전에는 `main.jsx` 가 첫 렌더에서 얼굴을 한 번 고정해 얼굴 사이가 전부 문서 교체였다. 로컬의 `?t=` 토큰은
+// `api.js` 의 `readToken()` 이 모듈 로드에서 지운다 — 여기서 읽기 전이다.
+//
+// 라우트 전환은 `startTransition` — 새 화면의 첫 렌더가 끝날 때까지 이전 화면이 남는다(React 18 · R8).
 
-import { useEffect, useState } from 'react'
+import { startTransition, useEffect, useState } from 'react'
 
 const listeners = new Set()
 
@@ -28,6 +31,9 @@ function read() {
 }
 
 export function navigate(to, { replace = false } = {}) {
+  const cur = location.pathname + location.search + location.hash
+  // 같은 주소를 다시 누른 것 — 히스토리를 쌓지 않는다
+  if (to === cur) return
   if (replace) history.replaceState(null, '', to)
   else history.pushState(null, '', to)
   for (const l of listeners) l()
@@ -36,7 +42,7 @@ export function navigate(to, { replace = false } = {}) {
 export function useRoute() {
   const [loc, setLoc] = useState(read)
   useEffect(() => {
-    const l = () => setLoc(read())
+    const l = () => startTransition(() => setLoc(read()))
     listeners.add(l)
     window.addEventListener('popstate', l)
     return () => {
@@ -47,7 +53,32 @@ export function useRoute() {
   return loc
 }
 
-// 같은 얼굴 안의 링크. 새 탭(⌘/Ctrl 클릭)은 브라우저에 맡긴다.
+// 얼굴 — **주소가 말해 준다.** 한 번들이 셋에서 돈다(MCP 설계서 §6.8).
+//
+//   로컬   /                 face: local   (window.__CDP_SERVER__ 없음)
+//   레포   /r/<repo>/…       face: repo    rest = 그 뒤 조각(graph · manage/<탭>)
+//   사이트 / · /manual · /login · /setup · /r      face: site    ┐ 서버가 index.html 에 심은
+//   콘솔   /console/…                              face: console ┘ window.__CDP_SERVER__ 로 안다
+//
+// `/r/` 밖에서는 경로만으로 로컬과 서버를 가를 수 없다(둘 다 `/`). 그래서 서버가 `index.html` 을 낼 때
+// 한 줄을 심는다 — 왕복 없이 갈린다.
+export function modeOf(path = location.pathname) {
+  const seg = path.split('/').filter(Boolean)
+  const dec = (s) => {
+    try {
+      return decodeURIComponent(s)
+    } catch {
+      return s
+    }
+  }
+  if (seg[0] === 'r' && seg[1]) return { server: true, repo: dec(seg[1]), face: 'repo', rest: seg.slice(2).map(dec) }
+  if (typeof window !== 'undefined' && window.__CDP_SERVER__) {
+    return { server: true, repo: null, face: seg[0] === 'console' ? 'console' : 'site', rest: seg.map(dec) }
+  }
+  return { server: false, repo: null, face: 'local', rest: seg.map(dec) }
+}
+
+// 같은 번들 안의 링크 — 얼굴 안이든 밖이든. 새 탭(⌘/Ctrl 클릭)은 브라우저에 맡긴다.
 export function Link({ to, children, className, replace = false, onClick, ...rest }) {
   return (
     <a
