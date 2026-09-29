@@ -3,6 +3,20 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.18.0
+
+편입 때 좌표 누락 방지 — [`docs/dev/좌표누락_TODO.md`](docs/dev/좌표누락_TODO.md). 지식 문서를 결정 문서 기준으로 판정해 `touches: []` 가 경고 없이 커밋됐던 것(dpms_wiki `b5a1fc6`)
+
+**`save`** — `core/save.js` · `viewer/bin/ctx-mcp.mjs`
+- `touches` 가 비면 `E_INPUT { field: 'work.touches' }` — 정말 0개면 `work.touchesEmpty` 에 사유(커밋되고 경고 한 줄 · 프론트매터 `touchesEmpty:`). `touches` 와 같이 보내면 `E_INPUT`
+- `work.source`(편입한 원문의 출처) — 프론트매터 `author` 다음 줄 · 있으면 시각 없는 `date` 경고를 내지 않는다
+- 프론트매터 값(title · author · source · touchesEmpty · tags)은 YAML 이 깨지는 글자가 있으면 인용 · 빈 좌표는 `touches: []`
+- 명함 — `save` 에 「부르기 전에 【좌표 판정】을 보이고 승인」 · `match` 의 `미등재` 는 기록 중이면 등재 후보 · `where` 의 `registry: null` 이면 `touches` 가 유일한 길
+
+**스킬** — `cdp-import` ③ 을 ③-1~③-6(문서 성격 · 「정의했다 → O」 · 답 읽는 법 · 0개면 멈춤 · 승인 필수) · 좌표 누락은 정정 기록 · 도메인 지식 문서 예시 / `cdp-save` ⑤B-0 승인 필수 · `TEMPLATE-work.md` 두 줄
+
+**그 밖** — 파서 · `work` 도구 · `ctx import` · 기록 화면이 `source` · `touchesEmpty` 를 안다(「원문 출처 — …」 · 「좌표가 없다 — … 사유」) — `5af7753`
+
 ## v0.17.0
 
 **소개에 「MCP 가 도는 길」** — `viewer/src/site/McpFlow.jsx`(새) · `viewer/src/site/Landing.jsx` · `viewer/src/styles/site.css`
