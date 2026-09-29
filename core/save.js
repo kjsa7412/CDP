@@ -30,6 +30,9 @@ const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
 export const MIRROR_WAIT_MS = 1500
 // E_CONFLICT 에 싣는 지금 본문의 상한 — 응답 크기를 지킨다. 넘으면 `truncated` 이고 그때만 `section` 을 다시 부른다.
 export const CONFLICT_CONTENT_MAX = 8000
+// 커밋(훅이 `bin/ctx check` · `ctx index` 를 돈다)의 상한 — git 기본 20초는 부하 걸린 기계에서 모자란다.
+// 넘어도 판정은 index.lock · HEAD 로 한다(10단계). 뮤텍스 안이라 그동안 다른 save 는 줄을 선다.
+export const COMMIT_TIMEOUT_MS = 120000
 
 // ── 되돌리기 ────────────────────────────────────────────────────────────────
 //
@@ -204,15 +207,38 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
-export async function save(root, input, { user, write = false, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS } = {}) {
+export async function save(root, input, { user, write = false, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS } = {}) {
   const out = await withLock(path.resolve(root), async () => {
     const r = await run(root, input, { user, write, now })
 
-    // 10 커밋 — 바뀐 경로만. 실패하면 되돌린다.
-    const c = await git.commitPaths(root, r.snap.paths(), { message: r.title, author: user })
+    // 10 커밋 — 바뀐 경로만. 실패하면 되돌린다 — **git 이 정말 커밋하지 않았을 때만.**
+    //
+    // 시간이 다 돼 실패로 돌아와도 Windows 에서는 진짜 git 이 살아서 커밋을 마쳤다. 그때 곧장 되돌리면
+    // 빈 커밋(되돌린 색인) + 옛 파일이 남고 호출자는 실패를 듣는다 — 작업 기록 하나가 사라진다(도구 층에서
+    // 2026-09-29 실측). `commitPaths` 는 이제 시간이 다 되면 git 을 나무째 죽이고 돌아온다 — 그래도 죽기
+    // 직전에 커밋을 마쳤을 수 있고 누가 `index.lock` 을 쥐었을 수 있으니, 잠금이 풀린 뒤 HEAD 로 판정한다.
+    const paths = r.snap.paths()
+    const head0 = await git.headSha(root)
+    let c = await git.commitPaths(root, paths, { message: r.title, author: user, timeout: commitTimeout })
     if (!c.ok) {
-      await r.snap.restore()
-      throw new CtxError('E_GIT', '커밋하지 못했다 — 되돌렸다', { reason: c.reason, message: c.message })
+      if (!(await git.waitIndexUnlocked(root))) {
+        // 5분이 지나도 잠겨 있다 — 커밋이 됐는지 모르니 손대지 않는다. 트리가 더러워 다음 save 가 알린다.
+        throw new CtxError('E_GIT', '커밋이 됐는지 알 수 없다 — .git/index.lock 이 풀리지 않아 파일은 쓴 채로 두었다. 셸에서 git status · git log 로 확인한다', {
+          reason: 'locked',
+          message: c.message,
+        })
+      }
+      const head1 = await git.headSha(root)
+      if (head1 && head1 !== head0) {
+        // 커밋은 됐다 — 호출만 늦게 실패로 돌아왔다. 색인 · 파일 · INDEX 는 add 한 그대로다.
+        c = { ok: true, commit: await git.headSha(root, { short: true }) }
+        r.warnings.push(`커밋이 ${Math.round(commitTimeout / 1000)}초를 넘겨 늦게 끝났다 — 커밋 훅(check · index)이 느리다`)
+      } else {
+        // 색인에 올린 것을 먼저 내린다 — 파일만 돌리면 색인에 남아 다음 save 가 「더러운 트리」 로 막힌다
+        await git.unstage(root, paths)
+        await r.snap.restore()
+        throw new CtxError('E_GIT', c.reason === 'timeout' ? `${c.message} — 되돌렸다` : '커밋하지 못했다 — 되돌렸다', { reason: c.reason, message: c.message })
+      }
     }
 
     return {

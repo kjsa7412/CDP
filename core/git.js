@@ -19,7 +19,7 @@
 // (뷰어 v0.2 §31 의 경계선). 앱이 rebase 를 시도하다 반쯤 실패하면
 // 사용자는 자기 레포가 어떤 상태인지 알 수 없게 된다.
 
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
@@ -358,11 +358,86 @@ export async function commitPaths(root, paths, { message, author, email, timeout
   if (!add.ok) return { ok: false, reason: 'add', message: firstLine(add.err) }
 
   const who = `${author} <${email || author + '@cdp'}>`
-  const c = await run(root, ['-c', 'user.name=' + author, '-c', 'user.email=' + (email || author + '@cdp'), 'commit', '--author=' + who, '-m', message], { timeout })
+  const c = await runCommit(root, ['-c', 'user.name=' + author, '-c', 'user.email=' + (email || author + '@cdp'), 'commit', '--author=' + who, '-m', message], { timeout })
+  if (c.timedOut) return { ok: false, reason: 'timeout', message: `커밋이 ${Math.round(timeout / 1000)}초를 넘겨 git 을 멈췄다 — 커밋 훅(check · index)이 느리다` }
   if (!c.ok) return { ok: false, reason: 'commit', message: firstLine(c.err) || firstLine(c.out) }
 
   const head = await run(root, ['rev-parse', '--short', 'HEAD'])
   return { ok: true, commit: head.ok ? head.out : null }
+}
+
+// 커밋만의 실행 — 시간이 다 되면 **프로세스 나무째** 죽이고, 다 죽은 뒤에 돌아온다.
+//
+// execFile 의 timeout 은 자식 하나만 죽인다. Windows 에서 그 자식은 `git` 실행기(Git\cmd\git.exe)라 진짜 git
+// (mingw64\bin\git.exe)과 훅은 살아서 커밋을 마친다 — 호출은 실패로 끝났는데 몇 초 뒤 HEAD 가 움직였다
+// (2026-09-29 실측: 0.8초에 죽였는데 3초 훅 뒤에 커밋). 그 사이 부르는 쪽이 색인을 비우고 파일을 돌리면
+// 빈 커밋 + 옛 파일이 남는다(도구 층 · 콘솔 실측). **index.lock 으로는 못 기다린다** — `git commit` 은 색인을
+// 시작할 때 잠깐 잠그고 풀어 둔 채 pre-commit 훅을 돈다(같은 날 실측: 첫 0.3초만 잠겼다).
+// 그래서 나무(Windows `taskkill /T` · 그 밖은 프로세스 그룹)를 죽인다. 돌아온 뒤에는 git 이 더 움직이지 않는다.
+function runCommit(cwd, args, { timeout }) {
+  const win = process.platform === 'win32'
+  return new Promise((resolve) => {
+    const child = spawn('git', ['-C', cwd, '-c', 'core.quotepath=false', ...args], { windowsHide: true, detached: !win })
+    const out = []
+    const err = []
+    child.stdout.on('data', (d) => out.push(d))
+    child.stderr.on('data', (d) => err.push(d))
+    let timedOut = false
+    let killed = Promise.resolve()
+    const timer =
+      timeout > 0
+        ? setTimeout(() => {
+            timedOut = true
+            killed = new Promise((res) => {
+              if (win) execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => res())
+              else {
+                try {
+                  process.kill(-child.pid, 'SIGKILL')
+                } catch {}
+                res()
+              }
+            })
+          }, timeout)
+        : null
+    const done = async (code, e) => {
+      clearTimeout(timer)
+      await killed
+      resolve({
+        ok: !e && code === 0 && !timedOut,
+        code,
+        timedOut,
+        out: Buffer.concat(out).toString('utf8').trim(),
+        err: (Buffer.concat(err).toString('utf8') || e?.message || '').trim(),
+      })
+    }
+    child.on('error', (e) => done(-1, e))
+    child.on('close', (code) => done(code))
+  })
+}
+
+// `commitPaths` 가 실패로 돌아온 뒤 **커밋이 됐는지** 판정하는 재료 셋. 돌아온 때 git 은 멈춰 있다(`runCommit`) —
+// 그래도 판정은 HEAD 로 한다: 죽이기 직전에 커밋을 마쳤을 수 있다. 남은 `index.lock` 은 누가 쥐었는지 모르는 것이다.
+export async function headSha(root, { short = false } = {}) {
+  const r = await run(root, ['rev-parse', ...(short ? ['--short'] : []), 'HEAD'])
+  return r.ok && r.out ? r.out : null
+}
+
+// 풀렸으면 true · `ms` 가 지나도 잠겨 있으면 false
+export async function waitIndexUnlocked(root, { ms = 300000, step = 500 } = {}) {
+  const lock = path.join(root, '.git', 'index.lock')
+  const locked = () => fs.access(lock).then(() => true).catch(() => false)
+  for (const end = Date.now() + ms; await locked(); ) {
+    if (Date.now() >= end) return false
+    await new Promise((res) => setTimeout(res, step))
+  }
+  return true
+}
+
+// 색인에 올린 그 경로만 내린다(reset --hard 가 아니다) — 파일을 돌린 뒤 색인에 남으면 트리가 더럽다
+export async function unstage(root, paths) {
+  if (!paths.length) return { ok: true }
+  const r = await run(root, ['reset', '-q', '--', ...paths])
+  return { ok: r.ok }
 }
 
 // 커밋을 되돌린다. `save` 가 커밋 뒤에 실패했을 때만 쓴다 — 미러 전이라

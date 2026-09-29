@@ -241,6 +241,74 @@ test('save — 빈 touches 는 touchesEmpty 사유 없이 E_INPUT · 사유가 �
   }
 })
 
+// 커밋 훅을 레포에 심는다 — 트리가 깨끗해야 save 가 받으므로 훅 자체는 커밋해 둔다
+async function hook(r, dir, script) {
+  await fs.mkdir(path.join(r, dir), { recursive: true })
+  await fs.writeFile(path.join(r, dir, 'pre-commit'), script)
+  await fs.chmod(path.join(r, dir, 'pre-commit'), 0o755)
+  await g(r, 'add', '-A')
+  await g(r, 'commit', '-qm', 'hook')
+  await g(r, 'config', 'core.hooksPath', dir)
+}
+const head = async (r) => (await run('git', ['-C', r, 'rev-parse', 'HEAD'])).stdout.trim()
+
+test('save — 훅이 막으면 E_GIT · 되돌리고 색인도 비운다 · 트리 깨끗 · 다음 save 가 된다', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    await hook(R.r, '.hooks-test', '#!/bin/sh\necho 막는다 >&2\nexit 1\n')
+    const h0 = await head(R.r)
+    await assert.rejects(save(R.r, { work: work('2026-0929-훅막힘', null, { touchesEmpty: '시험' }) }, opt()), (e) => e.code === 'E_GIT' && e.detail.reason === 'commit')
+    assert.equal(await head(R.r), h0)
+    assert.equal(await fs.stat(path.join(R.r, 'work', '2026-0929-훅막힘.md')).catch(() => null), null)
+    assert.equal(await porcelain(R.r), '', '색인에 남으면 다음 save 가 더러운 트리로 막힌다')
+    await g(R.r, 'config', '--unset', 'core.hooksPath')
+    await save(R.r, { work: work('2026-0929-훅막힘', null, { touchesEmpty: '시험' }) }, opt())
+  } finally {
+    await R.rm()
+  }
+})
+
+test('save — 훅이 시간을 넘겨도 「빈 커밋 + 옛 파일」 은 남지 않는다(된 것이면 된 것 · 안 된 것이면 그대로)', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    await hook(R.r, '.hooks-slow', '#!/bin/sh\nsleep 3\nexit 0\n')
+    const h0 = await head(R.r)
+    const id = '2026-0929-느린훅'
+    const res = await save(R.r, { work: work(id, null, { touchesEmpty: '시험' }) }, opt('hong', { commitTimeout: 800 })).then(
+      (v) => ({ ok: true, v }),
+      (e) => ({ ok: false, e })
+    )
+    // save 가 index.lock 이 풀릴 때까지 기다리고 판정한다 — 여기서 더 기다릴 것이 없다
+    const h1 = await head(R.r)
+    const rec = path.join(R.r, 'work', id + '.md')
+    if (h1 !== h0) {
+      // Windows — 실행기만 죽고 진짜 git 이 커밋을 마쳤다
+      const stat = (await run('git', ['-C', R.r, 'show', '--stat', '--format=', 'HEAD'])).stdout.trim()
+      assert.ok(stat.length > 0, '빈 커밋이 남았다')
+      assert.match(stat, /느린훅\.md/, '커밋에 작업 기록이 없다')
+      assert.ok(res.ok, '커밋이 됐으면 된 것으로 답한다: ' + res.e?.message)
+      assert.ok(res.v.commit && h1.startsWith(res.v.commit), '응답의 commit 이 HEAD 다')
+      assert.ok(res.v.warnings.some((w) => w.includes('늦게 끝났다')), res.v.warnings.join(' / '))
+      assert.ok(await fs.stat(rec).catch(() => null), '커밋은 됐는데 파일이 되돌려졌다')
+      assert.match(await fs.readFile(path.join(R.r, 'INDEX.md'), 'utf8'), /느린훅/, 'INDEX 가 커밋과 어긋난다')
+    } else {
+      // git 이 정말 멈췄다 — 전부 안 된 것
+      assert.equal(res.ok, false)
+      assert.equal(res.e.code, 'E_GIT')
+      assert.equal(res.e.detail.reason, 'timeout')
+      assert.equal(await fs.stat(rec).catch(() => null), null)
+    }
+    assert.equal(await porcelain(R.r), '')
+    // **훅이 끝날 때까지 더 본다.** index.lock 은 훅 동안 풀려 있어 그것만 기다리면, save 가 답한 뒤에 살아남은
+    // git 이 커밋을 마쳤다(Windows 의 git 실행기 · 2026-09-29 실측). 답한 뒤에는 아무것도 움직이지 않아야 한다.
+    await new Promise((res) => setTimeout(res, 3500))
+    assert.equal(await head(R.r), h1, 'save 가 답한 뒤에 커밋이 생겼다')
+    assert.equal(await porcelain(R.r), '')
+  } finally {
+    await R.rm()
+  }
+})
+
 test('save — work.source: 프론트매터에 남고 · 시각 없는 date 경고를 끈다 · 깨지는 제목은 인용한다', { skip: !hasGit && 'git 이 없다' }, async () => {
   const R = await repo()
   try {
