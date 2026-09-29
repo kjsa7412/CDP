@@ -3,11 +3,13 @@
 // **광고 문구를 쓰지 않는다.** 이 레포의 말 그대로 — 좌표 · 두 층 · 검사. 「이 서버」 카드는
 // `/site/info` 하나로 그리고 레포 **이름**은 싣지 않는다(집계만 · D2). 그림은 산출물의
 // `manual/그림/`(소스에서는 `docs/그림`) SVG 를 그대로 — 없으면 그 자리를 비운다.
+// 맨 아래 「MCP 가 도는 길」 은 번들 안의 그림이라 늘 있다(`McpFlow.jsx`).
 
 import { useState } from 'react'
 import { site, repoHref } from '../lib/api.js'
 import { Link, useTitle } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
+import McpFlow from './McpFlow.jsx'
 
 const BOOKS = {
   사용자_설명서: { icon: 'book', desc: '작업 레포에서 에이전트로 일하고 기록한다.', items: ['처음 한 번 — 연결', '하루 흐름 · 작업 요청 · 기록', '막혔을 때'] },
@@ -208,6 +210,7 @@ export default function Landing({ info }) {
         </div>
 
         <Figures />
+        <McpFlow />
       </div>
     </>
   )

@@ -109,6 +109,43 @@
 }
 .fig img { max-width: 100%; height: auto; }
 .fig figcaption { margin-top: 8px; font-size: 12px; color: var(--text-3); }
+
+/* MCP 가 도는 길 — 왼쪽 순서도 · 오른쪽 그 걸음의 요청/응답. 구간 색은 파랑(MCP · 누르는 것)과
+   보라(모델 API) 둘, 서버 안은 무채. 고른 화살표만 굵어진다 */
+.mcpflow { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.mcpflow__svg { width: 100%; height: auto; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-sizing: border-box; }
+.mcpflow__lane { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 0.5; }
+.mcpflow__th { fill: var(--text); font-size: 13px; font-weight: 600; }
+.mcpflow__ts { fill: var(--text-3); font-size: 11.5px; }
+.mcpflow__life { stroke: var(--border-strong); stroke-width: 0.6; stroke-dasharray: 4 4; }
+.mcpflow__rule { stroke: var(--border); stroke-width: 1; }
+.mcpflow__step { cursor: pointer; outline: none; --c: var(--text-3); }
+.mcpflow__step--mcp { --c: var(--accent); }
+.mcpflow__step--api { --c: var(--pending); }
+.mcpflow__step line { stroke: var(--c); stroke-width: 1.2; fill: none; transition: stroke-width var(--t-fast); }
+.mcpflow__step text { fill: var(--text-2); font-size: 11.5px; }
+.mcpflow__step:hover text, .mcpflow__step:focus-visible text { fill: var(--text); }
+.mcpflow__step:focus-visible line { stroke-width: 2.4; }
+.mcpflow__step.is-on line { stroke-width: 2.8; }
+.mcpflow__step.is-on text { fill: var(--c); font-weight: 700; }
+.mcpflow__side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.mcpflow__panel { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.mcpflow__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; font-size: 12.5px; color: var(--text-2); margin-bottom: 10px; }
+.mcpflow__head b { color: var(--text); }
+.mcpflow__tag { flex: none; padding: 1px 8px; border-radius: var(--r-badge); font-size: 11px; font-weight: 600; }
+.mcpflow__tag--mcp { background: var(--accent-bg); color: var(--accent); }
+.mcpflow__tag--api { background: var(--pending-bg); color: var(--pending); }
+.mcpflow__tag--in { background: var(--surface-3); color: var(--text-2); }
+.mcpflow__body {
+  margin: 0; padding: 10px 12px; min-height: 200px;
+  background: var(--surface-2); border-radius: var(--r-md);
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text);
+  white-space: pre-wrap; word-break: break-all;
+}
+.mcpflow__note { margin: 10px 0 0; font-size: 13px; line-height: 1.7; color: var(--text-2); }
+.mcpflow__nav { display: flex; justify-content: space-between; align-items: center; }
+.mcpflow__pos { font-size: 12.5px; color: var(--text-3); }
+.mcpflow__foot { margin: 0; font-size: 12.5px; line-height: 1.7; color: var(--text-3); }
 .site-foot {
   flex: none;
   margin-top: auto;
@@ -239,7 +276,7 @@
 /* 900px — 소개는 한 열 · 설명서는 목차가 위로 · 마법사는 그대로 */
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; gap: 24px; padding: 40px 0 28px; }
-  .cards3, .cards2 { grid-template-columns: 1fr; }
+  .cards3, .cards2, .mcpflow { grid-template-columns: 1fr; }
   .man { grid-template-columns: 1fr; background: none; }
   .man__nav { position: static; max-height: none; border-bottom: 1px solid var(--border); }
   .man__body { padding: 20px 20px 48px; }
