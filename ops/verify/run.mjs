@@ -778,6 +778,9 @@ await check(105, 'kit 을 JSON 으로 — 토큰 없으면 401 · 권한 밖 레
   return `${names.length}개 · 401 · 404 · 원문 0`
 })
 
+// 설치기가 이 PC 의 설치 목록을 쓴다(에이전트 세팅 갱신 T9) — 하네스는 진짜 %APPDATA% · ~/.config 를 건드리지 않는다
+const CFGDIR = path.join(TMP, 'cdp-config')
+
 await check(106, '받은 설치기 한 줄로 빈 레포에 설치 → 대장 최신 · 두 번째는 이미 최신', async () => {
   const inst = path.join(TMP, 'cdp-install.mjs')
   await fs.writeFile(inst, await (await fetch(`http://127.0.0.1:${PORT}/install.mjs`)).text())
@@ -788,7 +791,7 @@ await check(106, '받은 설치기 한 줄로 빈 레포에 설치 → 대장 �
   const go = () =>
     run(process.execPath, [inst, '--repo', 'alpha', '--workrepo', WR1, '.', '--yes', '--no-save'], {
       cwd: W3,
-      env: { ...process.env, CDP_TOKEN: TK3 },
+      env: { ...process.env, CDP_TOKEN: TK3, CDP_CONFIG_DIR: CFGDIR },
       encoding: 'utf8',
     })
   const a = await go()
@@ -810,7 +813,7 @@ await check(107, '한 줄 설치기는 토큰이 없고 물을 수 없으면 아
   const inst = path.join(TMP, 'cdp-install.mjs')
   const W4 = path.join(TMP, 'work4')
   await fs.mkdir(W4, { recursive: true })
-  const env = { ...process.env }
+  const env = { ...process.env, CDP_CONFIG_DIR: CFGDIR }
   delete env.CDP_TOKEN
   let code = 0
   let stderr = ''
@@ -844,6 +847,64 @@ await check(56, '서버 kit 을 바꾸면 대장이 낡음으로', async () => {
   const me = rows.find((r) => r.id === WRID)
   eq(me.state, '낡음', '상태')
   return `${me.applied.kit} → ${me.kitNow}`
+})
+
+await check(108, '에이전트 세팅이 바뀌면 --update 한 줄이 이 PC 의 작업 레포 전부를 — --commit 은 바꾼 파일만 · 고치던 파일이 있는 레포는 커밋 안 함 · 대장 최신 · 두 번째는 이미 최신', async () => {
+  const inst = path.join(TMP, 'cdp-install.mjs')
+  const W3 = path.join(TMP, 'work3')
+  const W5 = path.join(TMP, 'work5')
+  const env = { ...process.env, CDP_TOKEN: TK3, CDP_CONFIG_DIR: CFGDIR }
+  const gg = (cwd, ...a) => run('git', ['-C', cwd, '-c', 'user.name=h', '-c', 'user.email=h@x', ...a], { encoding: 'utf8' })
+  const node = (cwd, ...a) => run(process.execPath, [inst, ...a], { cwd, env, encoding: 'utf8' })
+  // 두 번째 작업 레포 — 같은 등록으로 설치한다(설치 목록은 경로가 열쇠다). 둘 다 설치한 것을 커밋해 둔다
+  await fs.mkdir(W5, { recursive: true })
+  await run('git', ['-C', W5, 'init', '-q'])
+  await fs.writeFile(path.join(W5, 'CLAUDE.md'), '# 우리 규약\n\n빌드는 make.\n')
+  await node(W5, '--repo', 'alpha', '--workrepo', WR1, '.', '--yes', '--no-save')
+  for (const w of [W3, W5]) {
+    await gg(w, 'add', '-A')
+    await gg(w, 'commit', '-qm', 'cdp 설치')
+  }
+  const reg = JSON.parse(await fs.readFile(path.join(CFGDIR, 'workrepos.json'), 'utf8'))
+  eq(reg.entries.length, 2, '설치 목록')
+  // 에이전트 세팅이 바뀐다 — 서버 레포의 스킬이 새 판으로(upgrade 의 kit-refresh 가 하는 일)
+  const A = path.join(F.repos, 'alpha')
+  await fs.appendFile(path.join(A, '.claude', 'skills', 'cdp-save', 'SKILL.md'), '\n<!-- 새 판 108 -->\n')
+  await gg(A, 'add', '-A')
+  await gg(A, 'commit', '-qm', '에이전트 세팅 갱신 — 하네스')
+  // W5 는 사람이 CLAUDE.md 를 고치던 중이다 — 그 레포는 커밋하지 않아야 한다
+  await fs.appendFile(path.join(W5, 'CLAUDE.md'), '\n고치던 줄\n')
+  const h5 = (await gg(W5, 'rev-parse', 'HEAD')).stdout.trim()
+
+  const dry = await node(W3, '--update', '--dry', '--yes')
+  must(/바뀔 곳 2 · 이미 최신 0 · 못 함 0/.test(dry.stdout), 'dry — ' + dry.stdout.slice(-200))
+  must(!(await fs.readFile(path.join(W3, '.claude', 'skills', 'cdp-save', 'SKILL.md'), 'utf8')).includes('새 판 108'), 'dry 가 썼다')
+
+  const a = await node(W3, '--update', '--yes', '--commit')
+  must(/바뀔 곳 2/.test(a.stdout), a.stdout.slice(-300))
+  for (const w of [W3, W5]) must((await fs.readFile(path.join(w, '.claude', 'skills', 'cdp-save', 'SKILL.md'), 'utf8')).includes('새 판 108'), `${w} 스킬이 안 바뀌었다`)
+  eq((await gg(W3, 'log', '-1', '--format=%s')).stdout.trim().startsWith('CDP 에이전트 세팅 갱신'), true, 'W3 커밋')
+  eq((await gg(W3, 'status', '--porcelain')).stdout.trim(), '', 'W3 트리')
+  eq((await gg(W5, 'rev-parse', 'HEAD')).stdout.trim(), h5, 'W5 는 커밋하지 않는다')
+  must(/커밋 안 함 — 원래 커밋 안 된 변경이 있던 파일이 있다: CLAUDE\.md/.test(a.stdout), 'W5 문장 — ' + a.stdout.slice(-300))
+  must((await fs.readFile(path.join(W5, 'CLAUDE.md'), 'utf8')).includes('고치던 줄'), '사람의 줄이 사라졌다')
+  const rows = (await (await H.call('/workrepos', { headers: { authorization: 'Bearer ' + TK3 } })).json()).repos
+  eq(rows.find((r) => r.id === WR1)?.state, '최신', '대장')
+
+  const b = await node(W5, '--update', '--yes')
+  must(/바뀔 곳 0 · 이미 최신 2/.test(b.stdout), '두 번째 — ' + b.stdout.slice(-200))
+  // 목록에 없는 경로는 멈춘다 — 무엇을 하면 되는지 말한다
+  let code = 0
+  let stderr = ''
+  try {
+    await node(TMP, '--update', path.join(TMP, 'work4'), '--yes')
+  } catch (e) {
+    code = e.code
+    stderr = e.stderr
+  }
+  eq(code, 2, '목록 밖 exit')
+  must(/설치 목록에 없는 경로/.test(stderr), stderr.slice(0, 120))
+  return '2곳 적용 · W3 커밋 · W5 커밋 안 함(고치던 CLAUDE.md) · 대장 최신 · 두 번째 이미 최신 · 목록 밖 exit 2'
 })
 
 await check(58, '보고 없이 설치해도 동작한다 (대장만 미설치)', async () => {
@@ -1802,6 +1863,33 @@ skip(67, '서버 모드 관리 메뉴 — 현황 · 작업 레포 · 정보 셋(
 skip(68, '공통 상단 바 — 표식(→ 소개) · 설명서 · 레포 · 콘솔(관리자) · 이름 · 역할 칩 · 로그아웃 · 얼굴을 넘어도 같은 문서', '브라우저 실측 — 2026-09-28 화면 · 권한 검토 v0.1 R5 · R7(얼굴 순회 navigation 1 · timeOrigin 불변)')
 skip(69, '레포 메뉴는 서버 모드에서 항상 — 쓰기/읽기 칩 · 관리자에게 콘솔 › 지식 레포 줄', '6.2 브라우저 실측 — 2026-09-23 확인 (레포 하나여도 메뉴)')
 
+// 소스로 돌 때 kit-refresh 는 패키지를 조립한다 — 조립에 번들(ops/out/ctx)이 있어야 한다. fresh clone(CI)에는 없다
+const L109 = 'ctx serve kit-refresh — 레포의 도구 층을 이 판으로 한 커밋 · dry 는 안 쓴다 · 두 번째는 최신 · kit 해시가 바뀐다'
+if (!(await fs.access(path.join(ROOT, 'ops', 'out', 'ctx', 'ctx.mjs')).then(() => true).catch(() => false))) skip(109, L109, 'ops/out/ctx 없음 — npm run build:ctx 먼저')
+else await check(109, L109, async () => {
+  const B = path.join(F.repos, 'beta')
+  const k0 = (await (await import('../../core/setup.js')).kitHash(B)).hash
+  // 판이 다르게 — beta 의 스킬 하나를 옛 판으로 만들고 커밋한다(서버 upgrade 전의 레포)
+  await fs.appendFile(path.join(B, '.claude', 'skills', 'cdp-import', 'SKILL.md'), '\n<!-- 옛 판 -->\n')
+  await run('git', ['-C', B, 'add', '-A'])
+  await run('git', ['-C', B, '-c', 'user.name=h', '-c', 'user.email=h@x', 'commit', '-qm', '옛 판'])
+  const head0 = (await run('git', ['-C', B, 'rev-parse', 'HEAD'])).stdout.trim()
+  const d = await ctx('serve', 'kit-refresh', '--root', F.repos, '--repo', 'beta', '--dry')
+  must(/beta\s+다름 \d+건/.test(d.stdout), 'dry — ' + d.stdout)
+  eq((await run('git', ['-C', B, 'rev-parse', 'HEAD'])).stdout.trim(), head0, 'dry 가 커밋했다')
+  const r = await ctx('serve', 'kit-refresh', '--root', F.repos, '--repo', 'beta', '--no-push')
+  must(/beta\s+갱신 \d+건 → [0-9a-f]+/.test(r.stdout), r.stdout)
+  const subj = (await run('git', ['-C', B, 'log', '-1', '--format=%s|%an'])).stdout.trim()
+  must(subj.startsWith('에이전트 세팅 갱신') && subj.endsWith('|cdp'), subj)
+  eq((await run('git', ['-C', B, 'status', '--porcelain'])).stdout.trim(), '', '트리')
+  must(!(await fs.readFile(path.join(B, '.claude', 'skills', 'cdp-import', 'SKILL.md'), 'utf8')).includes('옛 판'), '스킬이 안 갈렸다')
+  const again = await ctx('serve', 'kit-refresh', '--root', F.repos, '--repo', 'beta', '--no-push')
+  must(/beta\s+최신/.test(again.stdout), again.stdout)
+  const k1 = (await (await import('../../core/setup.js')).kitHash(B)).hash
+  return `dry · 갱신 ${subj.split('|')[0]} · 두 번째 최신 · kit ${k0} → ${k1}`
+})
+
+
 // ── 보고 ────────────────────────────────────────────────────────────────────
 
 results.sort((a, b) => a.n - b.n)
@@ -1814,6 +1902,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

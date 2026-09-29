@@ -60,6 +60,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx serve git-auth --host <h[:p]> --user <계정> [--test <url>]   origin 자격 — PAT 를 숨김 입력으로(.git-credentials 600)
   ctx serve git-auth --ssh --data <dir> [--rotate] | --list      SSH 배포 키(공개 키를 GitLab 에) · 지금 상태
   ctx serve doctor --root … --auth … --data …   서버 준비물 검사 (fail 이면 exit 1)
+  ctx serve kit-refresh --root <폴더> [--repo <이름>] [--dry] [--no-push]   레포들의 에이전트 세팅(스킬 · 도구 · 훅)을 이 번들의 판으로 — upgrade.sh 가 부른다
   ctx serve init --auth <f> --name <이름>       첫 관리자 + 토큰을 한 번에 (명부가 없을 때만 · 브라우저 /setup 과 같은 일)
   ctx package list|show|check|new|rename    패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로 · 이름 바꿈
   ctx repo new <경로> --package <이름> [--origin <url>] [--push]   지식 레포를 세운다
@@ -120,6 +121,7 @@ function parseArgs(argv) {
     else if (a === '--package') out.package = argv[++i]
     else if (a === '--origin') out.origin = argv[++i]
     else if (a === '--push') out.push = true
+    else if (a === '--no-push') out.noPush = true
     else if (a === '--all') out.all = true
     else if (a === '--from') out.from = argv[++i]
     else if (a === '--title') out.title = argv[++i]
@@ -922,6 +924,11 @@ export async function main(argv = process.argv.slice(2)) {
     if (opt.args[0] === 'git-auth') {
       const { runGitAuth } = await import('./ctx-gitauth.mjs')
       return runGitAuth(opt)
+    }
+    // `serve kit-refresh` — 레포들의 도구 층(에이전트 세팅)을 이 번들의 판으로. upgrade.sh 가 서버를 멈춘 사이에 부른다
+    if (opt.args[0] === 'kit-refresh') {
+      const { runKitRefresh } = await import('./ctx-serve-kit.mjs')
+      return runKitRefresh({ ...opt, builtAt: opt.builtAt || (BUILT.startsWith('__') ? null : BUILT) })
     }
     if (opt.args[0] === 'user' || opt.args[0] === 'token') {
       const { runAuthCmd } = await import('./ctx-mcp-serve.mjs')

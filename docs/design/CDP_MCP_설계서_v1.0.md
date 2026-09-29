@@ -120,7 +120,7 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 | `derive` | — | `{ pendingDerive: [...], brokenSections: [...] }` | 파생이 남은 섹션과 깨진 섹션. 이것이 비어야 커밋된다. 치우는 것은 `cdp-managed` 절차 |
 | `apply` | `coord: string` | `{ coord, doc, anchor, lines: [string] }` | 파생할 섹션에 붙일 변경 줄 초안. 파일은 고치지 않는다 — 고치는 것은 `cdp-save` 안에서 사람이 승인한 뒤 |
 | `check` | — | `{ ok, errors, warnings, findings }` | 커밋 가능한가. 커밋 때 같은 검사가 돈다 — 이 도구로 미리 본다 |
-| `sync` | — | 모드 A `{ mode: "local", remote, behind, ahead, hooksPath }` · 모드 B `{ mode: "server", head, mirror: ok\|lag\|off, kit: { hash, skills } }` | 원격과의 차이와 훅 설정 여부. 받지 않는다. 받을 것이 있으면 주입한 섹션이 최신이 아닐 수 있다고 알린다. 모드 B 의 `kit.hash` 는 **서버가 가진 스킬의 해시**다 — `CLAUDE.md` 블록의 `cdp:kit` 값과 다르면 이 PC 의 스킬이 낡았다는 뜻이다. 답에 적는다(§6.7) |
+| `sync` | — | 모드 A `{ mode: "local", remote, behind, ahead, hooksPath }` · 모드 B `{ mode: "server", head, mirror: ok\|lag\|off, kit: { hash, skills } }` | 원격과의 차이와 훅 설정 여부. 받지 않는다. 받을 것이 있으면 주입한 섹션이 최신이 아닐 수 있다고 알린다. 모드 B 의 `kit.hash` 는 **서버가 가진 스킬의 해시**다 — `CLAUDE.md` 블록의 `cdp:kit` 값과 다르면 이 PC 의 스킬이 낡았다는 뜻이다. 답에 적는다(§6.7) — 고치는 것은 담당자 PC 의 「일괄 갱신」 한 줄(설치기 `--update`), 팀원은 pull |
 | `brief` | — | `{ lines: [string, string] }` | 두 줄 요약 — 절차와 살아 있는 레포 상태 |
 | `repos` | — | `[{ name, title, default, coords, works, updated }]` | 이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다 |
 | `version` | — | `{ built, mode, repos: [name] }` | 이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다 |
@@ -1196,6 +1196,15 @@ POST /workrepos/<id>/applied   Bearer
 |---|---|
 | 관리 서비스 | `applied.kit` ≠ 서버 `kitHash` → **낡음** |
 | Claude Code | `sync` 도구의 `kit.hash` ≠ `CLAUDE.md` 블록의 `cdp:kit` → 스킬이 답에 적는다(§2.2) |
+
+> **정정(2026-09-29 · 에이전트 세팅 갱신 TODO)** — 서버 `kitHash` 는 **지식 레포 안의 `.claude/skills`** 로 계산된다(`collectKit` 도 거기서 싼다).
+> 그런데 `upgrade.sh` 는 레포를 건드리지 않아, 스킬을 고친 판을 올려도 kit 해시가 그대로였고 위 표의 「낡음」 이 뜨지 않았다(v0.18.0).
+> 지금은 두 단이다 — ① `upgrade.sh` 가 서버를 멈춘 사이 `ctx serve kit-refresh` 로 레포마다 **도구 층**(`core/toollayer.js` `TOOL_FILES`
+> + `.claude/skills/cdp-*`)을 새 `packages/` 판으로 한 커밋(작성자 `cdp` · 훅이 돈다 · 더러운 트리 · origin 앞섬이면 건너뜀 · 되돌리면 옛 판으로
+> 한 번 더). 도는 서버에서는 `POST /admin/repos/<이름>/kit`(재인증 · 뮤텍스 · `auth.log`) · `GET /admin/repos` 의 `kit` · 현황 경고 · 진단 줄.
+> ② 작업 레포는 설치기 `--update` — 설치할 때마다 **그 PC 의 설치 목록**(`core/localreg.js`)에 `{ server, repo, workrepo, path }` 를 적어 두고,
+> `--update` 가 그 PC 에 이 서버로 설치한 작업 레포를 전부 계획 → 한 번 묻고 → 적용 → 레포마다 보고. `--commit` 이면 바꾼 경로만 커밋하고,
+> 그 경로에 원래 커밋 안 된 변경이 있던 레포는 커밋하지 않는다. 관리 › 작업 레포 는 낡음이 있으면 맨 위에 담당자별 「일괄 갱신」 카드.
 
 그래서 `ctx setup` 이 `CLAUDE.md` 블록 첫 줄에 해시를 박는다 —
 

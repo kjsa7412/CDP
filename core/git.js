@@ -350,13 +350,15 @@ export async function restoreTree(root) {
 //
 // **경로를 받아서 그것만 add 한다.** `git add -A` 로 하지 않는다 — 서버 트리에
 // 다른 것이 있으면 그것까지 딸려 들어가고, 그러면 커밋이 작업 단위가 아니게 된다.
-export async function commitPaths(root, paths, { message, author, email }) {
+// `timeout` — 커밋은 훅(`bin/ctx check` · `ctx index`)을 돈다. 도구 층을 가는 커밋은 새 번들로 훅이 돌아 20초를 넘길 수 있다
+// (에이전트 세팅 갱신 — 2026-09-29 실측: 시간이 다 돼 호출이 실패로 끝났는데 git 은 살아서 커밋했다). 부르는 쪽이 늘린다.
+export async function commitPaths(root, paths, { message, author, email, timeout = 20000 }) {
   if (!paths.length) return { ok: false, reason: 'nothing' }
   const add = await run(root, ['add', '--', ...paths])
   if (!add.ok) return { ok: false, reason: 'add', message: firstLine(add.err) }
 
   const who = `${author} <${email || author + '@cdp'}>`
-  const c = await run(root, ['-c', 'user.name=' + author, '-c', 'user.email=' + (email || author + '@cdp'), 'commit', '--author=' + who, '-m', message])
+  const c = await run(root, ['-c', 'user.name=' + author, '-c', 'user.email=' + (email || author + '@cdp'), 'commit', '--author=' + who, '-m', message], { timeout })
   if (!c.ok) return { ok: false, reason: 'commit', message: firstLine(c.err) || firstLine(c.out) }
 
   const head = await run(root, ['rev-parse', '--short', 'HEAD'])

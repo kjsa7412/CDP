@@ -318,6 +318,8 @@ export const admin = {
   repoSync: (name) => A(`/repos/${encodeURIComponent(name)}/sync`, { ...J('POST', {}), allowStatus: [409] }),
   repoPush: (name) => A(`/repos/${encodeURIComponent(name)}/push`, { ...J('POST', {}), allowStatus: [409] }),
   repoRestore: (name) => A(`/repos/${encodeURIComponent(name)}/restore`, { ...J('POST', {}), allowStatus: [409] }),
+  // 에이전트 세팅(도구 층)을 이 서버 판으로 — 건너뜀(409 · 더러움 · origin 앞섬 · 훅)도 답이다
+  repoKit: (name) => A(`/repos/${encodeURIComponent(name)}/kit`, { ...J('POST', {}), allowStatus: [409] }),
   // 원격에 잇는다 — 세울 때 빠뜨린 origin. push 거절(409)도 답이다(사유 · 문장). 강제 push 는 없다
   repoOrigin: (name, url) => A(`/repos/${encodeURIComponent(name)}/origin`, { ...J('POST', { url }), allowStatus: [409] }),
   // 치운다 — 휴지통(<data>/trash)으로 옮긴다. 확인 이름이 레포 이름과 같아야 한다

@@ -377,6 +377,15 @@
 .howto li {
   margin-bottom: 14px;
 }
+/* 일괄 갱신 — 담당자별 낡은 작업 레포(에이전트 세팅 갱신 T9) */
+.howto .wr-owners {
+  margin: 6px 0 2px;
+  padding-left: 16px;
+  font-size: 12.5px;
+}
+.howto .wr-owners li {
+  margin-bottom: 2px;
+}
 .howto .btn {
   display: inline-flex;
   align-items: center;

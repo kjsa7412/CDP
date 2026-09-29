@@ -40,8 +40,11 @@ export default function WorkReposServer({ say }) {
 
   if (!data) return <Note>{error ? '대장을 읽지 못했습니다 — ' + error.message : '대장을 읽는 중입니다…'}</Note>
 
+  const stale = data.repos.filter((r) => r.state === '낡음')
+
   return (
     <>
+      {stale.length > 0 && <UpdateAll rows={stale} />}
       <Card title="작업 레포" hint="어디에 무엇이 깔려 있나">
         {data.repos.length === 0 && <Note>등록된 작업 레포가 없습니다. 아래에서 등록하세요.</Note>}
         {data.repos.map((r) => (
@@ -114,15 +117,75 @@ const SHELLS = [
 ]
 
 // 받은 파일은 **임시 폴더에** — 작업 레포에 남지 않는다. 작업 레포 경로는 `.`(그 폴더에서 붙여넣는다)
-export function installCommand(shell, { origin, repo, id }) {
+export function installCommand(shell, { origin, repo, id, update = false }) {
   const url = `${origin}/install.mjs`
-  const args = `--repo ${repo} --workrepo ${id} .`
+  // 일괄 — 레포 · 등록 id 는 그 PC 의 설치 목록에 있다(에이전트 세팅 갱신 T9). 어느 폴더에서 붙여넣어도 같다
+  const args = update ? '--update' : `--repo ${repo} --workrepo ${id} .`
   if (shell === 'ps') return `curl.exe -fsSLo "$env:TEMP\\cdp-install.mjs" ${url}; if ($?) { node "$env:TEMP\\cdp-install.mjs" ${args} }`
   if (shell === 'cmd') return `curl -fsSLo "%TEMP%\\cdp-install.mjs" ${url} && node "%TEMP%\\cdp-install.mjs" ${args}`
   return `curl -fsSLo /tmp/cdp-install.mjs ${url} && node /tmp/cdp-install.mjs ${args}`
 }
 
 const guessShell = () => (/Win/i.test(navigator.platform || navigator.userAgent || '') ? 'ps' : 'sh')
+
+function ShellTabs({ shell, setShell }) {
+  return (
+    <div className="howto-tabs" role="tablist" aria-label="터미널">
+      {SHELLS.map((s) => (
+        <button key={s.key} role="tab" aria-selected={shell === s.key} className={shell === s.key ? 'on' : ''} onClick={() => setShell(s.key)}>
+          {s.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// 에이전트 세팅이 바뀌었다 — 지식 레포의 스킬이 새 판이 되면(upgrade 의 kit-refresh · 콘솔의 「에이전트 세팅 갱신」)
+// 대장의 kit 해시와 달라져 행이 「낡음」 이 된다. **서버는 PC 에 못 쓴다**(§6.7.1) — 담당자가 자기 PC 에서 한 줄을
+// 돌리면 설치기가 그 PC 에 이 서버로 설치한 작업 레포를 전부 돈다(설치 목록 · 에이전트 세팅 갱신 T9 · T10).
+function UpdateAll({ rows }) {
+  const [shell, setShell] = useState(guessShell)
+  const owners = new Map()
+  for (const r of rows) {
+    const k = r.owner || '담당 없음'
+    owners.set(k, [...(owners.get(k) || []), r.name])
+  }
+  const cmd = installCommand(shell, { origin: window.location.origin, update: true })
+  return (
+    <Card title="에이전트 세팅이 바뀌었습니다" hint={`낡음 ${rows.length}곳 — 담당자 PC 에서 한 줄`}>
+      <div className="howto">
+        <ol>
+          <li>
+            <b>담당자마다 자기 PC 에서</b> 이 한 줄 — 그 PC 에 이 서버로 설치한 작업 레포를 <b>전부</b> 갱신합니다.
+            <ul className="wr-owners">
+              {[...owners].map(([o, names]) => (
+                <li key={o}>
+                  <b>{o}</b> — {names.join(' · ')}
+                </li>
+              ))}
+            </ul>
+            <ShellTabs shell={shell} setShell={setShell} />
+            <Cmd>{cmd}</Cmd>
+            <Note>
+              바뀔 것을 레포마다 보여 주고 한 번 묻습니다. 대장에 레포마다 보고합니다. 끝에 <code>--commit</code> 을 붙이면 레포마다{' '}
+              <b>바꾼 파일만</b> 커밋합니다 — 그 파일을 고치던 중인 레포는 커밋하지 않고 알려 줍니다. 미리 보기만 하려면 <code>--dry</code>.
+            </Note>
+          </li>
+          <li>
+            목록에 없다고 하면 — 그 PC 에서 이 한 줄을 처음 쓰는 것입니다.
+            <Note>
+              아래 행의 [설치 방법] 한 줄로 한 번 설치하면 그 PC 의 설치 목록에 들어갑니다(이미 최신이어도 적힙니다). 그 뒤부터는 이 한 줄이 전부를 돕니다.
+            </Note>
+          </li>
+          <li>
+            커밋을 올리고, Claude Code 를 열어 둔 레포는 다시 켠다.
+            <Note>팀원은 pull 로 받습니다 — 같은 한 줄을 돌릴 필요가 없습니다.</Note>
+          </li>
+        </ol>
+      </div>
+    </Card>
+  )
+}
 
 function HowTo({ row }) {
   const [shell, setShell] = useState(guessShell)
@@ -133,13 +196,7 @@ function HowTo({ row }) {
       <ol>
         <li>
           <b>작업 레포 폴더에서</b> 이 한 줄을 붙여넣는다.
-          <div className="howto-tabs" role="tablist" aria-label="터미널">
-            {SHELLS.map((s) => (
-              <button key={s.key} role="tab" aria-selected={shell === s.key} className={shell === s.key ? 'on' : ''} onClick={() => setShell(s.key)}>
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <ShellTabs shell={shell} setShell={setShell} />
           <Cmd>{cmd}</Cmd>
           <Note>
             설치기를 임시 폴더에 받아 돌립니다 — 작업 레포에는 CDP 파일만 들어갑니다. 무엇이 바뀔지 먼저 보여 주고

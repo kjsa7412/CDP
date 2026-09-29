@@ -22,6 +22,7 @@ import { listRepos } from '../../core/reponew.js'
 import { classifyPushError } from '../../core/git.js'
 import { REASON_TEXT } from '../../core/mirror.js'
 import { resolvePackages } from './ctx-package.mjs'
+import { planToolLayer } from '../../core/toollayer.js'
 import { hereDir } from '../server/runtime.js'
 
 const NL = String.fromCharCode(10)
@@ -138,6 +139,10 @@ export async function doctorRows(opt) {
     const repos = await listRepos(path.resolve(opt.root)).catch(() => null)
     if (!repos) fail('--root', `${opt.root} 를 읽을 수 없다`)
     else {
+      // 에이전트 세팅의 원본 — 패키지가 있을 때만 견준다(에이전트 세팅 갱신 TODO T8)
+      // 서버 안(콘솔 · 현황)에서는 프로세스에 한 번 만든 것을 같이 쓴다 — 셸의 doctor 는 한 번 돌고 끝난다
+      let kitSrc = null
+      if (pk) kitSrc = await import('./ctx-serve-kit.mjs').then((m) => (opt.inProcess ? m.sharedKitSource(pk) : m.kitSource(pk, { verify: false }))).catch(() => null)
       const real = repos.filter((r) => r.vocab)
       if (!real.length) warn('레포', `${opt.root} 에 지식 레포가 없다 (_vocab.md 있는 폴더) — 콘솔 > 지식 레포 · ctx repo new · git clone`)
       for (const r of repos) {
@@ -178,7 +183,13 @@ export async function doctorRows(opt) {
           }
         }
         if (r.ahead > 0) warn(`레포 ${r.name} 미러`, `${r.ahead}건이 origin 에 안 갔다 — 콘솔 > 지식 레포 > 「다시 보내기」`)
+        // 도구 층이 이 번들 판과 다르면 작업 레포가 옛 스킬을 받는다 — upgrade 때 건너뛴 레포(더러움 · origin 앞섬) · Docker
+        if (kitSrc) {
+          const k = await planToolLayer(r.path, kitSrc.from).catch(() => null)
+          if (k?.changes.length) warn(`레포 ${r.name} 에이전트 세팅`, `이 서버 판과 ${k.changes.length}건 다르다 — 콘솔 > 지식 레포 > 「에이전트 세팅 갱신」 (셸: sudo -u cdp -H node <prefix>/bin/ctx.mjs serve kit-refresh --root ${path.dirname(r.path)} --repo ${r.name})`)
+        }
       }
+      if (!opt.inProcess) await kitSrc?.cleanup()
     }
   }
 

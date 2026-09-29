@@ -65,7 +65,8 @@ export default function Repos({ say }) {
       .finally(() => setLoading(false))
   }, [refresh, refreshDoc, say])
   // 레포 이름 → 진단 줄(트리 · origin · push) 중 warn · fail 인 것
-  const docOf = (name) => (doc || []).filter((r) => r.state !== 'ok' && new RegExp(`^레포 ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`).test(r.what))
+  // 에이전트 세팅 줄은 칩이 따로 말한다 — 진단 줄로 두 번 쓰지 않는다
+  const docOf = (name) => (doc || []).filter((r) => r.state !== 'ok' && !/에이전트 세팅/.test(r.what) && new RegExp(`^레포 ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`).test(r.what))
   const create = async (body) => {
     setBusy(true)
     setDone(null)
@@ -87,9 +88,18 @@ export default function Repos({ say }) {
   const act = async (name, kind) => {
     setActing(name + ':' + kind)
     try {
-      const fn = kind === 'sync' ? admin.repoSync : kind === 'push' ? admin.repoPush : admin.repoRestore
+      const fn = kind === 'sync' ? admin.repoSync : kind === 'push' ? admin.repoPush : kind === 'kit' ? admin.repoKit : admin.repoRestore
       const r = await withSudo(() => fn(name))
-      if (kind === 'sync') say(r.ok ? (r.pulled ? `${name} — origin 에서 ${r.pulled}건 받았다` : `${name} — 이미 origin 과 같다`) : r.message || '맞추지 못했다', r.ok ? 4000 : 12000)
+      if (kind === 'kit')
+        say(
+          r.ok
+            ? r.state === 'same'
+              ? `${name} — 에이전트 세팅이 이미 이 서버 판이다`
+              : `${name} — 에이전트 세팅 ${r.changes.length}건을 갈았다 · ${r.commit}${r.pushed && !r.pushed.ok ? ' · origin 에는 못 보냄' : ''} — 작업 레포는 「낡음」 으로 뜬다`
+            : `${name} — 갈지 못했다: ${r.reasonText || r.reason || ''}${r.message ? ' — ' + r.message : ''}`,
+          r.ok ? 7000 : 12000
+        )
+      else if (kind === 'sync') say(r.ok ? (r.pulled ? `${name} — origin 에서 ${r.pulled}건 받았다` : `${name} — 이미 origin 과 같다`) : r.message || '맞추지 못했다', r.ok ? 4000 : 12000)
       else if (kind === 'push') say(r.ok ? `${name} — origin 에 보냈다` : `${name} — 보내지 못했다: ${r.message || r.reason || ''}`, r.ok ? 4000 : 10000)
       else say(r.ok ? `${name} — 트리를 되돌렸다 · 버린 것 ${r.discarded.length}` : r.message || '되돌리지 못했다', r.ok ? 5000 : 10000)
       invalidate('/admin/')
@@ -200,12 +210,21 @@ export default function Repos({ say }) {
                           </Chip>
                         </>
                       )}
+                      {(r.kit?.state === 'dry' || r.kit?.state === 'skipped') && (
+                        <>
+                          {' '}
+                          <Chip kind="warn" icon="warn" title={(r.kit.changes || []).map((c) => `${c.op} ${c.path}`).join('\n')}>
+                            에이전트 세팅 다름 {r.kit.changes.length}
+                          </Chip>
+                          {r.kit.state === 'skipped' && <div className="sub" style={{ marginTop: 3, color: 'var(--warn)' }}>에이전트 세팅 — {r.kit.line.replace(/^건너뜀 — /, '')}</div>}
+                        </>
+                      )}
                       {notes.map((n, i) => (
                         <div key={i} className="sub" style={{ marginTop: 3, color: n.state === 'fail' ? 'var(--danger)' : 'var(--warn)' }} title={n.note}>
                           진단 · {n.what.replace(`레포 ${r.name}`, '').trim() || '레포'} — {n.note.split(' — ')[0].split('. ')[0]}
                         </div>
                       ))}
-                      {(r.mirror === 'lag' || r.mirror === 'diverged' || originAhead || r.dirty > 0) && (
+                      {(r.mirror === 'lag' || r.mirror === 'diverged' || originAhead || r.dirty > 0 || r.kit?.state === 'dry') && (
                         <div className="rowact" style={{ marginTop: 4 }}>
                           {originAhead && (
                             <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'sync')} title="fetch → 뒤처졌으면 ff-only → 재스캔. 갈라졌으면 거절하고 문장을 낸다">
@@ -215,6 +234,11 @@ export default function Repos({ say }) {
                           {(r.mirror === 'lag' || r.mirror === 'diverged') && (
                             <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'push')} title="밀린 커밋을 origin 에 한 번 더 보낸다">
                               {acting === r.name + ':push' ? '보내는 중…' : '다시 보내기'}
+                            </button>
+                          )}
+                          {r.kit?.state === 'dry' && (
+                            <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'kit')} title="스킬 · 도구 · 훅을 이 서버 판으로 한 커밋 — 지식(_vocab · docs · work)은 안 건드린다. 작업 레포는 그 뒤 「낡음」 으로 뜬다">
+                              {acting === r.name + ':kit' ? '가는 중…' : '에이전트 세팅 갱신'}
                             </button>
                           )}
                           {r.dirty > 0 && (
@@ -276,7 +300,7 @@ export default function Repos({ say }) {
         </Note>
       )}
       <Note>
-        커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. <b>밀림</b>은 사유와 함께 뜹니다(인증 실패면 PAT · 셸). <b>origin 앞섬</b>은 누군가 서버 밖에서 쓴 것 — 「origin 과 맞추기」(ff-only). <b>갈림</b>은 기계가 합치지 않습니다 — 셸에서 rebase 한 뒤 「다시 보내기」. <b>트리 더러움</b>은 <code>save</code> 가 거절되는 상태 — 「트리 되돌리기」. 전부 관리자 확인 뒤에 돌고 감사에 남습니다(설명서 7.6).
+        커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. <b>밀림</b>은 사유와 함께 뜹니다(인증 실패면 PAT · 셸). <b>origin 앞섬</b>은 누군가 서버 밖에서 쓴 것 — 「origin 과 맞추기」(ff-only). <b>갈림</b>은 기계가 합치지 않습니다 — 셸에서 rebase 한 뒤 「다시 보내기」. <b>트리 더러움</b>은 <code>save</code> 가 거절되는 상태 — 「트리 되돌리기」. <b>에이전트 세팅 다름</b>은 레포 안의 스킬 · 도구 · 훅이 이 서버 판이 아닌 것 — 작업 레포가 옛 스킬을 받는다. upgrade 가 갈지만 그때 건너뛴 레포(더러움 · origin 앞섬)는 치운 뒤 「에이전트 세팅 갱신」. 전부 관리자 확인 뒤에 돌고 감사에 남습니다(설명서 7.6).
       </Note>
 
       {restoring && (

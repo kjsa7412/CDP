@@ -17,6 +17,10 @@
 //   한 줄    서버의 `GET /install.mjs`(I1). 설정에는 **server 만** 있다 — 레포 이름도 kit 도 없다.
 //            kit 은 토큰으로 받는다(`/kit/<레포>?workrepo=<id>&as=json` · I2)
 //              node cdp-install.mjs --repo <레포> --workrepo <id> <작업 레포 경로> [--dry] [--yes] [--no-save]
+//   일괄     에이전트 세팅이 바뀌었을 때 — **이 PC 에 이 서버로 설치한 작업 레포 전부**를 한 번에(에이전트 세팅 갱신 T9)
+//              node cdp-install.mjs --update [<작업 레포 경로>…] [--dry] [--yes] [--commit]
+//            설치할 때마다 이 PC 의 설치 목록(`core/localreg.js`)에 경로를 적어 두고 그것을 돈다.
+//            `--commit` 이면 레포마다 **바꾼 파일만** 커밋한다 — 그 파일에 원래 커밋 안 된 변경이 있으면 그 레포는 커밋하지 않는다
 //
 // **토큰을 묻는다**(I3). `CDP_TOKEN` 이 있으면 그것을 서버에 확인하고, 없거나 안 통하면
 // 보이지 않게 입력받는다. 확인되면 이 PC 에 둘지 묻는다(I4 · `core/tokenstore.js`).
@@ -36,6 +40,8 @@ import readline from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { planSetup, applySetup, mergeMcpJson, mcpEntryServer } from '../../core/setup.js'
 import { saveToken, storeLabel } from '../../core/tokenstore.js'
+import { execFile } from 'node:child_process'
+import { regFile, loadReg, saveReg, record, forServer, samePath } from '../../core/localreg.js'
 
 const NL = String.fromCharCode(10)
 const out = (s = '') => process.stdout.write(s + NL)
@@ -46,13 +52,15 @@ const err = (s = '') => process.stderr.write(s + NL)
 const CFG = globalThis.__CDP_KIT__ || null
 
 function parseArgs(argv) {
-  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null }
+  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false }
   const pos = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--dry') flags.dry = true
     else if (a === '--yes' || a === '-y') flags.yes = true
     else if (a === '--no-save') flags.noSave = true
+    else if (a === '--update') flags.update = true
+    else if (a === '--commit') flags.commit = true
     else if (a === '--repo') flags.repo = argv[++i] || null
     else if (a === '--workrepo') flags.workrepo = argv[++i] || null
     else if (!a.startsWith('--')) pos.push(a)
@@ -77,15 +85,24 @@ export async function main(argv) {
   const repo = CFG.repo || flags.repo
   const workrepo = CFG.workrepo || flags.workrepo
 
+  // 일괄 — 이 PC 의 설치 목록을 돈다. 레포 · 등록 id 는 목록에 있다
+  if (flags.update) {
+    if (!net) return bail('--update 는 한 줄 설치기로 돈다 — 관리 › 작업 레포 의 「일괄 갱신」 한 줄을 쓰세요.')
+    return updateAll({ server, paths: pos, dry, yes, commit: flags.commit, noSave: flags.noSave })
+  }
+
   const work = pos[0]
   if (!work || (net && (!repo || !workrepo))) {
     out('사용법 —')
-    if (net) out('  node cdp-install.mjs --repo <레포> --workrepo <등록 id> <작업 레포 경로> [--dry] [--yes] [--no-save]')
-    else out('  node install.mjs <작업 레포 경로> [--dry] [--yes] [--no-save]')
+    if (net) {
+      out('  node cdp-install.mjs --repo <레포> --workrepo <등록 id> <작업 레포 경로> [--dry] [--yes] [--no-save]')
+      out('  node cdp-install.mjs --update [<작업 레포 경로>…] [--dry] [--yes] [--commit]   이 PC 의 작업 레포 전부를 한 번에')
+    } else out('  node install.mjs <작업 레포 경로> [--dry] [--yes] [--no-save]')
     out('')
     out('  --dry      무엇이 바뀔지만 보고 쓰지 않는다')
     out('  --yes      묻지 않는다 (스크립트에서 부를 때 — 토큰은 CDP_TOKEN 에서)')
     out('  --no-save  입력한 토큰을 이 PC 에 두지 않는다')
+    if (net) out('  --commit   (--update) 레포마다 바꾼 파일만 커밋한다')
     out('')
     out(`서버   ${server}`)
     if (repo) out(`레포   ${repo}`)
@@ -130,25 +147,10 @@ export async function main(argv) {
 }
 
 async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token }) {
-  const plan = await planSetup(kitDir, work, { server, repo, kit })
-  if (!plan.ok) return bail(plan.reason)
-
-  // `.mcp.json` 은 `planSetup` 이 모른다 — 모드 A 시절 산출물만 안다.
-  // **여기서도 기존 파일을 읽어 병합한다.** 덮지 않는다.
-  const mcpPath = path.join(path.resolve(work), '.mcp.json')
-  const had = await fs.readFile(mcpPath, 'utf8').catch(() => null)
-  let next
-  try {
-    next = mergeMcpJson(had, mcpEntryServer(server, repo))
-  } catch (e) {
-    return bail(e.message)
-  }
-  plan.actions.push({
-    kind: 'mcp',
-    to: mcpPath,
-    op: had == null ? 'create' : had === next ? 'same' : 'update',
-    content: next,
-  })
+  // `.mcp.json` 은 `planSetup` 이 모른다 — `planFor` 가 기존 파일을 읽어 병합한다. 덮지 않는다
+  const pf = await planFor({ server, repo, kit, kitDir, work })
+  if (pf.error) return bail(pf.error)
+  const plan = pf.plan
 
   for (const a of plan.actions) {
     out(`  ${a.op === 'same' ? ' ' : '*'} ${a.op.padEnd(7)} ${a.kind.padEnd(8)} ${short(a.to, work)}`)
@@ -170,19 +172,17 @@ async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, to
       out('토큰이 없어 대장 보고는 건너뜁니다 — 설치는 끝났습니다. 토큰을 두고 한 번 더 돌리면 보고합니다.')
       return
     }
-    const r = await fetch(`${server}/workrepos/${encodeURIComponent(workrepo)}/applied`, {
-      method: 'POST',
-      headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
-      body: JSON.stringify({ kit: kit || null }),
-    }).catch(() => null)
-    out(r?.ok ? '대장에 보고했습니다.' : '대장 보고는 실패했습니다 — 설치는 끝났습니다 (보고는 추적용입니다)')
+    out((await reportTo(server, workrepo, token, kit)) ? '대장에 보고했습니다.' : '대장 보고는 실패했습니다 — 설치는 끝났습니다 (보고는 추적용입니다)')
   }
 
   const changes = plan.actions.filter((a) => a.op !== 'same')
   if (!changes.length) {
     out('')
     out('이미 최신입니다.')
-    if (!dry) await report()
+    if (!dry) {
+      await report()
+      await remember({ server, repo, workrepo, work, kit })
+    }
     return 0
   }
   if (dry) {
@@ -206,6 +206,7 @@ async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, to
   out('')
   out(`${changes.length}건 적용했습니다.${kit ? ` (kit ${kit})` : ''}`)
   await report()
+  await remember({ server, repo, workrepo, work, kit })
 
   out('')
   out('다음 —')
@@ -218,6 +219,195 @@ async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, to
   out('  3. git add .mcp.json .claude CLAUDE.md && git commit')
   out('     팀원은 pull 과 토큰만으로 끝난다 — 이 명령을 돌리면 토큰을 묻고 대장에 보고까지 한다')
   return 0
+}
+
+// ── 이 PC 의 설치 목록(T9) ─────────────────────────────────────────────────
+
+// 설치가 끝났으면(바뀐 것이 없어도) 한 줄 적는다 — 다음에 에이전트 세팅이 바뀌면 `--update` 가 이 줄을 돈다.
+// **관문이 아니다** — 못 적어도 설치는 끝났다.
+async function remember({ server, repo, workrepo, work, kit }) {
+  if (!repo) return
+  try {
+    const f = regFile()
+    const db = await loadReg(f)
+    record(db, { server, repo, workrepo, path: work, kit })
+    await saveReg(db, f)
+  } catch (e) {
+    out(`이 PC 의 설치 목록에 적지 못했습니다 — ${e.message} (설치는 끝났습니다 · --update 가 이 레포를 모릅니다)`)
+  }
+}
+
+function git(cwd, args) {
+  return new Promise((resolve) => {
+    execFile('git', ['-C', cwd, ...args], { windowsHide: true, encoding: 'utf8', timeout: 60000 }, (e, stdout, stderr) =>
+      resolve({ ok: !e, out: String(stdout || '').trim(), err: String(stderr || '').trim() })
+    )
+  })
+}
+
+// `.mcp.json` 병합까지 붙인 계획 — 한 레포 설치와 일괄이 같은 것을 쓴다
+async function planFor({ server, repo, kit, kitDir, work }) {
+  const plan = await planSetup(kitDir, work, { server, repo, kit })
+  if (!plan.ok) return { error: plan.reason }
+  const mcpPath = path.join(path.resolve(work), '.mcp.json')
+  const had = await fs.readFile(mcpPath, 'utf8').catch(() => null)
+  let next
+  try {
+    next = mergeMcpJson(had, mcpEntryServer(server, repo))
+  } catch (e) {
+    return { error: e.message }
+  }
+  plan.actions.push({ kind: 'mcp', to: mcpPath, op: had == null ? 'create' : had === next ? 'same' : 'update', content: next })
+  return { plan, changes: plan.actions.filter((a) => a.op !== 'same') }
+}
+
+async function reportTo(server, workrepo, token, kit) {
+  if (!workrepo || !token) return null
+  const r = await fetch(`${server}/workrepos/${encodeURIComponent(workrepo)}/applied`, {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+    body: JSON.stringify({ kit: kit || null }),
+  }).catch(() => null)
+  return !!r?.ok
+}
+
+const relTo = (work, p) => path.relative(path.resolve(work), p).split(path.sep).join('/')
+
+// 바꾼 파일만 커밋한다(T10). **그 파일에 원래 커밋 안 된 변경이 있으면 커밋하지 않는다** — 사람이 고치던
+// CLAUDE.md 줄이 「에이전트 세팅 갱신」 커밋에 딸려 가면 안 된다. 다른 경로의 스테이징은 건드리지 않는다(`commit -- <경로>`).
+async function commitChanged(work, rels, kit) {
+  const add = await git(work, ['add', '-A', '--', ...rels])
+  if (!add.ok) return { ok: false, why: add.err.split(NL)[0] }
+  const c = await git(work, ['commit', '-q', '-m', `CDP 에이전트 세팅 갱신${kit ? ' — kit ' + kit : ''}`, '--', ...rels])
+  if (!c.ok) return { ok: false, why: (c.err || c.out).split(NL)[0] }
+  const head = await git(work, ['rev-parse', '--short', 'HEAD'])
+  return { ok: true, commit: head.out }
+}
+
+// 일괄 — 이 PC 에 이 서버로 설치한 작업 레포 전부(또는 준 경로만). 계획을 다 보여 주고 **한 번** 묻는다.
+async function updateAll({ server, paths, dry, yes, commit, noSave }) {
+  const file = regFile()
+  const db = await loadReg(file)
+  let rows = forServer(db, server)
+  if (paths.length) {
+    const miss = paths.filter((p) => !rows.some((r) => samePath(r.path, p)))
+    if (miss.length) {
+      return bail(
+        `이 PC 의 설치 목록에 없는 경로입니다 — ${miss.map((p) => path.resolve(p)).join(' · ')}${NL}` +
+          '관리 › 작업 레포 에서 그 행의 [설치 방법] 한 줄로 한 번 설치하면 목록에 들어갑니다.'
+      )
+    }
+    rows = rows.filter((r) => paths.some((p) => samePath(r.path, p)))
+  }
+  out(`서버     ${server}`)
+  out(`목록     ${file}`)
+  if (!rows.length) {
+    out('')
+    out('이 PC 에 이 서버로 설치한 작업 레포가 없습니다.')
+    out('관리 › 작업 레포 에서 행마다 [설치 방법] 의 한 줄로 한 번 설치하면 목록에 들어갑니다 — 그 뒤부터 이 한 줄이 전부를 돕니다.')
+    return 1
+  }
+
+  const tk = await resolveToken(server, { required: true, yes })
+  if (tk?.error) return bail(tk.error)
+  if (tk?.entered && !noSave && !dry) await offerSave(tk.token, { yes })
+
+  // kit 은 레포(지식 레포)마다 한 번 받는다
+  const kits = new Map()
+  const cleanups = []
+  const items = []
+  try {
+    for (const r of rows) {
+      const it = { row: r, plan: null, changes: [], error: null, kit: null }
+      items.push(it)
+      if (!(await isDir(r.path))) {
+        it.error = '폴더가 없다 — 옮겼거나 지웠다(목록에서 빼려면 그 자리에 다시 설치하거나 목록 파일에서 그 줄을 지운다)'
+        continue
+      }
+      if (!r.workrepo) {
+        it.error = '등록 id 가 없다 — 행의 한 줄로 한 번 다시 설치한다'
+        continue
+      }
+      if (!kits.has(r.repo)) {
+        const got = await fetchKit(server, r.repo, r.workrepo, tk.token)
+        if (!got.error) cleanups.push(got.cleanup)
+        kits.set(r.repo, got)
+      }
+      const got = kits.get(r.repo)
+      if (got.error) {
+        it.error = got.error.split(NL)[0]
+        continue
+      }
+      it.kit = got.kit
+      const pf = await planFor({ server, repo: r.repo, kit: got.kit, kitDir: got.dir, work: r.path })
+      if (pf.error) {
+        it.error = pf.error.split(NL)[0]
+        continue
+      }
+      it.plan = pf.plan
+      it.changes = pf.changes
+    }
+
+    out('')
+    for (const it of items) {
+      const tag = it.error ? '못 함' : it.changes.length ? `바뀔 것 ${it.changes.length}` : '이미 최신'
+      out(`■ ${it.row.path}  (${it.row.repo} · ${it.row.workrepo || '—'})  ${tag}${it.kit ? ' · kit ' + it.kit : ''}`)
+      if (it.error) out('    ' + it.error)
+      for (const a of it.changes) out(`    * ${a.op.padEnd(7)} ${a.kind.padEnd(8)} ${short(a.to, it.row.path)}`)
+    }
+    const todo = items.filter((x) => !x.error && x.changes.length)
+    const fresh = items.filter((x) => !x.error && !x.changes.length)
+    const bad = items.filter((x) => x.error)
+    out('')
+    out(`바뀔 곳 ${todo.length} · 이미 최신 ${fresh.length} · 못 함 ${bad.length}`)
+    if (dry) {
+      out('--dry 이므로 쓰지 않았습니다.')
+      return bad.length ? 1 : 0
+    }
+    if (todo.length && !yes) {
+      const ok = await confirm(`위 ${todo.length}곳에 적용할까요?${commit ? ' (바꾼 파일만 커밋합니다)' : ''} [y/N] `)
+      if (!ok) {
+        out('그만둡니다. 아무것도 쓰지 않았습니다.')
+        return 1
+      }
+    }
+
+    const needCommit = []
+    for (const it of [...todo, ...fresh]) {
+      const w = it.row.path
+      if (it.changes.length) {
+        const rels = it.changes.map((a) => relTo(w, a.to))
+        // 원래 커밋 안 된 변경이 있던 파일인가 — 적용 **전에** 본다
+        const pre = commit ? (await git(w, ['status', '--porcelain', '--', ...rels])).out : ''
+        await applySetup(it.plan)
+        let line = `  ${w} — ${it.changes.length}건 적용`
+        if (commit) {
+          // porcelain 줄은 「XY 경로」 — 첫 줄은 git() 가 trim 해 앞 칸이 빠질 수 있다. 상태 칸을 글자 수가 아니라 모양으로 뗀다
+          if (pre) line += ' · 커밋 안 함 — 원래 커밋 안 된 변경이 있던 파일이 있다: ' + pre.split(NL).map((l) => l.trim().replace(/^\S{1,2}\s+/, '')).join(' · ')
+          else {
+            const c = await commitChanged(w, rels, it.kit)
+            line += c.ok ? ` · 커밋 ${c.commit}` : ` · 커밋 못 함 — ${c.why}`
+          }
+        } else needCommit.push(w)
+        out(line)
+      }
+      const rep = await reportTo(server, it.row.workrepo, tk.token, it.kit)
+      if (rep === false) out(`  ${w} — 대장 보고 실패 (설치는 끝났습니다)`)
+      record(db, { server, repo: it.row.repo, workrepo: it.row.workrepo, path: w, kit: it.kit })
+    }
+    await saveReg(db, file).catch((e) => out('설치 목록을 쓰지 못했습니다 — ' + e.message))
+    out('')
+    out(`끝났습니다 — 적용 ${todo.length}곳 · 대장 보고 ${todo.length + fresh.length}곳${bad.length ? ` · 못 함 ${bad.length}곳(위)` : ''}`)
+    if (needCommit.length) {
+      out('')
+      out('커밋은 각 레포에서 — 팀원은 pull 로 받습니다 (--commit 을 주면 이 명령이 바꾼 파일만 커밋합니다)')
+      for (const w of needCommit) out(`  git -C "${w}" add .mcp.json .claude CLAUDE.md && git -C "${w}" commit -m "CDP 에이전트 세팅 갱신"`)
+    }
+    if (todo.length) out('Claude Code 를 열어 둔 레포는 다시 켜야 새 스킬을 읽습니다.')
+    return bad.length ? 1 : 0
+  } finally {
+    for (const c of cleanups) await c()
+  }
 }
 
 // ── 토큰 ──────────────────────────────────────────────────────────────────
