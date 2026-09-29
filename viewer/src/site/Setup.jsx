@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { site } from '../lib/api.js'
 import { Link, useTitle } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
+import { copyText } from '../lib/clip.js'
 
 export default function Setup({ info, onDone }) {
   const [step, setStep] = useState(1)
@@ -149,9 +150,11 @@ export default function Setup({ info, onDone }) {
                 <button
                   className="abtn abtn--accent"
                   onClick={() => {
-                    navigator.clipboard?.writeText(done.raw)
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 1400)
+                    copyText(done.raw).then((ok) => {
+                      if (!ok) return
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 1400)
+                    })
                   }}
                 >
                   <Icon name={copied ? 'check' : 'copy'} size={13} /> {copied ? '복사됨' : '복사'}

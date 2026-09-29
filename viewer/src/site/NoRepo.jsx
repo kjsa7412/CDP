@@ -27,7 +27,8 @@ export default function NoRepo({ from = null }) {
       navigate('/r/' + encodeURIComponent(go.name) + '/', { replace: true })
     }
     // 세션이 없으면 로그인으로(보던 곳을 들고) — 직접 진입은 서버가 이미 보냈고, 화면 안에서는 여기서
-    if (!me) navigate('/login?next=' + encodeURIComponent('/r' + (from ? '?from=' + encodeURIComponent(from) : '')), { replace: true })
+    // 주소가 아직 `/r` 일 때만 — 로그아웃 직후 남은 렌더가 소개를 로그인으로 덮어쓰지 않게(Console.jsx 와 같은 이유)
+    if (!me && location.pathname === '/r') navigate('/login?next=' + encodeURIComponent('/r' + (from ? '?from=' + encodeURIComponent(from) : '')), { replace: true })
   }, [from, me, repos])
   if (!me) return null
   if (!from && repos.length) return null

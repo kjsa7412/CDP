@@ -681,6 +681,18 @@ export async function runServe(opt = {}) {
         return json(res, 200, { ok: true, built: BUILT, repos: list.length, mirror: await mirrorCounts(list) })
       }
 
+      // /install.mjs — 한 줄 설치의 설치기(설치 한 줄 TODO I1). **인증 앞이다** — 담긴 것은 코드(병합 규칙)와
+      // 이 서버의 주소 한 줄뿐이다. 레포 이름 · 사람 · kit 은 없다(`/healthz` 와 같은 규칙). kit 은 설치기가
+      // 사람이 붙여넣은 **토큰으로** `/kit/<레포>?…&as=json` 에서 받는다(I2) — 판정은 zip 과 같은 자리다.
+      if (url.pathname === '/install.mjs' && (req.method === 'GET' || req.method === 'HEAD')) {
+        const head = 'globalThis.__CDP_KIT__ = ' + JSON.stringify({ server: publicOrigin(req, opt) }) + NL
+        // 번들이 아니면(소스로 도는 개발 · 하네스) 이 PC 의 설치기를 부르는 두 줄(I8) — 같은 PC 에서만 돈다
+        const body = HAS_INSTALLER ? head + INSTALLER_SRC : head + `await import(${JSON.stringify(new URL('./cdp-install.mjs', import.meta.url).href)})` + NL
+        log.req({ ip, method: req.method, tool: '/install.mjs', ms: Date.now() - t0, status: 200 })
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
+        return res.end(req.method === 'HEAD' ? undefined : body)
+      }
+
       // 화면 자산 — **인증 앞에서 낸다.**
       //
       // 로그인 화면을 그리려면 그 전에 받아야 하고, 담긴 것은 빌드 산출물뿐이라
@@ -841,6 +853,7 @@ export async function runServe(opt = {}) {
             return res.end(loginPage({ next, failed: true }))
           }
           setCookie(res, auth.signSession(secret, d.user, { tid: d.tokenId }), { secure: secureCookie })
+          next = landingOf(next, d.role)
           if (isJson) return json(res, 200, { ok: true, user: d.user, role: d.role, next })
           res.writeHead(302, { location: next })
           return res.end()
@@ -1553,6 +1566,16 @@ export async function runServe(opt = {}) {
           }
           entries.push({ name: '설치.md', data: installNote({ origin, repo: name, row, kit }) })
 
+          // `&as=json` — 한 줄 설치기가 **토큰으로** 받는 같은 kit(설치 한 줄 TODO I2). 판정 · 조립은 zip 과 같고
+          // 담는 모양만 다르다 — `kit/` 아래 것만, 한 단 올려서.
+          if (url.searchParams.get('as') === 'json') {
+            const kitFiles = entries
+              .filter((f) => f.name.startsWith('kit/'))
+              .map((f) => ({ name: f.name.slice('kit/'.length), data: Buffer.from(f.data).toString('base64') }))
+            log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name, ms: Date.now() - t0, status: 200 })
+            return json(res, 200, { server: origin, repo: name, workrepo: row.id, kit, files: kitFiles })
+          }
+
           // 실행기. **설정 한 줄을 앞에 박아서** 사람이 URL 이나 id 를 옮겨
           // 적지 않게 한다. 토큰은 넣지 않는다(§6.7.3) -- 꾸러미는 파일로
           // 남고 사람 손을 거친다.
@@ -1986,6 +2009,19 @@ function safeNext(v, dflt = '/') {
   return /^\/(?!\/)/.test(t) ? t : dflt
 }
 
+// 로그인 뒤 갈 곳 — **역할이 정한다**(화면의 `landingFor` 와 같은 규칙). admin 은 콘솔 · 나머지는 레포(`/r` 이 첫 레포를 고른다).
+// `next` 는 그 역할이 갈 수 있을 때만 — 로그인 · 로그아웃 · 마법사로 되돌아가지 않고(`next` 가 겹쳐 로그인 화면에 머물던 것),
+// 콘솔은 admin 에게만(다른 사람이 콘솔 자리에서 로그인해 권한 안내를 첫 화면으로 보던 것).
+function landingOf(next, role) {
+  const admin = role === 'admin'
+  const home = admin ? '/console' : '/r'
+  const p = String(next || '').split(/[?#]/)[0]
+  if (!p || p === '/' || p === '/r' || p === '/r/') return home
+  if (/^[/](login|logout|setup)([/]|$)/.test(p)) return home
+  if (/^[/]console([/]|$)/.test(p) && !admin) return home
+  return next
+}
+
 function page(title, body) {
   return `<!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
@@ -2120,27 +2156,22 @@ function installNote({ origin, repo, row, kit }) {
 
 **\`kit/\` 안의 것은 아직 아무 데도 안 갔다.** 옮기는 일은 아래가 한다.
 
-## 2. 토큰을 환경변수에 둔다 — **먼저**
-
-    # macOS · Linux
-    export CDP_TOKEN=<관리자에게 받은 토큰>
-    # Windows
-    setx CDP_TOKEN <관리자에게 받은 토큰>     (새 터미널부터 먹는다)
-
-**이 꾸러미에 토큰은 없다.** 관리자에게 직접 받는다 — 메신저·메일에 남기지 않는다.
-먼저 두는 이유 — 다음 단계가 이 값을 보고 관리자의 설치 대장에 보고한다. 없어도 설치는
-되지만 관리 화면의 이 작업 레포 행이 \`미설치\` 로 남는다.
-
-## 3. 설치한다
+## 2. 설치한다 — 토큰은 설치기가 묻는다
 
     node install.mjs <작업 레포 경로>
 
-무엇이 바뀔지 먼저 보여 주고 묻는다. 미리만 보려면 \`--dry\`, 묻지 않으려면 \`--yes\`.
+1. **토큰** — \`CDP_TOKEN\` 이 있으면 서버에 확인한다. 없거나 안 통하면 **붙여넣으라고 묻는다**(화면에 안 보인다).
+   관리자에게 받은 것이다 — **이 꾸러미에 토큰은 없다.** 메신저·메일에 남기지 않는다.
+   통하면 이 PC 에 둘지 묻는다 — Windows 는 사용자 환경변수, macOS · Linux 는 \`~/.config/cdp/token\` + 셸 rc 한 줄.
+   건너뛰어도(그냥 Enter) 설치는 되고, 관리 화면의 이 작업 레포 행이 \`미설치\` 로 남을 뿐이다.
+2. **바뀔 것** — 먼저 보여 주고 묻는다. 미리만 보려면 \`--dry\`, 묻지 않으려면 \`--yes\`(그때 토큰은 \`CDP_TOKEN\` 에서만).
 
 - \`CLAUDE.md\` 가 이미 있으면 \`<!-- cdp:begin -->\` ~ \`<!-- cdp:end -->\` **블록만** 갈아 끼운다
 - \`.mcp.json\` 이 이미 있으면 \`cdp\` 항목만 더한다 — **다른 MCP 서버는 그대로 둔다**
 - 작업 레포의 \`cdp-\` 아닌 skill 은 건드리지 않는다
-- \`CDP_TOKEN\` 이 있으면 설치 대장에 보고까지 한다 — 바뀐 것이 없어도 보고한다(pull 로 받은 사람도 한 번 돌린다)
+- 토큰이 있으면 설치 대장에 보고까지 한다 — 바뀐 것이 없어도 보고한다(pull 로 받은 사람도 한 번 돌린다)
+
+**zip 없이도 된다.** 관리 화면의 작업 레포 › [설치 방법] 에 작업 레포 폴더에서 붙여넣는 **명령 한 줄**이 있다 — 하는 일은 이것과 같다.
 
 ### Node 가 없으면
 
@@ -2154,16 +2185,17 @@ function installNote({ origin, repo, row, kit }) {
 \`bin/ctx\` 를 가진 사람은 이것도 된다 —
 \`ctx setup --server ${origin} --repo ${repo} --workrepo ${row.id} <작업레포>\`
 
-## 4. Claude Code 를 다시 켠다
+## 3. Claude Code 를 다시 켠다
 
-환경변수는 프로세스 시작 때 읽힌다. \`/mcp\` 에 \`cdp\` 가 connected 면 된 것이다.
+**완전히** 끄고 켠다 — 환경변수는 프로세스 시작 때 읽힌다. VS Code · 데스크톱 앱 안이면 그 앱을 다시 켠다.
+\`/mcp\` 에 \`cdp\` 가 connected 면 된 것이다.
 
-## 5. 커밋한다
+## 4. 커밋한다
 
     git add .mcp.json .claude CLAUDE.md
     git commit -m "CDP 붙인다 — ${repo}"
 
-**팀원은 여기서부터 \`git pull\` 과 \`CDP_TOKEN\` 만으로 끝난다.** 이 꾸러미를
-다시 받을 필요가 없다.
+**팀원은 여기서부터 \`git pull\` 과 토큰만으로 끝난다.** 이 꾸러미를
+다시 받을 필요가 없다 — 토큰을 이 PC 에 두는 것도 설치 명령을 한 번 돌리면 묻는다.
 `
 }

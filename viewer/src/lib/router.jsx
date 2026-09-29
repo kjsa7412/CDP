@@ -17,6 +17,7 @@ const listeners = new Set()
 function read() {
   const u = new URL(location.href)
   return {
+    href: u.href,
     path: u.pathname,
     segs: u.pathname.split('/').filter(Boolean).map((s) => {
       try {
@@ -45,6 +46,9 @@ export function useRoute() {
     const l = () => startTransition(() => setLoc(read()))
     listeners.add(l)
     window.addEventListener('popstate', l)
+    // 구독 전에 바뀐 주소를 따라잡는다 — 자식의 effect 가 부모보다 먼저 돈다. 설명서의 「첫 권으로」 처럼 자식이 첫 렌더
+    // 직후 `navigate(…, { replace })` 하면 부모의 이 구독이 아직 없어 주소만 바뀌고 화면은 그대로였다
+    setLoc((cur) => (cur.href === location.href ? cur : read()))
     return () => {
       listeners.delete(l)
       window.removeEventListener('popstate', l)

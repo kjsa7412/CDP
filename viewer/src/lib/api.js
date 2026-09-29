@@ -90,6 +90,20 @@ export function repoHref() {
   } catch {}
   return p && p.startsWith(root) ? p : root
 }
+// 로그인 뒤 갈 곳 — **역할이 정한다.** admin 은 콘솔, writer · viewer 는 레포(마지막에 보던 곳 · 없으면 첫 레포).
+// `next` 는 그 역할이 갈 수 있을 때만 따른다 — 관리자가 콘솔에서 로그아웃한 자리에 다른 사람이 로그인해
+// 「관리자 권한이 필요합니다」 를 첫 화면으로 보던 것 · `/login?next=/login?next=…` 가 겹쳐 로그인 화면에 머물던 것.
+export function landingFor(me, next = null) {
+  const admin = !!(me?.admin || me?.role === 'admin')
+  const home = admin ? '/console' : repoHref()
+  const t = String(next || '')
+  if (!/^\/(?!\/)/.test(t)) return home
+  const p = t.split(/[?#]/)[0]
+  if (p === '/' || p === '/r' || p === '/r/') return home
+  if (/^\/(login|logout|setup)(\/|$)/.test(p)) return home
+  if (/^\/console(\/|$)/.test(p) && !admin) return home
+  return t
+}
 export function getTheme() {
   try {
     const t = localStorage.getItem(THEME)
@@ -164,6 +178,7 @@ function saveLocalState(patch) {
 async function req(path, opts = {}) {
   const { allowStatus = [], absolute = false, ...init } = opts
   const server = isServer()
+  const at = location.pathname
   const res = await fetch((absolute ? '' : base()) + path, {
     ...init,
     headers: {
@@ -180,8 +195,9 @@ async function req(path, opts = {}) {
       j = await res.json()
     } catch {}
     if (j?.error?.code === 'E_REAUTH') throw new ApiError(j.error.message, 401, 'E_REAUTH')
+    // 보내던 자리를 떠났거나(로그아웃 뒤 늦게 온 답) 이미 로그인 화면이면 옮기지 않는다 — `next` 가 겹치지 않게
     if (server) {
-      navigate('/login?next=' + encodeURIComponent(location.pathname + location.search))
+      if (location.pathname === at && !/^\/login(\/|$)/.test(at)) navigate('/login?next=' + encodeURIComponent(location.pathname + location.search))
       throw new ApiError('로그인이 필요합니다', 401, 'E_AUTH')
     }
     throw new ApiError('토큰이 없거나 만료되었습니다. 앱을 다시 실행하세요.', 401)

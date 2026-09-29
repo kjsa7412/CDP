@@ -5,14 +5,15 @@
 // 명부를 흘린다. 분당 20회를 넘으면 서버가 429 를 낸다.
 
 import { useState } from 'react'
-import { site, lastRepo, repoHref } from '../lib/api.js'
+import { site, landingFor } from '../lib/api.js'
 import { Link, navigate, useTitle } from '../lib/router.jsx'
 import { useSession } from '../lib/session.jsx'
 import { clearAll } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 
-export default function Login({ next = '/r' }) {
+export default function Login({ next = null }) {
   const session = useSession()
+  const me = session.me
   const [tok, setTok] = useState('')
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -29,11 +30,11 @@ export default function Login({ next = '/r' }) {
       const r = await site.login(t, next)
       if (r?.ok) {
         // 얼굴이 바뀐다(사이트 → 레포 · 콘솔) — 세션을 새로 읽고 pushState 로 간다(문서 교체 없음 · 화면 · 권한 검토 v0.1 R7).
-        // 다른 사람이었을 수 있으니 캐시는 비운다. 갈 곳이 그냥 /r 이면 마지막에 보던 레포로(P7) — 없으면 `/r` 화면이 첫 레포를 고른다.
+        // 다른 사람이었을 수 있으니 캐시는 비운다. 갈 곳은 **역할이 정한다**(`landingFor`) — admin 은 콘솔 · 나머지는 레포.
+        // `next` 는 그 역할이 갈 수 있을 때만 따른다
         clearAll()
-        await session.refresh()
-        const to = r.next || next
-        navigate(to === '/r' && lastRepo() ? repoHref() : to)
+        const who = await session.refresh()
+        navigate(landingFor(who || r, next))
         return
       }
       setMsg(r?.error?.message || '토큰을 확인하세요.')
@@ -52,6 +53,15 @@ export default function Login({ next = '/r' }) {
           <h1>CDP</h1>
         </div>
         <p className="auth__sub">지식 레포 관리 서비스 · {location.host}</p>
+        {me && (
+          // 이미 로그인한 채 왔다 — 그대로 들어가거나, 다른 토큰으로 바꿔 로그인한다
+          <div className="anote" style={{ marginBottom: 12 }}>
+            <b>{me.user}</b> {me.role && <span className="who__role">{me.role}</span>} 로 로그인되어 있습니다.{' '}
+            <Link to={landingFor(me, next)}>들어가기 →</Link>
+            <br />
+            다른 계정은 그 토큰을 아래에 넣습니다.
+          </div>
+        )}
         <form className="form" onSubmit={submit}>
           <div className="field">
             <label className="field__l" htmlFor="tk">토큰</label>

@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { api, currentRepo } from '../lib/api.js'
 import { useResource } from '../lib/cache.js'
 import Icon from './Icon.jsx'
+import { copyText } from '../lib/clip.js'
 
 const SEV = {
   error: { icon: 'block', label: '커밋이 거부될 것' },
@@ -37,9 +38,11 @@ export default function CheckView({ onOpen }) {
   for (const f of data.findings) counts[f.sev] += f.items.length
 
   const copy = (text, label) => {
-    navigator.clipboard?.writeText(text)
-    setCopied(label)
-    setTimeout(() => setCopied(''), 1400)
+    copyText(text).then((ok) => {
+      if (!ok) return
+      setCopied(label)
+      setTimeout(() => setCopied(''), 1400)
+    })
   }
 
   return (

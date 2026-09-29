@@ -22,7 +22,7 @@ export default function Site() {
   let page
   if (cur === '') page = <Landing info={info} />
   else if (cur === 'manual') page = <Manual info={info} id={route.segs[1] || null} hash={route.hash} />
-  else if (cur === 'login') page = <Login next={route.query.get('next') || '/r'} />
+  else if (cur === 'login') page = <Login next={route.query.get('next')} />
   else if (cur === 'setup') page = <Setup info={info} onDone={s.refresh} />
   else if (cur === 'r') page = <NoRepo from={route.query.get('from')} />
   else page = <NotFound path={route.path} />

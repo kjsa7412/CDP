@@ -6,6 +6,7 @@
 
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import { copyText } from './clip.js'
 
 let hljs = null
 let hljsPending = null
@@ -203,9 +204,11 @@ export async function enhance(root, { myCoords = [], coordIndex = null, coordLin
   root.querySelectorAll('[data-copy]').forEach((btn) => {
     btn.onclick = () => {
       const code = btn.parentElement.querySelector('code')
-      navigator.clipboard?.writeText(code?.textContent || '')
-      btn.textContent = '복사됨'
-      setTimeout(() => (btn.textContent = '복사'), 1200)
+      copyText(code?.textContent || '').then((ok) => {
+        if (!ok) return
+        btn.textContent = '복사됨'
+        setTimeout(() => (btn.textContent = '복사'), 1200)
+      })
     }
   })
 }

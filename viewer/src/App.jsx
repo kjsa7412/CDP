@@ -36,6 +36,7 @@ import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
 import Icon from './components/Icon.jsx'
+import { copyText } from './lib/clip.js'
 
 // 왼쪽 폭 — 하는 일에 따라 다르다. 목록은 제목 한 줄이면 되고, 뻗어나가기는
 // 열이 둘 이상 들어가야 "가로로 뻗는다"가 성립한다.
@@ -460,8 +461,7 @@ export default function App() {
       if (e.key === 'C' && e.shiftKey && docId) {
         const d = docs.find((x) => x.id === docId)
         if (d) {
-          api.doc(docId).then((full) => navigator.clipboard?.writeText(summaryText(full)))
-          say('요약 복사됨', 1500)
+          api.doc(docId).then((full) => copyText(summaryText(full))).then((ok) => ok && say('요약 복사됨', 1500))
         }
         return
       }

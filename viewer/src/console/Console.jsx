@@ -47,7 +47,9 @@ export default function Console() {
 
   // 세션이 없으면 로그인으로 — 직접 진입은 서버가 302 로 보냈고, 화면 안(로그아웃 뒤 뒤로 가기 등)에서는 여기서
   useEffect(() => {
-    if (!me) navigate('/login?next=' + encodeURIComponent(route.path + (route.hash || '')), { replace: true })
+    // 주소가 아직 콘솔일 때만 — 로그아웃은 세션을 비우고 곧바로 소개로 간다. 그 사이 한 번 남은 이 렌더가 소개를
+    // `/login?next=/console` 로 덮어써, 다음 사람이 로그인하자마자 「관리자 권한이 필요합니다」 를 보았다
+    if (!me && /^\/console(\/|$)/.test(location.pathname)) navigate('/login?next=' + encodeURIComponent(route.path + (route.hash || '')), { replace: true })
   }, [me, route.path, route.hash])
 
   // 없는 페이지(`/console/없음`)는 현황으로 — 주소를 고쳐 놓아야 왼쪽 메뉴의 현재 표시가 맞는다(검토 P6 · P22)

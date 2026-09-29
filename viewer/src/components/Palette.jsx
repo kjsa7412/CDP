@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import { shortDate } from '../lib/format.js'
 import Icon from './Icon.jsx'
+import { copyText } from '../lib/clip.js'
 
 export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
   const [q, setQ] = useState('')
@@ -86,9 +87,11 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
   }
 
   const copyCoord = () => {
-    navigator.clipboard?.writeText(res.reconciled.coord)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1400)
+    copyText(res.reconciled.coord).then((ok) => {
+      if (!ok) return
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1400)
+    })
   }
 
   const counts = res?.counts || { managed: 0, work: 0, coord: 0 }

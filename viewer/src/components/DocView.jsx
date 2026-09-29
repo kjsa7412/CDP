@@ -12,6 +12,7 @@ import { summaryText } from '../lib/format.js'
 import ValidityBlock from './ValidityBlock.jsx'
 import SectionRail from './SectionRail.jsx'
 import Icon from './Icon.jsx'
+import { copyText } from '../lib/clip.js'
 
 export default function DocView({
   docId,
@@ -184,9 +185,11 @@ export default function DocView({
   }, [doc?.id])
 
   const copy = (label, text) => {
-    navigator.clipboard?.writeText(text)
-    setCopied(label)
-    setTimeout(() => setCopied(''), 1400)
+    copyText(text).then((ok) => {
+      if (!ok) return
+      setCopied(label)
+      setTimeout(() => setCopied(''), 1400)
+    })
   }
 
   if (error) {

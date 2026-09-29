@@ -27,8 +27,11 @@ const GITHUB = 'https://github.com/kjsa7412/CDP/blob/main/'
 const BASE_OF = (id) => (id === '설치절차' ? 'ops/deploy/' : 'manual/')
 const ICON_OF = { 사용자_설명서: 'book', 관리자_설명서: 'shield', 개발자_설명서: 'gear', 설치절차: 'server' }
 
-export default function Manual({ info, id, hash }) {
+export default function Manual({ info, id: asked, hash }) {
   const books = info?.manuals || []
+  // 책을 안 고르면(`/manual`) **첫 권을 바로 그린다** — 주소는 뒤따라 고친다. 전에는 주소만 고치고 화면은 「설명서」
+  // 한 줄에 멈춰 오류처럼 보였다(자식의 replace 가 부모 구독보다 먼저 돌았다 · router.jsx)
+  const id = asked || books[0]?.id || null
   // 원문은 캐시(화면 · 권한 검토 v0.1 R8) — 책을 오가도 「읽는 중…」 은 처음 한 번뿐이다. 판이 바뀌면 문서 교체가 오므로 오래 둬도 된다
   const res = useResource(id ? '/site/manual/' + id : null, () => site.manual(id).then(String), { enabled: !!id, ttl: 5 * 60_000 })
   const text = res.data ?? null
@@ -36,10 +39,9 @@ export default function Manual({ info, id, hash }) {
   const [cur, setCur] = useState(null)
   const bodyRef = useRef(null)
 
-  // 책을 안 고르면 첫 권으로
   useEffect(() => {
-    if (!id && books.length) navigate('/manual/' + encodeURIComponent(books[0].id), { replace: true })
-  }, [id, books])
+    if (!asked && id) navigate('/manual/' + encodeURIComponent(id) + (hash || ''), { replace: true })
+  }, [asked, id, hash])
 
   const rendered = useMemo(() => (text != null ? renderMarkdown(text) : null), [text])
 

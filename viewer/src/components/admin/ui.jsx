@@ -6,6 +6,7 @@
 
 import { useState } from 'react'
 import Icon from '../Icon.jsx'
+import { copyText } from '../../lib/clip.js'
 
 export function Card({ title, hint, children, actions, id }) {
   return (
@@ -65,9 +66,11 @@ export function Cmd({ children }) {
       className="acmd"
       title="복사"
       onClick={() => {
-        navigator.clipboard?.writeText(text)
-        setDone(true)
-        setTimeout(() => setDone(false), 1400)
+        copyText(text).then((ok) => {
+          if (!ok) return
+          setDone(true)
+          setTimeout(() => setDone(false), 1400)
+        })
       }}
     >
       <code>{text}</code>
@@ -86,9 +89,11 @@ export function PathText({ children }) {
       className="apath"
       title="경로 복사"
       onClick={() => {
-        navigator.clipboard?.writeText(text)
-        setDone(true)
-        setTimeout(() => setDone(false), 1400)
+        copyText(text).then((ok) => {
+          if (!ok) return
+          setDone(true)
+          setTimeout(() => setDone(false), 1400)
+        })
       }}
     >
       {text}

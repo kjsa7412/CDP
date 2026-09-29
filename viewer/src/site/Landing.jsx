@@ -18,8 +18,8 @@ const BOOKS = {
 
 export default function Landing({ info }) {
   useTitle('소개 · CDP')
-  // 로그인 뒤에는 마지막에 보던 레포로. 이름은 상단 스위처와 같은 말 — 「로그인」 · 「레포」(화면 UX 검토 v0.1 §5.5)
-  const enter = info?.user ? repoHref() : '/login?next=%2Fr'
+  // 로그인 뒤 갈 곳은 역할이 정한다(`landingFor`) — 여기서 `next` 를 붙이지 않는다. 이름은 상단 스위처와 같은 말 — 「로그인」 · 「레포」(화면 UX 검토 v0.1 §5.5)
+  const enter = info?.user ? repoHref() : '/login'
   const m = info?.mirror || {}
   return (
     <>
