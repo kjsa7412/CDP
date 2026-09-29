@@ -91,6 +91,17 @@ function checkSchema(input) {
     throw new CtxError('E_INPUT', `body 에 ${APPLIED_MARK} 를 쓸 수 없다`, { field: 'work.body' })
   }
   for (const c of w.touches || []) checkCoord(c)
+  if (w.source != null && (typeof w.source !== 'string' || !w.source.trim())) {
+    throw new CtxError('E_INPUT', 'source 가 비었다 — 원문이 어디서 왔는지 적거나 빼고 보낸다', { field: 'work.source' })
+  }
+  if (w.touchesEmpty != null) {
+    if (typeof w.touchesEmpty !== 'string' || !w.touchesEmpty.trim()) {
+      throw new CtxError('E_INPUT', 'touchesEmpty 에는 좌표가 0개인 사유를 적는다', { field: 'work.touchesEmpty' })
+    }
+    if ((w.touches || []).length) {
+      throw new CtxError('E_INPUT', 'touches 가 있는데 touchesEmpty 를 보냈다 — 둘 중 하나다', { field: 'work.touchesEmpty' })
+    }
+  }
 
   for (const s of input.sections || []) {
     checkCoord(s.coord)
@@ -248,7 +259,9 @@ async function run(root, input, { user, write, mirror, now }) {
 
   const snap = new Snap(root)
   const warnings = []
-  if (!/\d{2}:\d{2}/.test(String(w.date || ''))) {
+  // 편입(`source` 가 있다)은 끈다 — 밖에서 온 문서는 시각을 모르는 것이 보통이고, 날짜는 원문의 것이라
+  // 고칠 수도 없다. 매번 나오는 경고는 아무것도 알리지 않는다(좌표 누락 TODO F2).
+  if (!w.source && !/\d{2}:\d{2}/.test(String(w.date || ''))) {
     warnings.push('date 에 시각이 없다 — 같은 날 같은 좌표의 선후를 알 수 없다')
   }
 
@@ -271,6 +284,22 @@ async function run(root, input, { user, write, mirror, now }) {
         '콘솔 > 지식 레포 > 「트리 되돌리기」, 또는 셸에서 git -C <레포> checkout -- . && git clean -fd',
       { reason: 'dirty', dirty: st.dirty, paths: st.dirtyPaths }
     )
+  }
+
+  // 3.7 좌표 0개 — **사유 없이는 받지 않는다.** 0개도 정상이지만(일정만 정한 작업), 좌표가 없는 기록은
+  // `match` · `where` 어디로도 닿지 않는다. 도메인 지식 문서를 편입하면서 정의한 용어를 전부 "설명" 으로
+  // 떨어뜨려 `touches: []` 가 경고 없이 커밋됐다(dpms_wiki b5a1fc6 · 좌표 누락 TODO C). 0개임을 확인했다는
+  // 선언을 `touchesEmpty` 로 받고, 받았어도 경고로 한 번 더 말한다. 모드 A 의 검사는 그대로다 — 기존
+  // `touches: []` 기록을 오류로 만들지 않는다.
+  if (!(w.touches || []).length) {
+    if (!w.touchesEmpty) {
+      throw new CtxError(
+        'E_INPUT',
+        'touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다. 정의하거나 처음 도입한 용어 · 바꾼 대상이 없는지 좌표 판정을 다시 보고, 정말 0개면 work.touchesEmpty 에 사유를 적어 보낸다',
+        { field: 'work.touches' }
+      )
+    }
+    warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
   }
 
   try {
@@ -383,10 +412,21 @@ async function run(root, input, { user, write, mirror, now }) {
 }
 
 function renderWork(w, user) {
-  const fm = ['---', `id: ${w.id}`, `title: ${w.title}`, `date: ${w.date || ''}`, `author: ${user}`]
-  fm.push('touches:')
-  for (const c of w.touches || []) fm.push(`  - ${c}`)
+  const fm = ['---', `id: ${w.id}`, `title: ${yamlStr(w.title)}`, `date: ${w.date || ''}`, `author: ${yamlStr(user)}`]
+  if (w.source) fm.push(`source: ${yamlStr(w.source.trim())}`)
+  // 0개는 `touches: []` — 빈 `touches:` 는 YAML 로 null 이라 "0개임을 확인했다" 는 선언이 안 된다.
+  const touches = w.touches || []
+  fm.push('touches:' + (touches.length ? '' : ' []'))
+  for (const c of touches) fm.push(`  - ${c}`)
+  if (!touches.length && w.touchesEmpty) fm.push(`touchesEmpty: ${yamlStr(w.touchesEmpty.trim())}`)
   if (w.supersedes) fm.push(`supersedes: ${w.supersedes}`)
-  fm.push(`tags: [${(w.tags || []).join(', ')}]`, '---', '')
+  fm.push(`tags: [${(w.tags || []).map(yamlStr).join(', ')}]`, '---', '')
   return fm.join(NL) + NL + w.body.replace(/\s*$/, '') + NL
+}
+
+// YAML 에서 그대로 두면 깨지는 값(콜론 · 대괄호 · 따옴표 · # )은 인용한다 — importdir 와 같은 규칙.
+// 전에는 title 을 그대로 적었다 — `[정정] …` 이면 배열로 읽혀 제목이 사라진다(cdp-save 「제목 인용」 을 사람이 지켜야 했다).
+function yamlStr(s) {
+  const v = String(s ?? '')
+  return /[:#\[\]{}&*!|>'"%@`,]|^\s|\s$|^$/.test(v) ? JSON.stringify(v) : v
 }

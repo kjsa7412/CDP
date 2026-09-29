@@ -215,6 +215,55 @@ test('save — `—`(문서 전체) 규칙: 머리 주석 · 전체 치환 · �
 })
 const topLine = (s) => s.split(NL)[0]
 
+// 좌표 누락 TODO C · D · F2 — dpms_wiki b5a1fc6 에서 도메인 지식 문서가 `touches: []` 로 경고 없이 커밋됐다.
+test('save — 빈 touches 는 touchesEmpty 사유 없이 E_INPUT · 사유가 있으면 커밋 + 경고 + 프론트매터에 남는다', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    const n0 = await commits(R.r)
+    await assert.rejects(save(R.r, { work: work('2026-0929-좌표없음', null) }, opt()), (e) => e.code === 'E_INPUT' && e.detail.field === 'work.touches' && /좌표로 찾을 수 없다/.test(e.message))
+    await assert.rejects(save(R.r, { work: { ...work('2026-0929-좌표없음', null), touches: undefined } }, opt()), (e) => e.code === 'E_INPUT' && e.detail.field === 'work.touches')
+    await assert.rejects(save(R.r, { work: work('2026-0929-둘다', 'table:a', { touchesEmpty: '사유' }) }, opt()), (e) => e.code === 'E_INPUT' && e.detail.field === 'work.touchesEmpty')
+    await assert.rejects(save(R.r, { work: work('2026-0929-빈사유', null, { touchesEmpty: '  ' }) }, opt()), (e) => e.code === 'E_INPUT' && e.detail.field === 'work.touchesEmpty')
+    assert.equal(await commits(R.r), n0, '거절은 커밋하지 않는다')
+    assert.equal(await porcelain(R.r), '')
+
+    const ok = await save(R.r, { work: work('2026-0929-일정', null, { touchesEmpty: '일정만 정했다 — 바꾼 대상 없음' }) }, opt())
+    assert.ok(ok.commit)
+    assert.ok(ok.warnings.some((w) => w.startsWith('touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: 일정만 정했다')), ok.warnings.join(' / '))
+    const r1 = await loadRepo(R.r)
+    const d = r1.byId.get('2026-0929-일정')
+    assert.deepEqual(d.touches, [])
+    assert.equal(d.hasTouchesKey, true)
+    assert.equal(d.touchesEmpty, '일정만 정했다 — 바꾼 대상 없음')
+    assert.deepEqual(d.unknownFields, [])
+  } finally {
+    await R.rm()
+  }
+})
+
+test('save — work.source: 프론트매터에 남고 · 시각 없는 date 경고를 끈다 · 깨지는 제목은 인용한다', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    const src = '공유드라이브/2026/PLC: 구조.md'
+    const a = await save(R.r, { work: work('2026-0917-편입', null, { title: '[편입] PLC · SCADA: 구조', date: '2026-09-17', source: src, touchesEmpty: '시험' }) }, opt())
+    assert.ok(!a.warnings.some((w) => w.startsWith('date 에 시각이 없다')), a.warnings.join(' / '))
+    const b = await save(R.r, { work: work('2026-0917-세션', null, { date: '2026-09-17', touchesEmpty: '시험' }) }, opt())
+    assert.ok(b.warnings.some((w) => w.startsWith('date 에 시각이 없다')), 'source 가 없으면 그대로 경고한다')
+    await assert.rejects(save(R.r, { work: work('2026-0917-빈출처', null, { source: ' ', touchesEmpty: '시험' }) }, opt()), (e) => e.code === 'E_INPUT' && e.detail.field === 'work.source')
+
+    const r1 = await loadRepo(R.r)
+    const d = r1.byId.get('2026-0917-편입')
+    assert.equal(d.source, src)
+    assert.equal(d.title, '[편입] PLC · SCADA: 구조', '제목이 배열로 읽히지 않는다')
+    assert.deepEqual(d.errors, [])
+    assert.deepEqual(d.unknownFields, [])
+    const text = await fs.readFile(path.join(R.r, 'work', '2026-0917-편입.md'), 'utf8')
+    assert.match(text, /^author: hong\r?\nsource: "공유드라이브\/2026\/PLC: 구조\.md"$/m)
+  } finally {
+    await R.rm()
+  }
+})
+
 test('mirror — bare origin: 동시 save 3 → 큐가 합쳐 origin = local · 응답 mirror ok · 겹침 0', { skip: !hasGit && 'git 이 없다' }, async () => {
   const R = await repo({ origin: true })
   try {

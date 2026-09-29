@@ -253,6 +253,12 @@ export default function DocView({
           {doc.id !== doc.fileId && doc.isUnit && (
             <div className="whywarn"><Icon name="warn" size={13} /> id 와 파일명이 다릅니다 — 파일명은 {doc.fileId}</div>
           )}
+          {doc.isUnit && doc.source && (
+            <div className="whyinfo">원문 출처 — {doc.source}</div>
+          )}
+          {doc.isUnit && doc.touchesEmpty && (
+            <div className="whywarn"><Icon name="warn" size={13} /> 좌표가 없다 — 어느 좌표로도 이 기록에 닿지 않는다 · 사유: {doc.touchesEmpty}</div>
+          )}
           {doc.unknownFields?.length > 0 && (
             <div className="whywarn">이 앱이 모르는 프론트매터 필드: {doc.unknownFields.join(', ')}</div>
           )}

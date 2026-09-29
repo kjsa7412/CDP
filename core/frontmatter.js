@@ -174,11 +174,14 @@ export function parseDoc(path, text) {
     status: normStatus(fm.status),
     touches: toArray(fm.touches),
     hasTouchesKey: Object.prototype.hasOwnProperty.call(fm, 'touches'),
+    // 좌표 0개의 사유(`save` 가 요구한다) · 편입한 원문의 출처(cdp-import ④)
+    touchesEmpty: fm.touchesEmpty ? String(fm.touchesEmpty).trim() : null,
+    source: fm.source ? String(fm.source).trim() : null,
     supersedes: normalizeSupersedes(fm.supersedes),
     attachments: toArray(fm.attachments),
     tags: toArray(fm.tags),
     unknownFields: Object.keys(fm).filter(
-      (k) => !['id', 'title', 'date', 'author', 'status', 'touches', 'supersedes', 'attachments', 'tags'].includes(k)
+      (k) => !['id', 'title', 'date', 'author', 'source', 'status', 'touches', 'touchesEmpty', 'supersedes', 'attachments', 'tags'].includes(k)
     ),
     headings,
     bodyChars: weight.chars,

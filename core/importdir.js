@@ -30,7 +30,7 @@ import { CtxError } from './tools.js'
 
 const NL = String.fromCharCode(10)
 const FM = /^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/
-const KNOWN = new Set(['id', 'title', 'date', 'author', 'status', 'touches', 'supersedes', 'attachments', 'tags'])
+const KNOWN = new Set(['id', 'title', 'date', 'author', 'source', 'status', 'touches', 'supersedes', 'attachments', 'tags'])
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.claude', '.vite', '.idea', '.vscode', '__pycache__'])
 const COORD = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*:\S+$/
 const MAX_NAME = 150
@@ -313,6 +313,7 @@ export async function planImport(src, repo, { author = null, keepTouches = false
       dateSource,
       author: who,
       authorSource,
+      source: fm.source ? String(fm.source).trim() : null,
       touches,
       supersedes: toArr(fm.supersedes),
       attachments: toArr(fm.attachments),
@@ -364,6 +365,7 @@ export async function planImport(src, repo, { author = null, keepTouches = false
 
 function renderWork(f) {
   const fm = ['---', `id: ${f.id}`, `title: ${yamlStr(f.title)}`, `date: ${f.date}`, `author: ${yamlStr(f.author)}`]
+  if (f.source) fm.push(`source: ${yamlStr(f.source)}`)
   fm.push('touches:' + (f.touches.length ? '' : ' []'))
   for (const c of f.touches) fm.push(`  - ${c}`)
   if (f.supersedes.length) fm.push(`supersedes: ${f.supersedes[0]}`)

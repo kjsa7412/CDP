@@ -609,6 +609,8 @@ export class Store {
               .map((r) => ({ coord: r.coord, doc: r.doc, anchor: r.anchor || null, state: r.state, count: r.count }))
           : null,
       unknownFields: d.unknownFields,
+      source: d.source ?? null,
+      touchesEmpty: d.touchesEmpty ?? null,
       // 좌표마다 따로 판정한다 — 문서 단위로 뭉치면 반드시 하나는 틀린다.
       // 그 좌표의 관리 문서 섹션 상태도 같이 싣는다: 이 문서를 근거로 쓰려는
       // 사람이 "지금 상태는 어디에 있나"를 한 화면에서 알아야 한다.
