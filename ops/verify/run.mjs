@@ -740,6 +740,100 @@ await check(53, '꾸러미에 토큰 원문이 없다', async () => {
   return `${files.length}개 · 원문 0`
 })
 
+// 설치 한 줄(설치 한 줄 TODO I1 · I2 · I3) — 공개 설치기 · 토큰으로 받는 kit · 받은 설치기로 끝까지
+await check(104, '/install.mjs 는 인증 없이 나오고 서버 주소 말고는 아무것도 없다', async () => {
+  const r = await fetch(`http://127.0.0.1:${PORT}/install.mjs`)
+  eq(r.status, 200, 'status')
+  must(/javascript/.test(r.headers.get('content-type') || ''), 'content-type ' + r.headers.get('content-type'))
+  const t = await r.text()
+  must(t.startsWith('globalThis.__CDP_KIT__ = {"server":"http://127.0.0.1:' + PORT), '설정 한 줄이 없다')
+  const cfg = JSON.parse(t.split(NL)[0].slice('globalThis.__CDP_KIT__ = '.length))
+  eq(Object.keys(cfg), ['server'], '설정에 server 말고 것')
+  for (const w of ['alpha', 'beta', 'kjsa', TK3, TK, TQ]) must(!t.includes(w), `설치기에 ${w.slice(0, 8)} 가 있다`)
+  return `${(t.length / 1024).toFixed(1)} KB · server 만`
+})
+
+let WR1 = null
+await check(105, 'kit 을 JSON 으로 — 토큰 없으면 401 · 권한 밖 레포는 404 · 원문 0', async () => {
+  const ok = await H.call('/workrepos', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TK3 },
+    body: JSON.stringify({ name: 'one-line', knowledge: 'alpha', owner: 'kjsa' }),
+  })
+  WR1 = (await ok.json()).id
+  eq((await H.call(`/kit/alpha?workrepo=${WR1}&as=json`)).status, 401, '토큰 없이')
+  // qa 는 alpha 만 — beta 는 없는 것이다
+  const TQ2 = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'qa', '--note', '설치 한 줄', '--data', F.data)).stdout.trim()
+  eq((await H.call(`/kit/beta?workrepo=${WR1}&as=json`, { headers: { authorization: 'Bearer ' + TQ2 } })).status, 404, '권한 밖')
+  const r = await H.call(`/kit/alpha?workrepo=${WR1}&as=json`, { headers: { authorization: 'Bearer ' + TK3 } })
+  eq(r.status, 200, 'status')
+  const j = await r.json()
+  eq([j.repo, j.workrepo], ['alpha', WR1], '머리')
+  must(/^[0-9a-f]+$/.test(j.kit || ''), 'kit 해시 없음')
+  const names = j.files.map((f) => f.name)
+  must(names.includes('.mcp.json') && names.some((n) => n.startsWith('.claude/skills/cdp-')), '파일 ' + names.slice(0, 4).join(','))
+  must(!names.some((n) => n.startsWith('kit/') || n === '설치.md' || n === 'install.mjs'), 'kit/ 밖의 것이 섞였다')
+  const all = j.files.map((f) => Buffer.from(f.data, 'base64').toString('utf8')).join('')
+  for (const t of [TK3, TQ2, TK, TK2]) must(!all.includes(t), '토큰이 샜다')
+  return `${names.length}개 · 401 · 404 · 원문 0`
+})
+
+await check(106, '받은 설치기 한 줄로 빈 레포에 설치 → 대장 최신 · 두 번째는 이미 최신', async () => {
+  const inst = path.join(TMP, 'cdp-install.mjs')
+  await fs.writeFile(inst, await (await fetch(`http://127.0.0.1:${PORT}/install.mjs`)).text())
+  const W3 = path.join(TMP, 'work3')
+  await fs.mkdir(W3, { recursive: true })
+  await run('git', ['-C', W3, 'init', '-q'])
+  await fs.writeFile(path.join(W3, '.mcp.json'), JSON.stringify({ mcpServers: { other: { command: 'x' } } }, null, 2))
+  const go = () =>
+    run(process.execPath, [inst, '--repo', 'alpha', '--workrepo', WR1, '.', '--yes', '--no-save'], {
+      cwd: W3,
+      env: { ...process.env, CDP_TOKEN: TK3 },
+      encoding: 'utf8',
+    })
+  const a = await go()
+  must(/대장에 보고했습니다/.test(a.stdout), '보고 없음 — ' + a.stdout.slice(-120))
+  const mcp = JSON.parse(await fs.readFile(path.join(W3, '.mcp.json'), 'utf8')).mcpServers
+  must(mcp.other && mcp.cdp, '다른 MCP 서버가 사라졌거나 cdp 가 없다')
+  must(mcp.cdp.headers.Authorization === 'Bearer ${CDP_TOKEN}', '원문이 박혔다')
+  const skills = await fs.readdir(path.join(W3, '.claude', 'skills'))
+  must(skills.length >= 7, `스킬 ${skills.length}`)
+  const rows = (await (await H.call('/workrepos', { headers: { authorization: 'Bearer ' + TK3 } })).json()).repos
+  eq(rows.find((r) => r.id === WR1)?.state, '최신', '대장')
+  const b = await go()
+  must(/이미 최신입니다/.test(b.stdout), '두 번째 — ' + b.stdout.slice(-80))
+  const left = (await fs.readdir(os.tmpdir())).filter((n) => n.startsWith('cdp-kit-'))
+  return `스킬 ${skills.length} · other 보존 · 최신 · 임시 kit 남은 것 ${left.length}`
+})
+
+await check(107, '한 줄 설치기는 토큰이 없고 물을 수 없으면 아무것도 안 쓰고 멈춘다', async () => {
+  const inst = path.join(TMP, 'cdp-install.mjs')
+  const W4 = path.join(TMP, 'work4')
+  await fs.mkdir(W4, { recursive: true })
+  const env = { ...process.env }
+  delete env.CDP_TOKEN
+  let code = 0
+  let stderr = ''
+  try {
+    await run(process.execPath, [inst, '--repo', 'alpha', '--workrepo', WR1, '.', '--yes'], { cwd: W4, env, encoding: 'utf8' })
+  } catch (e) {
+    code = e.code
+    stderr = e.stderr
+  }
+  eq(code, 2, 'exit')
+  must(/CDP_TOKEN/.test(stderr), 'stderr — ' + stderr.slice(0, 80))
+  eq(await fs.readdir(W4), [], '뭔가 썼다')
+  // 틀린 토큰도 같은 자리에서 — 재시작 뒤 /mcp failed 가 아니라
+  try {
+    await run(process.execPath, [inst, '--repo', 'alpha', '--workrepo', WR1, '.', '--yes'], { cwd: W4, env: { ...env, CDP_TOKEN: 'nope' }, encoding: 'utf8' })
+    code = 0
+  } catch (e) {
+    code = e.code
+  }
+  eq(code, 2, '틀린 토큰 exit')
+  return 'exit 2 · 쓴 것 0 · 틀린 토큰도 멈춤'
+})
+
 await check(56, '서버 kit 을 바꾸면 대장이 낡음으로', async () => {
   await fs.appendFile(path.join(F.repos, 'alpha', '.claude', 'skills', 'cdp-load', 'SKILL.md'), '\n<!-- 바꾼다 -->\n')
   // 커밋한다 — 실제로 kit 은 커밋으로 바뀌고, 더러운 트리는 이제 save 가 거절한다(동시 기록 검토 v0.1 D5 · 76번이 걸렸다)
@@ -1720,6 +1814,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

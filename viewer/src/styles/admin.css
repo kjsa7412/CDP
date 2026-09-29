@@ -392,3 +392,39 @@
 .howto .btn:hover {
   background: var(--surface-2);
 }
+/* 설치 한 줄 — 터미널 셋(설치 한 줄 TODO I6). 명령은 길다 — .acmd 가 줄바꿈한다 */
+.howto-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 8px 0 6px;
+}
+.howto-tabs button {
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.howto-tabs button.on {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.howto .acmd {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+}
+.howto-more {
+  margin-top: 4px;
+  font-size: 13px;
+}
+.howto-more summary {
+  cursor: pointer;
+  color: var(--text-2);
+}

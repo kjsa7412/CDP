@@ -97,71 +97,92 @@ export default function WorkReposServer({ say }) {
   )
 }
 
-// **토큰을 보여 주지 않는다**(§6.7.3). 화면이 토큰을 내면 HTTP 발급 경로를
-// 만든 것과 같아진다 — 발급은 서버 셸에서만 한다(§4.4.1).
+// **토큰을 보여 주지 않는다**(§6.7.3). 화면도 명령도 원문을 들지 않는다 — 사람이 관리자에게 받아
+// 설치기가 물을 때 붙여넣는다(설치 한 줄 TODO I3). 명령에 원문을 채우면 클립보드 · 셸 이력에 남는다.
 //
-// **사람이 하는 일만 적는다.** 전에는 "작업 레포 루트에 푼다" 뒤에
-// "CLAUDE.md 가 이미 있으면 블록만 갈아 끼웁니다" 가 붙어 있었다 — 읽는
-// 사람에게는 **자기가 직접 갈아 끼우라는 말**로 들리고, 실제로 그때는
-// 푸는 순간 이미 덮인 뒤였다. 지금은 `install.mjs` 가 병합하므로, 화면은
-// 그것이 무엇을 지켜 주는지만 말한다.
+// **한 줄이 기본이다**(I1 · I6). 전에는 zip 을 받아 풀고 그 폴더로 가서 경로를 적고, 토큰은 따로
+// `setx` 로 넣었다. 지금은 작업 레포 폴더에서 붙여넣는 한 줄이 설치기를 받고, 설치기가 토큰을 묻고
+// 확인하고 이 PC 에 두고, kit 을 그 토큰으로 받아 병합하고, 대장에 보고한다. zip 은 Node 가 없거나
+// 손으로 옮길 때의 길로 접어 둔다(I7).
+//
+// **사람이 하는 일만 적는다.** 병합이 무엇을 지키는지(`CLAUDE.md` 블록 · `.mcp.json` 의 다른 서버)는
+// 설치기가 바뀔 것을 보여 주며 말한다 — 화면은 한 줄로 줄인다.
+const SHELLS = [
+  { key: 'ps', label: 'PowerShell' },
+  { key: 'cmd', label: '명령 프롬프트' },
+  { key: 'sh', label: 'macOS · Linux' },
+]
+
+// 받은 파일은 **임시 폴더에** — 작업 레포에 남지 않는다. 작업 레포 경로는 `.`(그 폴더에서 붙여넣는다)
+export function installCommand(shell, { origin, repo, id }) {
+  const url = `${origin}/install.mjs`
+  const args = `--repo ${repo} --workrepo ${id} .`
+  if (shell === 'ps') return `curl.exe -fsSLo "$env:TEMP\\cdp-install.mjs" ${url}; if ($?) { node "$env:TEMP\\cdp-install.mjs" ${args} }`
+  if (shell === 'cmd') return `curl -fsSLo "%TEMP%\\cdp-install.mjs" ${url} && node "%TEMP%\\cdp-install.mjs" ${args}`
+  return `curl -fsSLo /tmp/cdp-install.mjs ${url} && node /tmp/cdp-install.mjs ${args}`
+}
+
+const guessShell = () => (/Win/i.test(navigator.platform || navigator.userAgent || '') ? 'ps' : 'sh')
+
 function HowTo({ row }) {
+  const [shell, setShell] = useState(guessShell)
   if (!row) return null
+  const cmd = installCommand(shell, { origin: window.location.origin, repo: currentRepo(), id: row.id })
   return (
     <div className="howto">
       <ol>
         <li>
-          꾸러미를 받아 <b>아무 데나 푼다.</b>
-          <div>
-            <a className="btn" href={api.kitUrl(row.id)} download>
-              <Icon name="copy" size={13} /> cdp-kit-{row.name}.zip 내려받기
-            </a>
+          <b>작업 레포 폴더에서</b> 이 한 줄을 붙여넣는다.
+          <div className="howto-tabs" role="tablist" aria-label="터미널">
+            {SHELLS.map((s) => (
+              <button key={s.key} role="tab" aria-selected={shell === s.key} className={shell === s.key ? 'on' : ''} onClick={() => setShell(s.key)}>
+                {s.label}
+              </button>
+            ))}
           </div>
+          <Cmd>{cmd}</Cmd>
           <Note>
-            작업 레포가 아니어도 됩니다. 안의 것은 <code>kit/</code> 한 단 아래에 있어서,
-            푸는 것만으로는 작업 레포의 아무것도 바뀌지 않습니다.
+            설치기를 임시 폴더에 받아 돌립니다 — 작업 레포에는 CDP 파일만 들어갑니다. 무엇이 바뀔지 먼저 보여 주고
+            묻습니다. 여러 번 돌려도 됩니다 — 두 번째부터는 <b>이미 최신입니다</b>. Node 20 이상이 있어야 합니다.
           </Note>
         </li>
         <li>
-          설치한다.
-          <Cmd>node install.mjs &lt;작업 레포 경로&gt;</Cmd>
+          토큰을 물으면 붙여넣는다 — <b>이 PC 에서 처음일 때만.</b>
           <Note>
-            무엇이 바뀔지 먼저 보여 주고 묻습니다. 미리만 보려면 <code>--dry</code>. 여러 번 돌려도
-            됩니다 — 두 번째부터는 <b>이미 최신입니다</b> 로 끝납니다.
-            <br />
-            이미 있는 <code>CLAUDE.md</code> 는 <code>cdp:begin ~ cdp:end</code> 블록만 바뀌고, 이미 있는{' '}
-            <code>.mcp.json</code> 은 <code>cdp</code> 항목만 더해집니다 — <b>다른 MCP 서버와 직접 쓰신 내용은
-            그대로 남습니다.</b>
-            <br />
-            Node 가 없으면 꾸러미 안 <code>설치.md</code> 의 「Node 가 없으면」 대로 손으로 옮깁니다.
+            관리자에게 받은 토큰입니다. 이 화면과 명령에는 토큰이 없습니다. 설치기가 서버에 맞는지 바로 확인하고,
+            이 PC 에 둘지 묻습니다 — Windows 는 사용자 환경변수 <code>CDP_TOKEN</code>, macOS · Linux 는{' '}
+            <code>~/.config/cdp/token</code>. Claude Code 가 이 값으로 서버에 붙습니다(<code>.mcp.json</code> 은 커밋되는
+            파일이라 원문 대신 <code>${'{'}CDP_TOKEN{'}'}</code> 자리만 둡니다).
           </Note>
         </li>
         <li>
-          토큰을 환경변수에 둔다.
-          <Cmd>setx CDP_TOKEN &lt;관리자에게 받은 토큰&gt;</Cmd>
+          Claude Code 를 <b>완전히</b> 끄고 다시 켠다.
           <Note>
-            토큰은 관리자에게 직접 받습니다. 이 화면과 꾸러미에는 토큰이 없습니다.
-            macOS · Linux 는 <code>export CDP_TOKEN=…</code> 입니다.
-          </Note>
-        </li>
-        <li>
-          Claude Code 를 다시 켠다.
-          <Note>
-            환경변수는 프로세스를 시작할 때 읽힙니다. <code>/mcp</code> 에 <code>cdp</code> 가 connected 면
-            된 것입니다.
+            환경변수는 프로세스가 시작할 때 읽힙니다 — VS Code · 데스크톱 앱 안이면 그 앱을 다시 켭니다.{' '}
+            <code>/mcp</code> 에 <code>cdp</code> 가 connected 면 된 것입니다.
           </Note>
         </li>
         <li>
           커밋한다.
           <Cmd>git add .mcp.json .claude CLAUDE.md</Cmd>
-          <Note>팀원은 여기서부터 pull 과 토큰만으로 끝납니다 — 꾸러미를 다시 받지 않습니다.</Note>
+          <Note>팀원은 pull 뒤 같은 한 줄을 한 번 — 설치할 것은 없고, 토큰을 묻고 두고 대장에 보고합니다.</Note>
         </li>
       </ol>
-      <Note>
-        <code>bin/ctx</code> 가 있으면 1·2번 대신{' '}
-        <Mono>{`ctx setup --server … --workrepo ${row.id}`}</Mono> 를 써도 됩니다. 같은 함수를 부르므로
-        결과가 같습니다.
-      </Note>
+      <details className="howto-more">
+        <summary>Node 가 없거나 파일로 받아 손으로 옮길 때 — 꾸러미 zip</summary>
+        <div>
+          <a className="btn" href={api.kitUrl(row.id)} download>
+            <Icon name="copy" size={13} /> cdp-kit-{row.name}.zip 내려받기
+          </a>
+        </div>
+        <Note>
+          아무 데나 풀고 그 안에서 <code>node install.mjs &lt;작업 레포 경로&gt;</code> — 위 한 줄과 같은 일을 합니다. Node 가
+          없으면 꾸러미 안 <code>설치.md</code> 의 「Node 가 없으면」 대로 손으로 옮깁니다.
+          <br />
+          <code>bin/ctx</code> 가 있으면 <Mono>{`ctx setup --server … --workrepo ${row.id}`}</Mono> 도 됩니다 — 같은 함수를
+          부릅니다.
+        </Note>
+      </details>
     </div>
   )
 }

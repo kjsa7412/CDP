@@ -22,6 +22,17 @@ git 자격 — [`docs/dev/git자격_TODO.md`](docs/dev/git자격_TODO.md). 비�
 
 **문서** — 관리자 설명서 3.3 「SSH 배포 키(콘솔) · PAT(명령 한 줄)」
 
+설치 한 줄 — [`docs/dev/설치_한줄_TODO.md`](docs/dev/설치_한줄_TODO.md). 토큰 원문은 화면 · 명령 · 설치기 어디에도 없다 — §4.4.1 그대로
+
+**작업 레포 설치가 명령 한 줄** — `viewer/bin/ctx-mcp-serve.mjs` · `viewer/bin/cdp-install.mjs` · `core/tokenstore.js`(새) · `viewer/src/components/admin/WorkReposServer.jsx`
+- 관리 › 작업 레포 › `[설치 방법]` — 작업 레포 폴더에서 붙여넣는 한 줄(PowerShell · 명령 프롬프트 · macOS/Linux 탭 · 주소 · 레포 · 등록 id 가 채워져 있다). zip 은 「Node 가 없거나 손으로 옮길 때」 로 접었다
+- `GET /install.mjs` — 인증 앞 · 설치기 전문과 서버 주소 한 줄뿐(레포 이름 · 사람 · kit 없음) · `GET /kit/<레포>?workrepo=<id>&as=json` — 설치기가 토큰으로 받는 같은 kit(zip 과 같은 판정)
+- 설치기가 **토큰을 묻는다** — `CDP_TOKEN` 을 `/me` 로 확인 · 없거나 안 통하면 숨김 입력(세 번) · 통하면 이 PC 에 둘지 묻는다(Windows 사용자 환경변수 — 원문은 표준 입력으로 · macOS/Linux `~/.config/cdp/token` 600 + rc 한 줄) · `--no-save` · 대장 보고는 확인된 토큰으로
+- zip 안 `install.mjs` 도 같은 토큰 단계(Enter 로 건너뛰면 보고만 빠진다) · 꾸러미 `설치.md` 를 그 순서로
+- `.claude/settings.local.json` 의 `env` 는 쓰지 않는다 — 실측(Claude Code 2.1.92)으로 `.mcp.json` 의 `${CDP_TOKEN}` 을 채우지 않았다
+
+**문서** — 사용자 설명서 2.1 · 관리자 설명서 5.2 · 9.3 · 명령 목록
+
 ## v0.14.0
 
 연결 · 삭제 · 내려받기 — [`docs/dev/레포_연결_삭제_내려받기_TODO.md`](docs/dev/레포_연결_삭제_내려받기_TODO.md)
