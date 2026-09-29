@@ -3,6 +3,13 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.17.0
+
+**소개에 「MCP 가 도는 길」** — `viewer/src/site/McpFlow.jsx`(새) · `viewer/src/site/Landing.jsx` · `viewer/src/styles/site.css`
+- 소개(`/`) 맨 아래 — tools/list 에서 tools/call 까지 열두 걸음의 순서도(모델 · Claude Code · cdp 서버 · core/)
+- 화살표나 [이전] · [다음](키보드 Enter · Space)을 누르면 그 구간의 실제 요청 · 응답과 설명이 오른쪽에 뜬다 — MCP 구간(JSON-RPC over HTTP · Bearer) · 모델 API 구간 · 서버 안
+- 예시 `Host` 는 연 서버 주소 · 레포 이름은 `<레포>`(소개는 집계만) · 900px 아래는 한 열 — `4a68b91`
+
 ## v0.16.0
 
 설치 한 줄 — [`docs/dev/설치_한줄_TODO.md`](docs/dev/설치_한줄_TODO.md). 토큰 원문은 화면 · 명령 · 설치기 어디에도 없다 — §4.4.1 그대로
