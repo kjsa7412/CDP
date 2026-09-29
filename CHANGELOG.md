@@ -3,7 +3,7 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
-## 다음
+## v0.15.0
 
 git 자격 — [`docs/dev/git자격_TODO.md`](docs/dev/git자격_TODO.md). 비밀(개인 키 · PAT)은 브라우저를 건너지 않는다 — 제품관리서비스 검토 D8 그대로
 
