@@ -302,6 +302,14 @@ export class Store {
       if (!d) return null
       const applied = this.sections.filter((r) => r.applied === d.id)
       const groups = []
+      // 정정 관계(`supersedes`)는 **작업문서에서 작업문서로** 가는 유일한 길이다.
+      // 둘 다 작업문서라 종류만으로는 갈리지 않으므로 여기만 방향을 말한다.
+      // 드물고, 있으면 먼저 봐야 한다 — 옛 기록을 연 사람에게 지금 맞는 말은
+      // 새 기록 쪽에 있다. 대상이 없는 선언은 문서 머리가 적색으로 말한다.
+      const olds = d.supersedes.map((s) => this.byId.get(s.id)).filter(Boolean)
+      const news = this.correctors(d.id).map((c) => c.doc)
+      if (news.length) groups.push({ label: '이 기록을 정정한', items: news.map(work).sort(byDate) })
+      if (olds.length) groups.push({ label: '이 기록이 정정한', items: olds.map(work).sort(byDate) })
       if (applied.length) groups.push({ label: '관리문서', items: byDoc(applied).sort(bySection) })
       groups.push({ label: '좌표', items: d.touches.map(coordNode).sort(byCoord) })
       return { node: work(d), groups }
@@ -472,6 +480,14 @@ export class Store {
 
   // ── 조회 ────────────────────────────────────────────────────────────────
 
+  // 이 기록을 정정한 새 기록 — 전체 정정 먼저, 범위 정정(scope) 뒤. `supersedes` 의 역방향
+  correctors(id) {
+    const v = this.validity.of(id)
+    return [...v.correctedBy.map((by) => ({ by, scope: null })), ...v.partialBy]
+      .map(({ by, scope }) => ({ doc: this.byId.get(by), scope }))
+      .filter((c) => c.doc)
+  }
+
   // 목록용 요약. 유효성·최신성은 항상 실려 나간다 — 그것이 이 뷰어의 판단 장치다.
   summary(d) {
     const v = this.validity.of(d.id)
@@ -640,6 +656,9 @@ export class Store {
         const o = this.byId.get(s.id)
         return { id: s.id, scope: s.scope, exists: !!o, title: o?.title || null, date: o?.date || null }
       }),
+      // 역방향 — 이 기록을 정정한 새 기록(범위 정정 포함). `validity` 는 id 만
+      // 들고 있어 화면이 제목을 그릴 수 없었다
+      correctedBy: this.correctors(d.id).map(({ doc: o, scope }) => ({ id: o.id, scope, title: o.title, date: o.date })),
       // 이어 읽기 — 이 문서의 좌표에서 바로 다음 문서(§27.8)
       nextInCoord: settled
         .filter((r) => !r.excluded && r.items.length)

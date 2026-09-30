@@ -209,8 +209,9 @@ export default function DocView({
   }
 
   // **정정 고정 바를 세우지 않는다** (정정_판정모델_v2 §3).
-  // `supersedes` 는 판정이 아니라 참조다. 정정한/정정당한 문서는 왼쪽 아래에서
-  // 다음 노드로 나온다 -- 무효 표시가 아니라 갈 수 있는 곳으로.
+  // `supersedes` 는 판정이 아니라 참조다. 정정한/정정당한 문서는 문서 머리의
+  // 무채색 3단(ValidityBlock `RelTier`)과 왼쪽 뻗어나가기의 첫 갈래로 나온다 --
+  // 무효 표시가 아니라 갈 수 있는 곳으로.
   return (
     <div className="docmain">
       <div className="docpane" ref={scrollRef}>
@@ -282,7 +283,7 @@ export default function DocView({
             <Attachments items={doc.attachments} base={doc.path} onOpen={onOpen} />
           )}
 
-          {/* 이어 읽기 · 백링크 · 좌표 이력은 **왼쪽 아래(뻗어나가기)로 나갔다.**
+          {/* 이어 읽기 · 백링크 · 좌표 이력은 **왼쪽 뻗어나가기로 나갔다.**
               본문 열에는 문서로서의 정보만 남는다 — 유효성 두 단 · 목차 ·
               본문 · 첨부 · 복사. */}
 

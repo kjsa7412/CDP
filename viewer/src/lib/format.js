@@ -91,11 +91,19 @@ export function summaryText(doc) {
   const lines = []
   lines.push(`${doc.id} · ${doc.title}`)
 
+  // **정정은 상태가 아니라 참조다** (정정_판정모델_v2 §3). `validity.state` 는
+  // valid · cycle 둘뿐이라 전에 여기 있던 'superseded' · 'partial' 분기는 한 번도
+  // 타지 않았고, 정정당한 기록도 「정정한 문서 없음」 으로 복사됐다. 상태가
+  // 아니라 **참조 목록**을 보고 쓴다 — 화면 머리 3단과 같은 말이다.
   const v = doc.validity
-  if (v.state === 'superseded') lines.push(`[유효] ⛔ 정정됨 — ${v.supersededBy.join(', ')} 가 이 기록을 바로잡았습니다`)
-  else if (v.state === 'partial') lines.push(`[유효] ◐ 부분 정정 — ${v.partialBy.map((p) => p.scope?.join(',')).join(' / ')}`)
-  else if (v.state === 'cycle') lines.push('[유효] ⛔ supersedes 순환 참조')
-  else lines.push('[유효] 현재 유효함 (이 기록을 정정한 문서 없음)')
+  const full = v.correctedBy || []
+  const part = v.partialBy || []
+  if (v.state === 'cycle') lines.push('[유효] ⛔ supersedes 순환 참조')
+  if (full.length) lines.push(`[유효] 정정됨 — ${full.join(', ')} 가 이 기록을 정정했습니다`)
+  if (part.length) lines.push(`[유효] 부분 정정 — ${part.map((p) => `${p.by} (${(p.scope || []).join(', ')})`).join(' / ')} 가 이 기록의 일부를 정정했습니다`)
+  if (v.state !== 'cycle' && !full.length && !part.length) lines.push('[유효] 현재 유효함 (이 기록을 정정한 문서 없음)')
+  const olds = (doc.supersedes || []).map((s) => s.id)
+  if (olds.length) lines.push(`[정정] 이 기록이 ${olds.join(', ')} 를 정정했습니다`)
 
   lines.push(`[나이] 작성 ${doc.date || '미지정'} · ${relLabel(doc.date)}`)
 

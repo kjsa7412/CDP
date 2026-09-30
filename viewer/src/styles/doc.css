@@ -57,10 +57,6 @@
   background: var(--danger-bg);
   font-weight: 600;
 }
-.vblock__validity.is-partial {
-  color: var(--danger);
-  box-shadow: inset 3px 0 0 var(--danger);
-}
 /* 2단 — 시간. 색이 없다. 2년 전도 --text-2 (§13-①) */
 .vblock__time {
   color: var(--text-2);
@@ -72,6 +68,18 @@
 }
 .vblock__time .sep {
   color: var(--border-strong);
+}
+/* 3단 — 정정 관계. 무채색 줄에 링크만 파랑(본문 링크와 같은 색) */
+.vblock__rel .vblock__ref {
+  color: var(--accent);
+  margin-left: var(--sp-1);
+}
+.vblock__rel .vblock__ref + .vblock__ref::before {
+  content: '· ';
+  color: var(--border-strong);
+}
+.vblock__rel .vblock__ref:hover {
+  text-decoration: underline;
 }
 /* 1단의 좌표 요약 -> 관계 패널로 보내는 버튼(12단계).
    좌표를 여기 나열하지 않는다. 몇 곳인지만 말하고 옆으로 넘긴다. */

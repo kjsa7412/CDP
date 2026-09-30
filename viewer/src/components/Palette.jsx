@@ -310,11 +310,8 @@ function WorkHit({ d, active, onClick }) {
     <button className="palette__hit" data-active={active} onClick={onClick}>
       <span className="row__date num">{shortDate(d.date)}</span>
       <span className="row__title">{d.title}</span>
-      {d.validity.state === 'superseded' && (
-        <span className="badge badge--danger">
-          <Icon name="block" size={12} /> 정정됨
-        </span>
-      )}
+      {/* 「정정됨」 적색 배지를 달지 않는다 — 정정은 판정이 아니라 참조다
+          (정정_판정모델_v2 §3). `validity.state` 에 'superseded' 는 없다 */}
       {/* `미결` 은 이관 대상이다 (정정_판정모델_v2 §2) — 상태가 아니라 오류다 */}
       {(d.status === '미결' || d.status === '제안') && (
         <span className="badge badge--danger">{d.status} — 이관 필요</span>

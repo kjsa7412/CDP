@@ -1,13 +1,15 @@
-// 문서 머리 — 본문을 읽기 전에 필요한 것 두 줄.
+// 문서 머리 — 본문을 읽기 전에 필요한 것 두 줄(정정 관계가 있으면 세 줄).
 //
 //   1단  최신성 — 확인이 필요한 좌표가 몇 곳인가 · 깨진 참조   (색 있음)
 //   2단  시간   — 작성일 · 작성자 · 좌표 수                    (무채색)
+//   3단  정정   — 이 기록을 정정한 새 기록 · 이 기록이 정정한 옛 기록  (무채색 · 있을 때만)
 //
 // **유효성 축이 없어졌다** (정정_판정모델_v2 §3). `supersedes` 는 판정이 아니라
 // 참조이고, 작업 기록은 사건이라 무효가 되지 않는다.
 //
 // 여기 남는 색은 **깨진 참조**뿐이다 — 순환과 대상 없음. 그것은 의견이 아니다.
-// 좌표별 세부는 왼쪽 아래(뻗어나가기)가 답한다.
+// 정정 관계는 3단에 **참조로만** 선다 — 색 없는 줄, 누르면 그 기록으로 간다.
+// 좌표별 세부는 왼쪽 뻗어나가기가 답한다.
 //
 // **`결정` 이라고 쓰지 않는다.** 지식공유문서는 결정을 담는 문서가 아니라
 // 작업의 완료에서 발생하는 문서다. 날짜는 그 작업을 적은 날 — 작성일이다.
@@ -40,6 +42,7 @@ export default function ValidityBlock({ doc, onOpen, onRelation }) {
           )}
         </div>
         <TimeTier doc={doc} />
+        <RelTier doc={doc} onOpen={onOpen} />
       </div>
     )
   }
@@ -50,7 +53,7 @@ export default function ValidityBlock({ doc, onOpen, onRelation }) {
           **좌표를 나열하지 않는다.** 몇 곳인지만 말하고 그 옆으로 보낸다. */}
       <div className={`vblock__tier vblock__validity ${tierClass(v.state)}`}>
         {/* 정정(`supersedes`)은 여기 나오지 않는다 —
-            판정이 아니라 참조이고, 참조는 왼쪽 아래가 다룬다
+            판정이 아니라 참조이고, 참조는 무채색 3단이 다룬다
             (정정_판정모델_v2 §3). 남는 것은 **깨진 참조**뿐이다. */}
 
         {v.state === 'cycle' && <span><Icon name="block" size={13} /> supersedes 순환 참조 — 체인이 자기 자신으로 돌아온다</span>}
@@ -71,6 +74,7 @@ export default function ValidityBlock({ doc, onOpen, onRelation }) {
       </div>
 
       <TimeTier doc={doc} />
+      <RelTier doc={doc} onOpen={onOpen} />
     </div>
   )
 }
@@ -93,6 +97,31 @@ function TimeTier({ doc }) {
       {doc.touches.length > 0 && <span className="sep">·</span>}
       {doc.touches.length > 0 && <span>좌표 {doc.touches.length}</span>}
       {doc.attachments.length > 0 && <span>📎 {doc.attachments.length}</span>}
+    </div>
+  )
+}
+
+// 3단 — 정정 관계. 색이 없다(정정_판정모델_v2 §3): 옛 기록은 무효가 된 것이
+// 아니라 새 기록이 **바로잡은** 것이고, 둘 다 사건으로 남는다. 새 색을 쓰지
+// 않는다 — 링크는 본문 링크와 같은 파랑이다.
+//
+// 대상이 없는 선언(`exists: false`)은 싣지 않는다 — 1단이 적색으로 이미 말한다.
+function RelTier({ doc, onOpen }) {
+  const news = doc.correctedBy || []
+  const olds = (doc.supersedes || []).filter((s) => s.exists)
+  if (!news.length && !olds.length) return null
+  const item = (r) => (
+    <button key={r.id} className="vblock__ref" onClick={() => onOpen?.(r.id)} title={r.id}>
+      {r.title || r.id}
+      {r.date && <span className="num"> · {String(r.date).slice(0, 10)}</span>}
+      {r.scope?.length > 0 && <span> · 범위 {r.scope.join(', ')}</span>}
+    </button>
+  )
+  return (
+    <div className="vblock__tier vblock__time vblock__rel">
+      {news.length > 0 && <span>이 기록을 정정한 {news.map(item)}</span>}
+      {news.length > 0 && olds.length > 0 && <span className="sep">·</span>}
+      {olds.length > 0 && <span>이 기록이 정정한 {olds.map(item)}</span>}
     </div>
   )
 }
