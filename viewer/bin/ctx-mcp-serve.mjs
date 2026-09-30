@@ -633,6 +633,7 @@ export async function runServe(opt = {}) {
             const out = await doSave(r.root, input, {
               user: a.user,
               write: a.write,
+              admin: !!a.admin, // 등록부 정리(rename · merge · retire)는 admin 만
               mirror: !!opt.mirror,
               log: (m) => log.line(m),
             })

@@ -15,7 +15,9 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { loadRepo } from './repo.js'
 import { runBuiltinCheck } from './check.js'
-import { resolveCoord } from './managed.js'
+import { resolveCoord, parseRegistry, docEscapes, normValue } from './managed.js'
+import { planManaged, checkManagedShape, needsAdmin } from './managedops.js'
+import { readText } from './scan.js'
 import { renderIndex, renderByCoord } from './indexes.js'
 import * as git from './git.js'
 import { CtxError, checkCoord, checkId, sliceSection } from './tools.js'
@@ -44,16 +46,48 @@ export const LOCK_RETRIES = 2
 
 class Snap {
   constructor(root) {
-    this.root = root
+    this.root = path.resolve(root)
     this.before = new Map()
+    this.made = [] // 이 save 가 만든 폴더 — 되돌릴 때 비었으면 치운다
+  }
+  // **레포 밖으로 나가는 경로는 여기서 막는다** — 등록부 · 좌표 · id 가 파일 이름이 되는 마지막 문이다.
+  abs(rel) {
+    const abs = path.resolve(this.root, rel)
+    if (abs !== this.root && !abs.startsWith(this.root + path.sep)) {
+      throw new CtxError('E_INPUT', '레포 밖 경로는 쓰지 않는다', { path: String(rel).slice(0, 120) })
+    }
+    return abs
+  }
+  async keep(rel, abs) {
+    if (!this.before.has(rel)) this.before.set(rel, await fs.readFile(abs, 'utf8').catch(() => null))
+  }
+  async mkdirs(dir) {
+    const missing = []
+    for (let d = dir; d !== this.root && d !== path.dirname(d); d = path.dirname(d)) {
+      if (await fs.stat(d).then(() => true).catch(() => false)) break
+      missing.push(d)
+    }
+    for (const d of missing.reverse()) {
+      await fs.mkdir(d).catch(() => {})
+      this.made.push(d)
+    }
   }
   async write(rel, text) {
-    const abs = path.join(this.root, rel)
-    if (!this.before.has(rel)) {
-      this.before.set(rel, await fs.readFile(abs, 'utf8').catch(() => null))
-    }
-    await fs.mkdir(path.dirname(abs), { recursive: true }).catch(() => {})
+    const abs = this.abs(rel)
+    await this.keep(rel, abs)
+    await this.mkdirs(path.dirname(abs))
     await fs.writeFile(abs, text, 'utf8')
+  }
+  // 파일을 지운다 — 원본을 들고 있어 되돌리면 다시 쓴다. `git add -- <지운 경로>` 가 삭제를 커밋한다.
+  async remove(rel) {
+    const abs = this.abs(rel)
+    await this.keep(rel, abs)
+    await fs.rm(abs, { force: true })
+    // 비게 된 docs/ 하위 폴더를 치운다(깊은 쪽부터 · 비어 있지 않으면 거기서 멈춘다)
+    const docs = path.join(this.root, 'docs') + path.sep
+    for (let d = path.dirname(abs); d.startsWith(docs); d = path.dirname(d)) {
+      if (!(await fs.rmdir(d).then(() => true).catch(() => false))) break
+    }
   }
   paths() {
     return [...this.before.keys()]
@@ -62,8 +96,12 @@ class Snap {
     for (const [rel, body] of this.before) {
       const abs = path.join(this.root, rel)
       if (body == null) await fs.rm(abs, { force: true }).catch(() => {})
-      else await fs.writeFile(abs, body, 'utf8').catch(() => {})
+      else {
+        await fs.mkdir(path.dirname(abs), { recursive: true }).catch(() => {})
+        await fs.writeFile(abs, body, 'utf8').catch(() => {})
+      }
     }
+    for (const d of [...this.made].reverse()) await fs.rmdir(d).catch(() => {})
   }
 }
 
@@ -221,9 +259,9 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
-export async function save(root, input, { user, write = false, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS } = {}) {
+export async function save(root, input, { user, write = false, admin = false, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS } = {}) {
   const out = await withLock(path.resolve(root), async () => {
-    const r = await run(root, input, { user, write, now })
+    const r = await run(root, input, { user, write, admin, now })
 
     // 10 커밋 — 바뀐 경로만. 실패하면 되돌린다 — **git 이 정말 커밋하지 않았을 때만.**
     //
@@ -265,10 +303,17 @@ export async function save(root, input, { user, write = false, mirror = false, n
       id: r.id,
       sections: r.sections,
       vocab: r.vocab,
+      managed: r.managedChanges.length,
+      ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
       warnings: r.warnings,
       mirror: 'off',
     }
   })
+
+  // 등록부를 바꿨으면 로그에 한 줄 — 누가 · 무엇을(행은 사라지기도 한다 · 작업 기록 id 가 그 이유다)
+  for (const e of out.managedChanges || []) {
+    log?.(`등록부 ${e.op} ${user} ${e.pattern || e.doc}${e.to ? ' → ' + e.to : ''}${e.into ? ' → ' + e.into : ''} (${out.id})`)
+  }
 
   // 11 미러 — **뮤텍스 밖 · 큐 하나.** push 가 늦거나 실패해도 커밋은 서버 트리에 있고,
   // 못 간 것은 다음 push 가 가져간다. 겹치는 push 는 큐가 합친다(검토 D1).
@@ -293,12 +338,13 @@ export async function save(root, input, { user, write = false, mirror = false, n
   return out
 }
 
-async function run(root, input, { user, write, mirror, now }) {
+async function run(root, input, { user, write, admin, mirror, now }) {
   // 1 권한
   if (!write) throw new CtxError('E_FORBIDDEN', '쓰기 권한이 없다', { user })
 
   // 2 스키마
   const w = checkSchema(input)
+  const managedOps = checkManagedShape(input.managed)
   const sections = input.sections || []
   const vocabAdds = input.vocab || []
 
@@ -308,6 +354,11 @@ async function run(root, input, { user, write, mirror, now }) {
   // 고칠 수도 없다. 매번 나오는 경고는 아무것도 알리지 않는다(좌표 누락 TODO F2).
   if (!w.source && !/\d{2}:\d{2}/.test(String(w.date || ''))) {
     warnings.push('date 에 시각이 없다 — 같은 날 같은 좌표의 선후를 알 수 없다')
+  }
+
+  // 2.5 구조 정리는 admin 만 — **파일을 만지기 전에.** 행을 더하는 것(add)은 덧붙임이라 writer 도 한다
+  if (needsAdmin(managedOps) && !admin) {
+    throw new CtxError('E_FORBIDDEN', '등록부 정리(rename · merge · retire)는 admin 만 한다 — admin 에게 요청한다', { user, need: 'admin' })
   }
 
   // 3 존재 — 기존 기록은 고치지도 지우지도 않는다. 정정은 supersedes 를 단 새 기록이다.
@@ -364,11 +415,54 @@ async function run(root, input, { user, write, mirror, now }) {
       if (!known.has(c)) throw new CtxError('E_INPUT', '어휘에 없는 좌표다 — vocab 에 같이 보내거나 먼저 등재한다', { coord: c })
     }
 
+    // 5.5 등록부 — 행 더하기 · 문서 만들기 · 정리. 계획은 순수 함수가 세우고(`managedops`) 쓰는 것은 여기(`Snap`)다.
+    // 새 행은 마지막 규칙 행 뒤에 붙으므로 기존 좌표의 자리는 바뀌지 않는다. 6단계는 **새 등록부**로 판정한다.
+    let registry = r0.registry
+    let plan = null
+    if (managedOps.length) {
+      const regText = await fs.readFile(path.join(root, '_managed.md'), 'utf8').catch(() => null)
+      plan = await planManaged({
+        ops: managedOps,
+        registryText: regText,
+        docPaths: r0.managedDocs.map((d) => d.path),
+        read: (rel) => fs.readFile(path.join(root, rel), 'utf8').catch(() => null),
+        workId: w.id,
+      })
+      warnings.push(...plan.warnings)
+      if (plan.changed) {
+        await snap.write('_managed.md', plan.registryText)
+        registry = parseRegistry(readText(plan.registryText))
+      }
+      for (const [rel, body] of plan.files) {
+        if (body === null) await snap.remove(rel)
+        else await snap.write(rel, body)
+      }
+      // **새 행이 걸리는 기존 좌표는 섹션을 같이 받는다.** 안 받으면 그 행이 생긴 커밋부터 그 좌표가 앵커 없음이 되고
+      // 이 레포의 다음 save 가 전부 E_CHECK 로 막힌다(실측 P4). 빈 섹션을 서버가 채우지 않는다 — 파생은 필수라
+      // applied 가 없는 섹션은 「파생 누락」 이다.
+      if (plan.added.length) {
+        const sent = new Set(sections.map((x) => x.coord))
+        const touched = new Set([...r0.works.flatMap((d) => d.touches), ...(w.touches || []), ...sent])
+        const need = [...touched].filter((c) => !sent.has(c) && plan.added.includes(resolveCoord(registry, c)?.pattern))
+        if (need.length) {
+          throw new CtxError(
+            'E_INPUT',
+            `새 등록부 행이 걸리는 좌표 ${need.length}개의 섹션이 없다 — sections 에 같이 보낸다(처음 만드는 섹션은 applied: null). 많으면 패턴을 좁혀(예: term:P*) 나눠 붙인다`,
+            { needSections: need.slice(0, 50), total: need.length }
+          )
+        }
+      }
+    }
+
     // 6 섹션
     const byDoc = new Map()
     for (const s of sections) {
-      const hit = resolveCoord(r0.registry, s.coord)
-      if (!hit) throw new CtxError('E_INPUT', '등록부에 걸리지 않는 좌표다 — 관리 문서가 없다', { coord: s.coord })
+      const hit = resolveCoord(registry, s.coord)
+      if (!hit) {
+        throw new CtxError('E_INPUT', '등록부에 걸리지 않는 좌표다 — 관리 문서가 없다. managed: [{ pattern, doc }] 로 행을 같이 보내 만들거나, sections 에서 빼고 touches 로만 닿게 한다', { coord: s.coord })
+      }
+      // 등록부가 준 경로를 그대로 쓰지 않는다 — 손으로 고친 행이 레포 밖을 가리킬 수 있다(Snap 이 한 번 더 막는다)
+      if (docEscapes(hit.doc)) throw new CtxError('E_INPUT', '등록부 행의 관리 문서 경로가 레포 밖을 가리킨다 — _managed.md 를 사람이 고친다', { coord: s.coord, doc: hit.doc })
       if (!byDoc.has(hit.doc)) {
         byDoc.set(hit.doc, await fs.readFile(path.join(root, hit.doc), 'utf8').catch(() => ''))
       }
@@ -396,6 +490,10 @@ async function run(root, input, { user, write, mirror, now }) {
         id: w.id,
         heading: s.heading,
       })
+      // 새 섹션의 `heading` 은 제목 줄 **전체**(`값 — 설명`)다 — 값이 빠지면 그 섹션은 이 좌표의 것으로 안 읽힌다(앵커 없음)
+      if (res.created && s.heading && hit.level > 0 && normValue(s.heading.split(/\s+[—–-]\s+/)[0]) !== normValue(hit.value)) {
+        throw new CtxError('E_INPUT', `sections[].heading 은 제목 줄 전체다 — "${hit.value} — 설명" 처럼 값으로 시작한다(값이 빠지면 섹션이 이 좌표로 안 읽힌다)`, { coord: s.coord, heading: s.heading.slice(0, 80) })
+      }
       // **읽은 뒤 바뀌었으면 거절한다.** 덮어쓰면 남의 갱신이 조용히 사라진다.
       //
       // 거절에 **다시 만들 재료**를 싣는다(동시 기록 검토 v0.1 D6) — 누가 · 언제 · 어느 기록으로
@@ -447,11 +545,14 @@ async function run(root, input, { user, write, mirror, now }) {
     const errors = res.findings.filter((f) => f.sev === 'error')
     if (errors.length) {
       await snap.restore()
-      throw new CtxError('E_CHECK', '검사에서 오류가 났다 — 아무것도 커밋하지 않았다', { findings: errors })
+      throw new CtxError('E_CHECK', '검사에서 오류가 났다 — 아무것도 커밋하지 않았다', {
+        findings: errors,
+        ...(plan?.added.length ? { hint: '새 등록부 행이 걸리는 좌표는 sections 를 같이 보낸다 · 문서 안에 같은 이름의 섹션이 둘이면 이름을 고친다' } : {}),
+      })
     }
     for (const f of res.findings.filter((x) => x.sev === 'warn')) warnings.push(`${f.label} ${f.items.length}건`)
 
-    return { snap, id: w.id, title: w.title, sections: sections.length, vocab: added, warnings }
+    return { snap, id: w.id, title: w.title, sections: sections.length, vocab: added, managedChanges: plan?.events || [], warnings }
   } catch (e) {
     await snap.restore()
     throw e

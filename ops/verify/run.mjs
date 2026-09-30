@@ -1840,6 +1840,39 @@ try {
     must(/· save · 2026-0925-더러움 · \d+ms · E_GIT ·/.test(log), 'serve.log 거부 줄')
     return `recent ${ov.saves.recent.length} · 거부 ${JSON.stringify(ov.saves.rejected24h)}`
   })
+
+  await check(110, '관리 문서 동적 생성 — writer 의 save 한 번으로 새 타입 · 새 관리 문서 · 등록부 행 · 섹션 · where 가 그 섹션을 가리킨다 · writer 의 retire 는 E_FORBIDDEN · admin 은 된다', async () => {
+    const n0 = Number(await gitq('rev-list', '--count', 'HEAD'))
+    const o = await mtool('save', {
+      work: { id: '2026-0930-용어집-신설', title: '용어집 신설', date: '2026-09-30 11:00', touches: ['term:PLC'], body: 'PLC 용어를 정의하며 용어집을 만들었다.' },
+      vocab: [{ coord: 'term:PLC', label: '프로그래머블 로직 컨트롤러', aliases: ['피엘씨'] }],
+      managed: [{ pattern: 'term:*', doc: 'docs/용어집.md', title: '용어집' }],
+      sections: [{ coord: 'term:PLC', applied: null, heading: 'PLC — 프로그래머블 로직 컨트롤러', body: '공장 설비를 제어하는 산업용 컴퓨터.' }],
+    }, TMW)
+    must(o.commit, JSON.stringify(o.error))
+    eq(o.managed, 1, 'managed')
+    must(o.warnings.some((w) => /새 어휘 타입 "term"/.test(w)), 'warnings: ' + o.warnings.join())
+    eq(Number(await gitq('rev-list', '--count', 'HEAD')), n0 + 1, '커밋 하나')
+    eq(await gitq('status', '--porcelain'), '', '트리')
+    const w = await mtool('where', { coord: 'term:PLC' }, TMW)
+    eq(w.registry.doc, 'docs/용어집.md', 'where.registry')
+    const s = await mtool('section', { coord: 'term:PLC' }, TMW)
+    eq(s.applied, '2026-0930-용어집-신설', 'applied')
+    must(/산업용 컴퓨터/.test(s.content), 'content')
+    const reg = await fs.readFile(path.join(MU, '_managed.md'), 'utf8')
+    must(/`term:\*` \| `docs\/용어집\.md` \| `## \{값\}` \| 서버 추가 · 2026-0930-용어집-신설 \|/.test(reg), '행: ' + reg.split(NL).slice(-3).join(' / '))
+    eq((await mtool('check', {}, TMW)).errors, 0, 'check')
+    // writer 는 정리를 못 한다 — 파일을 만지기 전에
+    const bad = await mtool('save', { work: { id: '2026-0930-폐기-시도', title: '폐기 시도', date: '2026-09-30 11:10', touches: ['term:PLC'], body: 'x' }, managed: [{ op: 'retire', pattern: 'term:*' }] }, TMW)
+    eq(bad.error?.code, 'E_FORBIDDEN', JSON.stringify(bad))
+    eq(await gitq('status', '--porcelain'), '', '거절 뒤 트리')
+    // admin 은 된다 — 행만 지우고 문서는 남는다
+    const ok = await mtool('save', { work: { id: '2026-0930-용어집-정리', title: '용어집 정리', date: '2026-09-30 11:20', touches: [], touchesEmpty: '등록부 정리만 했다', body: '용어집을 등록부에서 뺐다.' }, managed: [{ op: 'retire', pattern: 'term:*' }] }, TKA)
+    must(ok.commit, JSON.stringify(ok.error))
+    must(await fs.access(path.join(MU, 'docs', '용어집.md')).then(() => true).catch(() => false), '문서는 남는다')
+    must(!/`term:\*`/.test(await fs.readFile(path.join(MU, '_managed.md'), 'utf8')), '행이 남았다')
+    return `커밋 +1 · where ${w.registry.doc} · 행 note · writer retire E_FORBIDDEN · admin retire ${ok.commit}`
+  })
 } finally {
   SM.kill()
   await fs.writeFile(path.join(TMP, 'mirror', 'server.stderr.log'), SM.err()).catch(() => {})
@@ -1918,6 +1951,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

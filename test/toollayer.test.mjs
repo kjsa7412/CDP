@@ -181,3 +181,26 @@ test('refreshToolLayer — 훅이 시간을 넘겨도 「빈 커밋 + 옛 파일
     await S.rm()
   }
 })
+
+test('서버가 더한 행 · 문서는 도구 층 갱신이 건드리지 않는다 — 패키지에 같은 이름의 등록부 · 문서가 있어도(관리문서 동적 생성 M10)', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const S = await setup()
+  try {
+    const added = '# 등록부\n\n| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n| `term:*` | `docs/용어집.md` | `## {값}` | 서버 추가 · 2026-0930-용어집 |\n'
+    await put(S.repo, '_managed.md', added)
+    await put(S.repo, 'docs/용어집.md', '# 용어집\n\n## PLC\n')
+    await put(S.from, '_managed.md', '# 패키지 등록부 — 레포에 가면 안 된다\n')
+    await put(S.from, 'docs/용어집.md', '# 패키지의 같은 이름 문서\n')
+    await g(S.repo, 'add', '-A')
+    await g(S.repo, 'commit', '-qm', '서버가 더한 것')
+    const { changes } = await planToolLayer(S.repo, S.from)
+    assert.ok(changes.length > 0)
+    assert.ok(!changes.some((c) => c.path === '_managed.md' || c.path.startsWith('docs/') || c.path === '_vocab.md'), JSON.stringify(changes))
+    const r = await refreshToolLayer(S.repo, S.from)
+    assert.equal(r.state, 'updated')
+    assert.equal(await read(S.repo, '_managed.md'), added)
+    assert.equal(await read(S.repo, 'docs/용어집.md'), '# 용어집\n\n## PLC\n')
+    assert.equal(await porcelain(S.repo), '')
+  } finally {
+    await S.rm()
+  }
+})

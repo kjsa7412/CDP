@@ -24,7 +24,7 @@
 //
 // 남는 값이 없으므로 규칙은 "값이 있으면 오류" 하나다. 다만 미결·제안은
 // 갈 곳을 알려 줘야 하므로 메시지를 따로 낸다.
-import { normValue } from './managed.js'
+import { normValue, lintRegistry } from './managed.js'
 
 const AGENDA = new Set(['미결', '제안'])
 const REQUIRED = ['id', 'title', 'date', 'author']
@@ -258,6 +258,34 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       }
     }
     push('error', 'dup-anchor', '같은 좌표의 섹션이 한 문서에 둘 — 뒤의 것은 보이지 않는다', dups)
+
+    // 등록부 스스로의 결함 — 서버가 행을 더하게 되면서(`save.managed`) 손 편집도 같은 눈으로 본다.
+    // 탈출만 error 다(레포 밖을 쓰게 만든다). 나머지는 훅이 막을 일이 아니라 **사람이 알아야 할 일**이다.
+    const lint = lintRegistry(rules)
+    push(
+      'error',
+      'registry-path',
+      '등록부 행의 관리 문서가 레포 밖을 가리킴',
+      lint.escape.map((x) => ({ detail: `_managed.md:${x.line} \`${x.pattern}\` → ${x.doc}` }))
+    )
+    push(
+      'warn',
+      'registry-outside',
+      '등록부 행의 관리 문서가 docs/ 밖에 있음',
+      lint.outside.map((x) => ({ detail: `_managed.md:${x.line} \`${x.pattern}\` → ${x.doc}` }))
+    )
+    push(
+      'warn',
+      'registry-shadowed',
+      '앞 행이 완전히 가리는 등록부 행 — 그 행의 좌표는 닿지 않는다',
+      lint.shadowed.map((x) => ({ detail: `_managed.md:${x.line} \`${x.pattern}\` 을 ${x.byLine}행 \`${x.by}\` 이 가져간다` }))
+    )
+    push(
+      'warn',
+      'registry-level-mix',
+      '한 관리 문서에 앵커 레벨이 둘 — 섹션이 겹친다',
+      lint.levelMix.map((x) => ({ path: x.doc, detail: `${x.doc} ${x.levels.map((l) => (l ? '#'.repeat(l) : '—')).join(' · ')}` }))
+    )
   }
 
   // 등록부의 applied 가 없는 작업 기록을 가리킨다 — 이름을 잘못 적었거나

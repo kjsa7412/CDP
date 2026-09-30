@@ -51,7 +51,7 @@ const CARD = {
     '이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다',
   version: '이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다',
   save:
-    '작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘. 검사를 통과해야 커밋된다. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것 · 이슈로 보낸 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다. `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 밖에서 온 문서를 들이면 `source` 에 원문 출처를 적는다. `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
+    '작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘. 검사를 통과해야 커밋된다. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것 · 이슈로 보낸 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다. `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 등록부에 안 걸리는 새 타입이면 `managed: [{ pattern: "term:*", doc: "docs/용어집.md" }]` 로 행 · 관리 문서를 같이 만든다(섹션은 `sections` 에 같이 · 만들기 · 붙이기 · 정리는 【좌표 판정】 에 **【등록부 변경】** 으로 보이고 같은 승인을 받는다 · rename · merge · retire 는 admin 만). 밖에서 온 문서를 들이면 `source` 에 원문 출처를 적는다. `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
 }
 
 // ── 레포 캐시 (§2.6) ────────────────────────────────────────────────────────
@@ -297,6 +297,24 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
               })
             )
             .max(50)
+            .optional(),
+          // 관리 문서(등록부 행 · 문서)를 만들고 붙이고 정리한다. 없으면 옛 입력 그대로다.
+          // add(기본) 는 writer · rename · merge · retire 는 admin. 모르는 키는 거절한다 — 오타가 조용히 버려지지 않게
+          managed: z
+            .array(
+              z
+                .object({
+                  op: z.enum(['add', 'rename', 'merge', 'retire']).optional(),
+                  pattern: z.string().max(240).optional(),
+                  doc: z.string().max(240).optional(),
+                  level: z.number().int().min(0).max(6).optional(),
+                  title: z.string().max(200).optional(),
+                  to: z.string().max(240).optional(),
+                  into: z.string().max(240).optional(),
+                })
+                .strict()
+            )
+            .max(10)
             .optional(),
         },
       },
