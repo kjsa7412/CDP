@@ -3,6 +3,34 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.21.0
+
+**등록부를 바꾸면 사본 문구가 거짓으로 남던 것** — `core/regen.js` · `core/save.js` · `core/check.js` — `managed: add` 로 행을 더해도 문서 머리 표의 `등록부` 칸(「비대상」)과 `_vocab.md` 의 타입 목록 · 규칙(「`회의록:` 타입이 없다 · 13개가 전부다」)은 그대로였고 고칠 길도, `check` 가 잡을 규칙도 없었다
+- 머리 표의 `| 등록부 | … |` 칸과 `_vocab.md` 의 `<!-- cdp:registry -->` 블록을 **등록부에서 찍는다** — save 마다(같은 커밋) · 모드 A 는 `ctx index`. 뜻이 같으면 안 고치고 「비대상 — 사유」 는 남긴다
+- `managed: add` 가 새 행과 어긋나는 산문(대상 문서 머리말의 「비대상 · 1:1로 대응하지 않는다」 · `_vocab` · `_managed` 의 「`T:` 타입이 없다」 · 개수 주장)을 찾아 `E_INPUT { lines: [{ file, line, text, why }] }` — 같은 save 의 `edits` 로 고치거나 `managed[].reviewed: ["파일:행"]`
+- `check` — `registry-head`(사본이 등록부와 뜻이 다르다 · 오류) · `registry-prose`(어긋나 보이는 산문 · 경고)
+- 패키지 3벌의 `_vocab.md` · `_managed.md` 에서 목록 · 개수 사본을 걷고 「지금 등록부」 생성 블록을 둔다
+
+**좌표 섹션 밖을 쓰는 길** — `core/edits.js` · `core/save.js` — 서버형에서 문서 머리말 · 등록부 밖 문서(회의록 같은 날짜축) · `_vocab.md` 산문을 고칠 수 없던 것
+- `save` 입력 `edits: [{ file, old, new }]` — `old` 가 정확히 한 번 나오는 자리를 바꾼다(없으면 `E_CONFLICT` · 여럿이면 `E_INPUT`) · CRLF 파일은 줄끝 그대로 · 20건 · 작업 기록과 한 커밋
+- 못 건드리는 자리 — 좌표 섹션 · applied 주석 · 어휘 줄 · 등록부 행 · 생성 블록 · 문서 전체(—) 문서 · 작업 기록
+
+**서식 예시를 writer 가 지운다** — `core/examples.js` · `core/save.js` · `core/reponew.js` — `check` 는 「예시를 지운다」 고 시키는데 서버형에는 그 연산이 없었다(`retire` 는 admin 의 등록부 연산)
+- `save` 입력 `examples: "purge"` — `example:` 어휘 줄 + 짝 섹션 + 제목에 「(예시)」 가 있는 섹션을 한 커밋에. 작업 기록이 쓰는 예시 좌표는 표시만 뗀다(`kept`) · 표의 행으로 남은 예시는 `left` 로 알린다
+- 모드 A `ctx examples [--purge]` · 세울 때 `ctx repo new --no-examples` · 콘솔 「새 지식 레포」 의 「서식 예시 — 빼고 세운다」
+
+**문서 조회 도구** — `core/tools.js` · `viewer/bin/ctx-mcp.mjs` — 관리 문서 목록 · 비대상 문서를 볼 MCP 도구가 없어 뷰어의 HTTP API 를 토큰으로 부르던 것
+- MCP `docs`(도구 14) — 문서마다 경로 · 관리번호 · 등록부 대상인지 · 걸린 패턴 / `doc` 을 주면 그 문서 원문 · 헤딩(좌표 섹션이면 `coord`) · `ctx docs`
+- `match` — 좌표가 안 잡힌 이름은 문서 이름 · 관리번호 · 제목을 대 보고 `docs` 를 싣는다(`match(["회의록"])` → `BM_411`)
+
+**기본 레포 어긋남 · 경고의 해법** — `viewer/bin/ctx-mcp.mjs` · `core/setup.js` · `core/check.js` · `viewer/src/components/CheckView.jsx`
+- `brief({ repo })` 의 `repo` 가 이 연결(`.mcp.json` 의 `/mcp/<이름>`)의 기본과 다르면 경고 줄 · 설치가 기존 `.mcp.json` 의 다른 레포를 바로잡으면 계획에 그 줄
+- `check` 의 finding 에 `fix`(누가 무엇으로 치우나) — 화면 「검사」 가 라벨 아래에 보인다 · save 의 「새 어휘 타입」 경고에 뒷말
+
+- 스킬 — `cdp-save` 【등록부 변경】 의 「영향 문구」 · 「섹션 밖 쓰기」 · ⑤B-0 `brief({ repo })` / `cdp-import` ③-6 영향 문구 / `cdp-edit` 예시 4 를 모드 A · B 로 가르고 못 하는 일은 승인 전에 / `cdp-managed` 「서식 예시 정리」 · `docs`
+- 하네스 113 · 114 · `test/save-registry-copy.test.mjs`(이번 사례를 dpms 패키지 · writer 로) · `test/regen.test.mjs`
+- 검토 · TODO — `docs/design/CDP_등록부사본_모순_검토_v0.1.md` · `docs/dev/등록부사본_TODO.md`
+
 ## v0.20.0
 
 **본문 그림이 안 보이던 것** — `viewer/src/lib/markdown.js` · `viewer/src/components/DocView.jsx` · `core/repopath.js` — `![설명](../work/assets/…png)` 가 화면 주소 기준으로 풀려 레포에 파일이 있어도 전부 깨진 그림이던 것(파일은 파일 API 로만 나온다)
