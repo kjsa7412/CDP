@@ -3,7 +3,7 @@
 # 여기에만 있는 명령이 있으면 "CI 에서는 되는데 내 PC 에서는 안 된다" 가 생긴다.
 # 전부 package.json 의 스크립트다 — 개발자는 같은 것을 npm run 으로 돌린다.
 #
-#   npm ci · build · build:ctx · test · check:packages · verify
+#   npm ci · build · build:site · build:ctx · test · check:packages · verify
 #
 # 서버가 Linux 라 본선은 ubuntu 다. windows 는 번들 · 단위 테스트까지만 —
 # exe 빌드는 릴리스(release.yml)에서 한다.
@@ -31,6 +31,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # 공식 사이트 — 빌드 · 사전 생성 · 누출 검사(사내 흔적이 하나라도 있으면 실패). 캡처는 CI 에서 돌지 않는다
+      - run: npm run build:site
       - run: npm run build:ctx
       - run: npm test
       - run: npm run check:packages

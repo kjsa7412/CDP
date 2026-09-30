@@ -22,7 +22,11 @@
     "verify": "node ops/verify/run.mjs",
     "check:packages": "node viewer/bin/ctx-cli.mjs package check --all",
     "seed:kit": "node ops/lib/seed-kit.mjs",
-    "release:server": "node ops/lib/release-server.mjs"
+    "release:server": "node ops/lib/release-server.mjs",
+    "dev:site": "vite --config site/vite.config.js",
+    "build:site": "vite build --config site/vite.config.js && node site/tools/prerender.mjs && node site/tools/check-leaks.mjs",
+    "site:demo": "node site/demo/run.mjs",
+    "preview:site": "node site/tools/serve-static.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
@@ -37,6 +41,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright-core": "^1.63.0",
     "postject": "1.0.0-alpha.6",
     "rcedit": "^4.0.1",
     "vite": "^6.0.7"

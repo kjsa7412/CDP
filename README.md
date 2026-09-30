@@ -14,6 +14,7 @@
 | **제품화** | [`docs/design/CDP_제품화_검토_v1.0.md`](docs/design/CDP_제품화_검토_v1.0.md) — 손을 타는 자리와 자동화 · [`docs/dev/제품화_TODO.md`](docs/dev/제품화_TODO.md) — 실행 항목 |
 | **화면 · 권한** | [`docs/design/CDP_화면_권한_검토_v0.1.md`](docs/design/CDP_화면_권한_검토_v0.1.md) — 관리(레포 하나) 對 콘솔(서버 전부) · viewer/writer/admin 별 화면과 API 경계 · SPA 전환 깜빡임의 근본 원인과 권장안. **v0.13.0 에 구현** — [`docs/dev/화면_권한_TODO.md`](docs/dev/화면_권한_TODO.md) |
 | **동시 기록** | [`docs/design/CDP_동시기록_검토_v0.1.md`](docs/design/CDP_동시기록_검토_v0.1.md) — 여럿이 같은 관리 문서에 쓸 때 · 미러 · 서버 트리 ↔ origin · [`docs/dev/동시기록_TODO.md`](docs/dev/동시기록_TODO.md) — 단계 · 실측 |
+| **공식 사이트** | [`site/`](site) — 제품 소개 정적 SPA(Vercel · 사외). 화면 · 예제는 가상 데모 레포를 진짜 서버로 띄워 찍고 녹화한다 · [`docs/design/CDP_공식사이트_제작검토_v0.1.md`](docs/design/CDP_공식사이트_제작검토_v0.1.md) · [`docs/dev/공식사이트_TODO.md`](docs/dev/공식사이트_TODO.md) |
 | 바뀐 것 | [`CHANGELOG.md`](CHANGELOG.md) — 태그마다 한 절. 릴리스 노트가 여기서 나온다 |
 | `docs/` 의 판정 | [`docs/README.md`](docs/README.md) — **보존되는가.** 작업 메모(`dev/`)는 보존 대상이 아니다 |
 
@@ -92,6 +93,8 @@ node viewer/server/index.js --repo <경로> --dev http://localhost:5173 --no-ope
 | **`npm test`** | 단위 테스트 (`node:test` · `test/`) |
 | **`npm run verify`** | 검증 하네스 — MCP 설계서 §10 + 제품화 70~77 + 제품관리서비스 78~90 + 동시 기록 91~97 을 한 자리에서 |
 | `npm run check:packages` | 패키지마다 부어서 `ctx check` (= `ctx package check --all`) |
+| `npm run build:site` | 공식 사이트 → `ops/out/site/` — 빌드 · 주소별 사본 · **누출 검사**(사내 흔적이 있으면 실패). `dev:site` 는 5174 · `preview:site` 는 Vercel 처럼 낸다(5176) |
+| `npm run site:demo` | 데모 레포 · 서버 → 예제 녹화 → 화면 28장 캡처(Chrome/Edge 필요 · 사람이 판을 올릴 때) |
 | `npm run seed:kit` | fixture 의 `.claude/` 를 `agent/` 에서 (Python 없이) |
 | `npm run dev` · `dev:server` | 화면 / 서버 개발 |
 | `npm start` | 서버 (빌드된 화면 · viewer/fixture) |

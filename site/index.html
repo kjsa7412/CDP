@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko" data-face="site">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="color-scheme" content="light dark" />
+    <title>CDP — 좌표로 찾고 사람이 본문을 읽는다</title>
+    <meta name="description" content="프로젝트 지식을 작업 기록과 관리 문서 두 층으로 두고, 좌표로 잇고, 커밋할 때 검사한다. 지식 레포 뷰어 · ctx 도구 · MCP 서버." />
+    <!--cdp:meta-->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- 첫 페인트 전 테마 — 제품 index.html 과 같은 계산(cdp.theme + OS). 이 스크립트의 해시가 vercel.json 의 CSP 에 있다 —
+         한 글자라도 바꾸면 test/site.test.mjs 가 새 해시를 알려 준다. -->
+    <script>(function(){var t=null;try{t=localStorage.getItem('cdp.theme')}catch(e){}var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'})()</script>
+    <style>
+      html { background: #fff }
+      html[data-theme='dark'] { background: #161a21 }
+    </style>
+  </head>
+  <body>
+    <div id="root"><!--cdp:body--></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

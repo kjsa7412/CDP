@@ -2,6 +2,7 @@
 #
 #   cdp-v<버전>-win.zip          팀원 PC · 폐쇄망 (exe + 완성된 지식 레포 폴더)   ← windows
 #   cdp-server-v<버전>.tar.gz    서버 (ctx.mjs · web · packages · deploy)       ← ubuntu
+#   cdp-site-v<버전>.zip         공식 사이트 정적 폴더(Vercel 이 아닌 곳에 올릴 때) ← ubuntu
 #   SHA256SUMS                   반입 뒤 대조
 #
 # 태그와 package.json 의 버전이 다르면 **실패한다** — 태그 없는 0.8.0 이 다시
@@ -75,9 +76,32 @@ jobs:
           name: server
           path: ops/out/server/cdp-server-v*.tar.gz
 
+  site:
+    name: ubuntu · build:site
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build:site
+      - shell: bash
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          (cd ops/out/site && zip -qr "../../../cdp-site-v$V.zip" .)
+          ls -l "cdp-site-v$V.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: cdp-site-v*.zip
+
   publish:
     name: GitHub Release
-    needs: [version, windows, server]
+    needs: [version, windows, server, site]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
