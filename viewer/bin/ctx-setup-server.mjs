@@ -16,7 +16,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { unzip } from '../../core/zip.js'
-import { planSetup, applySetup, mergeMcpJson, mcpEntryServer, kitHash, kitOf } from '../../core/setup.js'
+import { planSetup, applySetup, mergeMcpJson, mcpEntryServer, repoDriftNote, kitHash, kitOf } from '../../core/setup.js'
 
 const NL = String.fromCharCode(10)
 const out = (s = '') => process.stdout.write(s + NL)
@@ -97,6 +97,8 @@ export async function runSetupServer(opt) {
     } catch (e) {
       return bail(e.message)
     }
+    const drift = repoDriftNote(had, repo)
+    if (drift) plan.warnings.push(drift)
     plan.actions.push({
       kind: 'mcp',
       to: mcpPath,

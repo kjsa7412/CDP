@@ -26,6 +26,8 @@ import { runSync } from '../../core/sync.js'
 // 도구 12종의 형태는 **여기서 만들지 않는다.** `core/tools.js` 가 만든 것을
 // 그대로 낸다 -- MCP 의 tools/call 과 바이트까지 같아야 하기 때문이다(MCP 설계서 §10).
 import * as T from '../../core/tools.js'
+import { regenerate } from '../../core/regen.js'
+import { planPurge } from '../../core/examples.js'
 
 // 번들 시각. `tools/build-ctx.mjs` 가 치환한다.
 //
@@ -40,7 +42,9 @@ const SEP = path.sep
 const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
 
   ctx check [--json]        커밋 가능한가. 오류가 있으면 exit 1
-  ctx index                 INDEX.md / INDEX-by-coord.md 재생성
+  ctx index                 INDEX.md / INDEX-by-coord.md 재생성 · 머리 표 등록부 칸 · _vocab.md 생성 블록을 등록부에서 다시 찍는다
+  ctx docs [<문서|관리번호>] 관리 문서 목록 · 등록부 대상인가 / 그 문서 원문 (MCP docs 와 같다)
+  ctx examples [--purge]    서식 예시 좌표 · 짝 섹션 목록 / --purge 는 파일만 지운다(커밋은 사람이)
   ctx match <이름...>       이름 -> 정본 좌표 (대조)
   ctx where <좌표...>       그 좌표의 상태가 어느 문서 어느 섹션에 · 얼마나 되나
   ctx search <말...>        말 -> 좌표 후보 (match 가 미등재를 낼 때의 폴백)
@@ -63,7 +67,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx serve kit-refresh --root <폴더> [--repo <이름>] [--dry] [--no-push]   레포들의 에이전트 세팅(스킬 · 도구 · 훅)을 이 번들의 판으로 — upgrade.sh 가 부른다
   ctx serve init --auth <f> --name <이름>       첫 관리자 + 토큰을 한 번에 (명부가 없을 때만 · 브라우저 /setup 과 같은 일)
   ctx package list|show|check|new|rename    패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로 · 이름 바꿈
-  ctx repo new <경로> --package <이름> [--origin <url>] [--push]   지식 레포를 세운다
+  ctx repo new <경로> --package <이름> [--origin <url>] [--push] [--no-examples]   지식 레포를 세운다
   ctx repo list --root <폴더>               서버 <root> 의 레포 목록
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
 
@@ -87,6 +91,8 @@ function parseArgs(argv) {
     const a = argv[i]
     if (a === '--json') out.json = true
     else if (a === '--pull') out.pull = true
+    else if (a === '--purge') out.purge = true
+    else if (a === '--no-examples') out.noExamples = true
     else if (a === '--repo') { const v = argv[++i]; out.repos.push(v); if (out.repo == null) out.repo = v }
     else if (a === '--root') out.root = argv[++i]
     else if (a === '--prompts') out.prompts = argv[++i]
@@ -230,6 +236,8 @@ function itemLine(i) {
 async function cmdCheck(r, opt) {
   const res = runBuiltinCheck({
     docs: r.docs,
+    vocabText: r.vocabText,
+    managedText: r.managedText,
     vocab: r.vocab,
     validity: r.validity,
     indexInfo: r.indexInfo,
@@ -301,7 +309,62 @@ async function cmdIndex(r) {
   }
   await fs.writeFile(path.join(r.root, 'INDEX-by-coord.md'), lines.join('\n') + '\n', 'utf8')
 
+  // 등록부 사본(등록부 사본 검토 X5) — 머리 표 칸 · _vocab.md 생성 블록을 등록부에서 다시 찍는다. 서버형은 save 가 한다
+  const docs = new Map()
+  for (const d of r.managedDocs) docs.set(d.path, await fs.readFile(path.join(r.root, d.path), 'utf8').catch(() => ''))
+  const vocabText = await fs.readFile(path.join(r.root, '_vocab.md'), 'utf8').catch(() => null)
+  const gen = regenerate({ registry: r.registry, vocab: r.vocab, docs, vocabText })
+  for (const [rel, text] of gen.files) await fs.writeFile(path.join(r.root, rel), text, 'utf8')
+
   out(`ctx index: INDEX.md ${r.works.length}행 / INDEX-by-coord.md 좌표 ${r.allCoords.length}개`)
+  for (const h of gen.heads) out(`ctx index: 머리 표를 등록부에 맞췄다 — ${h.path}:${h.line}  ${h.from} → ${h.to}`)
+  if (gen.block) out('ctx index: _vocab.md 생성 블록(cdp:registry)을 등록부에 맞췄다')
+  return 0
+}
+
+// 관리 문서 목록 · 한 문서 — MCP `docs` 와 같은 함수(등록부 사본 검토 X20)
+async function cmdDocs(r, opt) {
+  const res = T.toolDocs(r, { doc: opt.args[0] })
+  if (opt.json) {
+    out(JSON.stringify(res, null, 2))
+    return 0
+  }
+  if (res.docs) {
+    for (const d of res.docs) out(`${d.registered ? '●' : '○'} ${(d.no || '').padEnd(7)} ${d.path}${d.rules.length ? '  ' + d.rules.map((x) => x.pattern).join(' · ') : ''}`)
+    out(`\n관리 문서 ${res.total} · 등록부 대상 ${res.registered} (● 대상 · ○ 비대상)`)
+    return 0
+  }
+  out(res.text ?? '')
+  return 0
+}
+
+// 서식 예시 — 목록 · --purge 는 파일만 고친다(커밋은 사람이). 서버형은 save 의 examples: "purge"(X13)
+async function cmdExamples(r, opt) {
+  const touched = new Map()
+  for (const d of r.works) for (const c of d.touches) touched.set(c, [...(touched.get(c) || []), d.id])
+  const docs = new Map()
+  for (const d of r.managedDocs) docs.set(d.path, await fs.readFile(path.join(r.root, d.path), 'utf8').catch(() => ''))
+  const vocabText = await fs.readFile(path.join(r.root, '_vocab.md'), 'utf8').catch(() => '')
+  const p = planPurge({ vocabText, registry: r.registry, docs, touched })
+  const res = { coords: p.coords, sections: p.sections, kept: p.kept, left: p.left, written: false }
+  if (opt.purge) {
+    if (p.vocabText != null) await fs.writeFile(path.join(r.root, '_vocab.md'), p.vocabText, 'utf8')
+    for (const [rel, text] of p.files) await fs.writeFile(path.join(r.root, rel), text, 'utf8')
+    res.written = true
+  }
+  if (opt.json) {
+    out(JSON.stringify(res, null, 2))
+    return 0
+  }
+  out(`예시 좌표 ${p.coords.length} · 짝 섹션 · (예시) 섹션 ${p.sections.length}${p.kept.length ? ` · 작업 기록이 써서 남김 ${p.kept.length}` : ''}`)
+  for (const c of p.coords) out('  - ' + c)
+  for (const s of p.sections) out(`  § ${s.path}  ${s.heading}`)
+  for (const k of p.kept) out(`  = ${k.coord} (작업 기록 ${k.works.join(' · ')} — example 표시만 뗀다)`)
+  if (p.left.length) {
+    out(`\n예시 표시가 남은 줄 ${p.left.length} — 표의 행이라 사람이 고른다`)
+    for (const l of p.left.slice(0, 20)) out(`  ${l.file}:${l.line}  ${l.text}`)
+  }
+  out(opt.purge ? '\n지웠다 — git diff 로 보고 커밋한다.' : '\n지우려면 ctx examples --purge (파일만 고친다 · 커밋은 사람이)')
   return 0
 }
 
@@ -952,6 +1015,8 @@ export async function main(argv = process.argv.slice(2)) {
     check: cmdCheck,
     search: cmdSearch,
     index: cmdIndex,
+    docs: cmdDocs,
+    examples: cmdExamples,
     match: cmdMatch,
     where: cmdWhere,
     derive: cmdDerive,

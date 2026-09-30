@@ -23,8 +23,10 @@ async function readOr(root, name, fallback = '') {
 export async function loadRepo(root, { cache = new Map(), settings = {}, onProgress } = {}) {
   const { docs, bodies, stats } = await scan(root, cache, { onProgress })
 
-  const vocab = parseVocab(await readOr(root, '_vocab.md'))
-  const registry = parseRegistry(await readOr(root, '_managed.md'))
+  const vocabText = await readOr(root, '_vocab.md', null)
+  const managedText = await readOr(root, '_managed.md', null)
+  const vocab = parseVocab(vocabText ?? '')
+  const registry = parseRegistry(managedText ?? '')
 
   const indexText = await readOr(root, 'INDEX.md', null)
   const indexInfo = indexText == null ? { exists: false } : { exists: true, rows: countIndexRows(indexText) }
@@ -62,6 +64,9 @@ export async function loadRepo(root, { cache = new Map(), settings = {}, onProgr
     stats,
     vocab,
     registry,
+    // 원문 — 등록부 사본 검사(`core/regen.js`)가 생성 블록 · 산문을 본다
+    vocabText,
+    managedText,
     indexInfo,
     works,
     managedDocs,

@@ -184,6 +184,8 @@ export async function checkPackage(dir, { assemble = null } = {}) {
     const r = await loadRepo(root, { settings: { settledness: { excludeTypes: ['domain'] } } })
     const res = runBuiltinCheck({
       docs: r.docs,
+      vocabText: r.vocabText,
+      managedText: r.managedText,
       vocab: r.vocab,
       validity: r.validity,
       indexInfo: r.indexInfo,

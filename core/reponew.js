@@ -20,6 +20,7 @@ import path from 'node:path'
 import { CtxError } from './tools.js'
 import { status as gitStatus, classifyPushError, maskUrl } from './git.js'
 import { isSsh } from './gitauth.js'
+import { purgeTree } from './examplestree.js'
 
 export const REPO_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
@@ -59,9 +60,10 @@ async function copyTree(src, dst) {
  * @param push     origin 에 첫 커밋을 보낼지
  * @param author   첫 커밋의 작성자 이름 (기본 cdp)
  * @param dry      무엇을 할지만 낸다
+ * @param examples  false 면 서식 예시(`example:` 어휘 · 짝 섹션 · (예시) 섹션)를 빼고 세운다(등록부 사본 검토 X14). 기본은 지금처럼 둔다
  * @param sshCommand  origin 이 ssh 면 레포 로컬 설정으로 거는 한 줄(서버의 배포 키 · git 자격 TODO G2). 없으면 ssh 기본값
  */
-export async function newRepo({ from, dest, origin = null, push = false, author = 'cdp', dry = false, sshCommand = null }) {
+export async function newRepo({ from, dest, origin = null, push = false, author = 'cdp', dry = false, sshCommand = null, examples = true }) {
   const src = path.resolve(from)
   const dst = path.resolve(dest)
   const name = path.basename(dst)
@@ -79,7 +81,7 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
     throw new CtxError('E_INPUT', 'origin 주소 형식이 아니다', { origin })
   }
 
-  const plan = { name, from: src, dest: dst, origin, push, steps: ['복사', 'work/.gitkeep', 'git init', 'core.hooksPath .githooks', '첫 커밋 (훅이 ctx check 를 돈다)'] }
+  const plan = { name, from: src, dest: dst, origin, push, steps: ['복사', ...(examples ? [] : ['서식 예시 빼기']), 'work/.gitkeep', 'git init', 'core.hooksPath .githooks', '첫 커밋 (훅이 ctx check 를 돈다)'] }
   if (origin) plan.steps.push('remote add origin')
   if (origin && push) plan.steps.push('push -u origin HEAD')
   if (dry) return { ...plan, dry: true }
@@ -88,6 +90,9 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
   try {
     await copyTree(src, dst)
     created = true
+    // 서식 예시를 빼고 세운다 — 첫 커밋 **전에**. 훅의 검사가 뺀 뒤의 트리를 본다
+    let purged = null
+    if (!examples) purged = await purgeTree(dst)
     await fs.mkdir(path.join(dst, 'work'), { recursive: true })
     await fs.writeFile(path.join(dst, 'work', '.gitkeep'), '')
     // sh 스크립트 실행 권한 — POSIX 에서만 뜻이 있다
@@ -122,12 +127,12 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
         if (!r.ok) {
           // push 실패는 레포를 지울 이유가 아니다 — 세워진 것은 세워진 것이고,
           // 미러가 밀린 것은 `sync.mirror = lag` 로 보인다. 다만 사실을 알린다.
-          return { ...plan, commit: head.out, files, pushed: false, pushError: (r.err || r.out).split('\n')[0] }
+          return { ...plan, commit: head.out, files, pushed: false, pushError: (r.err || r.out).split('\n')[0], ...(purged ? { examples: purged } : {}) }
         }
         pushed = true
       }
     }
-    return { ...plan, commit: head.out, files, pushed }
+    return { ...plan, commit: head.out, files, pushed, ...(purged ? { examples: purged } : {}) }
   } catch (e) {
     // 반쪽 레포를 남기지 않는다. 우리가 만든 것만 지운다.
     if (created) await fs.rm(dst, { recursive: true, force: true }).catch(() => {})

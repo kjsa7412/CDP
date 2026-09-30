@@ -26,6 +26,9 @@ import { enqueuePush, lastPush, describe as mirrorLine } from './mirror.js'
 import { topApplied } from './frontmatter.js'
 import { take as takeAsset, checkAssetName, ASSETS_COUNT_MAX, ASSETS_TOTAL_MAX } from './assets.js'
 import { repoPath, mdRefs } from './repopath.js'
+import { regenerate, proseConflicts } from './regen.js'
+import { planPurge } from './examples.js'
+import { checkEditsShape, planEdits } from './edits.js'
 
 const NL = String.fromCharCode(10)
 const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
@@ -168,6 +171,8 @@ function checkSchema(input) {
     checkCoord(v.coord)
     if (!v.label) throw new CtxError('E_INPUT', 'vocab[].label 이 없다', { coord: v.coord })
   }
+  // 예시 정리(등록부 사본 검토 X10) — 값은 하나다. 다른 값이 조용히 무시되면 「지웠다」 고 답하게 된다
+  if (input.examples != null && input.examples !== 'purge') throw new CtxError('E_INPUT', 'examples 는 "purge" 하나다', { field: 'examples' })
   const assets = input.assets || []
   if (!Array.isArray(assets)) throw new CtxError('E_INPUT', 'assets 는 배열이다', { field: 'assets' })
   if (assets.length > ASSETS_COUNT_MAX) throw new CtxError('E_INPUT', `첨부는 save 한 번에 ${ASSETS_COUNT_MAX}개까지다`, { count: assets.length })
@@ -328,6 +333,8 @@ export async function save(root, input, { user, write = false, admin = false, mi
       managed: r.managedChanges.length,
       ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
       ...(r.assets.length ? { assets: r.assets } : {}),
+      ...(r.edits.length ? { edits: r.edits } : {}),
+      ...(r.examples ? { examples: r.examples } : {}),
       warnings: r.warnings,
       mirror: 'off',
     }
@@ -368,6 +375,7 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
   // 2 스키마
   const w = checkSchema(input)
   const managedOps = checkManagedShape(input.managed)
+  const editOps = checkEditsShape(input.edits)
   const sections = input.sections || []
   const vocabAdds = input.vocab || []
 
@@ -445,12 +453,39 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     const { text: nextVocab, added, newTypes } = addVocab(vocabText, vocabAdds)
     if (added) await snap.write(vocabPath, nextVocab)
     // 타입을 만들었으면 말한다 — 오타면 사람이 _vocab.md 에서 고친다. 등록부에 없으면 섹션은 못 쓴다(6단계).
-    for (const t of newTypes) warnings.push(`새 어휘 타입 "${t}" 을 만들었다 (_vocab.md 끝) — 의도한 타입이 맞는지 본다`)
+    for (const t of newTypes) warnings.push(`새 어휘 타입 "${t}" 을 만들었다 (_vocab.md 끝) — 의도한 타입이 맞는지 본다. 관리 문서로 파생하려면 managed 로 등록부 행을 같이 · 오타면 admin 이 _vocab.md 를 고친다(지우는 연산은 없다)`)
 
     // 5 좌표 — 어휘 등재 **뒤에** 본다. 새 좌표를 같은 save 에서 등재하고 쓰는 것이 정상이다.
     const r0 = await loadRepo(root, { settings: SETTINGS })
     const known = new Set(r0.vocab.coords.keys())
     for (const v of vocabAdds) known.add(v.coord)
+    const readRaw = (rel) => fs.readFile(path.join(root, rel), 'utf8').catch(() => null)
+    const docTexts = async (list) => new Map(await Promise.all(list.map(async (d) => [d.path, (await readRaw(d.path)) ?? ''])))
+
+    // 5.1 예시 정리(등록부 사본 검토 X10~X12) — `example:` 어휘 줄과 그 짝 섹션 · 「(예시)」 섹션을 한 번에.
+    // 작업 기록이 쓰는 예시 좌표는 지우지 않는다(그때는 좌표다 — 지우면 미등재 오류) · 표시만 뗀다.
+    let purged = null
+    if (input.examples === 'purge') {
+      const touched = new Map()
+      for (const d of r0.works) for (const c of d.touches) touched.set(c, [...(touched.get(c) || []), d.id])
+      const p = planPurge({ vocabText: await readRaw(vocabPath), registry: r0.registry, docs: await docTexts(r0.managedDocs), touched })
+      if (p.vocabText != null) await snap.write(vocabPath, p.vocabText)
+      for (const [rel, text] of p.files) await snap.write(rel, text)
+      for (const c of p.coords) known.delete(c)
+      purged = { coords: p.coords, sections: p.sections, kept: p.kept, left: p.left }
+      if (!p.coords.length && !p.sections.length && !p.kept.length) warnings.push('지울 서식 예시가 없다')
+      if (p.left.length) warnings.push(`예시 표시가 남은 줄 ${p.left.length}개 — 섹션이 아니라 표의 행이라 두었다. 지우려면 edits 로: ${p.left.slice(0, 3).map((l) => l.file + ':' + l.line).join(' · ')}${p.left.length > 3 ? ' …' : ''}`)
+    }
+
+    // 5.2 섹션 밖 쓰기(X15~X19) — 머리말 · 산문 · 비대상 문서. 등록부 계획(5.5)이 고친 글을 읽도록 그 앞에서
+    let editsDone = []
+    if (editOps.length) {
+      const vt = (await readRaw(vocabPath)) ?? ''
+      const { parseVocab } = await import('./vocab.js')
+      const e = await planEdits({ edits: editOps, read: readRaw, registry: r0.registry, vocabCoords: new Set(parseVocab(readText(vt)).coords.keys()) })
+      for (const [rel, text] of e.files) await snap.write(rel, text)
+      editsDone = e.done
+    }
     for (const c of [...(w.touches || []), ...sections.map((s) => s.coord)]) {
       if (!known.has(c)) throw new CtxError('E_INPUT', '어휘에 없는 좌표다 — vocab 에 같이 보내거나 먼저 등재한다', { coord: c })
     }
@@ -469,6 +504,25 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
         workId: w.id,
       })
       warnings.push(...plan.warnings)
+      // 5.4 **어긋나는 산문**(X7 · X8) — 새 행이 거짓으로 만드는 머리말 · 규칙 줄. 판정은 edits 를 적용한 **뒤**의 글로
+      const adds = plan.events.filter((e) => e.op === 'add').map((e) => ({ type: e.pattern.slice(0, e.pattern.indexOf(':')), doc: e.doc }))
+      if (adds.length) {
+        const pre = new Map()
+        for (const rel of new Set(['_vocab.md', ...adds.map((a) => a.doc)])) pre.set(rel, plan.files.has(rel) ? plan.files.get(rel) : await readRaw(rel))
+        pre.set('_managed.md', plan.registryText)
+        const hits = proseConflicts({ adds, texts: (rel) => pre.get(rel) ?? null })
+        const ok = new Set(managedOps.flatMap((o) => o.reviewed || []))
+        const left = hits.filter((h) => !ok.has(h.file + ':' + h.line))
+        const seen = hits.filter((h) => ok.has(h.file + ':' + h.line))
+        if (left.length) {
+          throw new CtxError(
+            'E_INPUT',
+            `새 등록부 행과 어긋나는 문구 ${left.length}줄이 남는다 — 같은 save 의 edits 로 고치거나, 맞는 줄이면 managed[].reviewed 에 "파일:행" 을 적는다: ${left.slice(0, 4).map((h) => h.file + ':' + h.line).join(' · ')}${left.length > 4 ? ' …' : ''}`,
+            { lines: left.slice(0, 50), total: left.length }
+          )
+        }
+        if (seen.length) warnings.push(`어긋나 보이는 문구 ${seen.length}줄을 맞다고 확인했다(reviewed): ${seen.map((h) => h.file + ':' + h.line).join(' · ')}`)
+      }
       if (plan.changed) {
         await snap.write('_managed.md', plan.registryText)
         registry = parseRegistry(readText(plan.registryText))
@@ -602,7 +656,14 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     // INDEX 를 본다** — 작업 기록을 방금 하나 더했으니 행 수가 반드시 어긋나고,
     // "INDEX.md 불일치" 경고가 `save` 마다 빠짐없이 나온다. 매번 나오는 경고는
     // 아무것도 알리지 않는다. 검사는 **커밋될 트리**를 봐야 한다.
-    const r0b = await loadRepo(root, { settings: SETTINGS })
+    let r0b = await loadRepo(root, { settings: SETTINGS })
+    // 9.5 등록부 사본(X1 · X3 · X5) — 머리 표 칸 · _vocab.md 생성 블록을 **지금 등록부**로 찍는다. INDEX 와 같은 층의 파생물이다
+    const gen = regenerate({ registry: r0b.registry, vocab: r0b.vocab, docs: await docTexts(r0b.managedDocs), vocabText: await readRaw(vocabPath) })
+    for (const [rel, text] of gen.files) await snap.write(rel, text)
+    if (gen.heads.length || gen.block) {
+      warnings.push(`등록부 사본을 등록부에 맞췄다 — ${[...gen.heads.map((h) => h.path + ':' + h.line + ' 머리 표'), ...(gen.block ? ['_vocab.md 생성 블록'] : [])].join(' · ')}`)
+      r0b = await loadRepo(root, { settings: SETTINGS })
+    }
     await snap.write('INDEX.md', renderIndex(r0b))
     await snap.write('INDEX-by-coord.md', renderByCoord(r0b))
 
@@ -610,6 +671,8 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     const r1 = await loadRepo(root, { settings: SETTINGS })
     const res = runBuiltinCheck({
       docs: r1.docs,
+      vocabText: r1.vocabText,
+      managedText: r1.managedText,
       vocab: r1.vocab,
       validity: r1.validity,
       indexInfo: r1.indexInfo,
@@ -627,7 +690,18 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     }
     for (const f of res.findings.filter((x) => x.sev === 'warn')) warnings.push(`${f.label} ${f.items.length}건`)
 
-    return { snap, id: w.id, title: w.title, sections: sections.length, vocab: added, managedChanges: plan?.events || [], assets: assetsOut.map(({ path: p, size }) => ({ path: p, size })), warnings }
+    return {
+      snap,
+      id: w.id,
+      title: w.title,
+      sections: sections.length,
+      vocab: added,
+      managedChanges: plan?.events || [],
+      assets: assetsOut.map(({ path: p, size }) => ({ path: p, size })),
+      edits: editsDone,
+      examples: purged,
+      warnings,
+    }
   } catch (e) {
     await snap.restore()
     throw e

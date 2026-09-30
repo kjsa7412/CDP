@@ -88,7 +88,7 @@ export default function Landing({ info }) {
                   <span className="arow__label">MCP</span>
                   <span className="arow__value">
                     <span className="amono">/mcp/&lt;레포&gt;</span>
-                    <span className="amuted">· 도구 13</span>
+                    <span className="amuted">· 도구 14</span>
                   </span>
                 </div>
                 {info?.setupNeeded ? (

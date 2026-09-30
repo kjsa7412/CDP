@@ -304,11 +304,11 @@ await check(10, '`..` 이 든 repo 값 → 거절', async () => {
 
 // ══ 모드 A ═════════════════════════════════════════════════════════════════
 
-await check(11, 'tools/list 가 12건이다 (모드 A)', async () => {
+await check(11, 'tools/list 가 13건이다 (모드 A)', async () => {
   const l = await c1.rpc('tools/list', {})
-  eq(l.result.tools.length, 12, '도구 수')
+  eq(l.result.tools.length, 13, '도구 수')
   must(!l.result.tools.some((t) => t.name === 'save'), '모드 A 에 save 가 있다')
-  return '12건 · save 없음'
+  return '13건 · save 없음'
 })
 
 await check(12, 'stdout 규약 밖 바이트 0', async () => {
@@ -475,8 +475,23 @@ await check(41, 'POST /mcp 와 /mcp/<name> 이 같은 도구 목록', async () =
   const a = (await H.rpc('/mcp', 'tools/list', {}, TK)).j.result.tools.map((t) => t.name).sort()
   const b = (await H.rpc('/mcp/alpha', 'tools/list', {}, TK)).j.result.tools.map((t) => t.name).sort()
   eq(a, b, '도구 목록')
-  eq(a.length, 13, '모드 B 는 13건')
-  return '13건 동일'
+  eq(a.length, 14, '모드 B 는 14건')
+  return '14건 동일'
+})
+
+await check(113, 'docs 도구 — 관리 문서 목록 · 등록부 여부 / match 의 문서 이름 대조 / brief({ repo }) 가 이 연결의 기본 레포와 다르면 경고', async () => {
+  const d = payload((await H.rpc('/mcp/alpha', 'tools/call', { name: 'docs', arguments: { repo: 'alpha' } }, TK)).j)
+  must(d.total > 0 && d.docs.every((x) => typeof x.registered === 'boolean'), JSON.stringify(d).slice(0, 200))
+  const m = payload((await H.rpc('/mcp/alpha', 'tools/call', { name: 'match', arguments: { repo: 'alpha', names: ['회의록'] } }, TK)).j)
+  must(m[0].docs?.some((x) => x.path === 'docs/회의록.md' && x.registered === false), JSON.stringify(m))
+  const one = payload((await H.rpc('/mcp/alpha', 'tools/call', { name: 'docs', arguments: { repo: 'alpha', doc: 'docs/회의록.md' } }, TK)).j)
+  must(one.text?.startsWith('# 회의록'), JSON.stringify(one).slice(0, 200))
+  // .mcp.json 이 /mcp/alpha 인데 cdp.json 은 beta — 스킬이 넘긴 repo 와 연결의 기본이 다르다
+  const b = payload((await H.rpc('/mcp/alpha', 'tools/call', { name: 'brief', arguments: { repo: 'beta' } }, TK)).j)
+  must(b.lines.some((l) => /기본 레포는 alpha 인데 beta/.test(l)), b.lines.join(' / '))
+  const same = payload((await H.rpc('/mcp/alpha', 'tools/call', { name: 'brief', arguments: { repo: 'alpha' } }, TK)).j)
+  must(!same.lines.some((l) => /기본 레포는/.test(l)), '같으면 조용해야 한다')
+  return `문서 ${d.total} · 등록부 대상 ${d.registered} · match 회의록 → docs/회의록.md · brief 경고`
 })
 
 await check(8, '기본 레포가 없으면 repo 생략 → E_REPO', async () => {
@@ -1086,17 +1101,17 @@ await check(72, 'ctx repo new 로 세운 레포가 다음 요청부터 MCP · �
   must(/^[0-9a-f]{7,}$/.test(j.commit || ''), '첫 커밋이 없다 — 훅이 막았나 · ' + o.stdout.slice(0, 160))
   // 서버는 새 폴더를 그 이름으로 가는 첫 요청에서 알아본다(관리자 설명서 3.4)
   const tl0 = (await H.rpc('/mcp/delta', 'tools/list', {}, TK3)).j?.result?.tools?.length
-  eq(tl0, 13, '첫 요청에서 알아본다')
+  eq(tl0, 14, '첫 요청에서 알아본다')
   const list = await (await H.call('/repos', { headers: { authorization: 'Bearer ' + TK3 } })).json()
   must(list.some((x) => x.name === 'delta'), '목록에 없다')
   const tl = (await H.rpc('/mcp/delta', 'tools/list', {}, TK3)).j.result.tools.length
-  eq(tl, 13, '새 레포의 도구 수')
+  eq(tl, 14, '새 레포의 도구 수')
   const b = payload((await H.rpc('/mcp/delta', 'tools/call', { name: 'brief', arguments: {} }, TK3)).j)
   eq(b.works, 0, '작업 기록 0건')
   must(b.managedDocs >= 40, `관리 문서 ${b.managedDocs}`)
   const hp = (await run('git', ['-C', path.join(F.repos, 'delta'), 'config', '--get', 'core.hooksPath'])).stdout.trim()
   eq(hp, '.githooks', '훅 경로')
-  return `commit ${j.commit} · 도구 13 · 관리 문서 ${b.managedDocs}`
+  return `commit ${j.commit} · 도구 14 · 관리 문서 ${b.managedDocs}`
 })
 
 await check(73, '세운 레포에 save 가 한 번 성공한다 (등록부 · 어휘 · 훅이 살아 있다)', async () => {
@@ -1203,7 +1218,7 @@ await check(14, '모드 A `.mcp.json` — Windows 는 cmd /c ctx.cmd mcp', async
   return 'win: cmd /c … ctx.cmd mcp · posix: bin/ctx mcp'
 })
 
-await check(15, 'ctx setup 이 .mcp.json 을 쓰고 그것으로 도구 12건이 열린다', async () => {
+await check(15, 'ctx setup 이 .mcp.json 을 쓰고 그것으로 도구 13건이 열린다', async () => {
   // **모드 A 가 MCP 로 붙는 유일한 길이다.** 이것이 없으면 에이전트가 bash 로
   // `ctx` 를 직접 부른다 — 서버가 있어도 아무도 안 붙으면 없는 것과 같다.
   const K = path.join(TMP, 'repos', 'alpha')
@@ -1225,7 +1240,7 @@ await check(15, 'ctx setup 이 .mcp.json 을 쓰고 그것으로 도구 12건이
   try {
     await c.rpc('initialize', INIT())
     const tools = (await c.rpc('tools/list')).result.tools
-    must(tools.length === 12, `도구 ${tools.length}건`)
+    must(tools.length === 13, `도구 ${tools.length}건`)
     must(!tools.some((t) => t.name === 'save'), '모드 A 에 save 가 있다')
     return `.mcp.json stdio · 도구 ${tools.length}건 · save 없음`
   } finally {
@@ -1921,6 +1936,30 @@ try {
     must(Buffer.from(await f.arrayBuffer()).equals(png), '바이트')
     return `ref ${u.ref.slice(7, 15)} · viewer 403 · svg 415 · 413 · 커밋 ${o.commit} · file 200`
   })
+  await check(114, 'save edits — 등록부 밖 문서(프로그램목록) 머리말을 writer 가 고친다 · 작업 기록과 한 커밋 · 트리 깨끗 · 낡은 old 는 E_CONFLICT · 좌표 섹션 · 문서 전체(—) 문서는 E_INPUT', async () => {
+    const DOC = 'docs/프로그램목록.md'
+    const doc = await mtool('docs', { doc: DOC }, TMW)
+    eq(doc.registered, false, '프로그램목록은 비대상')
+    const line = doc.text.split(NL).find((l, i) => i > 0 && l.trim() && !/^[#|<>]/.test(l))
+    must(line, '머리말 줄이 없다')
+    const n0 = Number(await gitq('rev-list', '--count', 'HEAD'))
+    const o = await mtool('save', { work: { id: '2026-0930-회의록-머리말', title: '회의록 머리말', date: '2026-09-30 19:00', touches: [], touchesEmpty: '회의록 머리말 정리 — 바꾼 좌표 없음', body: '머리말을 고쳤다.' }, edits: [{ file: DOC, old: line, new: line + ' (편집 시험)' }] }, TMW)
+    must(o.commit, JSON.stringify(o.error))
+    eq(o.edits, [{ file: DOC, line: doc.text.split(NL).indexOf(line) + 1 }], 'edits')
+    eq(Number(await gitq('rev-list', '--count', 'HEAD')), n0 + 1, '커밋 하나')
+    eq(await gitq('status', '--porcelain'), '', '트리')
+    must((await fs.readFile(path.join(MU, DOC), 'utf8')).includes(line + ' (편집 시험)'), '안 바뀌었다')
+    const stale = await mtool('save', { work: { id: '2026-0930-회의록-머리말2', title: 'x', date: '2026-09-30 19:10', touches: [], touchesEmpty: 'x', body: 'x' }, edits: [{ file: DOC, old: line + NL, new: 'y' + NL }] }, TMW)
+    eq(stale.error?.code, 'E_CONFLICT', JSON.stringify(stale))
+    const s = await mtool('section', { coord: 'table:rp_plnd_mst' }, TMW)
+    const guard = await mtool('save', { work: { id: '2026-0930-섹션-우회', title: 'x', date: '2026-09-30 19:20', touches: [], touchesEmpty: 'x', body: 'x' }, edits: [{ file: s.doc, old: s.heading, new: s.heading + ' 우회' }] }, TMW)
+    eq(guard.error?.code, 'E_INPUT', JSON.stringify(guard))
+    // note:* → docs/회의록.md 는 문서 전체(—)가 좌표의 상태다 — 어느 줄도 edits 로 못 쓴다
+    const whole = await mtool('save', { work: { id: '2026-0930-전체-우회', title: 'x', date: '2026-09-30 19:30', touches: [], touchesEmpty: 'x', body: 'x' }, edits: [{ file: 'docs/회의록.md', old: (await mtool('docs', { doc: 'docs/회의록.md' }, TMW)).text.split(NL).find((l) => l.trim()), new: '# 회의' }] }, TMW)
+    eq(whole.error?.code, 'E_INPUT', JSON.stringify(whole))
+    eq(await gitq('status', '--porcelain'), '', '거절 뒤 트리')
+    return `커밋 ${o.commit} · 낡은 old E_CONFLICT · 좌표 섹션 · 문서 전체 E_INPUT`
+  })
 } finally {
   SM.kill()
   await fs.writeFile(path.join(TMP, 'mirror', 'server.stderr.log'), SM.err()).catch(() => {})
@@ -2025,6 +2064,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

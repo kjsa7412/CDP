@@ -149,7 +149,10 @@ export function toolMatch(r, { names } = {}) {
   const list = checkWords(names, 'names', 20)
   return list.map((q) => {
     const hit = reconcile(r.vocab, q)
-    if (!hit) return { name: q, coord: null, kind: '미등재', vocabLine: null }
+    if (!hit) {
+      const docs = docHits(r, q)
+      return { name: q, coord: null, kind: '미등재', vocabLine: null, ...(docs.length ? { docs } : {}) }
+    }
     const e = r.vocab.coords.get(hit.coord)
     const row = {
       name: q,
@@ -388,6 +391,8 @@ export function toolApply(r, { coord } = {}) {
 export function toolCheck(r) {
   const res = runBuiltinCheck({
     docs: r.docs,
+    vocabText: r.vocabText,
+    managedText: r.managedText,
     vocab: r.vocab,
     validity: r.validity,
     indexInfo: r.indexInfo,
@@ -453,4 +458,106 @@ export function guardSize(obj, what) {
     })
   }
   return obj
+}
+
+// ── docs (등록부 사본 검토 X20~X22) ────────────────────────────────────────
+//
+// 관리 문서 목록 · 등록부 행 · 한 문서의 원문. 전에는 이것을 볼 도구가 없어 에이전트가 문서화되지 않은 뷰어
+// HTTP API(`/api/<repo>/docs` · `/file`)를 토큰으로 직접 불렀다(서버형 편입 세션 한 번에 문서 찾는 데만 10회 이상).
+// 비대상 문서(회의록 같은 날짜축)는 `section` 으로 읽을 길도 없다 — `save` 의 `edits` 는 `old` 를 원문에서 떼야 한다.
+
+// 파일 이름 앞의 관리번호 — `BM_411_회의록.md` → `BM_411`. 사람이 부르는 이름이 그것이다
+export function docNo(p) {
+  const m = String(p).split('/').pop().match(/^([A-Za-z]{1,6}[_-]\d{1,5})(?=[_ -])/)
+  return m ? m[1] : null
+}
+
+function docTitle(r, p) {
+  const t = r.bodies.get(p) || ''
+  const h = t.split(NL).find((l) => /^#\s/.test(l))
+  return h ? h.replace(/^#\s+/, '').trim() : p.split('/').pop().replace(/\.md$/i, '')
+}
+
+const anchorText = (rule) => (rule.whole ? '—' : '#'.repeat(rule.level) + ' {값}')
+
+function rulesOf(r, p) {
+  return (r.registry?.rules || []).filter((x) => x.doc.toLowerCase() === p.toLowerCase())
+}
+
+export function toolDocs(r, { doc } = {}) {
+  if (doc == null || doc === '') {
+    const docs = r.managedDocs
+      .map((d) => {
+        const rules = rulesOf(r, d.path)
+        const levels = new Set(rules.filter((x) => !x.whole).map((x) => x.level))
+        return {
+          path: d.path,
+          no: docNo(d.path),
+          title: docTitle(r, d.path),
+          registered: rules.length > 0,
+          rules: rules.map((x) => ({ pattern: x.pattern, anchor: anchorText(x) })),
+          sections: (d.managedSections || []).filter((s) => (levels.size ? levels.has(s.level) : s.level === 2)).length,
+        }
+      })
+      .sort((a, b) => a.path.localeCompare(b.path))
+    return {
+      docs,
+      total: docs.length,
+      registered: docs.filter((d) => d.registered).length,
+      registry: (r.registry?.rules || []).map((x) => ({ pattern: x.pattern, doc: x.doc, anchor: anchorText(x), line: x.line, missing: !r.byPath.has(x.doc) })),
+      files: ['_vocab.md', '_managed.md'],
+    }
+  }
+  const want = String(doc)
+  if (want === '_vocab.md' || want === '_managed.md') {
+    const text = want === '_vocab.md' ? r.vocabText : r.managedText
+    if (text == null) throw new CtxError('E_NOT_FOUND', `${want} 가 없다`, { doc: want })
+    return { path: want, text }
+  }
+  const d =
+    r.managedDocs.find((x) => x.path === want) ||
+    r.managedDocs.find((x) => x.path.toLowerCase() === want.toLowerCase()) ||
+    r.managedDocs.find((x) => docNo(x.path)?.toLowerCase() === want.toLowerCase())
+  if (!d) throw new CtxError('E_NOT_FOUND', '그 관리 문서가 없다 — docs() 로 목록을 본다', { doc: want.slice(0, 120) })
+  const rules = rulesOf(r, d.path)
+  const types = [...new Set(rules.map((x) => x.pattern.slice(0, x.pattern.indexOf(':'))))]
+  return {
+    path: d.path,
+    no: docNo(d.path),
+    title: docTitle(r, d.path),
+    registered: rules.length > 0,
+    rules: rules.map((x) => ({ pattern: x.pattern, anchor: anchorText(x) })),
+    headings: (d.managedSections || []).map((s) => {
+      const coord = types.map((t) => t + ':' + s.value).find((c) => {
+        const h = resolveCoord(r.registry, c)
+        return h && h.doc.toLowerCase() === d.path.toLowerCase() && h.level === s.level && r.vocab.coords.has(c)
+      })
+      return { level: s.level, value: s.value, title: s.title, line: s.line + 1, applied: s.applied ?? null, coord: coord ?? null }
+    }),
+    text: r.bodies.get(d.path) || '',
+  }
+}
+
+// 좌표가 안 잡힌 말 → 문서 이름 · 관리번호 · 제목(X22). 좌표가 아니라는 사실은 그대로 두고 문서가 있다는 것만 더한다
+export function docHits(r, name) {
+  const q = normKey(name)
+  if (q.length < 2) return []
+  const out = []
+  for (const d of r.managedDocs) {
+    const no = docNo(d.path)
+    const stem = d.path.split('/').pop().replace(/\.md$/i, '')
+    const bare = no ? stem.slice(no.length).replace(/^[_ -]+/, '') : stem
+    const title = docTitle(r, d.path)
+    const keys = [no, stem, bare, title].filter(Boolean).map(normKey)
+    if (keys.some((k) => k === q) || normKey(bare).includes(q)) {
+      out.push({ path: d.path, no, title, registered: rulesOf(r, d.path).length > 0 })
+    }
+  }
+  return out.slice(0, 5)
+}
+
+function normKey(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[\s_\-·]/g, '')
 }

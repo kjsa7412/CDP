@@ -14,7 +14,7 @@ export const MAX_OPS = 10
 export const OPS = ['add', 'rename', 'merge', 'retire']
 // op 마다 받는 키 — 이 밖의 키는 거절한다(오타가 조용히 버려지지 않게)
 const KEYS = {
-  add: { need: ['pattern', 'doc'], may: ['level', 'title'] },
+  add: { need: ['pattern', 'doc'], may: ['level', 'title', 'reviewed'] },
   rename: { need: ['doc', 'to'], may: [] },
   merge: { need: ['doc', 'into'], may: [] },
   retire: { need: ['pattern'], may: [] },
@@ -47,6 +47,10 @@ export function checkManagedShape(list) {
     }
     if (m.title != null && (typeof m.title !== 'string' || !m.title.trim() || m.title.length > 200 || /[\r\n]/.test(m.title))) {
       throw new CtxError('E_INPUT', `${at}.title 은 한 줄 1~200자다`, { field: at + '.title' })
+    }
+    // 등록부 사본 검토 X8 — 어긋난다고 걸린 산문 중 **맞는 줄**이라고 확인한 것(`파일:행`). 확인했다는 선언이 커밋에 남는다
+    if (m.reviewed != null && (!Array.isArray(m.reviewed) || m.reviewed.length > 50 || m.reviewed.some((x) => typeof x !== 'string' || !/^[^:\s][^\n]{0,240}:\d{1,6}$/.test(x)))) {
+      throw new CtxError('E_INPUT', `${at}.reviewed 는 "파일:행" 문자열 50개까지다 (예: "_vocab.md:53")`, { field: at + '.reviewed' })
     }
     return { ...m, op }
   })

@@ -102,6 +102,12 @@ export default function CheckView({ onOpen }) {
                   )}
                   <span className="count num">{f.items.length}건</span>
                 </div>
+                {/* 누가 무엇으로 치우는가 — 경고를 받은 사람이 다음 할 일을 안다(등록부 사본 검토 X30) */}
+                {f.fix && (
+                  <div className="finding__suggest" style={{ padding: '2px 0 6px 20px' }}>
+                    <Icon name="arrowRight" size={12} /> {f.fix}
+                  </div>
+                )}
 
                 {f.items.map((it, i) => (
                   <div className="finding__item" key={i}>

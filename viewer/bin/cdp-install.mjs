@@ -38,7 +38,7 @@ import path from 'node:path'
 import os from 'node:os'
 import readline from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { planSetup, applySetup, mergeMcpJson, mcpEntryServer } from '../../core/setup.js'
+import { planSetup, applySetup, mergeMcpJson, mcpEntryServer, repoDriftNote } from '../../core/setup.js'
 import { saveToken, storeLabel } from '../../core/tokenstore.js'
 import { execFile } from 'node:child_process'
 import { regFile, loadReg, saveReg, record, forServer, samePath } from '../../core/localreg.js'
@@ -257,6 +257,8 @@ async function planFor({ server, repo, kit, kitDir, work }) {
   } catch (e) {
     return { error: e.message }
   }
+  const drift = repoDriftNote(had, repo)
+  if (drift) plan.warnings.push(drift)
   plan.actions.push({ kind: 'mcp', to: mcpPath, op: had == null ? 'create' : had === next ? 'same' : 'update', content: next })
   return { plan, changes: plan.actions.filter((a) => a.op !== 'same') }
 }

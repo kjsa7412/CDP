@@ -856,6 +856,8 @@ export class Store {
       managedIndex: this.managedIndex,
       sections: this.sections,
       bodies: this.bodies,
+      vocabText: this.vocabText ?? null,
+      managedText: this.managedText ?? null,
     })
   }
 

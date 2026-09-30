@@ -46,12 +46,14 @@ const CARD = {
   check: '커밋 가능한가. 커밋 때 같은 검사가 돈다 — 이 도구로 미리 본다',
   sync:
     '원격과의 차이와 훅 설정 여부. 받지 않는다. 받을 것이 있으면 주입한 섹션이 최신이 아닐 수 있다고 알린다. 모드 B 의 `kit.hash` 는 서버가 가진 스킬의 해시다 — 이 작업 레포 `CLAUDE.md` 의 `cdp:kit` 값과 다르면 여기 깔린 스킬이 낡았다는 뜻이므로 답에 적는다 — 고치는 것은 담당자 PC 의 「일괄 갱신」 한 줄(관리 › 작업 레포 · 설치기 `--update`)이고, 팀원은 그 커밋을 pull 한다',
-  brief: '두 줄 요약 — 절차와 살아 있는 레포 상태',
+  brief: '두 줄 요약 — 절차와 살아 있는 레포 상태. 서버형이면 작업 레포 `.claude/cdp.json` 의 `repo` 를 넘긴다 — 이 연결(.mcp.json)의 기본 레포와 다르면 경고 줄이 붙는다',
+  docs:
+    '관리 문서 목록과 등록부. 인자 없이 부르면 문서마다 경로 · 관리번호(`BM_411`) · 제목 · 등록부 대상인지(`registered`) · 걸린 패턴을 준다 — "어느 문서가 있나 · 이 문서가 등록부에 있나" 는 이것. `doc` 에 경로나 관리번호를 주면 그 문서 원문(`text`)과 헤딩 목록(좌표 섹션이면 `coord`)을 준다. 등록부 비대상 문서(회의록 같은 날짜축)와 머리말은 `section` 으로 못 읽는다 — 이것으로 읽고, 고칠 때는 `save` 의 `edits` 에 여기 `text` 의 글을 그대로 `old` 로 싣는다. `_vocab.md` · `_managed.md` 도 `doc` 으로 받는다',
   repos:
     '이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다',
   version: '이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다',
   save:
-    '작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘. 검사를 통과해야 커밋된다. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것 · 이슈로 보낸 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다. `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 등록부에 안 걸리는 새 타입이면 `managed: [{ pattern: "term:*", doc: "docs/용어집.md" }]` 로 행 · 관리 문서를 같이 만든다(섹션은 `sections` 에 같이 · 만들기 · 붙이기 · 정리는 【좌표 판정】 에 **【등록부 변경】** 으로 보이고 같은 승인을 받는다 · rename · merge · retire 는 admin 만). 밖에서 온 문서를 들이면 `source` 에 원문 출처를 적는다. 그림 · pdf 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(`work/assets/<id>/<name>` 에 같은 커밋으로 들어간다 · 관리 문서에서는 `![설명](../work/assets/<id>/<name>)`). `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
+    '작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘. 검사를 통과해야 커밋된다. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것 · 이슈로 보낸 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다. `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 등록부에 안 걸리는 새 타입이면 `managed: [{ pattern: "term:*", doc: "docs/용어집.md" }]` 로 행 · 관리 문서를 같이 만든다(섹션은 `sections` 에 같이 · 만들기 · 붙이기 · 정리는 【좌표 판정】 에 **【등록부 변경】** 으로 보이고 같은 승인을 받는다 · rename · merge · retire 는 admin 만). 밖에서 온 문서를 들이면 `source` 에 원문 출처를 적는다. **좌표 섹션 밖**(문서 머리말 · 등록부 비대상 문서 · `_vocab.md` · `_managed.md` 의 산문)은 `edits: [{ file, old, new }]` — `docs({ doc })` 의 `text` 에서 떼어 온 `old` 가 정확히 한 번 나오는 자리를 바꾼다(좌표 섹션 · applied · 어휘 줄 · 등록부 행은 못 건드린다 · `old` 가 없으면 E_CONFLICT 로 다시 읽는다). 등록부 행을 더할 때 그 행과 어긋나는 문구(「비대상」 · 「`회의록:` 타입이 없다」)가 남으면 E_INPUT 에 `파일:행` 이 온다 — 같은 save 의 `edits` 로 고치거나 맞는 줄이면 `managed[].reviewed` 에 적는다. 서식 예시는 `examples: "purge"` 한 번으로 어휘 줄과 짝 섹션을 같이 지운다(writer · 작업 기록은 `touchesEmpty: "서식 예시 정리"`). 그림 · pdf 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(`work/assets/<id>/<name>` 에 같은 커밋으로 들어간다 · 관리 문서에서는 `![설명](../work/assets/<id>/<name>)`). `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
 }
 
 // ── 레포 캐시 (§2.6) ────────────────────────────────────────────────────────
@@ -162,7 +164,7 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
       async ({ repo: want, ...args }) => {
         try {
           const n = pick(want)
-          const out = withRepo(n, await run(await caches.get(n)(), args))
+          const out = withRepo(n, await run(await caches.get(n)(), args, { name: n, want }))
           return ok(big ? guardSize(out, name) : out)
         } catch (e) {
           return bad(e)
@@ -177,10 +179,16 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
   tool('derive', {}, (r) => T.toolDerive(r))
   tool('apply', { coord: z.string().max(240) }, (r, a) => T.toolApply(r, a))
   tool('check', {}, (r) => T.toolCheck(r))
-  tool('brief', {}, async (r) => {
+  tool('docs', { doc: z.string().max(240).optional() }, (r, a) => T.toolDocs(r, a), { big: true })
+  tool('brief', {}, async (r, _a, { name, want }) => {
     // 번들 나이는 `toolBrief` 가 낸다 — CLI 와 같은 줄이다(§3.0 · 하네스 20번)
     const b = T.toolBrief(r, { built })
     const lines = [...b.lines]
+    // 기본 레포가 다르다(등록부 사본 검토 X28) — 서버는 작업 레포의 cdp.json 을 못 본다. 스킬이 그 repo 를 넘기고
+    // 여기서 이 연결의 기본(`/mcp/<이름>`)과 대 본다. 다르면 repo 를 빠뜨린 읽기가 다른 레포로 간다
+    if (want && fallback && want !== fallback) {
+      lines.push(`[CDP] 이 연결(.mcp.json)의 기본 레포는 ${fallback} 인데 ${name} 를 물었다 — .mcp.json 과 .claude/cdp.json 의 레포가 다르다. repo 를 빠뜨린 읽기는 ${fallback} 로 간다 · 설치 한 줄을 다시 돌려 맞춘다`)
+    }
     // 서버형 — 미러 · 트리 이상이 있을 때만 한 줄(동시 기록 검토 v0.1 D3). 정상은 조용하다
     if (mode === 'server') {
       const m = await mirrorSummary(r.root).catch(() => null)
@@ -311,11 +319,20 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
                   title: z.string().max(200).optional(),
                   to: z.string().max(240).optional(),
                   into: z.string().max(240).optional(),
+                  // 어긋난다고 걸린 문구 중 맞는 줄이라고 확인한 것 — "파일:행"
+                  reviewed: z.array(z.string().max(260)).max(50).optional(),
                 })
                 .strict()
             )
             .max(10)
             .optional(),
+          // 섹션 밖 쓰기 — 머리말 · 비대상 문서 · _vocab.md · _managed.md 산문. old 가 정확히 한 번 나오는 자리를 new 로
+          edits: z
+            .array(z.object({ file: z.string().max(240), old: z.string().max(20000), new: z.string().max(50000) }).strict())
+            .max(20)
+            .optional(),
+          // 서식 예시 정리 — example: 어휘 줄과 짝 섹션 · (예시) 섹션을 한 번에
+          examples: z.literal('purge').optional(),
           // 첨부 — 올리기 API(`POST /api/<repo>/assets`)가 준 ref 와 파일 이름. 바이트는 여기 싣지 않는다(검토 ㉠)
           assets: z
             .array(z.object({ ref: z.string().max(80), name: z.string().max(120) }).strict())

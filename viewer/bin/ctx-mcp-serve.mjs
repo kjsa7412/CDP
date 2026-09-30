@@ -560,7 +560,7 @@ export async function runServe(opt = {}) {
   // 판정은 `core/reponew.js` 하나 — CLI `ctx repo new` 와 같은 함수다.
   // 서버의 SSH 배포 키가 있으면 그 한 줄 — ssh 원격을 쓰는 연결 · clone · 세우기가 레포 로컬 설정으로 건다(git 자격 TODO G2)
   const sshCmd = async () => (dataDir && (await gitauth.keyInfo(dataDir).catch(() => null))?.exists ? gitauth.sshCommand(dataDir) : null)
-  const buildRepo = async ({ name, pkgName = '', origin = null, clone = null, actor }) => {
+  const buildRepo = async ({ name, pkgName = '', origin = null, clone = null, actor, examples = true }) => {
     if (!REPO_NAME_RE.test(name)) return { status: 400, body: { error: { code: 'E_INPUT', message: '레포 이름 형식이 아니다 (영문·숫자·._-)' } } }
     if ((await store.list()).some((r) => r.name === name) || (await fs.stat(path.join(root, name)).catch(() => null))) {
       return { status: 409, body: { error: { code: 'E_EXISTS', message: '그 이름의 레포가 이미 있다', detail: { name } } } }
@@ -590,10 +590,10 @@ export async function runServe(opt = {}) {
       }
     }
     try {
-      const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor, sshCommand: await sshCmd() })
+      const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor, sshCommand: await sshCmd(), examples })
       await store.refresh()
-      await auth.audit(dataDir, `admin repo new · ${actor} · ${name} · package=${pkgName}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
-      return { status: 200, body: { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null } }
+      await auth.audit(dataDir, `admin repo new · ${actor} · ${name} · package=${pkgName}${examples ? '' : ' · 예시 뺌'}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
+      return { status: 200, body: { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null, examples: r.examples || null } }
     } catch (e) {
       const code = e?.code || 'E_REPO'
       return { status: code === 'E_EXISTS' ? 409 : 400, body: { error: { code, message: e.message, detail: e.detail } } }
@@ -1194,7 +1194,7 @@ export async function runServe(opt = {}) {
             const body = await readJson()
             if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
             const name = String(body.name || '').trim()
-            const out = await buildRepo({ name, pkgName: String(body.package || '').trim(), origin: body.origin ? String(body.origin).trim() : null, clone: body.clone ? String(body.clone).trim() : null, actor: a.user })
+            const out = await buildRepo({ name, pkgName: String(body.package || '').trim(), origin: body.origin ? String(body.origin).trim() : null, clone: body.clone ? String(body.clone).trim() : null, actor: a.user, examples: body.examples !== false })
             if (out.status === 200 && Array.isArray(body.grant) && body.grant.length) {
               // 세우면서 접근을 준다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다(검토 v0.1 §3.2).
               const granted = []

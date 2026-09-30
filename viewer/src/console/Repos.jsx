@@ -328,7 +328,7 @@ export default function Repos({ say }) {
 function NewRepo({ data, busy, onClose, onOk }) {
   const pkgs = data.packages || []
   const [tab, setTab] = useState('package')
-  const [f, setF] = useState({ name: '', pkg: pkgs.length === 1 ? pkgs[0].name : '', origin: '', clone: '', grant: [] })
+  const [f, setF] = useState({ name: '', pkg: pkgs.length === 1 ? pkgs[0].name : '', origin: '', clone: '', grant: [], examples: true })
   const okName = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(f.name.trim())
   const ok = okName && (tab === 'package' ? !!f.pkg : !!f.clone.trim())
   const grantable = (data.users || []).filter((u) => !u.all)
@@ -351,7 +351,7 @@ function NewRepo({ data, busy, onClose, onOk }) {
             onClick={() =>
               onOk(
                 tab === 'package'
-                  ? { name: f.name.trim(), package: f.pkg, origin: f.origin.trim() || undefined, grant: f.grant }
+                  ? { name: f.name.trim(), package: f.pkg, origin: f.origin.trim() || undefined, grant: f.grant, ...(f.examples ? {} : { examples: false }) }
                   : { name: f.name.trim(), clone: f.clone.trim(), grant: f.grant }
               )
             }
@@ -392,6 +392,13 @@ function NewRepo({ data, busy, onClose, onOk }) {
                   <b>{pkg.name}</b> — {pkg.description}
                 </span>
               )}
+            </Field>
+            <Field label="서식 예시" hint="패키지는 문서마다 예시 섹션과 그 좌표(example:)를 달고 온다 — 세운 직후 파생을 한 바퀴 돌려 보라는 것이다. 빼고 세워도 나중에 save 의 examples: &quot;purge&quot; 로 지울 수 있다.">
+              <div className="checks">
+                <label>
+                  <input type="checkbox" checked={!f.examples} onChange={(e) => setF({ ...f, examples: !e.target.checked })} /> 빼고 세운다 — 예시 좌표 · 짝 섹션 · (예시) 섹션. 표에 남은 예시 행은 그대로 둔다
+                </label>
+              </div>
             </Field>
             <Field label="origin (선택)" hint="있으면 첫 커밋을 바로 보낸다. 서버는 GitLab 프로젝트를 만들 수 없다 — 웹에서 빈 프로젝트를 먼저 만든다.">
               <input className="mono" value={f.origin} onChange={(e) => setF({ ...f, origin: e.target.value })} spellCheck={false} placeholder="http://<gitlab>/<그룹>/<프로젝트>.git" />

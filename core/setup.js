@@ -320,6 +320,24 @@ export function mergeDesktopConfig(existing, key, entry) {
   return JSON.stringify(j, null, 2) + '\n'
 }
 
+// 지금 `.mcp.json` 의 `cdp` 가 가리키는 레포(`…/mcp/<이름>`) — 등록부 사본 검토 X27.
+// 설치는 두 파일을 같은 repo 로 쓰지만, 그 뒤 손으로 바뀌면 repo 를 빠뜨린 읽기가 다른 레포로 간다
+// (작업 레포의 `.mcp.json` 은 다른 레포의 `/mcp/<이름>` 인데 `cdp.json` 은 이 레포였다). 다시 설치하면 고쳐진다 — 고쳐진다는 사실을 한 줄로 알린다.
+export function mcpRepoOf(text) {
+  try {
+    const url = JSON.parse(text)?.mcpServers?.cdp?.url
+    const m = String(url || '').match(/\/mcp\/([^/?#]+)\/?(?:[?#].*)?$/)
+    return m ? decodeURIComponent(m[1]) : null
+  } catch {
+    return null
+  }
+}
+
+export function repoDriftNote(had, repo) {
+  const cur = had ? mcpRepoOf(had) : null
+  return cur && cur !== repo ? `.mcp.json 의 cdp 가 /mcp/${cur} 를 가리키고 있었다 — /mcp/${repo} 로 바로잡는다(.claude/cdp.json 의 repo 와 같게). 그동안 repo 를 빠뜨린 읽기는 ${cur} 로 갔다` : null
+}
+
 export function mcpEntryServer(server, repo) {
   return {
     type: 'http',

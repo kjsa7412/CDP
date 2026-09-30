@@ -25,14 +25,16 @@
 // 남는 값이 없으므로 규칙은 "값이 있으면 오류" 하나다. 다만 미결·제안은
 // 갈 곳을 알려 줘야 하므로 메시지를 따로 낸다.
 import { normValue, lintRegistry } from './managed.js'
+import { lintGenerated, proseLint } from './regen.js'
 
 const AGENDA = new Set(['미결', '제안'])
 const REQUIRED = ['id', 'title', 'date', 'author']
 
-export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus, bodies }) {
+export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus, bodies, vocabText = null, managedText = null }) {
   const findings = []
-  const push = (sev, kind, label, items) => {
-    if (items.length) findings.push({ sev, kind, label, items })
+  // `fix` — 누가 무엇으로 치우는가(등록부 사본 검토 X30). 경고를 받은 사람이 다음 할 일을 안다
+  const push = (sev, kind, label, items, fix) => {
+    if (items.length) findings.push({ sev, kind, label, items, ...(fix ? { fix } : {}) })
   }
 
   const units = docs.filter((d) => d.layer === 'work' && d.hasFrontmatter)
@@ -89,7 +91,8 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
     'warn',
     'example-coord',
     '서식 예시 좌표가 남아 있다 — 시작할 때 _vocab.md 와 문서에서 같이 지운다',
-    examples.map((e) => ({ coord: e.coord, detail: `_vocab.md:${e.line}${e.label ? ' · ' + e.label : ''}` }))
+    examples.map((e) => ({ coord: e.coord, detail: `_vocab.md:${e.line}${e.label ? ' · ' + e.label : ''}` })),
+    '쓰기 권한자가 save 의 examples: "purge" 한 번으로 어휘 줄과 짝 섹션을 같이 지운다(작업 기록 하나) · 모드 A 는 ctx examples --purge 뒤 커밋'
   )
 
   // supersedes 대상 없음
@@ -166,6 +169,7 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
           missing: indexInfo.missing || [],
         },
       ],
+      fix: 'ctx index (커밋 훅 · 서버형 save 는 저절로 한다)',
     })
   }
 
@@ -286,6 +290,30 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       '한 관리 문서에 앵커 레벨이 둘 — 섹션이 겹친다',
       lint.levelMix.map((x) => ({ path: x.doc, detail: `${x.doc} ${x.levels.map((l) => (l ? '#'.repeat(l) : '—')).join(' · ')}` }))
     )
+
+    // **등록부의 사본이 원본과 다르다**(등록부 사본 검토 X6). 머리 표의 `등록부` 칸 · `_vocab.md` 생성 블록은 등록부에서
+    // 찍는 것이라 어긋나면 정본이 스스로와 모순한다 — 확신 있게 틀린 답을 내는 자리라 error. 서버형은 save 가 검사
+    // **전에** 다시 찍으므로 여기 걸리지 않는다. 모드 A 는 손으로 등록부를 고친 뒤 `ctx index` 를 안 돌린 것이다.
+    const docTexts = new Map()
+    if (bodies) for (const d of managedIndex.docs || []) if (bodies.has(d.path)) docTexts.set(d.path, bodies.get(d.path))
+    push(
+      'error',
+      'registry-head',
+      '등록부 사본(머리 표 · 생성 블록)이 등록부와 다르다',
+      lintGenerated({ registry: managedIndex.registry, vocab, docs: docTexts, vocabText }),
+      'ctx index 가 등록부에서 다시 찍는다 · 서버형은 다음 save 가 맞춘다'
+    )
+    // 생성하지 않는 산문 — **어림이라 경고**다(X9). 막으면 사람이 검사를 끈다
+    if (bodies) {
+      const texts = (rel) => (rel === '_vocab.md' ? vocabText : rel === '_managed.md' ? managedText : docTexts.get(rel) ?? null)
+      push(
+        'warn',
+        'registry-prose',
+        '등록부와 어긋나 보이는 문구 — 등록부 행이 있는데 「비대상 · 타입 없음」 이라고 적혀 있다',
+        proseLint({ registry: managedIndex.registry, texts }).map((h) => ({ path: h.file, detail: `${h.file}:${h.line} ${h.text}` })),
+        '쓰기 권한자가 save 의 edits 로 그 줄을 고친다(작업 기록 하나) · 모드 A 는 손으로'
+      )
+    }
   }
 
   // 등록부의 applied 가 없는 작업 기록을 가리킨다 — 이름을 잘못 적었거나

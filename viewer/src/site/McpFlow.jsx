@@ -51,12 +51,12 @@ function steps(host, ex) {
       n: '같은 주소 · 같은 토큰. 요청마다 인증을 다시 한다.',
     },
     {
-      f: 's', t: 'c', y: 224, k: 'mcp', r: 1, l: '④ 도구 13개', g: 'HTTP 응답 · cdp 서버 → Claude Code',
+      f: 's', t: 'c', y: 224, k: 'mcp', r: 1, l: '④ 도구 14개', g: 'HTTP 응답 · cdp 서버 → Claude Code',
       b: '{"jsonrpc":"2.0","id":1,"result":{"tools":[\n  {"name":"where",\n   "description":"좌표의 지금 상태가 어느 관리 문서 어느 섹션에\n     있나, 마지막으로 반영된 작업 … \\"지금 어떻게 돼 있나\\"는 이것…",\n   "inputSchema":{"type":"object","properties":{\n     "repo":{"type":"string","maxLength":64},\n     "coord":{"type":"string","maxLength":240},\n     "limit":{"type":"integer","minimum":1,"maximum":50}},\n   "required":["coord"]}},\n  { "name":"match", … }, { "name":"section", … }, … 13개 ]}}',
       n: 'description 은 ctx-mcp.mjs 의 명함(CARD) 문장이고 inputSchema 는 zod 정의를 JSON Schema 로 바꾼 것이다. 모델이 도구를 부를지 말지를 이 문장만 보고 정한다.',
     },
     {
-      f: 'c', t: 'm', y: 290, k: 'api', l: '⑤ 대화 + 도구 13개', g: 'HTTPS · Claude Code → 모델 API',
+      f: 'c', t: 'm', y: 290, k: 'api', l: '⑤ 대화 + 도구 14개', g: 'HTTPS · Claude Code → 모델 API',
       b: `POST /v1/messages\n{"system":"… CLAUDE.md … cdp instructions …",\n "tools":[\n   {"name":"mcp__cdp__where","description":"좌표의 지금 상태가 …",\n    "input_schema":{ …④ 와 같다… }},\n   {"name":"mcp__cdp__match", …}, … ],\n "messages":[{"role":"user",\n   "content":"${ex.ask}"}]}`,
       n: '여기부터는 MCP 가 아니라 모델 API 구간이다. MCP 도구는 mcp__cdp__<이름> 으로 이름이 바뀌어 Read · Edit 같은 기본 도구 옆에 나란히 실린다.',
     },
