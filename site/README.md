@@ -25,4 +25,5 @@ tools/          prerender · 누출 검사(leaks.mjs · leak-names.txt) · 판 �
 사내 흔적이 있어 쓰지 않는다. 새 이름 · 주소가 보이면 `tools/leak-names.txt` · `tools/leaks.mjs` 에 더한다.
 
 Vercel — 설정은 레포 루트 [`../vercel.json`](../vercel.json). 도메인은 환경변수 `CDP_SITE_URL`(없으면 Vercel 프로덕션 주소).
+**사이트에 닿는 파일이 바뀐 push 만 빌드한다** — `ignoreCommand` 가 [`tools/vercel-ignore.mjs`](tools/vercel-ignore.mjs) 를 부르고, 마지막 배포 커밋(`VERCEL_GIT_PREVIOUS_SHA`) 이후 `WATCH`(site/ · vercel.json · package.json · lock · .nvmrc · CHANGELOG.md · docs/그림/ · 제품의 tokens.css · site.css · Icon.jsx · McpFlow.jsx)가 안 바뀌었으면 건너뛴다. 모르면(첫 배포 · 기준 커밋 없음 · git 실패) 빌드한다. 억지로 빌드하려면 환경변수 `CDP_SITE_FORCE=1`. 사이트가 `site/` 밖의 파일을 새로 import 하면 `WATCH` 에 더한다 — 빠지면 `test/site.test.mjs` 가 잡는다.
 CSP 가 인라인 테마 스크립트를 해시로 허용한다 — `index.html` 의 그 스크립트를 고치면 `test/site.test.mjs` 가 새 해시를 알려 준다.

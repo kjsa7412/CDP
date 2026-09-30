@@ -50,6 +50,7 @@
 | ⑨ | `vercel.json` — `npm ci` · `npm run build:site` · `ops/out/site` · CSP(`default-src 'self'` · 인라인 테마 스크립트는 해시) · nosniff · no-referrer · DENY · `/assets` 1년 캐시. CI 에 `build:site` · 릴리스에 `cdp-site-v<판>.zip` | S1 의 「외부 요청 0」 을 헤더로 강제한다. 스타일은 `'unsafe-inline'` — React 의 style 속성 |
 | ⑩ | `site/tools/serve-static.mjs`(`npm run preview:site`) — Vercel 처럼 폴더 → index.html · 없으면 404.html · vercel.json 헤더 | `vite preview` 는 모든 주소에 루트 index.html 을 내서 사본 · 404 · CSP 를 못 본다 |
 | ⑩ | 실측 — 주소 7 + 없는 주소 × 1440/900/390 × 라이트/다크: 가로 스크롤 0 · 콘솔 오류 0(없는 주소의 404 만) · CSP 아래서 그려진다 | headless Chrome(playwright) — 앱의 Browser 창이 숨어 있어 0×0 이었다 |
+| ⑪ | 빌드 건너뛰기 — `vercel.json` `ignoreCommand` → `site/tools/vercel-ignore.mjs`. 기준은 `VERCEL_GIT_PREVIOUS_SHA`(그 브랜치의 마지막 성공 배포), `WATCH` 11곳만 본다. 모르면 빌드 · `CDP_SITE_FORCE=1` 로 억지 빌드 · 테스트 둘(사이트의 바깥 import 가 전부 WATCH 에 있다 · 임시 git 레포로 건너뜀/빌드 여섯 경우) | 운영자 지시(2026-09-30) — 제품 코드 · 설계서 push 마다 사이트를 다시 빌드하지 않는다. HEAD^ 가 아니라 마지막 배포와 비교해야 한 번에 여러 커밋을 push 해도 사이 변경을 놓치지 않는다 |
 
 ## 사람이 할 것
 

@@ -115,3 +115,78 @@ test('판 이력 — 맨 위가 지금 판이고 본문 없이 머리만', () =>
   assert.ok(r.length >= 20)
   for (const x of r) assert.ok(x.items.length >= 1 && x.items.every((s) => s.length < 200), `v${x.v}`)
 })
+
+// ── Vercel 빌드 건너뛰기(site/tools/vercel-ignore.mjs) ─────────────────────────────────────────
+
+test('빌드 건너뛰기 — 사이트가 site/ 밖에서 읽는 파일이 전부 WATCH 에 있다', async () => {
+  const { WATCH } = await import('../site/tools/vercel-ignore.mjs')
+  const watched = (rel) => WATCH.some((w) => (w.endsWith('/') ? rel.startsWith(w) : rel === w))
+  const seen = new Set()
+  const outside = new Set(['package.json', 'CHANGELOG.md']) // vite.config.js 가 fs 로 읽는다
+  const visit = (abs) => {
+    if (seen.has(abs) || !fs.existsSync(abs)) return
+    seen.add(abs)
+    if (!/\.(jsx?|mjs|css)$/.test(abs)) return
+    const src = fs.readFileSync(abs, 'utf8')
+    for (const m of src.matchAll(/(?:from|import)\s+'(\.{1,2}\/[^']+)'|@import\s+['"](\.{1,2}\/[^'"]+)['"]/g)) {
+      const spec = (m[1] || m[2]).replace(/\?.*$/, '')
+      const to = path.resolve(path.dirname(abs), spec)
+      const rel = path.relative(ROOT, to).split(path.sep).join('/')
+      if (!rel.startsWith('site/')) outside.add(rel)
+      visit(to)
+    }
+  }
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) walk(p)
+      else visit(p)
+    }
+  }
+  walk(path.join(ROOT, 'site/src'))
+  visit(path.join(ROOT, 'site/vite.config.js'))
+  assert.ok(outside.size >= 8, `밖에서 읽는 것이 너무 적다 — 훑기가 깨졌나: ${[...outside].join(', ')}`)
+  for (const rel of outside) assert.ok(watched(rel), `${rel} 을 사이트가 읽는데 WATCH 에 없다 — 바뀌어도 Vercel 이 빌드하지 않는다`)
+  assert.equal(JSON.parse(rd('vercel.json')).ignoreCommand, 'node site/tools/vercel-ignore.mjs')
+})
+
+test('빌드 건너뛰기 — 사이트 밖만 바뀌면 건너뛰고 · 닿으면 빌드 · 모르면 빌드', async () => {
+  const { decide } = await import('../site/tools/vercel-ignore.mjs')
+  const { execFileSync } = await import('node:child_process')
+  const os = await import('node:os')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cdp-vignore-'))
+  const g = (...a) => execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@x', ...a], { encoding: 'utf8' }).trim()
+  const put = (rel, text) => {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true })
+    fs.writeFileSync(path.join(dir, rel), text)
+  }
+  const commit = (rel, text) => {
+    put(rel, text)
+    g('add', '-A')
+    g('commit', '-qm', rel)
+    return g('rev-parse', 'HEAD')
+  }
+  try {
+    g('init', '-q')
+    const c1 = commit('core/save.js', '1')
+    commit('core/save.js', '2')
+    commit('docs/dev/메모.md', '3')
+    assert.equal(decide({ prev: c1, cwd: dir }).code, 0, '제품 코드 · 개발 메모만 — 건너뛴다')
+    const c3 = g('rev-parse', 'HEAD')
+    commit('docs/그림/1.svg', '<svg/>')
+    assert.equal(decide({ prev: c3, cwd: dir }).code, 1, '그림(한글 경로) — 빌드')
+    const c4 = g('rev-parse', 'HEAD')
+    commit('viewer/src/styles/tokens.css', 'a')
+    assert.equal(decide({ prev: c4, cwd: dir }).code, 1, '제품 토큰 — 빌드')
+    const c5 = g('rev-parse', 'HEAD')
+    commit('viewer/src/App.jsx', 'x')
+    assert.equal(decide({ prev: c5, cwd: dir }).code, 0, '사이트가 안 읽는 화면 코드 — 건너뛴다')
+    commit('site/src/pages/Home.jsx', 'x')
+    assert.equal(decide({ prev: c5, cwd: dir }).code, 1, '여러 커밋 사이 어디든 사이트 변경이 있으면 — 빌드')
+    assert.equal(decide({ prev: undefined, cwd: dir }).code, 1, '첫 배포 — 빌드')
+    assert.equal(decide({ prev: 'deadbeef'.repeat(5), cwd: dir }).code, 1, '얕은 clone 에 없는 커밋 — 빌드')
+    assert.equal(decide({ prev: c5, force: true, cwd: dir }).code, 1, 'CDP_SITE_FORCE — 빌드')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
