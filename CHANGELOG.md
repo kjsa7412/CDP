@@ -3,6 +3,24 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.19.0
+
+에이전트 세팅 갱신 — [`docs/dev/에이전트세팅_갱신_TODO.md`](docs/dev/에이전트세팅_갱신_TODO.md). 작업 레포에 가는 kit 은 **지식 레포 안의 `.claude/skills`** 에서 나온다 — 스킬을 고친 판을 올려도 레포가 옛 판이라 작업 레포가 옛 스킬을 받던 것
+
+**upgrade 가 도구 층을 간다** — `ops/deploy/upgrade.sh` · `core/toollayer.js`(새) · `viewer/bin/ctx-serve-kit.mjs`(새)
+- 멈춤 → `ctx serve kit-refresh` → 켬 — 레포마다 `.claude/skills/cdp-*` · 작업 레포 규약 · `CLAUDE.md` · `TEMPLATE-work.md` · `MANUAL*.md` · 훅 · `bin/ctx*` · `.gitattributes` 를 새 `packages/` 판으로 한 커밋(작성자 `cdp`) · `--mirror` 면 origin 에. 지식(`_vocab` · `_managed` · `docs` · `work`)은 그대로
+- 트리 더러움 · origin 앞섬이면 건너뛰고 사유 한 줄 · 새 판이 안 떠서 되돌리면 옛 판으로 한 번 더 · `--no-kit`
+- 콘솔 › 지식 레포 — `에이전트 세팅 다름 N` 칩 · 건너뛴 사유 · [에이전트 세팅 갱신](재인증 · 뮤텍스 · `auth.log`) · 현황 경고 · 진단 줄
+
+**작업 레포 일괄 갱신** — `viewer/bin/cdp-install.mjs` · `core/localreg.js`(새) · `viewer/src/components/admin/WorkReposServer.jsx`
+- 설치기가 설치할 때마다 그 PC 의 설치 목록(`%APPDATA%\cdp\workrepos.json` · `~/.config/cdp/workrepos.json`)에 적는다
+- `--update` — 그 PC 에 이 서버로 설치한 작업 레포 전부를 계획 → 한 번 묻고 → 적용 → 레포마다 대장 보고 · `--commit` 은 바꾼 파일만(고치던 파일이 있는 레포는 커밋 안 함) · `--dry`
+- 관리 › 작업 레포 — 낡음이 있으면 맨 위에 담당자별 「일괄 갱신」 카드 · cdp-load ⓪ · `sync` 명함이 이 한 줄을 가리킨다
+
+**커밋 시간 초과** — `core/git.js` · `core/save.js` — 훅이 20초를 넘기면 Windows 에서 실행기만 죽고 진짜 git 이 뒤늦게 커밋해 빈 커밋 + 옛 파일이 남던 것. 시간 초과 때 git 을 프로세스 나무째 멈추고 HEAD 로 판정한다(save · 도구 층 둘 다) · 도구 층 커밋은 180초 — `ea387c1` · `4f3d33d`
+
+**문서** — 관리자 설명서 9.1 · 9.2(로컬형도 스킬을 덮는다) · 9.3 · 설치절차 10장 · 사용자 설명서 · 설계서 6.7.4
+
 ## v0.18.0
 
 편입 때 좌표 누락 방지 — [`docs/dev/좌표누락_TODO.md`](docs/dev/좌표누락_TODO.md). 지식 문서를 결정 문서 기준으로 판정해 `touches: []` 가 경고 없이 커밋됐던 것(dpms_wiki `b5a1fc6`)
