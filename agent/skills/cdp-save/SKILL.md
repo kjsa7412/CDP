@@ -516,6 +516,7 @@ save({
       aliases: ["출장사진", "사진목록"] }
   ],
   // managed: [{ pattern: "term:*", doc: "docs/용어집.md", title: "용어집" }]   // 【등록부 변경】 을 승인받았을 때만 — 새 타입의 행 · 문서
+  // assets: [{ ref: "sha256:…", name: "사진첨부 영역.png" }]   // 그림 · pdf — 아래 「그림 · 첨부」. 바이트는 싣지 않는다
 })
 ```
 
@@ -544,6 +545,47 @@ where 도 조용했다(2026-09-23). 지금은 서버가 `E_INPUT`(헤딩 줄이 
 없으면 서버가 좌표 값을 그대로 제목으로 쓴다. `heading` 은 제목 줄 **전체**라 값으로 시작해야 한다(값이 빠지면 `E_INPUT`). `applied` 는 `null` 이다 —
 읽을 때 없었으니 보낼 것도 없다.
 
+### 그림 · 첨부 — `assets`
+
+화면 캡처 · 구성도 · 사양 pdf 를 문서에 넣을 때다. **「첨부는 못 한다」 로 멈추지 않는다** — 사람에게 레포를
+받아 push 하라고 하지도 않는다. 파일은 **작업 기록에 딸린다** — 자리는 모드 A · B 모두
+`work/assets/<작업 기록 id>/<이름>` 이다.
+
+| 본문이 있는 곳 | 링크 |
+|---|---|
+| 관리 문서(`docs/*.md`) 섹션 | `![구성도](../work/assets/<id>/구성도.png)` |
+| 작업 기록(`work/<id>.md`) | `![구성도](assets/<id>/구성도.png)` |
+
+이름에 공백이 있으면 `![구성도](<../work/assets/<id>/시스템 개요.png>)` 처럼 꺾쇠로 싼다. 받는 종류는
+png · jpg · gif · webp · pdf, 하나에 10 MB · save 한 번에 20개 · 합 30 MB. svg 는 받지 않는다(png 로 바꾼다).
+
+**모드 B — 올리고 `ref` 를 싣는다.** 바이트는 도구 인자로 보내지 않는다(모델이 파일을 옮겨 적으면 수십만
+토큰이고 한 글자만 틀려도 깨진 그림이 커밋된다). 셸에서 올린다 — 토큰은 MCP 가 쓰는 그 `CDP_TOKEN`,
+서버 주소는 작업 레포 `.mcp.json` 의 `url` 에서 `/mcp/<repo>` 를 뗀 것:
+
+```bash
+curl -sS -H "Authorization: Bearer $CDP_TOKEN" --data-binary @"docs/캡처/구성도.png" "http://cdp.example:7374/api/alpha/assets"
+# → { "ref": "sha256:9f2c…", "size": 48213, "type": "image/png", "expiresInHours": 24, … }
+```
+
+그 `ref` 를 `save` 의 `assets: [{ ref, name: "구성도.png" }]` 에 싣고, 본문(`work.body` · `sections[].body`)에
+위 표의 링크를 적는다. 올리기만으로는 레포가 바뀌지 않는다 — 서버가 24시간 들고 있다가 **`save` 가 작업
+기록 · 섹션과 한 커밋에 넣는다**(검사에서 걸리면 같이 되돌린다). 응답 `assets: [{ path, size }]` 가 들어간 자리다.
+
+| 올리기 응답 | |
+|---|---|
+| `403` | 쓰기 권한이 없다 — 관리자에게 |
+| `413` | 10 MB 넘는다 — 줄이거나 나눈다 |
+| `415` | 받는 종류가 아니다(내용으로 가린다 · 확장자가 아니라) |
+| `401` · 셸에 `CDP_TOKEN` 이 없다 | 사람에게 토큰을 청하지 말고 그대로 알린다 — 설치(작업 레포 설치 한 줄)가 넣는 값이다 |
+
+`save` 가 `warnings` 에 **「본문이 가리키는 그림 … 이 레포에 없다」** 를 내면 링크가 틀린 것이다(화면에서
+「그림을 찾을 수 없음」 으로 나온다) — 위 표와 다시 대 보고, 틀렸으면 정정 기록으로 고친다.
+**「올린 첨부 … 를 어느 본문도 가리키지 않는다」** 면 링크를 빠뜨린 것이다.
+
+**모드 A — 복사하고 커밋에 같이 넣는다.** `work/assets/<id>/` 에 파일을 두고 ⑤ 의 `git add` 에 그 경로를 더한다.
+링크 규칙은 위 표와 같다.
+
 ### `author` 를 보내지 않는다
 
 서버가 토큰에서 채운다. 보내면 거부된다 — 남의 이름으로 기록이 남으면
@@ -569,7 +611,7 @@ where 도 조용했다(2026-09-23). 지금은 서버가 `E_INPUT`(헤딩 줄이 
 ### 무엇이 돌아오나
 
 ```
-{ commit: "1bc1eec", id: "…", sections: 2, vocab: 1,
+{ commit: "1bc1eec", id: "…", sections: 2, vocab: 1, assets: [{ path: "work/assets/…/구성도.png", size: 48213 }],
   mirror: "ok", mirrorReason: null, mirrorLast: { state, reason, at, ahead, behind }, warnings: [...] }
 ```
 

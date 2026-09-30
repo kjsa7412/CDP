@@ -611,6 +611,11 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 > - 응답 `managed: <건수>` · `managedChanges: [{ op, pattern, doc, … }]`(있을 때만) · `serve.log` 에 `등록부 <op> <사람> <대상> (<id>)` 한 줄. 새 `sections[].heading` 은 제목 줄 **전체**(`값 — 설명`)다 — 값이 빠지면 E_INPUT(앵커 없음으로 E_CHECK 가 나던 것).
 > - 패키지와의 경계 — `toollayer` 는 도구 층만 간다(`_managed.md` · `docs/` 는 원래 대상이 아니다) — 서버가 더한 행 · 문서는 upgrade 가 덮지 않는다(시험).
 
+> **정정(2026-09-30 · v0.20.0 · 그림 · 첨부 검토 v0.1)** — 모드 B 에는 그림 · pdf 를 들일 길이 없었다(사람이 clone · 커밋 · push · 「origin 과 맞추기」). **`save` 입력에 `assets: [{ ref, name }]`** 를 더했다. 바이트는 도구 인자로 오지 않는다 — **`POST /api/<repo>/assets`**(몸통 = 파일 바이트 · Bearer 또는 쿠키 · writer 이상 · 10 MB · png · jpg · gif · webp · pdf 를 **내용으로** 가린다 · svg 거절)가 `<data>/staging/<sha256>` 에 24시간 들고 `{ ref, size, type }` 을 준다. 올리기만으로 레포는 바뀌지 않는다.
+> - **3.8 첨부 꺼내기**(파일을 만지기 전) — ref → 바이트 · 해시 대조 · 확장자 ↔ 종류 · 20개 · 합 30 MB. **6.5** — `work/assets/<work.id>/<name>` 에 새 파일로(`Snap.writeBin` · 있으면 `E_EXISTS`) · 되돌리면 지우고 빈 폴더까지. **7** — 작업 기록 프론트매터 `attachments: [assets/<id>/<name>, …]`.
+> - **6.7 경고 둘** — 이 save 가 쓴 본문(작업 기록 · 섹션)의 그림 중 레포에 없는 것 · 어느 본문도 가리키지 않는 첨부. 경로 규칙은 화면과 같은 `core/repopath.js`(문서 폴더 기준 · `/…` 와 `docs/` · `work/` 는 루트).
+> - 응답 `assets: [{ path, size }]`(있을 때만). 모드 A 는 도구가 없다 — 스킬이 `work/assets/<id>/` 에 복사해 커밋에 넣는다.
+
 > **정정(v0.12.0 · 동시 기록 검토 v0.1 D3 · D5 · D6 · D7)** — 처리 순서에 **3.5 트리** 가 들어갔다: `git status` 한 번 → 커밋 안 된 변경이 있으면 `E_GIT { reason: 'dirty', dirty, paths }` 로 거절(뮤텍스 안 · 파일을 만지기 전). **6 섹션** 의 `E_CONFLICT` detail 은 `{ coord, expected, current, currentWork: { id, title, author, date }, content, truncated }` — 지금 본문(8,000자)이 실려 `section` 을 다시 부르지 않고 그 위에 다시 만든다. 등록부의 `—`(문서 전체) 규칙은 **문서 첫 줄의 `<!-- applied: … -->`** 가 applied 이고 치환은 파일 전체다(`frontmatter.topApplied` · 전에는 정규식 예외로 `E_REPO`). **11 미러** 는 뮤텍스 밖 · 큐 · 1.5초까지 기다린다 — 응답 `mirror` 는 `off · ok · queued · lag · diverged` 이고 `mirrorReason` · `mirrorLast { state, reason, at, ahead, behind }` · 이상이면 `warnings` 에 한 줄. 응답 예시 —
 > `{ "commit": "a1b2c3d", "id": "…", "sections": 1, "vocab": 0, "warnings": [], "mirror": "ok", "mirrorReason": null, "mirrorLast": { "state": "ok", … } }`.
 > `serve.log` 의 `save` 줄은 key = `work.id` · 결과 코드 · 도구 시간이다(전에는 `-` · 200 · 핸들러 시각).
