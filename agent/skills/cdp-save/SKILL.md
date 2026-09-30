@@ -183,7 +183,7 @@ date: 2026-09-08 14:30
 id: 2026-0821-면접심사의견-개편
 title: 면접심사의견등록(PSC043) 개편 — 현황/작성 화면 분리
 date: 2026-08-21
-author: kjsa
+author: dev.a
 touches:
   - screen:PSC043
   - table:ps_ext_emp_mst
@@ -299,7 +299,7 @@ apply("table:ps_ext_emp_mst")
 현재 상태라는 전제로 돌고, 작업 기록은 기본으로 넣지 않는다. 그래서 값이
 기록에만 있으면 **주입받은 쪽은 그 값이 없다고 판단하고 새로 정하려 든다.**
 
-실제로 이렇게 새 나갔다. `2026-0831-A10-결의서-기본값` 이 지불 수단별
+실제로 이렇게 새 나갔다. `2026-0831-ERP-결의서-기본값` 이 지불 수단별
 기본값 표를 정했는데, 파생된 섹션에 남은 것은 이 한 줄이었다.
 
 ```
@@ -450,7 +450,7 @@ git -C <repo> push
 
 ```
 save({
-  repo: "gdi",                          // **필수.** 쓰기에서 기본값은 사고다
+  repo: "alpha",                        // **필수.** 쓰기에서 기본값은 사고다
   work: {                               // ③ 의 프론트매터 + 본문
     id: "2026-0908-출장복명-사진첨부",
     title: "EXD020 — 차량 미이용자 사진 첨부",
@@ -579,7 +579,7 @@ where 도 조용했다(2026-09-23). 지금은 서버가 `E_INPUT`(헤딩 줄이 
 
 ```markdown
 ## ISS-014 — 연심회 보류 상태값 추가 여부
-- 제기: 2026-08-17 kjsa
+- 제기: 2026-08-17 dev.a
 - 내용: 현장은 "다음 회차로 넘긴다"를 쓰는데 상태값에 없다
 - 결정권자: 연구관리팀
 - 상태: 대기
@@ -654,7 +654,7 @@ match(["출장복명작성", "출장사진목록", "운행일지"])
 id: 2026-0908-출장복명-사진첨부
 title: EXD020 출장복명작성 — 차량 미이용자 사진 첨부, 입력 영역 상단
 date: 2026-09-08 14:30
-author: kjsa
+author: dev.a
 touches:
   - screen:EXD020
   - table:rp_trip_photo_list
@@ -768,7 +768,7 @@ apply("screen:EXD020")
 ## ISS-015 — 차량 이용 여부 판정 기준
 <!-- applied: 2026-0908-출장복명-사진첨부 -->
 
-- **제기** 2026-09-08 · kjsa
+- **제기** 2026-09-08 · dev.a
   ([`출장복명-사진첨부`](../work/2026-0908-출장복명-사진첨부.md))
 - **내용** 첨부 영역이 뜨는 조건. 출장신청 교통수단 값인가, 운행일지 등록 여부인가
 - **결정권자** 총무팀
@@ -798,7 +798,7 @@ $ git -C C:/cdp commit -m "EXD020 사진 첨부 영역 · 입력 영역 상단"
  5 files changed, 42 insertions(+), 3 deletions(-)
 
 $ git -C C:/cdp push
-To http://10.10.20.250:2900/soln1/cdp.git
+To http://<gitlab>/team/cdp.git
    a1b2c3d..1bc1eec  main -> main
 ```
 
@@ -827,7 +827,7 @@ apply("screen:EXD020")          # 변경 줄 초안
 # ⑤B-0 【좌표 판정】 · 기록 · 섹션 초안을 보이고 승인을 받는다 — 승인 전에는 save 를 부르지 않는다
 
 # ⑤B 한 번
-save({ repo: "gdi", work: {...}, sections: [{ coord: "screen:EXD020",
+save({ repo: "alpha", work: {...}, sections: [{ coord: "screen:EXD020",
        applied: "2026-0715-외부인원-신설", body: "…" }], vocab: [...] })
   → { commit: "1bc1eec", sections: 2, vocab: 1, mirror: "queued" }
 ```

@@ -212,7 +212,7 @@ exe 는 `.gitignore` 로 빼 둔다 — 68MB 를 git 이력에 넣으면 되돌�
 한 번 넣어 준다.
 
 ```
-<지식 레포>\tools\cdp.exe ctx setup C:\gdi
+<지식 레포>\tools\cdp.exe ctx setup C:\work\alpha
 ```
 
 두 가지가 들어간다.
@@ -363,7 +363,7 @@ ctx search <말...>    말 → 좌표 후보 (대조가 미등재를 낼 때)
 가장 흔한 형태는 **라벨을 붙여 쓴 alias 하나**다.
 
 ```markdown
-- `api:/adapter/a10/expense-slip` — 지출결의서 생성 연계
+- `api:/adapter/erp/expense-slip` — 지출결의서 생성 연계
   aliases: 지출결의서생성연계          ← 이렇게 부르는 사람이 없다
 ```
 

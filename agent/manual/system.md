@@ -158,7 +158,7 @@ tools/cdp.exe      앱 + ctx
 id: 2026-0922-EXD020-첨부용량        ← 파일명과 **반드시 같다**
 title: EXD020 사진 첨부 용량 10MB
 date: 2026-09-22 14:30               ← 그 일이 있었던 **때**
-author: kjsa
+author: dev.a
 touches:
   - screen:EXD020
 tags: [출장]
@@ -345,7 +345,7 @@ cdp-save    ① pull      ② 좌표 판정  ③ 기록  ④ 파생  ⑤ 한 커
 ## 지시
 > 사진 첨부 용량은 10MB 로 해줘. WAS 업로드 상한이 그거라서 20MB 로
 > 적어 놔도 어차피 안 올라가.
-kjsa, 2026-09-22.
+dev.a, 2026-09-22.
 
 ## 반영
 docs/화면설계서.md ## EXD020 의 첨부 대목에 10MB.
@@ -627,8 +627,8 @@ Node·exe 가 없는 PC 에서 **아무도 커밋을 못 하게 됐다.** 그리
 ④ 자기 위치의 부모        <repo>/bin/ctx.mjs · <repo>/tools/cdp.exe
 ```
 
-④ 가 필요한 이유 — 작업 레포(`C:\gdi`)에 서서 `C:\cdp\bin\ctx` 를 **전체
-경로로 부르는데도** 못 찾았다. `C:\cdp` 는 `C:\gdi` 의 형제라 상위 탐색에
+④ 가 필요한 이유 — 작업 레포(`C:\work\alpha`)에 서서 `C:\cdp\bin\ctx` 를 **전체
+경로로 부르는데도** 못 찾았다. `C:\cdp` 는 `C:\work\alpha` 의 형제라 상위 탐색에
 걸리지 않는다.
 
 ## 7.6 CRLF — 조용히 깨지는 자리

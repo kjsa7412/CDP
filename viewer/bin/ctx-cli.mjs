@@ -185,7 +185,7 @@ async function findRepo(explicit) {
   // `ctx` 는 지식 레포 안에서 산다 -- `<repo>/bin/ctx.mjs` 이거나
   // `<repo>/tools/cdp.exe` 다. 그러니 자기 위치의 부모가 곧 레포다.
   //
-  // 전에는 cwd 에서 위로만 찾았다. 그래서 작업 레포(C:\gdi)에 서서
+  // 전에는 cwd 에서 위로만 찾았다. 그래서 작업 레포(C:\work\alpha)에 서서
   // `C:\cdp\bin\ctx brief` 라고 **전체 경로로 부르는데도** "지식 레포를
   // 찾을 수 없습니다" 가 나왔다. 형제 폴더는 상위 탐색에 걸리지 않는다.
   // 부른 사람은 경로를 다 적었는데 못 찾는다는 말을 듣는다.
@@ -384,7 +384,7 @@ async function cmdWhere(r, opt) {
       out(`  작업   ${x.works}건`)
       // **id 를 낸다.** 처음에 건수만 냈는데, 그러면 검토가 "이 요청을 이미
       // 결정한 기록이 있다" 를 볼 길이 없다 -- 실제로 놓쳤다. CDP 의 id 는
-      // 날짜+주제라서 **id 만으로 주제가 읽힌다**(2026-0831-A10-결의서-기본값).
+      // 날짜+주제라서 **id 만으로 주제가 읽힌다**(2026-0831-ERP-결의서-기본값).
       // 본문이 아니라 이름이므로 ①의 본문 읽기 금지를 깨지 않는다.
       for (const d of x.ids) out(`    ${d.date || ''}  ${d.id}`)
       if (x.works > x.ids.length) out(`    ... ${x.works - x.ids.length}건 더 (ctx where ${x.coord})`)
@@ -427,7 +427,7 @@ async function cmdWhere(r, opt) {
 // 가진 섹션이 레포에 멀쩡히 있는데도 빈손으로 돌아온다. 실측 사례:
 //
 //   "지출결의서" · "입출금계좌코드" · "거래처코드"  -> 전부 (미등재)
-//   답은 api:/adapter/a10/expense-slip 섹션에 있었다
+//   답은 api:/adapter/erp/expense-slip 섹션에 있었다
 //   -- 좌표 이름이 API 경로여서 요구사항서의 어떤 단어와도 이어지지 않는다
 //
 // **본문을 싣지 않는다. 좌표 이름만 낸다.** cdp-work 의 ① 검토는 관리 문서와
@@ -831,7 +831,7 @@ async function cmdSetup(r, opt) {
   }
   if (!target) {
     err('ctx setup <작업 레포 경로> [--also <지식 레포>]… [--desktop] [--dry]')
-    err('  예:  ctx setup C:' + BS + 'gdi')
+    err('  예:  ctx setup C:' + BS + 'work' + BS + 'alpha')
     return 2
   }
   const plan = await planSetup(r.root, target, { also: opt.also || [] })

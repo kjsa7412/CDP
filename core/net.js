@@ -29,7 +29,7 @@ export function normalizeIp(ip) {
   return m ? m[1] : s
 }
 
-// `'10.10.20.0/24, 127.0.0.1, ::1'` → 규칙 목록. 잘못된 조각은 **던진다** —
+// `'192.168.0.0/24, 127.0.0.1, ::1'` → 규칙 목록. 잘못된 조각은 **던진다** —
 // 조용히 빼면 "제한했다고 믿는데 열려 있는" 상태가 된다.
 export function parseCidrs(spec) {
   const out = []

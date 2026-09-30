@@ -358,7 +358,7 @@
 `ctx where` 에 좌표를 여럿 주면 자리와 범위를 한 번에 준다.
 
 ```
-bin/ctx where api:/adapter/a10/expense-slip code:AC-040
+bin/ctx where api:/adapter/erp/expense-slip code:AC-040
 ```
 
 **`** 사실상 비어 있다` 가 붙으면 주입은 성공했고 내용이 없다는 뜻이다.**
@@ -389,9 +389,9 @@ bin/ctx where api:/adapter/a10/expense-slip code:AC-040
 **② 좌표별 후속**
 
 ```
-2026-0710-A10-어댑터-v1
+2026-0710-ERP-어댑터-v1
   table:rp_plnd_mst           후속 3건   ← 이 부분은 갱신됐을 수 있다
-  api:/adapter/a10/plan-sync  최신       ← 이 부분은 이 문서가 마지막 말이다
+  api:/adapter/erp/plan-sync  최신       ← 이 부분은 이 문서가 마지막 말이다
 ```
 
 **한 문서 안에서 좌표마다 판정이 다르다.** *"이 문서는 낡았다"* 는 말은
@@ -434,7 +434,7 @@ bin/ctx where api:/adapter/a10/expense-slip code:AC-040
 id: 2026-0821-면접심사의견-개편        # 파일명과 같아야 한다
 title: PSC043 개편 — 현황/작성 화면 분리
 date: 2026-08-21
-author: kjsa
+author: dev.a
 touches:
   - screen:PSC043
   - code:PS130
@@ -495,7 +495,7 @@ tags: [채용, 화면개편]
 현재 상태라는 전제로 돌고, 작업 기록은 기본으로 넣지 않는다. 그래서 값이
 기록에만 있으면 **주입받은 쪽은 그 값이 없다고 판단하고 새로 정하려 든다.**
 
-실제로 이렇게 새 나갔다. `2026-0831-A10-결의서-기본값` 이 지불 수단별
+실제로 이렇게 새 나갔다. `2026-0831-ERP-결의서-기본값` 이 지불 수단별
 기본값 표를 정했는데, 파생된 섹션에 남은 것은 이 한 줄이었다.
 
 ```
@@ -694,11 +694,11 @@ merge·rebase·충돌 해결을 기계가 하지 않는다. 관리 문서 섹션
 갈 곳은 `docs/위험및이슈관리대장.md` 다. 좌표는 `issue:{번호}` 다.
 
 ```markdown
-## ISS-002 — A10 고정 작성자 계정 생성
+## ISS-002 — 외부 ERP 고정 작성자 계정 생성
 <!-- applied: null -->
 
-- **제기** 2026-09-02 · 홍은택
-- **결정권자** A10(더존)
+- **제기** 2026-09-02 · dev.b
+- **결정권자** 외부 ERP 담당
 - **상태** 회신 대기
 ```
 

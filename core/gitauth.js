@@ -240,7 +240,7 @@ export async function listCredentials(file) {
 // 다른 helper 가 있으면 멈춘다 — `force` 로만 바꾼다(G8).
 export async function storeCredential({ scheme = 'http', host, user, secret, file = null, force = false, env = process.env }) {
   if (!/^https?$/.test(scheme)) throw new CtxError('E_INPUT', 'scheme 은 http · https 다', { scheme })
-  if (!host || !/^[A-Za-z0-9.-]+(:\d+)?$/.test(host)) throw new CtxError('E_INPUT', '호스트 형식이 아니다 — 10.10.20.250:2900 처럼', { host })
+  if (!host || !/^[A-Za-z0-9.-]+(:\d+)?$/.test(host)) throw new CtxError('E_INPUT', '호스트 형식이 아니다 — gitlab.example:2900 처럼', { host })
   if (!user) throw new CtxError('E_INPUT', '계정(--user)이 필요하다', {})
   if (!secret || /\s/.test(secret)) throw new CtxError('E_INPUT', 'PAT 가 비었거나 공백이 있다', {})
   const st = await credentialState({ env })

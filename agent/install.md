@@ -6,7 +6,7 @@
 ① 개발 PC      배포본을 만든다              도구 개발자 · 버전마다
 ② 반입         폐쇄망이면 파일을 옮긴다      관리자 · 버전마다
 ③ 지식 레포    C:\cdp 를 세운다              관리자 · 프로젝트당 1회
-④ 작업 레포    C:\gdi 에 세팅을 넣는다       관리자 · 레포당 1회
+④ 작업 레포    C:\work\alpha 에 세팅을 넣는다 관리자 · 레포당 1회
 ⑤ 팀원 PC     clone 하고 두 가지를 더 한다   팀원 · 사람마다
 ```
 
@@ -31,7 +31,7 @@
 <작업 레포>/.claude/cdp.json     **커밋 안 함.** { "knowledgeRepo": "…" }
 ```
 
-이 문서는 `C:\cdp`(지식) · `C:\gdi`(작업)를 예로 쓴다. **예일 뿐이다.**
+이 문서는 `C:\cdp`(지식) · `C:\work\alpha`(작업)를 예로 쓴다. **예일 뿐이다.**
 
 ---
 
@@ -133,7 +133,7 @@ git init && git config core.hooksPath .githooks
 보여 주고 누르면 쓴다. 둘은 같은 함수를 부른다.
 
 ```
-ctx setup: C:\gdi
+ctx setup: C:\work\alpha
   .claude\skills\   cdp-work · cdp-load · cdp-save · cdp-managed
                     cdp-import · cdp-edit · cdp-push
   CLAUDE.md         지식 레포 = C:\cdp
@@ -164,7 +164,7 @@ ctx setup: C:\gdi
 
 ```
 git clone <지식레포>  C:\cdp
-git clone <코드레포>  C:\gdi
+git clone <코드레포>  C:\work\alpha
 ```
 
 **clone 이 실어 오지 않는 것이 둘 있다.**
@@ -217,7 +217,7 @@ copy <새 배포본>\knowledge-repo-dpms\bin\*         C:\cdp\bin\
 copy <새 배포본>\cdp.exe                             C:\cdp\tools\
 copy <새 배포본>\knowledge-repo-dpms\MANUAL*.md    C:\cdp\
 copy <새 배포본>\knowledge-repo-dpms\.gitattributes C:\cdp\     ← 도구 파일이다 (*.cmd eol=crlf · 2026-09-23)
-C:\cdp\tools\cdp.exe ctx setup C:\gdi   ← skill 도 같이 갱신된다
+C:\cdp\tools\cdp.exe ctx setup C:\work\alpha   ← skill 도 같이 갱신된다
 ```
 
 `_vocab.md` · `_managed.md` · `docs/` · `work/` 는 **건드리지 않는다.**

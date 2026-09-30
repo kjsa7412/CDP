@@ -123,7 +123,7 @@ where("<좌표>")
 id: 2026-0908-EXD020-첨부용량
 title: EXD020 사진 첨부 용량 10MB — 문서 반영
 date: 2026-09-08
-author: kjsa
+author: dev.a
 touches:
   - screen:EXD020
 tags: [문서반영]
@@ -136,7 +136,7 @@ tags: [문서반영]
 > 사진 첨부 용량은 10MB 로 해줘. WAS 업로드 상한이 그거라서 20MB 로
 > 적어 놔도 어차피 안 올라가.
 
-kjsa, 2026-09-08.
+dev.a, 2026-09-08.
 
 ## 반영
 
@@ -265,7 +265,7 @@ where("screen:EXD020")
 id: 2026-0922-EXD020-첨부용량
 title: EXD020 사진 첨부 용량 10MB — 문서 반영
 date: 2026-09-22 10:15
-author: kjsa
+author: dev.a
 touches:
   - screen:EXD020
 tags: [문서반영, 출장]
@@ -278,7 +278,7 @@ tags: [문서반영, 출장]
 > 사진 첨부 용량은 10MB 로 해줘. WAS 업로드 상한이 그거라서 20MB 로
 > 적어 놔도 어차피 안 올라가.
 
-kjsa, 2026-09-22.
+dev.a, 2026-09-22.
 
 ## 반영
 

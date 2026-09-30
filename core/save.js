@@ -321,7 +321,7 @@ async function run(root, input, { user, write, mirror, now }) {
 
   // 3.7 좌표 0개 — **사유 없이는 받지 않는다.** 0개도 정상이지만(일정만 정한 작업), 좌표가 없는 기록은
   // `match` · `where` 어디로도 닿지 않는다. 도메인 지식 문서를 편입하면서 정의한 용어를 전부 "설명" 으로
-  // 떨어뜨려 `touches: []` 가 경고 없이 커밋됐다(dpms_wiki b5a1fc6 · 좌표 누락 TODO C). 0개임을 확인했다는
+  // 떨어뜨려 `touches: []` 가 경고 없이 커밋됐다(실측 · 좌표 누락 TODO C). 0개임을 확인했다는
   // 선언을 `touchesEmpty` 로 받고, 받았어도 경고로 한 번 더 말한다. 모드 A 의 검사는 그대로다 — 기존
   // `touches: []` 기록을 오류로 만들지 않는다.
   if (!(w.touches || []).length) {
