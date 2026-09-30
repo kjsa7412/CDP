@@ -4,6 +4,7 @@ import { useRoute, useNavigate } from '../router.jsx'
 import Shot from '../components/Shot.jsx'
 import Lightbox from '../components/Lightbox.jsx'
 import { GROUPS, SHOTS, shotById } from '../data/screens.js'
+import shots from '../data/shots.json'
 
 const ROLE = { admin: 'admin', writer: 'writer', viewer: 'viewer' }
 
@@ -17,7 +18,7 @@ export default function Screens() {
       <header className="st-head">
         <h1 tabIndex={-1}>화면</h1>
         <p className="st-lead">
-          판 <span className="amono">v{__CDP_VERSION__}</span> 의 서버를 그대로 띄우고 <b>가상 프로젝트</b>(도서관 대출 관리 시스템 개편)로 채운 지식 레포를 붙여 찍었다. 목업이 아니다 — 화면은 진짜이고, 내용만 가상이다. 사람은{' '}
+          판 <span className="amono">v{shots.version}</span> 의 서버를 그대로 띄우고 <b>가상 프로젝트</b>(도서관 대출 관리 시스템 개편)로 채운 지식 레포를 붙여 찍었다. 목업이 아니다 — 화면은 진짜이고, 내용만 가상이다. {shots.captured} 에 찍었다. 사람은{' '}
           <span className="amono">lead</span>(admin) · <span className="amono">dev.a</span>(writer) · <span className="amono">dev.b</span>(viewer) 셋이다.
         </p>
       </header>

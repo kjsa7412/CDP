@@ -33,7 +33,10 @@ test('주소 일곱 — 라우트 표 · 페이지 · 상단 바가 같다', () 
   assert.equal(new Set(ROUTES.map((r) => r.path)).size, ROUTES.length, '주소 중복')
 })
 
-test('화면 14장 — 라이트 · 다크 PNG 가 둘 다 있다 · 묶음이 있다', () => {
+test('화면 14장 — 라이트 · 다크 PNG 가 둘 다 있다 · 묶음이 있다 · 찍은 판이 적혀 있다', (t) => {
+  const shotsMeta = JSON.parse(rd('site/src/data/shots.json'))
+  assert.match(shotsMeta.version, /^\d+\.\d+\.\d+$/)
+  if (shotsMeta.version !== pkg.version) t.diagnostic(`화면은 v${shotsMeta.version} 에서 찍었다 — 지금 v${pkg.version}. 화면이 바뀌었으면 npm run site:demo`)
   assert.equal(SHOTS.length, 14)
   const keys = new Set(GROUPS.map((g) => g.key))
   for (const s of SHOTS) {

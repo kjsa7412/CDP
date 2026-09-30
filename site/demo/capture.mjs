@@ -235,5 +235,10 @@ export async function capture({ base, st, out }) {
     await browser.close()
     S2.kill()
   }
+  // 어느 판으로 찍었나 — 판을 올려도 그림은 그대로라, 사이트가 「판 vX 의 화면」 을 package.json 이 아니라 이것으로 말한다
+  if (!ONLY.length) {
+    const pkg = JSON.parse(await fs.readFile(path.join(ROOT, 'package.json'), 'utf8'))
+    await fs.writeFile(path.join(ROOT, 'site/src/data/shots.json'), JSON.stringify({ version: pkg.version, captured: new Date().toISOString().slice(0, 10) }, null, 2) + NL)
+  }
   console.log(`[site:demo] 캡처 ${done.length}장 → site/public/shots/`)
 }

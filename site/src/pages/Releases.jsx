@@ -1,6 +1,8 @@
 // 판 이력 — CHANGELOG 의 절 제목만(빌드 때 뽑는다 · site/tools/releases.mjs). 본문은 레포의 CHANGELOG 에 있다.
 
 import releases from 'virtual:cdp-releases'
+import shots from '../data/shots.json'
+import { EXAMPLES } from '../data/examples.js'
 
 export default function Releases() {
   return (
@@ -8,7 +10,7 @@ export default function Releases() {
       <header className="st-head">
         <h1 tabIndex={-1}>판 이력</h1>
         <p className="st-lead">
-          판마다 무엇이 바뀌었나. 이 사이트의 화면과 예제는 <span className="amono">v{__CDP_VERSION__}</span> 기준이다.
+          판마다 무엇이 바뀌었나. 지금 판은 <span className="amono">v{__CDP_VERSION__}</span> 이고, 이 사이트의 화면은 <span className="amono">v{shots.version}</span> · 예제는 <span className="amono">v{EXAMPLES[0]?.version}</span> 에서 찍고 녹화했다.
         </p>
       </header>
       <ol className="rel">
