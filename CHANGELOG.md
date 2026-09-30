@@ -3,6 +3,21 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.20.0
+
+**본문 그림이 안 보이던 것** — `viewer/src/lib/markdown.js` · `viewer/src/components/DocView.jsx` · `core/repopath.js` — `![설명](../work/assets/…png)` 가 화면 주소 기준으로 풀려 레포에 파일이 있어도 전부 깨진 그림이던 것(파일은 파일 API 로만 나온다)
+- 상대 경로는 **그 문서의 폴더 기준** · `/…` 와 `docs/…` · `work/…` 는 레포 루트 · 퍼센트 인코딩 · 꺾쇠(`(<…/시스템 개요.png>)`)를 푼다. 첨부 목록과 같은 함수
+- 못 읽은 그림은 「그림을 찾을 수 없음 · <경로>」 상자(레포 밖이면 그 말로) · 그림을 누르면 원본 · 본문의 pdf · xlsx 링크는 파일로 연다(전에는 그 이름의 문서를 찾았다)
+- 파일 API 의 `.svg` 에 `content-security-policy: sandbox` · 설명서 화면의 상대 그림은 GitHub raw 로
+
+**첨부를 서버가 받는다** — `core/assets.js` · `core/save.js` · `viewer/bin/ctx-mcp-serve.mjs` · `viewer/bin/ctx-mcp.mjs` — 서버형에는 그림 · pdf 를 들일 길이 없어 지식 레포를 받아 커밋 · push 하고 「origin 과 맞추기」 를 해야 했던 것
+- `POST /api/<repo>/assets` — 몸통 = 파일 바이트(`curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일`) · writer 이상 · png · jpg · gif · webp · pdf 를 내용으로 가린다(svg 415) · 10 MB(413 · `Expect: 100-continue` 도) · `<data>/staging/` 에 24시간 → `{ ref, size, type }`. 레포는 바뀌지 않는다
+- `save` 입력 `assets: [{ ref, name }]` — `work/assets/<id>/<name>` 에 작업 기록 · 섹션과 **한 커밋**, 검사에서 걸리면 같이 되돌린다 · 작업 기록 `attachments` · 응답 `assets: [{ path, size }]` · 20개 · 합 30 MB
+- 경고 둘 — 이 save 가 쓴 본문의 그림이 레포에 없다 · 올린 첨부를 어느 본문도 가리키지 않는다
+- 스킬 `cdp-save` 「그림 · 첨부」(모드 A 복사 · 모드 B curl → assets) · `cdp-edit` · `cdp-import` 가 가리킨다 · `save` 명함 · 사용자 설명서 6.5 · 8.5 · 관리자 설명서 부록(staging)
+- 하네스 112 · `test/save-assets.test.mjs`
+- 검토 · TODO — `docs/design/CDP_그림첨부_검토_v0.1.md` · `docs/dev/그림첨부_TODO.md`
+
 ## v0.19.3
 
 **새 어휘 타입은 서버가 만든다** — `core/save.js` — `save` 의 `vocab` 에 `_vocab.md` 에 없는 타입(`term:PLC` 인데 `## term` 이 없다)이 오면 `E_INPUT` 「타입은 사람이 먼저 만든다」 로 거절하던 것. 서버에만 있는 레포는 사람이 커밋할 곳이 없고 초기에는 새 타입이 계속 는다(dpms_wiki · 도메인 지식 편입이 막혔다) — `d140164`
