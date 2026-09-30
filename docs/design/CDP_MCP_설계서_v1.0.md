@@ -147,7 +147,7 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 | `E_REPO` | 레포를 못 열음 · 스캔 실패 | path · cause |
 | `E_AUTH` / `E_FORBIDDEN` | 모드 B — 토큰 없음/무효 · 권한 없음 | — |
 | `E_EXISTS` | `save` — `work/<id>.md` 가 이미 있다 | id |
-| `E_CONFLICT` | `save` — 섹션 `applied` 불일치 | `{ coord, expected, current }` |
+| `E_CONFLICT` | `save` — 섹션 `applied` 불일치 · 등록부의 같은 패턴이 다른 자리에 이미 있다(`managed`) | `{ coord, expected, current }` · `{ kind: 'managed', pattern, current: { doc, level, note } }` |
 | `E_CHECK` | `save` — `runBuiltinCheck` 오류 | `findings` |
 | `E_GIT` | `save` — 커밋/미러 실패 | stderr 요약 |
 
@@ -535,7 +535,7 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 
 ### 4.5 `save` 도구
 
-명함 — *"작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘. 검사를 통과해야 커밋된다. 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다."*
+명함 — *"작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘(+ 등록부에 안 걸리는 새 타입이면 `managed` 로 관리 문서 · 행). 검사를 통과해야 커밋된다. 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다."*
 
 입력 —
 
@@ -553,10 +553,16 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
   },
   "sections": [
     { "coord": "table:mart.마스터_단지", "applied": "2026-0911-…", "body": "…" }   // 헤딩·applied 주석 없이 내용만
-    // 새 섹션: "applied": null, "heading": "단지 마스터"  → 서버가 "## <값> — <heading>" 을 만든다
+    // 새 섹션: "applied": null, "heading": "마스터_단지 — 단지 마스터"  → 서버가 "## <heading>" 을 만든다 (제목 줄 **전체** — 값으로 시작해야 한다. 아니면 E_INPUT)
   ],
   "vocab": [
     { "coord": "factor:C019", "label": "신규 팩터", "aliases": ["…"] }          // 선택. 타입 섹션이 없으면 서버가 만든다 (v0.19.3)
+  ],
+  "managed": [                                          // 선택. 관리 문서(등록부 행 · 문서)를 만들고 붙이고 정리한다 (v0.19.3)
+    { "pattern": "term:*", "doc": "docs/용어집.md", "level": 2, "title": "용어집" },   // add(기본 · writer) — 행은 등록부 맨 끝, 문서가 없으면 만든다
+    { "op": "rename", "doc": "docs/용어집.md", "to": "docs/3.용어/용어집.md" },      // 정리 — admin
+    { "op": "merge",  "doc": "docs/메모.md",   "into": "docs/용어집.md" },
+    { "op": "retire", "pattern": "term:*" }
   ]
 }
 ```
@@ -568,11 +574,13 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 1  권한       users[].write · active                                     아니면 E_FORBIDDEN
 2  스키마     §2.7 형식 · body 에 "<!-- applied:" 포함 금지 · sections[].body 에 섹션 레벨 이하 헤딩 줄 금지(섹션을 쪼갠다 · 2026-09-23)   아니면 E_INPUT
 3  존재       work/<id>.md 없음                                          있으면 E_EXISTS
+2.5 권한      managed 에 rename · merge · retire 가 있으면 admin      아니면 E_FORBIDDEN { need: 'admin' } (파일을 만지기 전)
 4  어휘       vocab 를 각 "## <type>" 섹션 끝에 "- `coord` — label\n  aliases: …" 로 붙인다 (메모리)
-5  좌표       touches · sections.coord 가 어휘에 있고 등록부에 걸린다     아니면 E_INPUT
+4.5 등록부   managed 를 차례로 계획(`core/managedops.js` · 순수) → _managed.md · 새 문서 · 옮긴 문서를 쓰고 지울 문서를 지운다(Snap). 경로 docs/…md · 패턴 · 겹침(완전히 덮이면 거절) · 레벨 · 기존 좌표 섹션(needSections)을 **쓰기 전에** 거른다   아니면 E_INPUT / E_CONFLICT / E_NOT_FOUND / E_EXISTS
+5  좌표       touches · sections.coord 가 어휘에 있고 (4.5 가 더한 행을 포함한) 등록부에 걸린다     아니면 E_INPUT
 6  섹션       각 sections: 현재 applied == 보낸 applied                  아니면 E_CONFLICT { expected, current }
              치환 범위 = "## <값>" 헤딩 다음 줄 ~ 같은/상위 레벨 다음 헤딩 전.  헤딩은 유지, applied 주석은 서버가 <id> 로 쓴다
-             새 섹션은 문서 끝(또는 등록부 규칙 위치)에 헤딩 + applied + body
+             새 섹션은 문서 끝에 헤딩 + applied + body
 7  기록       work/<id>.md = TEMPLATE 순서의 프론트매터(author = 토큰 user) + body
 8  인덱스     INDEX.md · INDEX-by-coord.md 재생성                         **검사보다 먼저**
 9  검사       runBuiltinCheck(갱신된 트리)                                error 있으면 파일 복원 후 E_CHECK { findings }
@@ -593,7 +601,15 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 
 > **정정(2026-09-30 · v0.19.3)** — 4 어휘: **타입 섹션(`## term`)이 없으면 서버가 `_vocab.md` 끝에 만든다.** 전에는 `E_INPUT` "타입은 사람이 먼저 만든다" 로 거절했다 — 지식 레포가 서버에만 있으면 사람이 커밋할 작업 트리가 없고, 초기에는 새 타입이 계속 는다(dpms_wiki 에 `term:` 이 없어 도메인 지식 문서 편입이 막혔다). 통제는 타입이 아니라 좌표 하나하나의 등재가 한다 — 형식(`checkCoord`) · 어휘 등재 · 등록부 대조는 그대로다. 만들었으면 응답 `warnings` 에 「새 어휘 타입 "term" 을 만들었다」 가 실린다(오타는 지워지지 않으니 사람이 본다). 타입이 생겨도 **관리 문서(등록부)가 없으면 `sections` 는 못 쓴다** — `touches` 로만 닿는다.
 
-규칙 — 기존 `work/*.md` 는 수정·삭제하지 않는다(정정은 `supersedes` 를 단 새 기록). 어휘 삭제 없음(폐기는 사람이 `deprecated` 표기). `_managed.md` 는 `save` 로 바꾸지 않는다.
+규칙 — 기존 `work/*.md` 는 수정·삭제하지 않는다(정정은 `supersedes` 를 단 새 기록). 어휘 삭제 없음(폐기는 사람이 `deprecated` 표기). `_managed.md` 는 **`managed[]` 로만** 바꾼다(v0.19.3 — 아래 정정. 전에는 「`save` 로 바꾸지 않는다」 였다).
+
+> **정정(2026-09-30 · v0.19.3 · 관리문서 동적 생성 검토 v0.1)** — 패키지가 깐 관리 문서는 프로젝트 전체를 덮지 못하고, 서버에만 있는 레포는 사람이 커밋할 작업 트리가 없다. 어휘 타입만 열어서는 그 타입의 좌표를 받을 섹션이 없다(dpms_wiki `term:*`). 그래서 **`save` 입력에 `managed[]`** 를 더했다 — 별도 도구는 만들지 않는다(행만 더한 중간 상태가 그 타입을 건드린 다음 save 를 전부 E_CHECK 로 막는다 · 실측 P4).
+> - **`add`(기본 · writer)** — `{ pattern, doc, level?(기본 2 · 0 = `—`), title? }`. 새 행은 **등록부 맨 끝**(마지막 규칙 행 바로 뒤 · 같은 표)이라 먼저 걸리는 기존 행의 자리는 바뀌지 않는다. 4번째 칸에 `서버 추가 · <work.id>`(`parseRegistry` 의 `note`). 문서가 없으면 `# 제목` 한 줄로 만든다. 거르는 것 — 경로(`docs/…md` · `..` · 절대 · 역슬래시 · 예약 이름 · 깊이 4 · 길이) · 패턴(구체적 타입 · 공백 · `|` · 백틱 없음) · **앞 행이 완전히 덮는 패턴은 거절**(교차는 경고) · **한 문서는 한 레벨**(`—` 는 새 문서 전용) · 같은 패턴이 같은 자리면 멱등 / 다른 자리면 `E_CONFLICT { kind: 'managed', current }` · **새 행이 걸리는 기존 좌표의 섹션은 같은 save 가 보낸다**(아니면 `E_INPUT { needSections }`).
+> - **`rename` · `merge` · `retire`(admin)** — 문서 이름 바꾸기(그 문서의 모든 행 · 파일 이동) · 합치기(같은 레벨 · 머리말 없음 · 원본 삭제 · 이름이 겹치면 dup-anchor 로 E_CHECK 롤백) · 행 폐기(문서는 남긴다). 정리는 기존 좌표의 자리를 바꾸고 `retire` 는 검사를 끄는 수단이라 admin 이다. 다른 문서 안의 링크는 고치지 않는다(경고).
+> - **처리 순서** — 2.5(권한) · 4.5(등록부 · 계획을 쓴다)가 들어갔고 6단계는 **새 등록부**로 섹션을 판정한다. `Snap` 이 `remove` 를 배워 지운 파일 · 새로 만든 폴더까지 돌린다. 등록부가 준 경로는 6단계에서 다시 `docEscapes` + root 접두 검사한다(손으로 고친 행이 레포 밖을 가리켜도 못 쓴다 · P5).
+> - **`check`** — `registry-path`(레포 밖 = error) · `registry-outside`(docs/ 밖) · `registry-shadowed`(덮인 행) · `registry-level-mix`(레벨 섞임) 경고 셋.
+> - 응답 `managed: <건수>` · `managedChanges: [{ op, pattern, doc, … }]`(있을 때만) · `serve.log` 에 `등록부 <op> <사람> <대상> (<id>)` 한 줄. 새 `sections[].heading` 은 제목 줄 **전체**(`값 — 설명`)다 — 값이 빠지면 E_INPUT(앵커 없음으로 E_CHECK 가 나던 것).
+> - 패키지와의 경계 — `toollayer` 는 도구 층만 간다(`_managed.md` · `docs/` 는 원래 대상이 아니다) — 서버가 더한 행 · 문서는 upgrade 가 덮지 않는다(시험).
 
 > **정정(v0.12.0 · 동시 기록 검토 v0.1 D3 · D5 · D6 · D7)** — 처리 순서에 **3.5 트리** 가 들어갔다: `git status` 한 번 → 커밋 안 된 변경이 있으면 `E_GIT { reason: 'dirty', dirty, paths }` 로 거절(뮤텍스 안 · 파일을 만지기 전). **6 섹션** 의 `E_CONFLICT` detail 은 `{ coord, expected, current, currentWork: { id, title, author, date }, content, truncated }` — 지금 본문(8,000자)이 실려 `section` 을 다시 부르지 않고 그 위에 다시 만든다. 등록부의 `—`(문서 전체) 규칙은 **문서 첫 줄의 `<!-- applied: … -->`** 가 applied 이고 치환은 파일 전체다(`frontmatter.topApplied` · 전에는 정규식 예외로 `E_REPO`). **11 미러** 는 뮤텍스 밖 · 큐 · 1.5초까지 기다린다 — 응답 `mirror` 는 `off · ok · queued · lag · diverged` 이고 `mirrorReason` · `mirrorLast { state, reason, at, ahead, behind }` · 이상이면 `warnings` 에 한 줄. 응답 예시 —
 > `{ "commit": "a1b2c3d", "id": "…", "sections": 1, "vocab": 0, "warnings": [], "mirror": "ok", "mirrorReason": null, "mirrorLast": { "state": "ok", … } }`.
