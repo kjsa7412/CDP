@@ -124,21 +124,32 @@ function checkSchema(input) {
 
 // ── 어휘 등재 (4단계) ───────────────────────────────────────────────────────
 //
-// 타입 섹션(`## table`) 끝에 한 줄을 붙인다. **타입 섹션이 없으면 만들지 않고
-// 거절한다** — 어휘의 뼈대는 사람이 정하는 것이고, 서버가 타입을 늘리기
-// 시작하면 통제 어휘가 통제되지 않는다.
+// 타입 섹션(`## table`) 끝에 한 줄을 붙인다. **타입 섹션이 없으면 문서 끝에 만든다** —
+// 전에는 거절하고 "타입은 사람이 먼저 만든다" 로 답했는데, 지식 레포가 서버에만 있으면
+// 사람이 커밋할 작업 트리가 없고(클라이언트에 clone 이 없다) 초기에는 새 타입이 계속 는다
+// (dpms_wiki 에 `term:` 이 없어 도메인 지식 문서 편입이 막혔다 · 2026-09-30).
+// 통제는 타입이 아니라 **좌표 하나하나의 등재**가 한다 — 그것은 그대로 save 안에서 검사되고
+// (형식은 `checkCoord` — ASCII 타입은 소문자만이라 `Term` ↔ `term` 은 못 갈라진다) 커밋은 git 에
+// 남아 사람이 되돌릴 수 있다. 오타로 만든 타입은 지워지지 않으니 만들었으면 경고로 알린다.
 //
 // 삭제는 없다(`deprecated` 표기는 사람이).
 
 function addVocab(text, entries) {
-  if (!entries.length) return { text, added: 0 }
+  if (!entries.length) return { text, added: 0, newTypes: [] }
   const lines = text.split(NL)
+  const newTypes = []
   let added = 0
   for (const v of entries) {
     const type = v.coord.slice(0, v.coord.indexOf(':'))
     if (text.includes('`' + v.coord + '`')) continue // 이미 있다
-    const head = lines.findIndex((l) => l.trim() === '## ' + type)
-    if (head < 0) throw new CtxError('E_INPUT', `어휘에 "## ${type}" 섹션이 없다 — 타입은 사람이 먼저 만든다`, { coord: v.coord })
+    let head = lines.findIndex((l) => l.trim() === '## ' + type)
+    const fresh = head < 0
+    if (fresh) {
+      while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
+      lines.push('', '## ' + type, '')
+      head = lines.length - 2
+      newTypes.push(type)
+    }
     let end = lines.length
     for (let i = head + 1; i < lines.length; i++) {
       if (/^##\s/.test(lines[i])) {
@@ -146,13 +157,14 @@ function addVocab(text, entries) {
         break
       }
     }
-    while (end > head + 1 && !lines[end - 1].trim()) end--
+    while (!fresh && end > head + 1 && !lines[end - 1].trim()) end--
     const row = ['- `' + v.coord + '` — ' + v.label]
     if (v.aliases?.length) row.push('  aliases: ' + v.aliases.join(', '))
     lines.splice(end, 0, ...row)
     added++
   }
-  return { text: lines.join(NL), added }
+  if (newTypes.length && lines[lines.length - 1] !== '') lines.push('')
+  return { text: lines.join(NL), added, newTypes }
 }
 
 // ── 섹션 치환 (6단계) ───────────────────────────────────────────────────────
@@ -339,8 +351,10 @@ async function run(root, input, { user, write, mirror, now }) {
     // 4 어휘 (메모리 → 파일)
     const vocabPath = '_vocab.md'
     const vocabText = await fs.readFile(path.join(root, vocabPath), 'utf8')
-    const { text: nextVocab, added } = addVocab(vocabText, vocabAdds)
+    const { text: nextVocab, added, newTypes } = addVocab(vocabText, vocabAdds)
     if (added) await snap.write(vocabPath, nextVocab)
+    // 타입을 만들었으면 말한다 — 오타면 사람이 _vocab.md 에서 고친다. 등록부에 없으면 섹션은 못 쓴다(6단계).
+    for (const t of newTypes) warnings.push(`새 어휘 타입 "${t}" 을 만들었다 (_vocab.md 끝) — 의도한 타입이 맞는지 본다`)
 
     // 5 좌표 — 어휘 등재 **뒤에** 본다. 새 좌표를 같은 save 에서 등재하고 쓰는 것이 정상이다.
     const r0 = await loadRepo(root, { settings: SETTINGS })

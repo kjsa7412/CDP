@@ -146,6 +146,27 @@ test('save — 같은 좌표 새 섹션 둘 동시: 헤딩 하나 · 둘째는 E
   }
 })
 
+test('save — 어휘에 없는 타입은 서버가 만든다(문서 끝) · 같은 save 의 둘째는 그 섹션에 붙는다 · 경고로 알린다', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    const r = await save(R.r, { work: work('2026-0930-용어', 'term:PLC'), vocab: [{ coord: 'term:PLC', label: '프로그래머블 로직 컨트롤러', aliases: ['피엘씨'] }, { coord: 'term:SCADA', label: '감시제어 시스템' }] }, opt())
+    assert.ok(r.commit)
+    assert.equal(r.vocab, 2)
+    assert.ok(r.warnings.some((w) => /새 어휘 타입 "term"/.test(w)))
+    const v = await fs.readFile(path.join(R.r, '_vocab.md'), 'utf8')
+    assert.ok(v.endsWith(['', '## term', '', '- `term:PLC` — 프로그래머블 로직 컨트롤러', '  aliases: 피엘씨', '- `term:SCADA` — 감시제어 시스템', ''].join(NL)))
+    assert.equal((v.match(/^## term$/gm) || []).length, 1)
+    // 만든 뒤에는 보통 타입이다 — 경고 없이 붙는다
+    const r2 = await save(R.r, { work: work('2026-0930-용어2', 'term:CIMON'), vocab: [{ coord: 'term:CIMON', label: '시몬' }] }, opt())
+    assert.ok(!r2.warnings.some((w) => /새 어휘 타입/.test(w)))
+    assert.equal(await porcelain(R.r), '')
+    const loaded = await loadRepo(R.r, {})
+    assert.ok(loaded.vocab.coords.has('term:CIMON'))
+  } finally {
+    await R.rm()
+  }
+})
+
 test('save — 더러운 트리는 E_GIT dirty 로 거절 · 트리는 그대로 · restore 뒤에 된다', { skip: !hasGit && 'git 이 없다' }, async () => {
   const R = await repo()
   try {

@@ -556,7 +556,7 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
     // 새 섹션: "applied": null, "heading": "단지 마스터"  → 서버가 "## <값> — <heading>" 을 만든다
   ],
   "vocab": [
-    { "coord": "factor:C019", "label": "신규 팩터", "aliases": ["…"] }          // 선택. 타입 섹션이 있어야 한다
+    { "coord": "factor:C019", "label": "신규 팩터", "aliases": ["…"] }          // 선택. 타입 섹션이 없으면 서버가 만든다 (v0.19.3)
   ]
 }
 ```
@@ -590,6 +590,8 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 작업 기록을 방금 하나 더했으니 행 수가 반드시 어긋나고, "INDEX.md 불일치" 경고가
 `save` 마다 빠짐없이 나온다. 매번 나오는 경고는 아무것도 알리지 않는다. 검사는
 **커밋될 트리**를 봐야 한다.
+
+> **정정(2026-09-30 · v0.19.3)** — 4 어휘: **타입 섹션(`## term`)이 없으면 서버가 `_vocab.md` 끝에 만든다.** 전에는 `E_INPUT` "타입은 사람이 먼저 만든다" 로 거절했다 — 지식 레포가 서버에만 있으면 사람이 커밋할 작업 트리가 없고, 초기에는 새 타입이 계속 는다(dpms_wiki 에 `term:` 이 없어 도메인 지식 문서 편입이 막혔다). 통제는 타입이 아니라 좌표 하나하나의 등재가 한다 — 형식(`checkCoord`) · 어휘 등재 · 등록부 대조는 그대로다. 만들었으면 응답 `warnings` 에 「새 어휘 타입 "term" 을 만들었다」 가 실린다(오타는 지워지지 않으니 사람이 본다). 타입이 생겨도 **관리 문서(등록부)가 없으면 `sections` 는 못 쓴다** — `touches` 로만 닿는다.
 
 규칙 — 기존 `work/*.md` 는 수정·삭제하지 않는다(정정은 `supersedes` 를 단 새 기록). 어휘 삭제 없음(폐기는 사람이 `deprecated` 표기). `_managed.md` 는 `save` 로 바꾸지 않는다.
 
