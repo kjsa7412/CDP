@@ -1938,6 +1938,32 @@ else await check(109, L109, async () => {
   return `dry · 갱신 ${subj.split('|')[0]} · 두 번째 최신 · kit ${k0} → ${k1}`
 })
 
+await check(111, '스킬의 「push 는 하지 않는다」 는 모드 A 한정이다 — 모드 B 종료 보고는 save 응답(commit · mirror)이 근거고 push 안내가 없다', async () => {
+  // 모드 B 에서 「push 는 하지 않았습니다」 가 종료 보고에 옮겨졌다(2026-09-30) — 모드 B 에는 사람이 누를 push 가 없다.
+  const dir = path.join(ROOT, 'agent', 'skills')
+  const bad = []
+  for (const n of ['cdp-import', 'cdp-edit', 'cdp-managed']) {
+    const lines = (await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8')).split('\n')
+    lines.forEach((l, i) => {
+      if (!/push\s*(는|를)?\s*(하지 않|안 한|안 함)/.test(l)) return
+      // 같은 줄이거나 바로 앞 8줄 안에 어느 모드 얘기인지가 있어야 한다
+      const near = lines.slice(Math.max(0, i - 8), i + 1).join('\n')
+      if (!/모드 [AB]/.test(near)) bad.push(`${n}:${i + 1}`)
+    })
+  }
+  must(bad.length === 0, `모드 표시 없는 push 문구 — ${bad.join(' · ')}`)
+
+  const save = await fs.readFile(path.join(dir, 'cdp-save', 'SKILL.md'), 'utf8')
+  const at = save.indexOf('### 모드 B 의 종료 보고')
+  must(at > 0, 'cdp-save 에 「모드 B 의 종료 보고」 가 없다')
+  const sect = save.slice(at, save.indexOf('\n## ', at))
+  for (const k of ['commit', 'mirrorReason', 'mirrorLast', '"ok"', '"lag"', '"off"']) must(sect.includes(k), `종료 보고 표에 ${k} 가 없다`)
+  must(!/push\s*하세요|푸시하세요|직접 push/.test(sect), '모드 B 종료 보고에 push 를 시키는 말이 있다')
+  for (const n of ['cdp-import', 'cdp-edit', 'cdp-managed']) {
+    must((await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8')).includes('종료 보고'), `${n}: 모드 B 종료 보고 안내가 없다`)
+  }
+  return 'import · edit · managed 의 push 문구 모드 표시 · save ⑤B 종료 보고 표'
+})
 
 // ── 보고 ────────────────────────────────────────────────────────────────────
 
@@ -1951,6 +1977,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)
