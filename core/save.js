@@ -33,6 +33,8 @@ export const CONFLICT_CONTENT_MAX = 8000
 // 커밋(훅이 `bin/ctx check` · `ctx index` 를 돈다)의 상한 — git 기본 20초는 부하 걸린 기계에서 모자란다.
 // 넘어도 판정은 index.lock · HEAD 로 한다(10단계). 뮤텍스 안이라 그동안 다른 save 는 줄을 선다.
 export const COMMIT_TIMEOUT_MS = 120000
+// 남이 쥔 index.lock 때문에 커밋이 시작도 못 했을 때 다시 하는 횟수 — 잠금이 풀린 뒤에(10단계)
+export const LOCK_RETRIES = 2
 
 // ── 되돌리기 ────────────────────────────────────────────────────────────────
 //
@@ -219,8 +221,9 @@ export async function save(root, input, { user, write = false, mirror = false, n
     // 직전에 커밋을 마쳤을 수 있고 누가 `index.lock` 을 쥐었을 수 있으니, 잠금이 풀린 뒤 HEAD 로 판정한다.
     const paths = r.snap.paths()
     const head0 = await git.headSha(root)
-    let c = await git.commitPaths(root, paths, { message: r.title, author: user, timeout: commitTimeout })
-    if (!c.ok) {
+    const commit = () => git.commitPaths(root, paths, { message: r.title, author: user, timeout: commitTimeout })
+    let c = await commit()
+    for (let retry = 0; !c.ok; retry++) {
       if (!(await git.waitIndexUnlocked(root))) {
         // 5분이 지나도 잠겨 있다 — 커밋이 됐는지 모르니 손대지 않는다. 트리가 더러워 다음 save 가 알린다.
         throw new CtxError('E_GIT', '커밋이 됐는지 알 수 없다 — .git/index.lock 이 풀리지 않아 파일은 쓴 채로 두었다. 셸에서 git status · git log 로 확인한다', {
@@ -233,6 +236,10 @@ export async function save(root, input, { user, write = false, mirror = false, n
         // 커밋은 됐다 — 호출만 늦게 실패로 돌아왔다. 색인 · 파일 · INDEX 는 add 한 그대로다.
         c = { ok: true, commit: await git.headSha(root, { short: true }) }
         r.warnings.push(`커밋이 ${Math.round(commitTimeout / 1000)}초를 넘겨 늦게 끝났다 — 커밋 훅(check · index)이 느리다`)
+      } else if (c.reason !== 'timeout' && /index\.lock/.test(c.message || '') && retry < LOCK_RETRIES) {
+        // 남이 index.lock 을 잠깐 쥐어 add · commit 이 시작도 못 했다(HEAD 그대로) — 풀린 뒤 다시 한다.
+        // 뮤텍스 밖의 읽기는 이제 잠그지 않지만(`git.status`), 사람의 셸 · 다른 도구는 여전히 쥘 수 있다.
+        c = await commit()
       } else {
         // 색인에 올린 것을 먼저 내린다 — 파일만 돌리면 색인에 남아 다음 save 가 「더러운 트리」 로 막힌다
         await git.unstage(root, paths)

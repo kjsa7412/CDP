@@ -309,6 +309,74 @@ test('save — 훅이 시간을 넘겨도 「빈 커밋 + 옛 파일」 은 남�
   }
 })
 
+// 미러 큐 · doctor · 개요 · `/repos` 는 뮤텍스 밖에서 `git.status` 를 부른다 — 그것이 index.lock 을 쥐면
+// 다음 save 의 add · commit 이 `Unable to create '…/index.lock'` 로 죽었다(2026-09-29 하네스 91 · 가끔).
+test('git.status — 색인을 새로 써 두지 않는다(--no-optional-locks) · 값은 같다', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    const idx = path.join(R.r, '.git', 'index')
+    // stat 정보를 낡게 한다 — 보통의 `git status` 는 여기서 색인을 고쳐 쓴다(index.lock 을 쥐고)
+    const later = new Date(Date.now() + 5000)
+    await fs.utimes(path.join(R.r, 'README.md'), later, later)
+    const before = await fs.readFile(idx)
+    const st = await status(R.r)
+    assert.equal(st.dirty, 0)
+    assert.ok((await fs.readFile(idx)).equals(before), 'status 가 색인을 고쳐 썼다 — index.lock 을 쥐었다')
+    // 대조 — 옵션 없는 git status 는 고쳐 쓴다(이 시험이 무엇을 보는지)
+    await run('git', ['-C', R.r, 'status', '--porcelain'])
+    assert.ok(!(await fs.readFile(idx)).equals(before), '보통의 git status 도 색인을 안 썼다 — 시험이 아무것도 안 본다')
+  } finally {
+    await R.rm()
+  }
+})
+
+test('save — 동시 5건 동안 뮤텍스 밖에서 status 를 두드려도 전부 커밋 · 트리 깨끗', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    const n0 = await commits(R.r)
+    let stop = false
+    let polls = 0
+    const hammer = (async () => {
+      while (!stop) {
+        await status(R.r)
+        polls++
+      }
+    })()
+    const out = await Promise.all(
+      ['a', 'b', 'c', 'd', 'e'].map((v) => save(R.r, { work: work(`2026-0930-두드림-${v}`, `table:${v}`), sections: [{ coord: `table:${v}`, applied: null, body: `${v} 의 새 본문.` }] }, opt()))
+    )
+    stop = true
+    await hammer
+    assert.ok(polls > 0)
+    assert.equal(out.filter((o) => o.commit).length, 5)
+    assert.equal(await commits(R.r), n0 + 5)
+    assert.equal(await porcelain(R.r), '')
+  } finally {
+    await R.rm()
+  }
+})
+
+test('save — 남이 index.lock 을 잠깐 쥐면 풀린 뒤 다시 커밋한다 · 트리 깨끗', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    const h0 = await head(R.r)
+    const lock = path.join(R.r, '.git', 'index.lock')
+    await fs.writeFile(lock, '')
+    const t0 = Date.now()
+    const release = new Promise((res) => setTimeout(() => fs.rm(lock, { force: true }).then(res), 1200))
+    const v = await save(R.r, { work: work('2026-0930-잠금', 'table:a'), sections: [{ coord: 'table:a', applied: null, body: 'a 의 새 본문.' }] }, opt())
+    await release
+    assert.ok(Date.now() - t0 >= 1000, '잠금이 풀리기 전에 커밋했다 — 시험이 잠금을 못 만났다')
+    assert.ok(v.commit)
+    assert.notEqual(await head(R.r), h0)
+    assert.match((await run('git', ['-C', R.r, '-c', 'core.quotepath=false', 'show', '--stat', '--format=', 'HEAD'])).stdout, /잠금\.md/)
+    assert.equal(await porcelain(R.r), '')
+  } finally {
+    await fs.rm(path.join(R.r, '.git', 'index.lock'), { force: true })
+    await R.rm()
+  }
+})
+
 test('save — work.source: 프론트매터에 남고 · 시각 없는 date 경고를 끈다 · 깨지는 제목은 인용한다', { skip: !hasGit && 'git 이 없다' }, async () => {
   const R = await repo()
   try {

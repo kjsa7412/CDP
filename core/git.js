@@ -46,6 +46,13 @@ function run(cwd, args, { timeout = 20000 } = {}) {
   })
 }
 
+// **읽기는 index.lock 을 잡지 않는다.** `git status` 는 읽다가 색인의 stat 정보를 새로 고쳐 **써 두고**(선택 잠금),
+// 그동안 `.git/index.lock` 을 쥔다. 미러 큐 · doctor · 개요 · `/repos` 는 save 뮤텍스 밖에서 status 를 부르고,
+// 그것이 다음 save 의 `git add` · `git commit` 과 겹치면 커밋이 `Unable to create '…/index.lock': File exists` 로
+// 죽었다(2026-09-29 하네스 91 — 동시 save 5건 · --mirror, 가끔). `--no-optional-locks` 는 그 쓰기만 끈다 —
+// 읽는 값은 같다. 쓰기(add · commit · checkout · clean · reset · pull)는 그대로 잠근다.
+const READ_ONLY = ['--no-optional-locks']
+
 export async function isRepo(root) {
   return (await fs.access(path.join(root, '.git')).then(() => true).catch(() => false))
 }
@@ -70,7 +77,7 @@ export async function status(root) {
 
   // `-uall` — 미추적 폴더를 `work/` 로 접지 않고 파일로 낸다. 중단된 save 가 남긴 `work/<id>.md` 가 그대로 보여야
   // 사람이 무엇을 버리는지 안다. 깨끗한 레포에서는 비용이 없다.
-  const [s, hooksPath] = await Promise.all([run(root, ['status', '--porcelain=v2', '--branch', '--untracked-files=all']), readHooksPath(root)])
+  const [s, hooksPath] = await Promise.all([run(root, [...READ_ONLY, 'status', '--porcelain=v2', '--branch', '--untracked-files=all']), readHooksPath(root)])
   const head = {}
   let dirty = 0
   // 더러운 경로 — 앞 10개. `save` 의 거절 문장과 콘솔이 "무엇이" 를 말할 수 있어야 한다
@@ -333,7 +340,7 @@ export async function restoreTree(root) {
   const st = await status(root)
   if (!st.dirty) return { ok: true, discarded: [], status: st }
   // v2 로 읽는다 — v1 은 첫 줄의 앞 공백이 `run` 의 trim 에 잘려 `docs/t.md` 가 `ocs/t.md` 가 됐다(테스트가 잡았다)
-  const porcelain = await run(root, ['status', '--porcelain=v2', '--untracked-files=all'])
+  const porcelain = await run(root, [...READ_ONLY, 'status', '--porcelain=v2', '--untracked-files=all'])
   const discarded = porcelain.ok ? porcelain.out.split('\n').filter((l) => l && !l.startsWith('#')).map(porcelainPath) : st.dirtyPaths
   const co = await run(root, ['checkout', '--', '.'])
   if (!co.ok) return { ok: false, reason: 'failed', message: firstLine(co.err), discarded: [] }
