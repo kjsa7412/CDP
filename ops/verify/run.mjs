@@ -36,7 +36,9 @@ async function check(n, label, fn) {
     const note = await fn()
     rec(n, label, 'ok', note || '')
   } catch (e) {
-    rec(n, label, 'fail', String(e?.message || e).split(NL)[0].slice(0, 120))
+    // execFile 의 실패는 첫 줄이 `Command failed: <명령>` 뿐이다 — 사유는 stderr 에 있다(2026-09-30 93 이 그것만 남겼다)
+    const why = String(e?.stderr || '').split(NL).map((l) => l.trim()).find(Boolean)
+    rec(n, label, 'fail', String(e?.message || e).split(NL)[0].slice(0, 120) + (why ? ' — ' + why.slice(0, 160) : ''))
   }
 }
 const skip = (n, label, why) => rec(n, label, 'skip', why)
@@ -180,6 +182,14 @@ function serve(args) {
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+// 서버가 떴나 — 2.5초를 기다리고, 그래도 안 받으면 받을 때까지(최대 60초). 부하 걸린 기계에서 `--mirror` 서버가
+// 2.5초 안에 못 떠 91~97 이 전부 `fetch failed` 로 넘어졌다(2026-09-30 하네스). 응답이면 무엇이든 떴다는 뜻이다.
+async function ready(port, ms = 60000) {
+  await wait(2500)
+  for (const t0 = Date.now(); Date.now() - t0 < ms; await wait(300)) {
+    if (await fetch(`http://127.0.0.1:${port}/`, { redirect: 'manual' }).then(() => true, () => false)) return
+  }
+}
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
@@ -367,7 +377,7 @@ const TQ = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'qa', '--dat
 const TG = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'ghost', '--data', F.data)).stdout.trim()
 
 const S = serve(['--root', F.repos, '--port', String(PORT), '--auth', F.auth, '--data', F.data, '--web', path.join(ROOT, 'ops/out/web')])
-await wait(2500)
+await ready(PORT)
 const H = http(`http://127.0.0.1:${PORT}`)
 
 await check(22, '명부에 없는 --user 로 발급 → 거절', async () => {
@@ -1302,7 +1312,7 @@ await check(80, '명부가 비면 bootstrap.code · /setup 이 첫 관리자를 
   await fs.mkdir(D2, { recursive: true })
   const S2 = serve(['--root', F.repos, '--port', String(PORT + 1), '--auth', A2, '--data', D2, '--web', path.join(ROOT, 'ops/out/web')])
   try {
-    await wait(2500)
+    await ready(PORT + 1)
     const code = (await fs.readFile(path.join(D2, 'bootstrap.code'), 'utf8')).trim()
     must(code.length >= 24, '코드 파일')
     must(/첫 관리자가 없다/.test(S2.err()), 'stderr 한 줄')
@@ -1484,7 +1494,7 @@ await check(88, 'v1.1 명부(write:true) 를 서버가 읽으면 writer · admin
   )
   const S3 = serve(['--root', F.repos, '--port', String(PORT + 2), '--auth', A3, '--data', D3, '--admin-from', '10.0.0.0/8'])
   try {
-    await wait(2500)
+    await ready(PORT + 2)
     const base = `http://127.0.0.1:${PORT + 2}`
     const me = await (await fetch(`${base}/me`, { headers: { authorization: 'Bearer ' + rawOld } })).json()
     eq(me.role, 'writer', 'write:true → writer')
@@ -1631,14 +1641,15 @@ await run('git', ['-C', MU, 'push', '-q', '-u', 'origin', 'HEAD'])
 await ctx('serve', 'user', 'add', '--auth', F.auth, '--name', 'mw', '--repos', '*', '--role', 'writer', '--data', F.data)
 const TMW = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'mw', '--data', F.data)).stdout.trim()
 const SM = serve(['--root', MROOT, '--port', String(MPORT), '--auth', F.auth, '--data', MDATA, '--mirror', '--web', path.join(ROOT, 'ops/out/web')])
-await wait(2500)
+await ready(MPORT)
 const HM = http(`http://127.0.0.1:${MPORT}`)
 const AM = (p, opt = {}) => fetch(`http://127.0.0.1:${MPORT}${p}`, { redirect: 'manual', ...opt })
 const mtool = async (name, args, tk) => payload((await HM.rpc('/mcp/mu', 'tools/call', { name, arguments: { repo: 'mu', ...args } }, tk)).j)
 const gitq = (...a) => run('git', ['-C', MU, '-c', 'core.quotepath=false', ...a]).then((r) => r.stdout.trim())
 const mrepo = async (tk = TKA) => (await (await AM('/repos', { headers: { authorization: 'Bearer ' + tk } })).json()).find((r) => r.name === 'mu')
 // 미러 큐가 끝날 때까지 — `/repos` 의 행이 조건을 만족할 때까지 기다린다(최대 ms). 문자열이면 그 상태(사유까지 실린 뒤)
-const untilMirror = async (want, ms = 10000) => {
+// 30초 — 부하 걸린 기계(다른 프로젝트의 시험이 돌던 2026-09-30)에서 로컬 bare 로의 push 가 10초를 넘겼다. 맞으면 바로 돌아온다
+const untilMirror = async (want, ms = 30000) => {
   const t0 = Date.now()
   const ok = typeof want === 'function' ? want : (r) => r.mirror === want && (want === 'ok' || want === 'off' || !!r.mirrorReason)
   for (;;) {
@@ -1695,6 +1706,9 @@ try {
   })
 
   await check(93, '미러 non-ff — 로컬형이 origin 에 먼저 push → save 는 되고 mirror diverged · 사유 non-ff · /repos · overview · doctor · brief · sync 는 rebase 문장으로 거절 · 사람이 rebase 뒤 「다시 보내기」 ok', async () => {
+    // 92 의 save 는 미러를 1.5초만 기다리고 `queued` 로 답한다 — 그 push 가 끝나기 전에 clone 하면 clone 의 push 가
+    // non-ff 로 거절되고 94~97 이 줄줄이 넘어졌다(2026-09-30 하네스). origin 이 서버와 같아진 뒤에 clone 한다.
+    eq((await untilMirror('ok')).mirror, 'ok', '앞 save 의 미러')
     const C = path.join(TMP, 'mirror', 'clone')
     await run('git', ['clone', '-q', MBARE, C])
     await fs.appendFile(path.join(C, 'README.md'), NL + '로컬형이 origin 에 먼저.' + NL)
@@ -1715,6 +1729,8 @@ try {
     const sy = await mtool('sync', {}, TMW)
     eq(sy.mirror, 'diverged', 'sync.mirror')
     eq(sy.mirrorReason, 'non-ff', 'sync.mirrorReason')
+    // 로그 줄은 큐가 fetch · status 를 마친 **뒤에** 나온다 — /repos 가 diverged 를 먼저 보일 수 있다(2026-09-30 부하에서 1초 늦었다)
+    for (const t0 = Date.now(); !SM.err().includes('미러 실패 mu:') && Date.now() - t0 < 10000; ) await wait(200)
     must(SM.err().includes('미러 실패 mu: origin 에 서버가 모르는 커밋이 있다'), '로그 사유: ' + SM.err().split(NL).filter((l) => l.includes('미러')).join(' | '))
     const ov = await (await AM('/admin/overview', ADM(TKA))).json()
     must(ov.alerts.some((x) => x.level === 'bad' && /origin 과 갈라진 레포 1/.test(x.text)), 'overview 경고: ' + JSON.stringify(ov.alerts))
@@ -1762,7 +1778,7 @@ try {
     const o = await mtool('save', { work: { id: '2026-0925-맞춘뒤', title: '맞춘 뒤', date: '2026-09-25 13:00', touches: ['table:rp_plnd_chg_mst'], body: '맞춘 뒤' }, sections: [{ coord: 'table:rp_plnd_chg_mst', applied: s.applied, body: '**정의** 맞춘 뒤.' }] }, TMW)
     must(o.commit, JSON.stringify(o.error))
     const r = await untilMirror('ok')
-    eq(r.mirror, 'ok', 'mirror 뒤')
+    eq(r.mirror, 'ok', 'mirror 뒤 ' + (r.mirrorReason || ''))
     eq((await run('git', ['-C', MBARE, 'rev-parse', 'HEAD'])).stdout.trim(), await gitq('rev-parse', 'HEAD'), 'origin = local')
     return `warn → sync pulled 1 → save ${o.commit} → origin = local`
   })
