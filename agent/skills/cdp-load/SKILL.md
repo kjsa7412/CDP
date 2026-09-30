@@ -1,13 +1,13 @@
 ---
 name: cdp-load
-description: 좌표를 인자로 받아 그 대상의 현재 상태(관리 문서 섹션)를 맥락으로 주입한다. cdp-work 의 ② 단계가 이것을 쓴다. 좌표를 이미 알고 있어 맥락만 보고 싶을 때 단독으로도 쓴다 — 예를 들어 "table:rp_plnd_mst 지금 어떻게 돼 있어?".
+description: 좌표를 인자로 받아 그 대상의 현재 상태(관리 문서 섹션)를 맥락으로 주입한다. cdp-work 의 ② 단계가 이것을 쓴다. 좌표를 이미 알고 있어 맥락만 보고 싶을 때 단독으로도 쓴다 — 예를 들어 "table:pj_plan_mst 지금 어떻게 돼 있어?".
 ---
 
 # cdp-load — 좌표의 현재 상태를 주입한다
 
 ```
 cdp-load <좌표> [<좌표> …]
-cdp-load table:rp_plnd_mst screen:PSC043
+cdp-load table:pj_plan_mst screen:HRC043
 ```
 
 **좌표를 스스로 추출하지 않는다.** 추출은 `cdp-work` 의 ① 검토가 하고, 이 skill 은
@@ -96,18 +96,18 @@ sync()
 ```
 | 좌표 패턴     | 관리 문서                    | 섹션      |
 | table:*      | docs/테이블정의서.md          | ## {값}   |
-| screen:PS*   | docs/화면정의서_인사.md       | ## {값}   |
+| screen:HR*   | docs/화면정의서_인사.md       | ## {값}   |
 ```
 
 **`ctx where <좌표>` 가 등록부 조회와 반영 확인을 한 번에 한다.** 이것을 먼저 쓴다.
 
 ```
-where("screen:PSC043")
+where("screen:HRC043")
 ```
 ```
-screen:PSC043
+screen:HRC043
   문서   docs/화면정의서_인사.md
-  섹션   ## PSC043
+  섹션   ## HRC043
   상태   반영 2026-0821-면접심사의견-개편
   작업   1건
     2026-08-21  2026-0821-면접심사의견-개편
@@ -132,7 +132,7 @@ screen:PSC043
 섹션 머리의 주석이 마지막으로 반영된 작업 기록이다.
 
 ```markdown
-## rp_plnd_mst — 계획서마스터
+## pj_plan_mst — 계획서마스터
 <!-- applied: 2026-0821-계획서-상태값추가 -->
 ```
 
@@ -153,7 +153,7 @@ screen:PSC043
 
 ```
 2026-0710-ERP-어댑터-v1
-  table:rp_plnd_mst           후속 3건   ← 이 부분은 갱신됐을 수 있다
+  table:pj_plan_mst           후속 3건   ← 이 부분은 갱신됐을 수 있다
   api:/adapter/erp/plan-sync  최신       ← 이 부분은 이 문서가 마지막 말이다
 ```
 
@@ -186,8 +186,8 @@ id 나열은 수십 토큰이고, 얻는 것은 "더 있다"를 알고 필요하
 좌표마다 이 블록을 낸다.
 
 ```
-[좌표]   table:rp_plnd_mst
-[정본]   docs/테이블정의서.md  ## rp_plnd_mst        ← 자리
+[좌표]   table:pj_plan_mst
+[정본]   docs/테이블정의서.md  ## pj_plan_mst        ← 자리
 [범위]   그 섹션만 — 24줄 · 약 700자 (docs/테이블정의서.md:112)
          **이 문서의 다른 섹션도, 이 좌표를 건드린 작업 기록도 안 실었다**
 [상태]   반영 2026-0903-계획서-이력테이블
@@ -195,16 +195,16 @@ id 나열은 수십 토큰이고, 얻는 것은 "더 있다"를 알고 필요하
          (섹션 본문 그대로)
 
 [근거]   2026-0710-ERP-어댑터-v1
-         · table:rp_plnd_mst          후속 3건 — 이 부분은 갱신됐을 수 있음
+         · table:pj_plan_mst          후속 3건 — 이 부분은 갱신됐을 수 있음
          · api:/adapter/erp/plan-sync 최신
 [절단]   매칭 8건 중 3건 주입. 나머지 id: 2026-06…, 2026-05…
-[보기]   viewer 검색창(Ctrl+K)에 `table:rp_plnd_mst` — 섹션은 오른쪽 목차
+[보기]   viewer 검색창(Ctrl+K)에 `table:pj_plan_mst` — 섹션은 오른쪽 목차
 ```
 
 `[정본]` · `[범위]` 는 `ctx where` 가 그대로 준다. 좌표 여럿을 한 번에 넘길 수 있다.
 
 ```
-where("table:rp_plnd_mst")
+where("table:pj_plan_mst")
 ```
 
 | 줄 | 언제 |
@@ -248,7 +248,7 @@ where("table:rp_plnd_mst")
 
 ### 사용자
 
-> `table:rp_plnd_mst` 지금 어떻게 돼 있어?
+> `table:pj_plan_mst` 지금 어떻게 돼 있어?
 
 ### 0. 최신 확인
 
@@ -260,10 +260,10 @@ sync()
 ### 1~3. 주입
 
 ```
-where("table:rp_plnd_mst")
-table:rp_plnd_mst
+where("table:pj_plan_mst")
+table:pj_plan_mst
   문서   docs/테이블정의서.md
-  섹션   ## rp_plnd_mst
+  섹션   ## pj_plan_mst
   상태   반영 2026-0428-계획서-이력3종
   작업   3건
     2026-04-28  2026-0428-계획서-이력3종
@@ -274,11 +274,11 @@ table:rp_plnd_mst
 섹션 본문을 그대로 낸다.
 
 ```
-【주입 — table:rp_plnd_mst】
-  정본   docs/테이블정의서.md  ## rp_plnd_mst
+【주입 — table:pj_plan_mst】
+  정본   docs/테이블정의서.md  ## pj_plan_mst
   상태   최신 (파생 남음 없음)
 
-  ## rp_plnd_mst — 계획서마스터
+  ## pj_plan_mst — 계획서마스터
   (섹션 본문 …)
 ```
 
@@ -290,13 +290,13 @@ table:rp_plnd_mst
 
 ```
 match(["계획서마스터"])
-계획서마스터  ->  table:rp_plnd_mst  (alias · _vocab.md:27)
+계획서마스터  ->  table:pj_plan_mst  (alias · _vocab.md:27)
 ```
 
 **바꿨다는 사실을 출력에 적는다.**
 
 ```
-【주입 — table:rp_plnd_mst】  ("계획서마스터" 를 정본으로 바꿨습니다)
+【주입 — table:pj_plan_mst】  ("계획서마스터" 를 정본으로 바꿨습니다)
 ```
 
 적지 않으면 사용자는 자기가 부른 이름이 정본인 줄 안다. 그리고 다음에도
@@ -305,23 +305,23 @@ match(["계획서마스터"])
 ## 예시 3 — 파생이 남아 있을 때 (**가장 중요**)
 
 ```
-where("table:ps_ext_emp_mst")
-table:ps_ext_emp_mst
+where("table:hr_ext_emp_mst")
+table:hr_ext_emp_mst
   문서   docs/테이블정의서.md
-  섹션   ## ps_ext_emp_mst
-  상태   파생 남음 — 작업 2건  (ctx apply table:ps_ext_emp_mst)
+  섹션   ## hr_ext_emp_mst
+  상태   파생 남음 — 작업 2건  (ctx apply table:hr_ext_emp_mst)
 ```
 
 ```
-【주입 — table:ps_ext_emp_mst】
+【주입 — table:hr_ext_emp_mst】
   ⚠ **이 섹션은 아직 안 채워진 상태입니다.** 2건이 남아 있습니다 —
-     2026-09-02  EXA021 외부 심의위원 …
+     2026-09-02  BZA021 외부 심의위원 …
      2026-09-03  …
 
   아래 섹션 내용은 그 2건이 빠진 상태이므로, 설계 근거로 쓰기 전에
   두 작업 기록을 확인하는 것이 좋습니다.
 
-  ## ps_ext_emp_mst — 외부인원마스터
+  ## hr_ext_emp_mst — 외부인원마스터
   (섹션 본문 …)
 ```
 
@@ -332,15 +332,15 @@ table:ps_ext_emp_mst
 
 ### 사용자
 
-> `table:rp_trip_photo_list` 어떻게 돼 있어?
+> `table:pj_trip_photo_list` 어떻게 돼 있어?
 
 ```
-match(["rp_trip_photo_list"])
-  rp_trip_photo_list  ->  (미등재)  _vocab.md 에 없습니다
+match(["pj_trip_photo_list"])
+  pj_trip_photo_list  ->  (미등재)  _vocab.md 에 없습니다
 ```
 
 ```
-【주입 — table:rp_trip_photo_list】
+【주입 — table:pj_trip_photo_list】
   ⚠ **_vocab.md 에 없는 이름입니다.** 좌표가 아직 아닙니다.
      이 이름으로 작업 기록을 남기면 커밋이 막힙니다 —
      먼저 어휘에 등재해야 합니다.
@@ -349,9 +349,9 @@ match(["rp_trip_photo_list"])
 **`ctx where` 로 확인하지 마라.** 등재되지 않은 좌표에도 답을 준다 —
 
 ```
-where("table:rp_trip_photo_list")
+where("table:pj_trip_photo_list")
   문서   docs/테이블정의서.md
-  섹션   ## rp_trip_photo_list       ← 등록부 패턴으로 **계산한 자리**다
+  섹션   ## pj_trip_photo_list       ← 등록부 패턴으로 **계산한 자리**다
   작업   0건                          ← 등재됐다는 뜻이 아니다
 ```
 
@@ -385,9 +385,9 @@ sync()
 | 본문 | 터미널 |
 |---|---|
 | `match(["a","b"])` | `ctx match "a" "b"` |
-| `where("screen:PSC043")` | `ctx where screen:PSC043` |
-| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
-| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `where("screen:HRC043")` | `ctx where screen:HRC043` |
+| `section("screen:HRC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:HRC043")` | `ctx apply screen:HRC043` |
 | `derive()` | `ctx derive` |
 | `check()` | `ctx check` |
 | `sync()` | `ctx sync` |

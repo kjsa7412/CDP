@@ -18,7 +18,7 @@ function escapeLiteral(s) {
   return out
 }
 
-// `screen:SE*` → /^screen:SE.*$/   `table:*` → /^table:.*$/
+// `screen:RS*` → /^screen:RS.*$/   `table:*` → /^table:.*$/
 // glob 의 * 만 지원한다. 정규식을 그대로 허용하면 등록부가 읽기 어려워지고,
 // 등록부는 사람이 읽고 고치는 표다.
 function patternToRegex(pat) {
@@ -95,7 +95,7 @@ export function parseRegistry(text) {
   return { rules, errors, present: rules.length > 0 }
 }
 
-// 위에서부터 먼저 걸리는 규칙. `screen:SEB010` 은 `screen:SE*` 에 걸리고
+// 위에서부터 먼저 걸리는 규칙. `screen:RSB010` 은 `screen:RS*` 에 걸리고
 // `screen:*` 까지 내려가지 않는다.
 export function resolveCoord(registry, coord) {
   if (!registry || !registry.rules.length) return null
@@ -109,7 +109,7 @@ export function resolveCoord(registry, coord) {
 
 // 관리 문서를 섹션으로 분해한다.
 //
-//   ## rp_plnd_mst — 계획서마스터
+//   ## pj_plan_mst — 계획서마스터
 //   <!-- applied: 2026-0821-계획서-상태값추가 -->
 //
 // applied 가 null 이거나 없으면 **아직 정리되지 않은 섹션**이다. 빈 섹션을
@@ -125,7 +125,7 @@ export function parseManagedSections(text) {
     found.push({
       level: h[1].length,
       title,
-      // "rp_plnd_mst — 계획서마스터" → 값은 구분선 앞
+      // "pj_plan_mst — 계획서마스터" → 값은 구분선 앞
       value: title.split(/\s+[—–-]\s+/)[0].trim(),
       line: i,
     })

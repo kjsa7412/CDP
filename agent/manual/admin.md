@@ -70,12 +70,12 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 
 ## table
 
-- `table:rp_plnd_mst` — 계획서마스터
+- `table:pj_plan_mst` — 계획서마스터
   aliases: 계획서, 연구계획서
 
 ## screen
 
-- `screen:PLA011` — 연구계획서 등록
+- `screen:PJA011` — 연구계획서 등록
   aliases: 계획서등록
 ```
 
@@ -325,8 +325,8 @@ exit 1** 이다.
 **관리자를 기다리게 하지 않는다.**
 
 ```markdown
-- `code:PS130` — 외부인원 업무구분
-  aliases: 업무구분코드, PS130
+- `code:HR130` — 외부인원 업무구분
+  aliases: 업무구분코드, HR130
 ```
 
 ### 정리하기 — 관리자가 한다
@@ -380,7 +380,7 @@ ctx search <말...>    말 → 좌표 후보 (대조가 미등재를 낼 때)
 ```
 
 **넣지 말 것** — 그 대상의 **속성**. `결제수단`·`과세구분` 은 그 자체가 다른
-좌표(`code:AC-040` 등)이므로 여기 넣으면 서로 잡아먹는다. **먼저 등재된 쪽이
+좌표(`code:FI-040` 등)이므로 여기 넣으면 서로 잡아먹는다. **먼저 등재된 쪽이
 조용히 이긴다** — 충돌은 오류로 안 나온다.
 
 > 좌표 이름이 **API 경로나 모듈명**인 타입을 특히 살펴라. 요구사항은 업무
@@ -389,9 +389,9 @@ ctx search <말...>    말 → 좌표 후보 (대조가 미등재를 낼 때)
 ### 지우지 않는다
 
 ```markdown
-- `table:rp_rdc_opl_mst` — 연관위 의견 (구)
+- `table:pj_rev_opn_mst` — 연관위 의견 (구)
   deprecated: 2026-03-26 오타 정정
-  supersededBy: table:rp_rdc_opl_list
+  supersededBy: table:pj_rev_opn_list
 ```
 
 **과거 문서가 그 이름을 쓰고 있다.** 지우면 그 문서들이 검색에서 사라지고,

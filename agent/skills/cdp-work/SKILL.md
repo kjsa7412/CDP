@@ -53,24 +53,24 @@ description: 작업 요청을 CDP 절차로 수행한다 — ① 검토(대상 �
 3. **이름을 정본 좌표로 대조한다.**
 
    ```
-   match(["면접심사의견등록", "PS130", "서류심사"])
+   match(["면접심사의견등록", "HR130", "서류심사"])
    ```
    ```
-   면접심사의견등록  ->  screen:PSC043  (이름 일치 · _vocab.md:70)
-   PS130             ->  code:PS130     (값 일치 · _vocab.md:112)
-   서류심사          ->  screen:PSC031  (alias 일치 · _vocab.md:68)
+   면접심사의견등록  ->  screen:HRC043  (이름 일치 · _vocab.md:70)
+   HR130             ->  code:HR130     (값 일치 · _vocab.md:112)
+   서류심사          ->  screen:HRC031  (alias 일치 · _vocab.md:68)
    ```
 
    **타입 이름을 짐작하지 마라.** 위 출력의 `screen:` · `code:` 는 이 예시
    레포의 것이고, 타입은 `_vocab.md` 가 정한다 — 관리문서 이름을 한글로 쓰는
-   레포도 있다(`화면설계서:PSC043`). `match` 가 그 레포의 정본을 돌려준다.
+   레포도 있다(`화면설계서:HRC043`). `match` 가 그 레포의 정본을 돌려준다.
 
    `(미등재)` 로 나오면 어휘에 없는 것이다. 그대로 두고 ①의 출력에 적어라 —
    커밋 때 검사가 막는다. 여기서 임의로 다른 좌표로 바꾸지 마라.
 
    **폐기 좌표를 쓰면 후속을 알려준다.** 그러면 후속 좌표를 쓴다.
    ```
-   연심회의견상세  ->  table:rp_rdc_opl_dtl  [폐기 2026-03-26 -> table:rp_rdc_opl_mst]
+   연심회의견상세  ->  table:pj_rev_opn_dtl  [폐기 2026-03-26 -> table:pj_rev_opn_mst]
    ```
 
    **`cdp` 도구가 없다면** `_vocab.md` 를 직접 읽어 대조한다. 그 파일은 사람이
@@ -129,7 +129,7 @@ description: 작업 요청을 CDP 절차로 수행한다 — ① 검토(대상 �
 판정을 낸 뒤, **주입할 좌표에 대해 자리를 한 번에 묻는다.**
 
 ```
-where("screen:PSC043")
+where("screen:HRC043")
 ```
 
 좌표 여럿을 한 번에 받아 **어느 문서 어느 섹션인지와 그 섹션의 크기**를 준다.
@@ -138,18 +138,18 @@ where("screen:PSC043")
 
 ```
 【검토】
-요청  PSC043 면접심사의견등록에 심사위원 연대서명 출력물을 추가한다
+요청  HRC043 면접심사의견등록에 심사위원 연대서명 출력물을 추가한다
 
 대상
-  screen:PSC043      변경   출력물 2종 추가
-  code:PS130         ?      업무구분 코드를 쓸지 미정
-  screen:PSC031      참조   첨부를 읽어오지만 PSC031 은 안 바뀜 → 좌표 아님
+  screen:HRC043      변경   출력물 2종 추가
+  code:HR130         ?      업무구분 코드를 쓸지 미정
+  screen:HRC031      참조   첨부를 읽어오지만 HRC031 은 안 바뀜 → 좌표 아님
 
 주입  2건 — 각 좌표의 **섹션 하나씩**이다 (문서 전체가 아니다)
 
-  screen:PSC043   docs/화면설계서.md  ## PSC043
+  screen:HRC043   docs/화면설계서.md  ## HRC043
                   22줄 · 약 610자 · 반영 2026-0821-면접심사의견-개편
-  code:PS130      docs/코드정의서.md  ## PS130
+  code:HR130      docs/코드정의서.md  ## HR130
                   9줄 · 약 88자 · 아직 실린 작업 없음
 
   viewer: 검색창(Ctrl+K)에 좌표를 붙여 넣으면 그 문서로 간다.
@@ -179,7 +179,7 @@ where("screen:PSC043")
 *"제약이 없다"* 로 바꿔 읽게 된다 — 확신 있게 틀린 답이 나온다.
 
 ```
-  screen:ACA011   docs/화면설계서.md  ## ACA011
+  screen:FIA011   docs/화면설계서.md  ## FIA011
                   3줄 · 약 12자 · ** 사실상 비어 있다
                   → 이 화면의 현재 규칙은 문서에 없다. 코드에서 읽어야 한다
 ```
@@ -230,7 +230,7 @@ id 는 **이름**이라 읽어도 요청 해석이 편향되지 않는다. 본�
 
 | 상황 | |
 |---|---|
-| 사용자가 대상을 이미 명시 (*"PSC043 화면에…"*) | 대상 한 줄로 압축 |
+| 사용자가 대상을 이미 명시 (*"HRC043 화면에…"*) | 대상 한 줄로 압축 |
 | 좌표 후보가 0개 | `주입  없음` 만 적고 ③으로 |
 | **요청이 크고 모호** (*"채용 쪽 정리해줘"*) | **여기서 되묻고 멈춘다.** ②③으로 가지 마라. 맥락 문제가 아니라 요청 문제다 |
 
@@ -268,7 +268,7 @@ pull 을 강제하지는 않는다. ff 가 안 될 때 **보는 것조차 막히
 **`cdp-load` skill 을 부를 수 있으면 부른다.**
 
 ```
-cdp-load screen:PSC043 code:PS130
+cdp-load screen:HRC043 code:HR130
 ```
 
 **부를 수 없으면 `<repo>/.claude/skills/cdp-load/SKILL.md` 를 읽어 그 절차를 그대로 따른다.**
@@ -277,13 +277,13 @@ cdp-load screen:PSC043 code:PS130
 좌표 하나만 빠르게 보려면 `ctx where` 가 더 싸다.
 
 ```
-where("table:ps_ext_emp_mst")
+where("table:hr_ext_emp_mst")
 ```
 ```
-table:ps_ext_emp_mst
+table:hr_ext_emp_mst
   문서   docs/테이블정의서.md
-  섹션   ## ps_ext_emp_mst
-  상태   파생 남음 — 작업 2건 (ctx apply table:ps_ext_emp_mst)
+  섹션   ## hr_ext_emp_mst
+  상태   파생 남음 — 작업 2건 (ctx apply table:hr_ext_emp_mst)
   주입   그 섹션만 — 18줄 · 약 520자 (docs/테이블정의서.md:839)
 ```
 
@@ -313,7 +313,7 @@ table:ps_ext_emp_mst
 2. **파생 남음·후속·절단을 답변에 옮긴다.** ②에서 확인한 것을 사용자가 알아야 한다.
 
    ```
-   ⚠ 테이블정의서의 ps_ext_emp_mst 섹션에 파생이 2건 남아 있습니다.
+   ⚠ 테이블정의서의 hr_ext_emp_mst 섹션에 파생이 2건 남아 있습니다.
       아래 설계는 아직 안 채워진 상태를 기준으로 한 것이므로,
       2026-0902·2026-0903 작업 내용을 확인하는 것이 좋습니다.
    ```
@@ -361,12 +361,12 @@ table:ps_ext_emp_mst
 
 ```
 $ C:\cdp\bin\ctx match "출장복명작성"
-출장복명작성  ->  screen:EXD020  (alias · _vocab.md:118)
+출장복명작성  ->  screen:BZD020  (alias · _vocab.md:118)
 ```
 
 ```
 【대상】
-  screen:EXD020    출장복명작성 — 이 화면을 바꾼다
+  screen:BZD020    출장복명작성 — 이 화면을 바꾼다
 ```
 
 ### ② 주입
@@ -378,10 +378,10 @@ $ C:\cdp\bin\ctx sync
 ```
 
 ```
-$ C:\cdp\bin\ctx where screen:EXD020
-screen:EXD020
+$ C:\cdp\bin\ctx where screen:BZD020
+screen:BZD020
   문서   docs/화면설계서.md
-  섹션   ## EXD020
+  섹션   ## BZD020
   상태   반영 2026-0821-출장복명-입력영역
   작업   1건
 ```
@@ -389,7 +389,7 @@ screen:EXD020
 섹션을 읽는다.
 
 ```markdown
-## EXD020 — 출장복명작성
+## BZD020 — 출장복명작성
 <!-- applied: 2026-0821-출장복명-입력영역 -->
 
 출장복명작성.
@@ -460,7 +460,7 @@ screen:EXD020
 ①에서 대상이 0개면 ②를 건너뛰고 ③으로 간다. 그리고 이런 요청은 애초에
 skill 이 발동하지 않는 것이 맞다.
 
-**억지로 좌표를 붙이지 마라.** `screen:EXD020` 을 다루는 코드 안의 정규식
+**억지로 좌표를 붙이지 마라.** `screen:BZD020` 을 다루는 코드 안의 정규식
 이라 해도, 그 정규식을 고치는 것이 화면 사양을 바꾸는 것은 아니다.
 
 ---
@@ -481,7 +481,7 @@ $ C:\cdp\bin\ctx sync
 
 ```
 ⚠ 원격에 3건이 있는데 받지 않은 상태로 설계했습니다. cdp-save 가 시작할 때
-   pull 하므로, 그때 EXD020 섹션이 달라져 있으면 다시 봐야 합니다.
+   pull 하므로, 그때 BZD020 섹션이 달라져 있으면 다시 봐야 합니다.
 ```
 
 ---
@@ -497,9 +497,9 @@ $ C:\cdp\bin\ctx sync
 | 본문 | 터미널 |
 |---|---|
 | `match(["a","b"])` | `ctx match "a" "b"` |
-| `where("screen:PSC043")` | `ctx where screen:PSC043` |
-| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
-| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `where("screen:HRC043")` | `ctx where screen:HRC043` |
+| `section("screen:HRC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:HRC043")` | `ctx apply screen:HRC043` |
 | `derive()` | `ctx derive` |
 | `check()` | `ctx check` |
 | `sync()` | `ctx sync` |

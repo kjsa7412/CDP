@@ -74,7 +74,7 @@ git -C <repo> pull --ff-only
 
 > **타입 이름은 `_vocab.md` 가 정본이다.** 아래 예시의
 > `screen:` · `table:` 은 설명용이고 레포마다 다르다 — 관리문서 이름을
-> 한글로 쓰는 레포도 있다(`화면설계서:PSC043`). **먼저 `_vocab.md` 를 열어라.**
+> 한글로 쓰는 레포도 있다(`화면설계서:HRC043`). **먼저 `_vocab.md` 를 열어라.**
 
 ### 무엇이 좌표인가
 
@@ -132,11 +132,11 @@ match(["면접심사의견등록", "업무구분코드", "서류심사"])
 ```
 【좌표 판정】
   ―― 넣는다 ――
-  screen:PSC043         변경   출력물 2종 추가
-  table:ps_ext_emp_mst  변경   wrk_tp_cd · tel_no 추가
-  code:PS130            신설   업무구분 코드그룹 (미등재 → 등재한다)
+  screen:HRC043         변경   출력물 2종 추가
+  table:hr_ext_emp_mst  변경   wrk_tp_cd · tel_no 추가
+  code:HR130            신설   업무구분 코드그룹 (미등재 → 등재한다)
   ―― 뺀다 ――
-  screen:PSC031         참조   첨부를 읽어오지만 안 바뀜 → 좌표 아님
+  screen:HRC031         참조   첨부를 읽어오지만 안 바뀜 → 좌표 아님
   module:grid-common    사용   컴포넌트를 썼을 뿐 → 좌표 아님
   ―― 이슈로 ――
   (없음)
@@ -181,17 +181,17 @@ date: 2026-09-08 14:30
 ```markdown
 ---
 id: 2026-0821-면접심사의견-개편
-title: 면접심사의견등록(PSC043) 개편 — 현황/작성 화면 분리
+title: 면접심사의견등록(HRC043) 개편 — 현황/작성 화면 분리
 date: 2026-08-21
 author: dev.a
 touches:
-  - screen:PSC043
-  - table:ps_ext_emp_mst
-  - code:PS130
+  - screen:HRC043
+  - table:hr_ext_emp_mst
+  - code:HR130
 tags: [채용, 화면개편]
 ---
 
-# 면접심사의견등록(PSC043) 개편 — 현황/작성 화면 분리
+# 면접심사의견등록(HRC043) 개편 — 현황/작성 화면 분리
 
 (본문 — 자유 형식)
 ```
@@ -246,9 +246,9 @@ supersedes: 2026-0902-업무이력-오기재
 **등록부가 답한다. 어느 문서를 고칠지 생각하지 마라.**
 
 ```
-where("screen:PSC043")
-where("table:ps_ext_emp_mst")
-where("code:PS130")
+where("screen:HRC043")
+where("table:hr_ext_emp_mst")
+where("code:HR130")
 where("module:grid-common")
 ```
 
@@ -257,14 +257,14 @@ where("module:grid-common")
 ### 초안 받기
 
 ```
-apply("table:ps_ext_emp_mst")
+apply("table:hr_ext_emp_mst")
 ```
 ```
-# docs/테이블정의서.md  ## ps_ext_emp_mst
+# docs/테이블정의서.md  ## hr_ext_emp_mst
 
-<!-- applied: 2026-0821-면접심사의견-개편 -> 2026-0902-EXA021-외부심의위원 -->
+<!-- applied: 2026-0821-면접심사의견-개편 -> 2026-0902-BZA021-외부심의위원 -->
 
-**변경** · 2026-09-02 [`EXA021-외부심의위원`](../work/2026-0902-EXA021-외부심의위원.md)
+**변경** · 2026-09-02 [`BZA021-외부심의위원`](../work/2026-0902-BZA021-외부심의위원.md)
 ```
 
 `ctx apply` 는 **파일을 고치지 않는다.** 변경 줄과 새 `applied` 값만 준다.
@@ -274,14 +274,14 @@ apply("table:ps_ext_emp_mst")
 ### 섹션만 바꾼다
 
 ```diff
-  ## ps_ext_emp_mst — 외부인원마스터
+  ## hr_ext_emp_mst — 외부인원마스터
 - <!-- applied: 2026-0715-외부인원-신설 -->
 + <!-- applied: 2026-0821-면접심사의견-개편 -->
 
   | 컬럼 | 타입 | 길이 | NULL | 키 | 설명 |
   |---|---|---|:--:|:--:|---|
   | `email` | varchar | 100 | Y | | 이메일 |
-+ | `wrk_tp_cd` | varchar | 10 | Y | | 업무구분코드 (PS130) |
++ | `wrk_tp_cd` | varchar | 10 | Y | | 업무구분코드 (HR130) |
 + | `tel_no` | varchar | 20 | Y | | 전화번호 |
 
 + **변경** · 2026-08-21 [`면접심사의견-개편`](../work/2026-0821-면접심사의견-개편.md) `wrk_tp_cd`·`tel_no` 추가
@@ -339,8 +339,8 @@ apply("table:ps_ext_emp_mst")
 ②에서 `(미등재)` 가 나왔으면 `<repo>/_vocab.md` 의 해당 타입 섹션에 **한 줄 추가**한다.
 
 ```markdown
-- `code:PS130` — 외부인원 업무구분
-  aliases: 업무구분코드, PS130
+- `code:HR130` — 외부인원 업무구분
+  aliases: 업무구분코드, HR130
 ```
 
 **`aliases` 가 이 파일의 값어치다.** 정본만 적으면 작성자만 편해지고, alias 가 있어야
@@ -378,7 +378,7 @@ git -C <repo> push
 **작업 기록 1 + 관리 문서 N 을 한 커밋에 넣는다.** 그러면:
 
 ```
-git log -L '/## ps_ext_emp_mst/,/^## /:docs/테이블정의서.md'
+git log -L '/## hr_ext_emp_mst/,/^## /:docs/테이블정의서.md'
 ```
 
 그 테이블의 변경 이력이 그대로 나온다. **git 이 이미 형상관리 도구이고 우리는
@@ -453,19 +453,19 @@ save({
   repo: "alpha",                        // **필수.** 쓰기에서 기본값은 사고다
   work: {                               // ③ 의 프론트매터 + 본문
     id: "2026-0908-출장복명-사진첨부",
-    title: "EXD020 — 차량 미이용자 사진 첨부",
+    title: "BZD020 — 차량 미이용자 사진 첨부",
     date: "2026-09-08 14:30",
-    touches: ["screen:EXD020", "table:rp_trip_photo_list"],
+    touches: ["screen:BZD020", "table:pj_trip_photo_list"],
     // touchesEmpty: "일정만 정했다 — 바꾼 대상 없음",   // touches 가 빌 때만 · 없으면 E_INPUT
     // source: "공유드라이브/…/원문.md",                  // 편입(cdp-import)일 때만
     tags: ["출장"],
-    body: "# EXD020 — …
+    body: "# BZD020 — …
 
 (③ 의 본문 전체)"
   },
   sections: [                           // ④ 의 결과. 좌표 하나에 하나
     {
-      coord: "screen:EXD020",
+      coord: "screen:BZD020",
       applied: "2026-0715-외부인원-신설",   // **`section` 이 준 값 그대로**
       body: "출장복명작성.
 
@@ -473,7 +473,7 @@ save({
     }
   ],
   vocab: [                              // ② 에서 `(미등재)` 였던 것만
-    { coord: "table:rp_trip_photo_list", label: "출장사진목록",
+    { coord: "table:pj_trip_photo_list", label: "출장사진목록",
       aliases: ["출장사진", "사진목록"] }
   ]
 })
@@ -494,11 +494,11 @@ where 도 조용했다(2026-09-23). 지금은 서버가 `E_INPUT`(헤딩 줄이 
 
 `section` 이 `missing` 을 답한 좌표는 섹션을 새로 만드는 것이다. 그때만
 `heading` 을 같이 보낸다 — 제목 줄이 `## {값}` 이 아니어야 할 때다
-(`## rp_trip_photo_list — 출장사진목록`).
+(`## pj_trip_photo_list — 출장사진목록`).
 
 ```
-{ coord: "table:rp_trip_photo_list", applied: null,
-  heading: "rp_trip_photo_list — 출장사진목록", body: "…" }
+{ coord: "table:pj_trip_photo_list", applied: null,
+  heading: "pj_trip_photo_list — 출장사진목록", body: "…" }
 ```
 
 없으면 서버가 좌표 값을 그대로 제목으로 쓴다. `applied` 는 `null` 이다 —
@@ -604,7 +604,7 @@ where 도 조용했다(2026-09-23). 지금은 서버가 `E_INPUT`(헤딩 줄이 
 
 ## 상황
 
-`cdp-work` 으로 EXD020 에 사진 첨부를 넣는 작업을 마쳤다. 이제 기록한다.
+`cdp-work` 으로 BZD020 에 사진 첨부를 넣는 작업을 마쳤다. 이제 기록한다.
 
 ## ① pull
 
@@ -623,7 +623,7 @@ Already up to date.
 
 ```
 match(["출장복명작성", "출장사진목록", "운행일지"])
-출장복명작성   ->  screen:EXD020          (alias · _vocab.md:118)
+출장복명작성   ->  screen:BZD020          (alias · _vocab.md:118)
 출장사진목록   ->  (미등재)  _vocab.md 에 없습니다
 운행일지       ->  (미등재)  _vocab.md 에 없습니다
 ```
@@ -632,10 +632,10 @@ match(["출장복명작성", "출장사진목록", "운행일지"])
 
 ```
 【좌표 판정】
-  screen:EXD020         변경   사진 첨부 영역 신설 · 입력 영역을 맨 위로
-  table:rp_trip_photo_list  신설   사진 저장 테이블 (미등재 → ④에서 등재)
+  screen:BZD020         변경   사진 첨부 영역 신설 · 입력 영역을 맨 위로
+  table:pj_trip_photo_list  신설   사진 저장 테이블 (미등재 → ④에서 등재)
   issue:ISS-015         제기   차량 이용 여부를 무엇으로 판정하는지 안 정해짐
-  screen:EXD012         참조   출장등록에서 넘어오지만 안 바뀜  → 좌표 아님
+  screen:BZD012         참조   출장등록에서 넘어오지만 안 바뀜  → 좌표 아님
   운행일지              언급   "차량 이용자는 운행일지로 갈음" → 대상 아님
 ```
 
@@ -652,17 +652,17 @@ match(["출장복명작성", "출장사진목록", "운행일지"])
 ```markdown
 ---
 id: 2026-0908-출장복명-사진첨부
-title: EXD020 출장복명작성 — 차량 미이용자 사진 첨부, 입력 영역 상단
+title: BZD020 출장복명작성 — 차량 미이용자 사진 첨부, 입력 영역 상단
 date: 2026-09-08 14:30
 author: dev.a
 touches:
-  - screen:EXD020
-  - table:rp_trip_photo_list
+  - screen:BZD020
+  - table:pj_trip_photo_list
   - issue:ISS-015
 tags: [출장]
 ---
 
-# EXD020 — 사진 첨부 영역과 입력 영역 위치
+# BZD020 — 사진 첨부 영역과 입력 영역 위치
 
 ## 사진 첨부 영역
 
@@ -671,7 +671,7 @@ tags: [출장]
 
 - 입력 영역 안, 복명 내용 아래
 - 차량 미이용자용. 이용자는 운행일지로 갈음한다
-- 여러 장. `rp_trip_photo_list` 에 순번으로 쌓는다
+- 여러 장. `pj_trip_photo_list` 에 순번으로 쌓는다
 
 ## 입력 영역을 맨 위로
 
@@ -695,7 +695,7 @@ tags: [출장]
 `_vocab.md` 의 `## table` 에 이름순 자리로.
 
 ```markdown
-- `table:rp_trip_photo_list` — 출장사진목록
+- `table:pj_trip_photo_list` — 출장사진목록
 ```
 
 `_vocab.md` 의 `## issue` 에도 한 줄 —
@@ -708,19 +708,19 @@ tags: [출장]
 
 ```
 [오류] _vocab.md 미등재 좌표  1건
-   table:rp_trip_photo_list
+   table:pj_trip_photo_list
 ```
 
 ### 섹션 두 곳
 
 ```
-apply("screen:EXD020")
+apply("screen:BZD020")
 ```
 
 `docs/화면설계서.md`
 
 ```markdown
-## EXD020 — 출장복명작성
+## BZD020 — 출장복명작성
 <!-- applied: 2026-0908-출장복명-사진첨부 -->      ← 새 기록으로 바꾼다
 
 출장복명작성.
@@ -731,7 +731,7 @@ apply("screen:EXD020")
 **입력 영역은 화면 맨 위**다. 아래에 두면 첫 번째 이유가 그대로 남는다.
 
 입력 영역 안, 복명 내용 아래에 **사진 첨부**가 있다. 차량 미이용자용이며
-`table:rp_trip_photo_list` 에 순번으로 여러 장 쌓는다. 차량 이용자는
+`table:pj_trip_photo_list` 에 순번으로 여러 장 쌓는다. 차량 이용자는
 운행일지로 갈음한다.
 
 **변경** · 2026-09-08 [`출장복명-사진첨부`](../work/2026-0908-출장복명-사진첨부.md) 사진 첨부 영역 · 입력 영역 상단
@@ -740,7 +740,7 @@ apply("screen:EXD020")
 **이 섹션만 읽고 화면의 현재 상태를 알 수 있다.** 이렇게 쓰면 안 된다 —
 
 ```markdown
-## EXD020 — 출장복명작성
+## BZD020 — 출장복명작성
 <!-- applied: 2026-0908-출장복명-사진첨부 -->
 
 출장복명작성. 사진 첨부 영역을 추가했다.
@@ -752,12 +752,12 @@ apply("screen:EXD020")
 누구용인지, 몇 장인지, 이용자는 어떻게 되는지가 없다. 주입은 이 섹션만
 싣기 때문에 저 링크는 아무도 안 탄다.
 
-`docs/테이블정의서.md` 에는 `## rp_trip_photo_list` 섹션을 **새로 만든다.**
+`docs/테이블정의서.md` 에는 `## pj_trip_photo_list` 섹션을 **새로 만든다.**
 등록부의 `table:*` 이 이미 이 좌표를 거기로 보내므로, 안 만들면 —
 
 ```
 [오류] 등록부가 가리키는 섹션이 없음  1건
-   table:rp_trip_photo_list  docs/테이블정의서.md 에 `## rp_trip_photo_list` 섹션이 없음
+   table:pj_trip_photo_list  docs/테이블정의서.md 에 `## pj_trip_photo_list` 섹션이 없음
 ```
 
 `docs/위험및이슈관리대장.md` 에도 `## ISS-015` 를 **새로 만든다.** 등록부의
@@ -792,9 +792,9 @@ where("issue:ISS-015")
 
 ```
 $ git -C C:/cdp add work/2026-0908-출장복명-사진첨부.md docs/화면설계서.md docs/테이블정의서.md docs/위험및이슈관리대장.md _vocab.md
-$ git -C C:/cdp commit -m "EXD020 사진 첨부 영역 · 입력 영역 상단"
+$ git -C C:/cdp commit -m "BZD020 사진 첨부 영역 · 입력 영역 상단"
 [pre-commit] INDEX.md 를 갱신해 커밋에 포함했습니다.
-[test 1bc1eec] EXD020 사진 첨부 영역 · 입력 영역 상단
+[test 1bc1eec] BZD020 사진 첨부 영역 · 입력 영역 상단
  5 files changed, 42 insertions(+), 3 deletions(-)
 
 $ git -C C:/cdp push
@@ -818,16 +818,16 @@ To http://<gitlab>/team/cdp.git
 match(["출장복명작성", "출장사진목록", "운행일지"])
 
 # ④ 섹션을 읽는다. **파일을 열지 않는다** — where 뒤에 Read 가 아니라 section 이다
-section("screen:EXD020")
+section("screen:BZD020")
   → { coord, doc, anchor, applied: "2026-0715-외부인원-신설", body: "…" }
-apply("screen:EXD020")          # 변경 줄 초안
+apply("screen:BZD020")          # 변경 줄 초안
 
 # ③④ 를 메모리에 만든다. **파일은 안 만든다**
 
 # ⑤B-0 【좌표 판정】 · 기록 · 섹션 초안을 보이고 승인을 받는다 — 승인 전에는 save 를 부르지 않는다
 
 # ⑤B 한 번
-save({ repo: "alpha", work: {...}, sections: [{ coord: "screen:EXD020",
+save({ repo: "alpha", work: {...}, sections: [{ coord: "screen:BZD020",
        applied: "2026-0715-외부인원-신설", body: "…" }], vocab: [...] })
   → { commit: "1bc1eec", sections: 2, vocab: 1, mirror: "queued" }
 ```
@@ -856,7 +856,7 @@ save({ repo: "alpha", work: {...}, sections: [{ coord: "screen:EXD020",
 
 ```markdown
 **변경**
-· 2026-09-02 [`EXA021-외부심의위원`](../work/2026-0902-EXA021-외부심의위원.md) `wrk_tp_cd` 를 선택 모달 그룹핑 키로 사용. 컬럼 변경 없음
+· 2026-09-02 [`BZA021-외부심의위원`](../work/2026-0902-BZA021-외부심의위원.md) `wrk_tp_cd` 를 선택 모달 그룹핑 키로 사용. 컬럼 변경 없음
 ```
 
 ### "요청이 셋이었는데 기록도 셋인가"
@@ -891,9 +891,9 @@ save({ repo: "alpha", work: {...}, sections: [{ coord: "screen:EXD020",
 | 본문 | 터미널 |
 |---|---|
 | `match(["a","b"])` | `ctx match "a" "b"` |
-| `where("screen:PSC043")` | `ctx where screen:PSC043` |
-| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
-| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `where("screen:HRC043")` | `ctx where screen:HRC043` |
+| `section("screen:HRC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:HRC043")` | `ctx apply screen:HRC043` |
 | `derive()` | `ctx derive` |
 | `check()` | `ctx check` |
 | `sync()` | `ctx sync` |

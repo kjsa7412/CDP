@@ -169,7 +169,7 @@ export function fullText(index, query, limit = 50) {
 // 그것은 매 타이핑마다 훑어도 예산(30ms) 안이다.
 //
 // 정규화 키 하나로 네 자리를 같은 규칙으로 본다 — 공백·하이픈·언더스코어를
-// 지우고 소문자로(`vocab.normKey`). 그래서 `RP_PLND_MST` 도 `rp plnd mst` 도
+// 지우고 소문자로(`vocab.normKey`). 그래서 `PJ_PLAN_MST` 도 `pj plan mst` 도
 // `연구 계획서` 도 같은 것을 가리킨다. **띄어쓰기를 질의하는 사람이 맞출 필요가
 // 없다** — 한글 이름에서 그것을 맞추라고 하면 그건 검색이 아니다.
 //

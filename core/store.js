@@ -191,7 +191,7 @@ export class Store {
     // 이름일 뿐이고, 노드를 따로 두지 않는다. 부르는 이름만 자리에 따라 바뀐다 —
     //
     //   좌표를 아는 자리     "테이블정의서"      docItem  → 관리 문서 열
-    //   문서 안을 훑는 자리   "rp_plnd_chg_mst"  coordAt  → 좌표 열
+    //   문서 안을 훑는 자리   "pj_plan_chg_mst"  coordAt  → 좌표 열
     //
     // **줄의 이름이 곧 다음 열이다.** 문서 이름을 단 줄이 섹션 열을 열면 누른
     // 것과 열린 것이 다르고, 섹션 이름을 단 줄이 또 섹션 열을 열면 같은 것을
@@ -497,7 +497,7 @@ export class Store {
       settledCoords: s.filter((x) => x.count > 0).length,
       // 좌표별 플래그 — **문제가 있는 좌표만** 싣는다. 없으면 정상이라는 뜻이다.
       // 목록이 좌표 뷰에서 그 좌표만 보고 판정할 수 있어야 한다: 문서 단위로
-      // 판정하면 "screen:PSC043 후속 1건" 처럼 남의 좌표 후속을 이 좌표에
+      // 판정하면 "screen:HRC043 후속 1건" 처럼 남의 좌표 후속을 이 좌표에
       // 붙여 보여준다 (수행 v1.0 §6.3).
       coordFlags: s
         .map((x) => ({ x, sec: this.sections.find((r) => r.coord === x.coord) }))

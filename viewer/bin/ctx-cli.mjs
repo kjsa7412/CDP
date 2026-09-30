@@ -308,7 +308,7 @@ async function cmdIndex(r) {
 // 판단은 LLM, 대조는 기계 (작업환경 §6.4).
 async function cmdMatch(r, opt) {
   if (!opt.args.length) {
-    err('ctx match: 대조할 이름을 주세요.  예) ctx match "면접심사의견등록" PS130')
+    err('ctx match: 대조할 이름을 주세요.  예) ctx match "면접심사의견등록" HR130')
     return 2
   }
   const rows = T.toolMatch(r, { names: opt.args })
@@ -354,7 +354,7 @@ function sectionAt(r, coord) {
 async function cmdWhere(r, opt) {
   const coord = opt.args[0]
   if (!coord) {
-    err('ctx where: 좌표를 주세요.  예) ctx where table:rp_plnd_mst')
+    err('ctx where: 좌표를 주세요.  예) ctx where table:pj_plan_mst')
     return 2
   }
 
@@ -626,7 +626,7 @@ async function cmdTerm(r, opt) {
 async function cmdApply(r, opt) {
   const coord = opt.args[0]
   if (!coord) {
-    err('ctx apply: 좌표를 주세요.  예) ctx apply table:ps_ext_emp_mst')
+    err('ctx apply: 좌표를 주세요.  예) ctx apply table:hr_ext_emp_mst')
     return 2
   }
   const sec = r.sections.find((x) => x.coord === coord)

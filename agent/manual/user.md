@@ -211,14 +211,14 @@
 
 ```
 【검토】
-요청  PSC043 면접심사의견등록에 심사위원 연대서명 출력물을 추가한다
+요청  HRC043 면접심사의견등록에 심사위원 연대서명 출력물을 추가한다
 
 대상
-  screen:PSC043      변경   출력물 2종 추가
-  code:PS130         ?      업무구분 코드를 쓸지 미정
-  screen:PSC031      참조   첨부를 읽어오지만 PSC031 은 안 바뀜 → 좌표 아님
+  screen:HRC043      변경   출력물 2종 추가
+  code:HR130         ?      업무구분 코드를 쓸지 미정
+  screen:HRC031      참조   첨부를 읽어오지만 HRC031 은 안 바뀜 → 좌표 아님
 
-주입  screen:PSC043 · code:PS130
+주입  screen:HRC043 · code:HR130
 ```
 
 | 규칙 | 왜 |
@@ -237,7 +237,7 @@
 | 판정이 틀리면 | 미리 막는다 | **출력에 보이므로 사후 교정된다** |
 
 **틀린 주입의 비용은 틀린 답이 아니라 낭비된 토큰이다.** 판정이 어긋났으면
-답변에서 드러나고, 그때 *"PS130 은 아니야"* 라고 하면 된다.
+답변에서 드러나고, 그때 *"HR130 은 아니야"* 라고 하면 된다.
 
 **멈추는 경우는 하나뿐이다** — *"채용 쪽 정리해줘"* 처럼 요청 자체가 무엇을
 원하는지 모를 때. 그건 맥락 문제가 아니라 요청 문제다.
@@ -295,18 +295,18 @@
 
 | # | 작업 | 좌표 | 아닌 것 |
 |---|---|---|---|
-| 1 | `PS_EXT_EMP_MST` 에 컬럼 2개 추가 | `table:ps_ext_emp_mst` | |
-| 2 | PSC043 을 현황/작성 화면으로 분리 | `screen:PSC043` | `module:grid-common` (쓰기만 함) |
-| 3 | 코드그룹 PS130 신설 | `code:PS130` | |
-| 4 | EXA021 에서 `wrk_tp_cd` 로 트리 그룹핑 | `screen:EXA021` | **`table:ps_ext_emp_mst`** — 읽기만 한다 |
-| 5 | SEC013 의견 컬럼을 상태로 필터 | `screen:SEC013` | **`table:rp_rpmc_insp_targr_list`** — 표시만 바뀐다 |
-| 6 | SEB020 임시저장에 작성일 미기록 | `screen:SEB020` · **`table:rp_pre_rview_opl_list`** | — 컬럼이 언제 채워지는지가 바뀌었다 |
+| 1 | `HR_EXT_EMP_MST` 에 컬럼 2개 추가 | `table:hr_ext_emp_mst` | |
+| 2 | HRC043 을 현황/작성 화면으로 분리 | `screen:HRC043` | `module:grid-common` (쓰기만 함) |
+| 3 | 코드그룹 HR130 신설 | `code:HR130` | |
+| 4 | BZA021 에서 `wrk_tp_cd` 로 트리 그룹핑 | `screen:BZA021` | **`table:hr_ext_emp_mst`** — 읽기만 한다 |
+| 5 | RSC013 의견 컬럼을 상태로 필터 | `screen:RSC013` | **`table:pj_insp_target_list`** — 표시만 바뀐다 |
+| 6 | RSB020 임시저장에 작성일 미기록 | `screen:RSB020` · **`table:pj_pre_review_list`** | — 컬럼이 언제 채워지는지가 바뀌었다 |
 | 7 | 통합테스트 일정 확정 | **없음** (`touches: []`) | 아무 대상도 안 바꿨다 |
 | 8 | `dateRange2` 종료일 역전 방지 | `module:date-range` | 그 컴포넌트를 쓰는 화면들 |
-| 9 | 계획서 관리번호 중복 검증 | `screen:PLA011` · `screen:PLA021` · `table:rp_plnd_mst` | 유니크 제약은 안 걸었지만 그 **판단**이 테이블 정의에 남는다 |
-| 10 | PLA011 신규 진입 디폴트를 과제에서 | `screen:PLA011` | **`table:rp_rsch_prj_mst`** — 읽기만 한다 |
-| 11 | 알림 문구를 사용자 말로 | `screen:SEA021` | 조건은 그대로다. 문구도 그 화면의 정의다 |
-| 12 | 테이블명 오타 정정 | `table:rp_rdc_opl_mst` | |
+| 9 | 계획서 관리번호 중복 검증 | `screen:PJA011` · `screen:PJA021` · `table:pj_plan_mst` | 유니크 제약은 안 걸었지만 그 **판단**이 테이블 정의에 남는다 |
+| 10 | PJA011 신규 진입 디폴트를 과제에서 | `screen:PJA011` | **`table:pj_rsch_prj_mst`** — 읽기만 한다 |
+| 11 | 알림 문구를 사용자 말로 | `screen:RSA021` | 조건은 그대로다. 문구도 그 화면의 정의다 |
+| 12 | 테이블명 오타 정정 | `table:pj_rev_opn_mst` | |
 
 **4·5·10 이 헷갈리는 자리다.** 다 "그 테이블을 쓰는 화면 작업"인데 테이블은
 안 바뀐다. **6 은 반대다** — 컬럼이 언제 채워지는지가 바뀌었으니 그 컬럼을
@@ -333,8 +333,8 @@
 
 | 보이는 것 | 이럴 때 말한다 |
 |---|---|
-| 대상에 없는 것이 있다 | *"PSC031 도 바뀌어"* |
-| 대상에 있으면 안 되는 것 | *"PS130 은 안 건드려"* |
+| 대상에 없는 것이 있다 | *"HRC031 도 바뀌어"* |
+| 대상에 있으면 안 되는 것 | *"HR130 은 안 건드려"* |
 | 주입이 과하다 | *"맥락 필요 없어, 그냥 해"* |
 
 `?` 로 표시된 것은 AI 가 확신이 없다는 뜻이다. **거기가 먼저 볼 자리다.**
@@ -348,7 +348,7 @@
 들어왔다"* 고 읽기 쉬운데, 실제로 들어온 것은 **그 문서의 한 섹션**이다.
 
 ```
-[정본]   docs/테이블정의서.md  ## ps_ext_emp_mst
+[정본]   docs/테이블정의서.md  ## hr_ext_emp_mst
 [범위]   그 섹션만 — 18줄 · 약 520자 (docs/테이블정의서.md:839)
 ```
 
@@ -358,7 +358,7 @@
 `ctx where` 에 좌표를 여럿 주면 자리와 범위를 한 번에 준다.
 
 ```
-bin/ctx where api:/adapter/erp/expense-slip code:AC-040
+bin/ctx where api:/adapter/erp/expense-slip code:FI-040
 ```
 
 **`** 사실상 비어 있다` 가 붙으면 주입은 성공했고 내용이 없다는 뜻이다.**
@@ -373,7 +373,7 @@ bin/ctx where api:/adapter/erp/expense-slip code:AC-040
 **① 무엇이 실려 있나**
 
 ```
-[상태]   docs/테이블정의서.md ## ps_ext_emp_mst
+[상태]   docs/테이블정의서.md ## hr_ext_emp_mst
          반영 2026-0903-계획서-이력테이블
 ```
 
@@ -390,7 +390,7 @@ bin/ctx where api:/adapter/erp/expense-slip code:AC-040
 
 ```
 2026-0710-ERP-어댑터-v1
-  table:rp_plnd_mst           후속 3건   ← 이 부분은 갱신됐을 수 있다
+  table:pj_plan_mst           후속 3건   ← 이 부분은 갱신됐을 수 있다
   api:/adapter/erp/plan-sync  최신       ← 이 부분은 이 문서가 마지막 말이다
 ```
 
@@ -432,12 +432,12 @@ bin/ctx where api:/adapter/erp/expense-slip code:AC-040
 ```yaml
 ---
 id: 2026-0821-면접심사의견-개편        # 파일명과 같아야 한다
-title: PSC043 개편 — 현황/작성 화면 분리
+title: HRC043 개편 — 현황/작성 화면 분리
 date: 2026-08-21
 author: dev.a
 touches:
-  - screen:PSC043
-  - code:PS130
+  - screen:HRC043
+  - code:HR130
 tags: [채용, 화면개편]
 ---
 ```
@@ -586,7 +586,7 @@ ctx derive
 그 작업이 그 좌표를 **쓰는 방식만** 바꿨을 수 있다.
 
 ```markdown
-· 2026-09-02 [`EXA021-외부심의위원`](../work/…) `wrk_tp_cd` 를 선택 모달
+· 2026-09-02 [`BZA021-외부심의위원`](../work/…) `wrk_tp_cd` 를 선택 모달
   그룹핑 키로 사용. **컬럼 변경 없음**
 ```
 
@@ -600,8 +600,8 @@ ctx derive
 `_vocab.md` 의 해당 타입 섹션에 **한 줄**.
 
 ```markdown
-- `code:PS130` — 외부인원 업무구분
-  aliases: 업무구분코드, PS130
+- `code:HR130` — 외부인원 업무구분
+  aliases: 업무구분코드, HR130
 ```
 
 **`aliases` 가 이 파일의 값어치다.** 정본만 적으면 작성자만 편해지고, alias 가

@@ -1,6 +1,6 @@
 ---
 name: cdp-edit
-description: 관리 문서(테이블정의서·화면설계서·코드정의서 등)의 내용을 고치라는 지시를 받았을 때 쓴다. 이 세션에서 코드 작업을 하지 않고 **문서만** 바꾸는 경우다 — "화면설계서 EXD020 에 사진 첨부 추가해줘", "이 컬럼 설명이 틀렸으니 고쳐줘", "코드정의서에 값 하나 넣어줘". 문서를 고치고 **그 지시 자체를 작업 기록으로 남긴다.** 코드 작업을 동반하면 cdp-work → cdp-save 이고, 밖에서 온 문서를 들이는 것은 cdp-import 다.
+description: 관리 문서(테이블정의서·화면설계서·코드정의서 등)의 내용을 고치라는 지시를 받았을 때 쓴다. 이 세션에서 코드 작업을 하지 않고 **문서만** 바꾸는 경우다 — "화면설계서 BZD020 에 사진 첨부 추가해줘", "이 컬럼 설명이 틀렸으니 고쳐줘", "코드정의서에 값 하나 넣어줘". 문서를 고치고 **그 지시 자체를 작업 기록으로 남긴다.** 코드 작업을 동반하면 cdp-work → cdp-save 이고, 밖에서 온 문서를 들이는 것은 cdp-import 다.
 ---
 
 # cdp-edit — 지시로 관리 문서를 고치고, 그 지시를 남긴다
@@ -120,16 +120,16 @@ where("<좌표>")
 
 ```markdown
 ---
-id: 2026-0908-EXD020-첨부용량
-title: EXD020 사진 첨부 용량 10MB — 문서 반영
+id: 2026-0908-BZD020-첨부용량
+title: BZD020 사진 첨부 용량 10MB — 문서 반영
 date: 2026-09-08
 author: dev.a
 touches:
-  - screen:EXD020
+  - screen:BZD020
 tags: [문서반영]
 ---
 
-# EXD020 사진 첨부 용량
+# BZD020 사진 첨부 용량
 
 ## 지시
 
@@ -140,7 +140,7 @@ dev.a, 2026-09-08.
 
 ## 반영
 
-`docs/화면설계서.md` `## EXD020` 의 첨부 표에서 용량을 20MB → 10MB.
+`docs/화면설계서.md` `## BZD020` 의 첨부 표에서 용량을 20MB → 10MB.
 
 ## 확인한 것
 
@@ -215,10 +215,10 @@ git -C <repo> commit -m "<제목>"
 $ git -C C:/cdp pull --ff-only
 Already up to date.
 
-where("screen:EXD020")
-screen:EXD020
+where("screen:BZD020")
+screen:BZD020
   문서   docs/화면설계서.md
-  섹션   ## EXD020
+  섹션   ## BZD020
   상태   반영 2026-0921-B-첨부제한
 ```
 
@@ -236,7 +236,7 @@ screen:EXD020
 값인지 본다.
 
 ```
-where("screen:EXD020")
+where("screen:BZD020")
     2026-09-21  2026-0921-B-용량
 ```
 
@@ -246,8 +246,8 @@ where("screen:EXD020")
 ### ④ 문서 수정
 
 ```markdown
-## EXD020 — 출장복명작성
-<!-- applied: 2026-0922-EXD020-첨부용량 -->      ← ⑤ 의 기록 id 로
+## BZD020 — 출장복명작성
+<!-- applied: 2026-0922-BZD020-첨부용량 -->      ← ⑤ 의 기록 id 로
 
 | 사진 첨부 | |
 |---|---|
@@ -258,20 +258,20 @@ where("screen:EXD020")
 
 ### ⑤ 작업 기록 — 지시가 곧 본문이다
 
-`C:/cdp/work/2026-0922-EXD020-첨부용량.md`
+`C:/cdp/work/2026-0922-BZD020-첨부용량.md`
 
 ```markdown
 ---
-id: 2026-0922-EXD020-첨부용량
-title: EXD020 사진 첨부 용량 10MB — 문서 반영
+id: 2026-0922-BZD020-첨부용량
+title: BZD020 사진 첨부 용량 10MB — 문서 반영
 date: 2026-09-22 10:15
 author: dev.a
 touches:
-  - screen:EXD020
+  - screen:BZD020
 tags: [문서반영, 출장]
 ---
 
-# EXD020 사진 첨부 용량
+# BZD020 사진 첨부 용량
 
 ## 지시
 
@@ -282,7 +282,7 @@ dev.a, 2026-09-22.
 
 ## 반영
 
-`docs/화면설계서.md` `## EXD020` 의 사진 첨부 표에서 용량 20MB → 10MB.
+`docs/화면설계서.md` `## BZD020` 의 사진 첨부 표에서 용량 20MB → 10MB.
 근거(WAS 상한)를 함께 적었다.
 
 ## 확인한 것
@@ -310,9 +310,9 @@ dev.a, 2026-09-22.
 ### ⑥ 커밋
 
 ```
-$ git -C C:/cdp add work/2026-0922-EXD020-첨부용량.md docs/화면설계서.md
-$ git -C C:/cdp commit -m "EXD020 첨부 용량 10MB — 문서 반영"
-[main 4c3e9b2] EXD020 첨부 용량 10MB — 문서 반영
+$ git -C C:/cdp add work/2026-0922-BZD020-첨부용량.md docs/화면설계서.md
+$ git -C C:/cdp commit -m "BZD020 첨부 용량 10MB — 문서 반영"
+[main 4c3e9b2] BZD020 첨부 용량 10MB — 문서 반영
  4 files changed, 44 insertions(+), 5 deletions(-)
 ```
 
@@ -322,12 +322,12 @@ $ git -C C:/cdp commit -m "EXD020 첨부 용량 10MB — 문서 반영"
 
 ### 사용자
 
-> 화면설계서에 EXA021 버튼 이름 '추가' 로 바꿔 줘.
+> 화면설계서에 BZA021 버튼 이름 '추가' 로 바꿔 줘.
 
 ### 확인
 
 ```
-where("screen:EXA021")
+where("screen:BZA021")
 ```
 
 섹션에 이렇게 적혀 있다.
@@ -348,7 +348,7 @@ where("screen:EXA021")
 
    "동작이 새로 만드는 것이 아니라 이미 있는 외부인원을 고르는 것이다.
     '추가' 라고 쓰면 여기서 사람을 등록할 수 있다고 읽힌다."
-   (2026-0902-EXA021-외부심의위원)
+   (2026-0902-BZA021-외부심의위원)
 
    '추가' 로 되돌리는 것이 맞습니까? 맞다면 그 이유를 기록에 남기겠습니다.
 ```
@@ -411,9 +411,9 @@ docs/회의록.md 는 등록부에 없는 문서(날짜축)라 작업 기록 없
 | 본문 | 터미널 |
 |---|---|
 | `match(["a","b"])` | `ctx match "a" "b"` |
-| `where("screen:PSC043")` | `ctx where screen:PSC043` |
-| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
-| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `where("screen:HRC043")` | `ctx where screen:HRC043` |
+| `section("screen:HRC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:HRC043")` | `ctx apply screen:HRC043` |
 | `derive()` | `ctx derive` |
 | `check()` | `ctx check` |
 | `sync()` | `ctx sync` |

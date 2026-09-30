@@ -218,8 +218,8 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
 
   // 등록부가 가리키는데 없는 것 — 앵커 없음. **커밋을 막는다.**
   //
-  // 등록부에 `screen:SE*` → `화면정의서_연구.md ## {값}` 이 있는데 그 문서에
-  // `## SEB020` 이 없으면, 그 좌표의 현재 상태를 적을 자리가 없다는 뜻이다.
+  // 등록부에 `screen:RS*` → `화면정의서_연구.md ## {값}` 이 있는데 그 문서에
+  // `## RSB020` 이 없으면, 그 좌표의 현재 상태를 적을 자리가 없다는 뜻이다.
   // 조용히 지나가면 cdp-load 가 빈손으로 돌아오고 읽는 쪽은 그것을
   // "정의되지 않았다"로 읽는다 — 프로토콜 §9.6 조용한 실패다.
   if (managedIndex) {

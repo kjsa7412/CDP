@@ -65,11 +65,11 @@ derive()
   api:/adapter/erp/expense-slip    작업 2건     인터페이스정의서
                                    실린 것 2026-0831-ERP-결의일-기준
                                      + 2026-09-02  2026-0902-결의서-작성자고정
-  code:PS130                       작업 1건     코드정의서
+  code:HR130                       작업 1건     코드정의서
                                      + 2026-08-21  2026-0821-면접심사의견-개편
 
 깨진 섹션 1곳 — 등록부가 없는 자리를 가리킨다
-  screen:SEB020                    anchor-missing  화면설계서
+  screen:RSB020                    anchor-missing  화면설계서
 ```
 
 **두 묶음이고 처리 방법이 다르다.**
@@ -93,7 +93,7 @@ derive()
 사용자에게 그대로 알리고 판단을 받아라.
 
 ```
-⛔ docs/테이블정의서.md ## rp_plnd_mst 의 applied 가
+⛔ docs/테이블정의서.md ## pj_plan_mst 의 applied 가
    2026-0801-계획서-초안 을 가리키는데 work/ 에 그 파일이 없습니다.
    이름 오기인지, 기록이 지워진 것인지 확인이 필요합니다.
 ```
@@ -128,7 +128,7 @@ derive()
 ### 초안 받기
 
 ```
-apply("table:ps_ext_emp_mst")
+apply("table:hr_ext_emp_mst")
 ```
 
 새 `applied` 값과 붙일 변경 줄, 그리고 **반영해야 할 작업 기록 목록**을 준다.
@@ -136,7 +136,7 @@ apply("table:ps_ext_emp_mst")
 ### 작업 기록을 읽는다
 
 ```
-where("table:ps_ext_emp_mst")
+where("table:hr_ext_emp_mst")
 ```
 
 `applied` 이후의 기록을 **오래된 것부터** 읽는다. 순서가 중요하다 —
@@ -145,15 +145,15 @@ where("table:ps_ext_emp_mst")
 ### 섹션을 고친다
 
 ```diff
-  ## ps_ext_emp_mst — 외부인원마스터
+  ## hr_ext_emp_mst — 외부인원마스터
 - <!-- applied: 2026-0821-면접심사의견-개편 -->
-+ <!-- applied: 2026-0902-EXA021-외부심의위원 -->
++ <!-- applied: 2026-0902-BZA021-외부심의위원 -->
 
-  | `wrk_tp_cd` | varchar | 10 | Y | | 업무구분코드 (PS130) |
+  | `wrk_tp_cd` | varchar | 10 | Y | | 업무구분코드 (HR130) |
 
   **변경**
   · 2026-08-21 [`면접심사의견-개편`](../work/2026-0821-면접심사의견-개편.md) `wrk_tp_cd`·`tel_no` 추가
-+ · 2026-09-02 [`EXA021-외부심의위원`](../work/2026-0902-EXA021-외부심의위원.md) `wrk_tp_cd` 를 선택 모달 그룹핑 키로 사용. 컬럼 변경 없음
++ · 2026-09-02 [`BZA021-외부심의위원`](../work/2026-0902-BZA021-외부심의위원.md) `wrk_tp_cd` 를 선택 모달 그룹핑 키로 사용. 컬럼 변경 없음
 ```
 
 | 규칙 | |
@@ -204,7 +204,7 @@ where("table:ps_ext_emp_mst")
 작업 기록을 읽었는데 **섹션 본문을 어떻게 고칠지 모르겠으면** 넘긴다.
 
 ```
-⚠ screen:SEC011 은 반영하지 않았습니다.
+⚠ screen:RSC011 은 반영하지 않았습니다.
    2026-0902-연관위-readonly 가 "빈 row 판정 규칙"을 바꿨는데
    화면정의서의 어느 항목에 해당하는지 판단이 안 됩니다.
    그 작업 작성자(dev.a)가 반영하는 것이 맞아 보입니다.
@@ -230,13 +230,13 @@ where("table:ps_ext_emp_mst")
 >   repo: "<레포>",
 >   work: {
 >     id: "YYYY-MMDD-파생정리-<좌표 조각>",        // 좌표 하나에 하나 — 모드 A 의 "좌표 단위 커밋" 과 같다
->     title: "파생 정리 — table:ps_ext_emp_mst",
+>     title: "파생 정리 — table:hr_ext_emp_mst",
 >     date: "YYYY-MM-DD HH:MM",
->     touches: ["table:ps_ext_emp_mst"],           // 치운 좌표
+>     touches: ["table:hr_ext_emp_mst"],           // 치운 좌표
 >     tags: ["derive"],                            // **이 태그가 표식이다.** 화면 · 검색이 거른다
->     body: "근거: 2026-0902-EXA021-외부심의위원 (컬럼 둘 추가) · 2026-0908-…\n판단: …\n확신이 없어 넘긴 것: …"
+>     body: "근거: 2026-0902-BZA021-외부심의위원 (컬럼 둘 추가) · 2026-0908-…\n판단: …\n확신이 없어 넘긴 것: …"
 >   },
->   sections: [{ coord: "table:ps_ext_emp_mst", applied: "<section 이 준 값 그대로>", body: "<③ 에서 만든 content>" }]
+>   sections: [{ coord: "table:hr_ext_emp_mst", applied: "<section 이 준 값 그대로>", body: "<③ 에서 만든 content>" }]
 > })
 > ```
 >
@@ -248,7 +248,7 @@ where("table:ps_ext_emp_mst")
 
 ```
 git -C <repo> add docs/테이블정의서.md
-git -C <repo> commit -m "테이블정의서 ps_ext_emp_mst 섹션 반영 (2026-0902-EXA021-외부심의위원)"
+git -C <repo> commit -m "테이블정의서 hr_ext_emp_mst 섹션 반영 (2026-0902-BZA021-외부심의위원)"
 ```
 
 작업 기록을 새로 만들지 않는다 — **이 작업은 대상을 바꾼 것이 아니라
@@ -286,8 +286,8 @@ derive()             # pendingDerive[].total 이 그 좌표의 작업 기록 수
 ```
 $ git commit -m "출장사진 테이블"
 [오류] 관리 문서 파생 누락 — 지식공유문서를 남기면 파생 갱신은 필수입니다  2건
-   screen:EXD020  docs/화면설계서.md · applied 2026-0908-… 뒤 후속 1건 — `ctx apply screen:EXD020`
-   table:rp_trip_photo_list  docs/테이블정의서.md · applied 없음 · 작업 1건
+   screen:BZD020  docs/화면설계서.md · applied 2026-0908-… 뒤 후속 1건 — `ctx apply screen:BZD020`
+   table:pj_trip_photo_list  docs/테이블정의서.md · applied 없음 · 작업 1건
 
   오류 2건 — 이대로는 커밋되지 않는다
 [pre-commit] 커밋을 중단했습니다.
@@ -309,11 +309,11 @@ Already up to date.
 derive()
 파생 남은 섹션 2곳
 
-  screen:EXD020                    작업 6건     화면설계서
+  screen:BZD020                    작업 6건     화면설계서
                                    실린 것 2026-0908-출장복명-사진첨부
                                      + 2026-09-23  2026-0923-출장사진-테이블
 
-  table:rp_trip_photo_list         작업 1건     테이블정의서
+  table:pj_trip_photo_list         작업 1건     테이블정의서
                                    실린 것 (없음)
                                      + 2026-09-23  2026-0923-출장사진-테이블
 ```
@@ -334,7 +334,7 @@ derive()
 ## ③ 근거를 읽는다
 
 ```
-apply("table:rp_trip_photo_list")
+apply("table:pj_trip_photo_list")
 ```
 
 작업 기록을 연다 — `work/2026-0923-출장사진-테이블.md`
@@ -357,7 +357,7 @@ apply("table:rp_trip_photo_list")
 `docs/테이블정의서.md` 에 **이름순 자리**로 신설.
 
 ```markdown
-## rp_trip_photo_list — 출장사진목록
+## pj_trip_photo_list — 출장사진목록
 <!-- applied: 2026-0923-출장사진-테이블 -->
 
 출장 건별 사진. 여러 장이라 목록 테이블이다.
@@ -372,14 +372,14 @@ apply("table:rp_trip_photo_list")
 
 ### 있는 섹션은 얹는다
 
-`docs/화면설계서.md` `## EXD020` —
+`docs/화면설계서.md` `## BZD020` —
 
 ```markdown
 <!-- applied: 2026-0923-출장사진-테이블 -->      ← 최신 기록으로
 
 (기존 내용 그대로)
 
-사진은 `table:rp_trip_photo_list` 에 저장한다.
+사진은 `table:pj_trip_photo_list` 에 저장한다.
 ```
 
 **섹션을 다시 쓰지 않는다.** 이미 있는 내용은 그대로 두고 바뀐 것만 얹는다.
@@ -403,7 +403,7 @@ $ git commit -m "출장사진 테이블 파생"
 **틀리게 반영하느니 하지 마라.**
 
 ```
-table:ps_ext_emp_mst 는 남이 바꾼 것이라 컬럼 의미를 그 기록만 읽고
+table:hr_ext_emp_mst 는 남이 바꾼 것이라 컬럼 의미를 그 기록만 읽고
 정확히 옮길 수 없습니다. 작성자(dev.a)에게 확인이 필요합니다.
 ```
 
@@ -416,7 +416,7 @@ table:ps_ext_emp_mst 는 남이 바꾼 것이라 컬럼 의미를 그 기록만 
 
 ```markdown
 **변경**
-· 2026-09-02 [`EXA021-외부심의위원`](../work/2026-0902-EXA021-외부심의위원.md) `wrk_tp_cd` 를 선택 모달 그룹핑 키로 사용. **컬럼 변경 없음**
+· 2026-09-02 [`BZA021-외부심의위원`](../work/2026-0902-BZA021-외부심의위원.md) `wrk_tp_cd` 를 선택 모달 그룹핑 키로 사용. **컬럼 변경 없음**
 ```
 
 "바뀐 게 없다" 도 사실이고, 적어 두지 않으면 다음 사람이 같은 확인을
@@ -436,7 +436,7 @@ table:ps_ext_emp_mst 는 남이 바꾼 것이라 컬럼 의미를 그 기록만 
 
 ```
 [경고] 같은 날 기록이 더 있습니다 — 반영됐는지 눈으로 확인하세요
-   screen:EXE020  applied 2026-0831-AI구독-카드번호 와 같은 날 1건 — 2026-0831-AI구독-대장업로드
+   screen:BZE020  applied 2026-0831-AI구독-카드번호 와 같은 날 1건 — 2026-0831-AI구독-대장업로드
 ```
 
 **오류가 아니다. 커밋은 된다.** 기계는 두 기록이 같은 날이라 순서를 모르고,
@@ -458,9 +458,9 @@ table:ps_ext_emp_mst 는 남이 바꾼 것이라 컬럼 의미를 그 기록만 
 | 본문 | 터미널 |
 |---|---|
 | `match(["a","b"])` | `ctx match "a" "b"` |
-| `where("screen:PSC043")` | `ctx where screen:PSC043` |
-| `section("screen:PSC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
-| `apply("screen:PSC043")` | `ctx apply screen:PSC043` |
+| `where("screen:HRC043")` | `ctx where screen:HRC043` |
+| `section("screen:HRC043")` | `ctx where` 뒤에 그 섹션을 연다 — **도구 쪽이 한 번에 준다** |
+| `apply("screen:HRC043")` | `ctx apply screen:HRC043` |
 | `derive()` | `ctx derive` |
 | `check()` | `ctx check` |
 | `sync()` | `ctx sync` |
