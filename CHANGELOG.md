@@ -3,6 +3,15 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.19.1
+
+**동시 save 의 index.lock 경합** — `core/git.js` · `core/save.js` — 뮤텍스 밖의 읽기(미러 큐 · doctor · 개요 · `/repos`)가 `git status` 로 색인을 고쳐 쓰며 `.git/index.lock` 을 잠깐 쥐어, 겹친 save 가 `E_GIT` `Unable to create '…/index.lock': File exists` 로 거절되던 것(하네스 91 · 가끔)
+- 읽기 `status` 는 `--no-optional-locks` — 색인을 쓰지 않는다. 쓰기(add · commit · checkout · clean · reset · pull)는 그대로
+- save 10단계 — 남이 쥔 index.lock 때문에 add · commit 이 시작도 못 했으면(HEAD 그대로) 잠금이 풀린 뒤 두 번까지 다시 커밋한다
+- `test/save.test.mjs` — 색인을 안 고쳐 쓴다 · 가짜 index.lock 을 쥔 동안의 save · 동시 save 중 status 두드리기 — `e379eb3`
+
+**하네스** — `ops/verify/run.mjs` — 서버가 받을 때까지 기다린다(고정 2.5초 대신) · 93 은 앞 save 의 미러가 끝난 뒤 clone · 미러 로그 줄 · 미러 대기 30초 · 실패에 stderr 한 줄 — `69ff1a3`
+
 ## v0.19.0
 
 에이전트 세팅 갱신 — [`docs/dev/에이전트세팅_갱신_TODO.md`](docs/dev/에이전트세팅_갱신_TODO.md). 작업 레포에 가는 kit 은 **지식 레포 안의 `.claude/skills`** 에서 나온다 — 스킬을 고친 판을 올려도 레포가 옛 판이라 작업 레포가 옛 스킬을 받던 것
