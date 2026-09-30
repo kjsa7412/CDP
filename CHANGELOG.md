@@ -3,6 +3,21 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.19.3
+
+**새 어휘 타입은 서버가 만든다** — `core/save.js` — `save` 의 `vocab` 에 `_vocab.md` 에 없는 타입(`term:PLC` 인데 `## term` 이 없다)이 오면 `E_INPUT` 「타입은 사람이 먼저 만든다」 로 거절하던 것. 서버에만 있는 레포는 사람이 커밋할 곳이 없고 초기에는 새 타입이 계속 는다(dpms_wiki · 도메인 지식 편입이 막혔다) — `d140164`
+- 타입 섹션이 없으면 `_vocab.md` 끝에 `## <타입>` 을 만들고 항목을 붙인다. 같은 save 의 다음 항목은 그 섹션에 붙는다. 응답 `warnings` 에 「새 어휘 타입 … 을 만들었다」
+- 형식(`checkCoord`) · 좌표 등재 · 등록부 대조는 그대로 — 관리 문서(등록부)가 없는 타입은 `touches` 로만 닿고 `sections` 는 못 쓴다
+
+**관리 문서를 서버가 만들고 붙이고 정리한다** — `core/save.js` · `core/managedops.js` · `core/managed.js` · `core/check.js` — 패키지가 깐 관리 문서는 프로젝트 전체를 덮지 못하는데 서버에만 있는 레포는 새 타입의 좌표를 받을 관리 문서 · 등록부 행을 만들 길이 없었다(`sections` 는 `E_INPUT 등록부에 걸리지 않는다`, 설계서 §4.5 「`_managed.md` 는 `save` 로 바꾸지 않는다」) — `c1d29ec`
+- `save` 입력 `managed[]`(선택) — `add`(기본 · writer): 등록부 **맨 끝**에 행 · 4번째 칸 `서버 추가 · <작업 기록 id>` · 문서가 없으면 `# 제목` 으로 생성, 어휘 · 섹션 · 작업 기록과 **한 커밋**. `rename` · `merge` · `retire`(admin): 문서 이름 바꾸기 · 합치기 · 행 폐기(문서는 남는다)
+- 쓰기 전에 거른다 — 경로는 `docs/…md` 만(`..` · 절대경로 · 예약 이름 거절) · 앞 행에 완전히 덮이는 패턴 거절(일부 겹침은 경고) · 한 문서는 한 레벨 · 같은 패턴이 다른 자리에 있으면 `E_CONFLICT { kind: 'managed', current }` · 새 행이 걸리는 기존 좌표의 섹션은 같은 save 가 보낸다(`E_INPUT { needSections }`). 검사에서 걸리면 등록부 · 새 문서 · 옮기고 지운 문서까지 전부 되돌린다
+- `check` — `registry-path`(레포 밖을 가리키면 오류) · `registry-outside` · `registry-shadowed`(덮인 행) · `registry-level-mix` 경고. 등록부가 준 문서 경로는 `save` 가 레포 밖으로 쓰지 않는다
+- 새 섹션의 `heading` 은 제목 줄 전체(`값 — 설명`) — 값이 빠지면 `E_INPUT`(앵커 없음 `E_CHECK` 였다)
+- 스킬 — `cdp-save` · `cdp-import` 의 【좌표 판정】 승인에 【등록부 변경】(새 타입 · 새 관리 문서 · 좌표 부착)을 같이 받는다 · `cdp-managed` 「구조 정리」(admin) — `af378a0`
+- 패키지가 세운 행 · 문서는 upgrade 가 덮지 않는다(도구 층만 간다 · 시험). 화면은 바뀌지 않는다
+- 검토 · TODO — `docs/design/CDP_관리문서_동적생성_검토_v0.1.md` · `docs/dev/관리문서_동적생성_TODO.md`
+
 ## v0.19.2
 
 **배포본의 사내 흔적** — `agent/install.md` · `agent/manual/*.md` · `agent/skills/*/SKILL.md` · `viewer/bin/ctx-cli.mjs` · `ctx-mcp-serve.mjs` · `core/*` 주석 · 오류 문구 — 받는 곳에 가는 세팅 · 도움말 · 예시에 사람 이름 · 서버 주소 · 레포 이름 · 고객사 화면 · 스키마 · 업무 말이 그대로 실리던 것
