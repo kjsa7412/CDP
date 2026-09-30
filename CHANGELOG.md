@@ -3,6 +3,17 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.19.2
+
+**배포본의 사내 흔적** — `agent/install.md` · `agent/manual/*.md` · `agent/skills/*/SKILL.md` · `viewer/bin/ctx-cli.mjs` · `ctx-mcp-serve.mjs` · `core/*` 주석 · 오류 문구 — 받는 곳에 가는 세팅 · 도움말 · 예시에 사람 이름 · 서버 주소 · 레포 이름 · 고객사 화면 · 스키마 · 업무 말이 그대로 실리던 것
+- 사람 → lead · dev.a · dev.b · 서버 → `cdp.example:7374` · GitLab → `<gitlab>` · 작업 레포 → `C:\work\alpha` · 외부 ERP 이름 → 「외부 ERP」 — `aa1e301`
+- 화면 · 코드 · 테이블 이름 → 일반 예시(`BZD020` · `HRC043` · `hr_ext_emp_mst` · `screen:HR*` …). 등록부 예시의 prefix 묶음 · 코드 블록 열 맞춤은 그대로 — `2e910ee`
+- 업무 말 → 어느 조직에나 있는 말(출장보고 · 심의회 · 운영위 · 사업계획) — `c610971`
+- `ctx setup` 사용법 예시 · `storeCredential` 호스트 형식 오류의 예시 주소가 바뀐다. 동작은 그대로
+- 남은 것 — `manual/*.md`(제품 설명서 세 권) · `ops/deploy/설치절차.md` 는 사내 서버 실행 절차라 따로 판단한다
+
+**정정 관계 양방향** — `core/store.js` · `viewer/src/components/ValidityBlock.jsx` 외 — 작업 기록 머리와 뻗어나가기에 「이 기록을 정정한」 · 「이 기록이 정정한」 을 싣는다 · 요약 복사(⇧C)가 정정 관계를 참조 목록으로 쓴다 — `382ac20`
+
 ## v0.19.1
 
 **동시 save 의 index.lock 경합** — `core/git.js` · `core/save.js` — 뮤텍스 밖의 읽기(미러 큐 · doctor · 개요 · `/repos`)가 `git status` 로 색인을 고쳐 쓰며 `.git/index.lock` 을 잠깐 쥐어, 겹친 save 가 `E_GIT` `Unable to create '…/index.lock': File exists` 로 거절되던 것(하네스 91 · 가끔)
