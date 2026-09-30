@@ -2,10 +2,10 @@
 //
 // 형식:
 //   ## table
-//   - `table:tb_research_plan` — 연구계획 마스터
-//     aliases: 연구계획테이블, 계획서테이블, TB_RESEARCH_PLAN
+//   - `table:tb_biz_plan` — 사업계획 마스터
+//     aliases: 사업계획테이블, 계획서테이블, TB_BIZ_PLAN
 //   - `table:tb_plan_history` — 계획서 변경 이력 (구)
-//     deprecated: 2026-06-01 → table:tb_research_plan_hist 로 통합
+//     deprecated: 2026-06-01 → table:tb_biz_plan_hist 로 통합
 //
 // deprecated 의 후속 좌표는 산문이라 안정적으로 뽑을 수 없다. 설계서 §34-4 에서
 // 형식 고정을 요청했고, 그 전까지는 "화살표 뒤 첫 번째 타입:값 토큰"으로 읽는다.
@@ -155,7 +155,7 @@ export function parseVocab(text) {
   }
   for (const c of coords.values()) {
     put(c.coord, c.coord, 'canonical', c.coord)
-    // 좌표의 값 부분만으로도 걸리게 한다 (tb_research_plan)
+    // 좌표의 값 부분만으로도 걸리게 한다 (tb_biz_plan)
     const v = c.coord.slice(c.coord.indexOf(':') + 1)
     put(v, c.coord, 'value', v)
     for (const a of c.aliases) put(a, c.coord, 'alias', a)
@@ -189,7 +189,7 @@ export function reconcile(vocab, query) {
   const direct = vocab.aliasIndex.get(normKey(q))
   if (direct) return { ...direct, matched: q, exact: true }
 
-  // 질의 안에 alias 가 섞여 있는 경우 — "연구계획 테이블 관련 최근 변경"
+  // 질의 안에 alias 가 섞여 있는 경우 — "사업계획 테이블 관련 최근 변경"
   const nq = normKey(q)
   let best = null
   for (const [k, v] of vocab.aliasIndex) {

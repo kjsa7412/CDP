@@ -736,7 +736,7 @@ export class Store {
         ],
         pq
       )
-      // 대조가 집은 좌표는 이름이 안 걸려도 들어간다 — "연구계획 테이블 관련
+      // 대조가 집은 좌표는 이름이 안 걸려도 들어간다 — "사업계획 테이블 관련
       // 최근 변경" 처럼 질의 **안에** alias 가 섞인 경우가 그것이다
       if (!m && c.coord !== rec?.coord) continue
       const sec = this.sections.find((r) => r.coord === c.coord) || null

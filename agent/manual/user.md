@@ -304,7 +304,7 @@
 | 7 | 통합테스트 일정 확정 | **없음** (`touches: []`) | 아무 대상도 안 바꿨다 |
 | 8 | `dateRange2` 종료일 역전 방지 | `module:date-range` | 그 컴포넌트를 쓰는 화면들 |
 | 9 | 계획서 관리번호 중복 검증 | `screen:PJA011` · `screen:PJA021` · `table:pj_plan_mst` | 유니크 제약은 안 걸었지만 그 **판단**이 테이블 정의에 남는다 |
-| 10 | PJA011 신규 진입 디폴트를 과제에서 | `screen:PJA011` | **`table:pj_rsch_prj_mst`** — 읽기만 한다 |
+| 10 | PJA011 신규 진입 디폴트를 프로젝트에서 | `screen:PJA011` | **`table:pj_proj_mst`** — 읽기만 한다 |
 | 11 | 알림 문구를 사용자 말로 | `screen:RSA021` | 조건은 그대로다. 문구도 그 화면의 정의다 |
 | 12 | 테이블명 오타 정정 | `table:pj_rev_opn_mst` | |
 

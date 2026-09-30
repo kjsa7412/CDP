@@ -71,11 +71,11 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 ## table
 
 - `table:pj_plan_mst` — 계획서마스터
-  aliases: 계획서, 연구계획서
+  aliases: 계획서, 사업계획서
 
 ## screen
 
-- `screen:PJA011` — 연구계획서 등록
+- `screen:PJA011` — 사업계획서 등록
   aliases: 계획서등록
 ```
 
@@ -389,7 +389,7 @@ ctx search <말...>    말 → 좌표 후보 (대조가 미등재를 낼 때)
 ### 지우지 않는다
 
 ```markdown
-- `table:pj_rev_opn_mst` — 연관위 의견 (구)
+- `table:pj_rev_opn_mst` — 운영위 의견 (구)
   deprecated: 2026-03-26 오타 정정
   supersededBy: table:pj_rev_opn_list
 ```
