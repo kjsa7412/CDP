@@ -12,7 +12,7 @@ text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sa
 
 <rect x="40" y="30" width="600" height="114" rx="20" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
 <text class="th" x="60" y="54" fill="#444441">CDP 레포 — 우리가 고치는 소스</text>
-<text class="ts" x="60" y="72" fill="#5F5E5A">C:\project\CDP · 도구 개발자만 연다</text>
+<text class="ts" x="60" y="72" fill="#5F5E5A">C:\src\cdp · 도구 개발자만 연다</text>
 
 <rect x="60" y="84" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
 <text class="th" x="148" y="98" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">agent/</text>
@@ -48,11 +48,11 @@ text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sa
 
 <line x1="340" y1="320" x2="340" y2="372" class="arr" marker-end="url(#arrow)"/>
 <rect x="360" y="328" width="250" height="32" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
-<text class="ts" x="485" y="344" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">cdp.exe ctx setup C:\gdi</text>
+<text class="ts" x="485" y="344" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">cdp.exe ctx setup C:\work\alpha</text>
 
 <rect x="40" y="382" width="600" height="114" rx="20" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
 <text class="th" x="60" y="406" fill="#3C3489">작업 레포 — 여럿이어도 된다</text>
-<text class="ts" x="60" y="424" fill="#534AB7">예: C:\gdi · 코드가 있는 곳 · 레포당 1회</text>
+<text class="ts" x="60" y="424" fill="#534AB7">예: C:\work\alpha · 코드가 있는 곳 · 레포당 1회</text>
 
 <rect x="60" y="436" width="176" height="42" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
 <text class="th" x="148" y="450" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">skill</text>

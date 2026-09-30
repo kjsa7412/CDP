@@ -112,7 +112,7 @@ export default function Landing({ info }) {
               <Icon name="coord" size={20} />
               <h3>좌표</h3>
               <p>
-                <code>table:rp_plnd_mst</code> 같은 이름표 하나로 사건과 상태를 잇는다. 검색이 "비슷한 것" 을 내는 자리에서 좌표는 <b>그것</b>을 낸다.
+                <code>테이블정의서:bk_loan_mst</code> 같은 이름표 하나로 사건과 상태를 잇는다. 검색이 "비슷한 것" 을 내는 자리에서 좌표는 <b>그것</b>을 낸다.
               </p>
             </div>
             <div className="fcard">

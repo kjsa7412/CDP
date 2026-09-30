@@ -367,7 +367,7 @@ function NewRepo({ data, busy, onClose, onOk }) {
       </div>
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="레포 이름" hint="폴더명 = 레포 이름 = 주소 조각. 영문 · 숫자 · . _ -">
-          <input className="mono" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} spellCheck={false} autoFocus placeholder="예: gdi" />
+          <input className="mono" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} spellCheck={false} autoFocus placeholder="예: alpha" />
         </Field>
         {tab === 'package' ? (
           <>

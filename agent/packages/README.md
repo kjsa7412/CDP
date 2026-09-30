@@ -68,7 +68,7 @@ ctx package new <이름> --from dpms
 이름은 자리표시자이고, 프로젝트가 정해지면 그 이름으로 바꾼다.
 
 ```
-ctx package rename project_1 gdi [--title "GDI 문서 세트"]
+ctx package rename project_1 alpha [--title "알파 사업 문서 세트"]
 ```
 
 폴더 · `_package.json` 의 `name` · `README.md` 첫 제목을 **한 번에** 바꾼다 — 셋 중 하나만
@@ -77,7 +77,7 @@ ctx package rename project_1 gdi [--title "GDI 문서 세트"]
 
 | | |
 |---|---|
-| **패키지 이름 ≠ 지식 레포 이름** | 패키지는 서식의 이름, 레포 이름은 세울 때 정한다(`ctx repo new <경로> --package <이름>`). `dpms` 로 `gdi` 레포를 세울 수 있다 |
+| **패키지 이름 ≠ 지식 레포 이름** | 패키지는 서식의 이름, 레포 이름은 세울 때 정한다(`ctx repo new <경로> --package <이름>`). `dpms` 로 `alpha` 레포를 세울 수 있다 |
 | 이미 세운 레포 | 그대로다. 레포는 패키지의 사본이고 이름을 따로 갖는다 |
 | 서버의 `packages/` | 다음 산출물(`release:server` → `upgrade.sh`)이 따라간다 |
 | 클라이언트 배포본 | 다음 릴리스의 `knowledge-repo-<새 이름>/` 이 된다 |

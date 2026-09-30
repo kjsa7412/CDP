@@ -3,8 +3,8 @@
 // **구간이 둘이다.** Claude Code ↔ 이 서버(MCP · JSON-RPC over HTTP)와 Claude Code ↔ 모델 API.
 // 모델은 이 서버를 모른다 — "불러 달라" 는 JSON 을 낼 뿐이고 옮겨 적는 것은 Claude Code 다.
 // 화살표나 [이전] · [다음] 을 누르면 그 구간에 실제로 오가는 요청 · 응답이 오른쪽에 뜬다.
-// ⑨ 의 값은 viewer/fixture 에서 `ctx where screen:PSC043 --json` 이 낸 그대로다. 레포 이름은
-// 싣지 않는다(소개는 집계만 — D2) — `<레포>` 로 둔다.
+// ⑨ 의 값은 공식 사이트의 데모 레포(site/demo — 가상 프로젝트)에서 `where 화면설계서:LN030` 이 낸 그대로다. 소개는
+// 사외에도 보이는 면이라 실물 fixture 의 값을 싣지 않는다(공식 사이트 제작 검토 v0.1). 레포 이름은 `<레포>` 로 둔다(D2).
 
 import { useState } from 'react'
 
@@ -21,7 +21,18 @@ const KIND = {
   in: { label: '서버 안', cls: 'mcpflow__tag--in' },
 }
 
-function steps(host) {
+// 예의 값 — 데모 레포(site/demo)의 예제 ① 에서 녹화한 where 와 같다. 다른 값을 보이려면 `ex` 로 넘긴다.
+export const EX = {
+  coord: '화면설계서:LN030',
+  name: '연체 현황',
+  anchor: '## LN030',
+  doc: 'docs/2.개발/DE_331_화면설계서.md',
+  applied: '2026-0702-연체현황-화면',
+  ask: '연체 현황 화면에 엑셀 내려받기 붙여 줘',
+  program: 'LN030',
+}
+
+function steps(host, ex) {
   const tok = 'Authorization: Bearer <CDP_TOKEN 값>'
   return [
     {
@@ -46,17 +57,17 @@ function steps(host) {
     },
     {
       f: 'c', t: 'm', y: 290, k: 'api', l: '⑤ 대화 + 도구 13개', g: 'HTTPS · Claude Code → 모델 API',
-      b: 'POST /v1/messages\n{"system":"… CLAUDE.md … cdp instructions …",\n "tools":[\n   {"name":"mcp__cdp__where","description":"좌표의 지금 상태가 …",\n    "input_schema":{ …④ 와 같다… }},\n   {"name":"mcp__cdp__match", …}, … ],\n "messages":[{"role":"user",\n   "content":"면접심사 화면에 임시저장 버튼 넣어줘"}]}',
+      b: `POST /v1/messages\n{"system":"… CLAUDE.md … cdp instructions …",\n "tools":[\n   {"name":"mcp__cdp__where","description":"좌표의 지금 상태가 …",\n    "input_schema":{ …④ 와 같다… }},\n   {"name":"mcp__cdp__match", …}, … ],\n "messages":[{"role":"user",\n   "content":"${ex.ask}"}]}`,
       n: '여기부터는 MCP 가 아니라 모델 API 구간이다. MCP 도구는 mcp__cdp__<이름> 으로 이름이 바뀌어 Read · Edit 같은 기본 도구 옆에 나란히 실린다.',
     },
     {
       f: 'm', t: 'c', y: 328, k: 'api', r: 1, l: '⑥ tool_use: where', g: 'HTTPS 응답 · 모델 → Claude Code',
-      b: '{"role":"assistant","content":[\n  {"type":"tool_use","id":"toolu_01…",\n   "name":"mcp__cdp__where",\n   "input":{"coord":"screen:PSC043"}}]}',
-      n: '모델은 도구를 실행하지 않는다. "이것을 불러 달라" 는 JSON 을 낼 뿐이다. 이 예는 match 로 "면접심사" → screen:PSC043 을 확정한 다음 차례다.',
+      b: `{"role":"assistant","content":[\n  {"type":"tool_use","id":"toolu_01…",\n   "name":"mcp__cdp__where",\n   "input":{"coord":"${ex.coord}"}}]}`,
+      n: `모델은 도구를 실행하지 않는다. "이것을 불러 달라" 는 JSON 을 낼 뿐이다. 이 예는 match 로 "${ex.name}" → ${ex.coord} 을 확정한 다음 차례다.`,
     },
     {
       f: 'c', t: 's', y: 366, k: 'mcp', l: '⑦ POST tools/call', g: 'HTTP · Claude Code → cdp 서버',
-      b: `POST /mcp/<레포>\n${tok}\n\n{"jsonrpc":"2.0","id":7,"method":"tools/call",\n "params":{"name":"where",\n   "arguments":{"coord":"screen:PSC043"}}}`,
+      b: `POST /mcp/<레포>\n${tok}\n\n{"jsonrpc":"2.0","id":7,"method":"tools/call",\n "params":{"name":"where",\n   "arguments":{"coord":"${ex.coord}"}}}`,
       n: 'Claude Code 가 ⑥ 의 tool_use 를 JSON-RPC tools/call 로 옮겨 적는다. 이름 앞의 mcp__cdp__ 를 떼고 input 을 arguments 로 옮긴다.',
     },
     {
@@ -66,30 +77,31 @@ function steps(host) {
     },
     {
       f: 'k', t: 's', y: 442, k: 'in', r: 1, l: '⑨ JSON', g: '서버 안 · 계산 결과',
-      b: '{"coord":"screen:PSC043",\n "section":{"doc":"docs/화면설계서.md","anchor":"## PSC043",\n   "applied":"2026-0821-면접심사의견-개편","state":"ok"},\n "works":[{"id":"2026-0821-면접심사의견-개편", …}],\n "total":1}',
-      n: '샘플 레포에서 실제로 나온 값이다. ctx where --json 과 바이트까지 같다(검증 하네스 1번).',
+      b: `{"coord":"${ex.coord}",\n "section":{"doc":"${ex.doc}","anchor":"${ex.anchor}",\n   "applied":"${ex.applied}","state":"ok"},\n "works":[{"id":"${ex.applied}", …}],\n "total":1}`,
+      n: '데모 레포(가상 프로젝트)에서 실제로 나온 값을 줄였다. MCP 의 where 는 ctx where --json 과 바이트까지 같다(검증 하네스 1번).',
     },
     {
       f: 's', t: 'c', y: 480, k: 'mcp', r: 1, l: '⑩ result', g: 'HTTP 응답 · cdp 서버 → Claude Code',
-      b: '200 OK\n{"jsonrpc":"2.0","id":7,"result":{"content":[\n  {"type":"text",\n   "text":"{\\"repo\\":\\"<레포>\\",\\"coord\\":\\"screen:PSC043\\", …}"}]}}',
+      b: `200 OK\n{"jsonrpc":"2.0","id":7,"result":{"content":[\n  {"type":"text",\n   "text":"{\\"repo\\":\\"<레포>\\",\\"coord\\":\\"${ex.coord}\\", …}"}]}}`,
       n: '서버 로그에는 사용자 · 레포 · 도구 · 좌표 · 걸린 ms · 상태만 남는다. 문서 본문은 남기지 않는다.',
     },
     {
       f: 'c', t: 'm', y: 518, k: 'api', l: '⑪ tool_result', g: 'HTTPS · Claude Code → 모델 API',
-      b: 'POST /v1/messages\n{"messages":[ …앞 대화…,\n  {"role":"assistant","content":[ ⑥ 의 tool_use ]},\n  {"role":"user","content":[\n    {"type":"tool_result","tool_use_id":"toolu_01…",\n     "content":"{\\"repo\\":\\"<레포>\\",\\"coord\\":\\"screen:PSC043\\", …}"}]}]}',
+      b: `POST /v1/messages\n{"messages":[ …앞 대화…,\n  {"role":"assistant","content":[ ⑥ 의 tool_use ]},\n  {"role":"user","content":[\n    {"type":"tool_result","tool_use_id":"toolu_01…",\n     "content":"{\\"repo\\":\\"<레포>\\",\\"coord\\":\\"${ex.coord}\\", …}"}]}]}`,
       n: '도구가 돌려준 내용은 이 구간을 지나 모델 API 로 간다. 대화 전체와 도구 목록을 매번 다시 보낸다.',
     },
     {
       f: 'm', t: 'c', y: 556, k: 'api', r: 1, l: '⑫ 다음 호출 또는 답', g: 'HTTPS 응답 · 모델 → Claude Code',
-      b: '{"type":"tool_use","name":"mcp__cdp__section",\n "input":{"coord":"screen:PSC043"}}\n\n→ 다시 ⑦ 로 (section · work …)\n→ 충분하면 {"type":"text","text":"PSC043P 에 넣겠습니다 …"}',
+      b: `{"type":"tool_use","name":"mcp__cdp__section",\n "input":{"coord":"${ex.coord}"}}\n\n→ 다시 ⑦ 로 (section · work …)\n→ 충분하면 {"type":"text","text":"${ex.program} 에 넣겠습니다 …"}`,
       n: '⑥ ~ ⑫ 가 필요한 만큼 되풀이된다. 접속(① ~ ④)은 세션을 시작할 때 한 번이다.',
     },
   ]
 }
 
-export default function McpFlow() {
+// `host` — 공식 사이트는 자기 도메인이 아니라 `<서버>` 를 보인다(공식 사이트 제작 검토 v0.1). 소개 얼굴은 그 서버의 host 그대로.
+export default function McpFlow({ host = location.host, ex = EX }) {
   const [cur, setCur] = useState(0)
-  const S = steps(location.host)
+  const S = steps(host, ex)
   const wrap = (i) => (i + S.length) % S.length
   const go = (i) => setCur(wrap(i))
   // [이전] · [다음] 은 앞 값에서 센다 — 빨리 두 번 누르면 둘 다 같은 cur 를 보고 한 칸만 간다

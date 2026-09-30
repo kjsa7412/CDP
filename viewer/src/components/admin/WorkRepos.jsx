@@ -238,7 +238,7 @@ export default function WorkRepos({ state, patch, say }) {
           value={add}
           onChange={(e) => setAdd(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addRepo()}
-          placeholder={'C:' + String.fromCharCode(92) + 'gdi'}
+          placeholder={'C:' + String.fromCharCode(92) + 'work' + String.fromCharCode(92) + 'alpha'}
           spellCheck={false}
           aria-label="작업 레포 경로"
         />

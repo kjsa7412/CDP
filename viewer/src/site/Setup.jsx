@@ -112,7 +112,7 @@ export default function Setup({ info, onDone }) {
                 <div className="form">
                   <div className="field">
                     <label className="field__l" htmlFor="su-name">이름 (아이디)</label>
-                    <input id="su-name" className="mono" value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} autoFocus placeholder="kjsa" />
+                    <input id="su-name" className="mono" value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} autoFocus placeholder="lead" />
                     <span className="field__h">
                       영문 · 숫자 · <code>.</code> <code>_</code> <code>-</code>. 커밋의 <code>author</code> 로 남는다 — 사내 아이디를 쓴다. 바꿀 수 없다.
                     </span>
