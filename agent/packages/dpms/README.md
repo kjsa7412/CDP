@@ -33,7 +33,7 @@ git init && git config core.hooksPath .githooks
 ```
 1  안 쓰는 문서를 지운다            46개를 다 쓰는 프로젝트는 드물다
 2  _managed.md 에서 그 패턴을 지운다  없는 문서를 가리키면 커밋이 막힌다
-3  문서마다 예시 섹션을 지운다       `(예시)` 가 붙어 있다
+3  서식 예시를 지운다              ctx examples --purge · 서버형은 save 의 examples: "purge"
 4  _vocab.md 에 좌표를 등록한다      여기 없는 좌표를 쓰면 커밋이 막힌다
 5  ctx check                       이상 없음이 나오면 시작할 수 있다
 ```

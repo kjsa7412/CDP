@@ -124,6 +124,7 @@ ops/lib/build-ctx.mjs          번들에 위 둘과 SDK 포함 → bin/ctx.mjs �
 | `brief` | — | `{ lines: [string, string] }` | 두 줄 요약 — 절차와 살아 있는 레포 상태 |
 | `repos` | — | `[{ name, title, default, coords, works, updated }]` | 이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다 |
 | `version` | — | `{ built, mode, repos: [name] }` | 이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다 |
+| `docs` | `doc?: string` (경로 · 관리번호 · `_vocab.md` · `_managed.md`) | 없으면 `{ docs: [{ path, no, title, registered, rules, sections }], total, registered, registry }` · 있으면 `{ path, no, title, registered, rules, headings: [{ level, value, line, applied, coord }], text }` | 관리 문서 목록 · 등록부 대상인지 · 한 문서의 원문. 머리말과 등록부 밖 문서는 `section` 으로 못 읽는다 — 이것으로 읽고 `save` 의 `edits` 에 `text` 의 글을 `old` 로 싣는다 (정정 v0.21.0 · 등록부 사본 검토 X20) |
 
 명함은 도구당 3~4문장. `term` 은 `match` 에 흡수. `setup` · `index` · `sync --pull` 은 도구가 아니다.
 
@@ -615,6 +616,13 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 > - **3.8 첨부 꺼내기**(파일을 만지기 전) — ref → 바이트 · 해시 대조 · 확장자 ↔ 종류 · 20개 · 합 30 MB. **6.5** — `work/assets/<work.id>/<name>` 에 새 파일로(`Snap.writeBin` · 있으면 `E_EXISTS`) · 되돌리면 지우고 빈 폴더까지. **7** — 작업 기록 프론트매터 `attachments: [assets/<id>/<name>, …]`.
 > - **6.7 경고 둘** — 이 save 가 쓴 본문(작업 기록 · 섹션)의 그림 중 레포에 없는 것 · 어느 본문도 가리키지 않는 첨부. 경로 규칙은 화면과 같은 `core/repopath.js`(문서 폴더 기준 · `/…` 와 `docs/` · `work/` 는 루트).
 > - 응답 `assets: [{ path, size }]`(있을 때만). 모드 A 는 도구가 없다 — 스킬이 `work/assets/<id>/` 에 복사해 커밋에 넣는다.
+
+> **정정(2026-09-30 · v0.21.0 · 등록부 사본 · 모순 검토 v0.1)** — 등록부를 바꾸면 그 사본(문서 머리 표의 `등록부` 칸 · `_vocab.md` 의 타입 목록)과 산문이 거짓인 채 남았고, 모드 B 에는 그것을 고치거나 서식 예시를 지울 길이 없었다(dpms_wiki `75a3c90`).
+> - **입력 셋** — `edits: [{ file, old, new }]`(20 · `docs/**.md` · `_vocab.md` · `_managed.md` — `old` 가 정확히 한 번 · 없으면 `E_CONFLICT` · 좌표 섹션 · applied · 어휘 줄 · 등록부 행 · 생성 블록은 못 건드린다) · `examples: "purge"`(`example:` 어휘 줄 + 짝 섹션 + 「(예시)」 섹션 · 작업 기록이 쓰는 예시 좌표는 표시만 뗀다) · `managed[].reviewed: ["파일:행"]`.
+> - **처리 순서** — **5.1** 예시 정리 · **5.2** edits(등록부 계획이 고친 글을 읽도록 그 앞) · **5.4** 새 행과 어긋나는 산문(대상 문서 머리말의 「비대상」 · `_vocab` · `_managed` 의 「`T:` 타입이 없다」 · 개수 주장) — 남으면 `E_INPUT { lines: [{ file, line, text, why }] }` · **9.5** 머리 표 칸 · `<!-- cdp:registry -->` 블록을 **지금 등록부**로 다시 찍는다(`core/regen.js` · INDEX 와 같은 층 · 모드 A 는 `ctx index`).
+> - **`check`** — `registry-head`(사본이 등록부와 뜻이 다르다 · error) · `registry-prose`(어긋나 보이는 산문 · warn). finding 에 `fix`(누가 무엇으로).
+> - **`brief({ repo })`** — `repo` 가 이 연결의 기본(`/mcp/<이름>`)과 다르면 경고 줄. 스킬이 `.claude/cdp.json` 의 repo 를 넘긴다.
+> - 응답 `edits: [{ file, line }]` · `examples: { coords, sections, kept, left }`(있을 때만).
 
 > **정정(v0.12.0 · 동시 기록 검토 v0.1 D3 · D5 · D6 · D7)** — 처리 순서에 **3.5 트리** 가 들어갔다: `git status` 한 번 → 커밋 안 된 변경이 있으면 `E_GIT { reason: 'dirty', dirty, paths }` 로 거절(뮤텍스 안 · 파일을 만지기 전). **6 섹션** 의 `E_CONFLICT` detail 은 `{ coord, expected, current, currentWork: { id, title, author, date }, content, truncated }` — 지금 본문(8,000자)이 실려 `section` 을 다시 부르지 않고 그 위에 다시 만든다. 등록부의 `—`(문서 전체) 규칙은 **문서 첫 줄의 `<!-- applied: … -->`** 가 applied 이고 치환은 파일 전체다(`frontmatter.topApplied` · 전에는 정규식 예외로 `E_REPO`). **11 미러** 는 뮤텍스 밖 · 큐 · 1.5초까지 기다린다 — 응답 `mirror` 는 `off · ok · queued · lag · diverged` 이고 `mirrorReason` · `mirrorLast { state, reason, at, ahead, behind }` · 이상이면 `warnings` 에 한 줄. 응답 예시 —
 > `{ "commit": "a1b2c3d", "id": "…", "sections": 1, "vocab": 0, "warnings": [], "mirror": "ok", "mirrorReason": null, "mirrorLast": { "state": "ok", … } }`.
