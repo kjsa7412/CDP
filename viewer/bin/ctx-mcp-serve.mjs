@@ -9,6 +9,7 @@
 // 무거운 것(레포)은 캐시가 들고 있으므로 만드는 것은 등록표뿐이다.
 
 import http from 'node:http'
+import os from 'node:os'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import path from 'node:path'
 import fs from 'node:fs/promises'
@@ -26,6 +27,7 @@ import { buildServer, makeRepoCache, BUILT } from './ctx-mcp.mjs'
 import * as mirror from '../../core/mirror.js'
 import { newRepo, cloneRepo, connectOrigin, trashRepo, REPO_NAME_RE } from '../../core/reponew.js'
 import { withLock } from '../../core/lock.js'
+import * as assets from '../../core/assets.js'
 import * as gitauth from '../../core/gitauth.js'
 import { listPackages as listPackageDirs } from '../../core/packages.js'
 import { resolvePackages, materializePackage } from './ctx-package.mjs'
@@ -460,6 +462,8 @@ export async function runServe(opt = {}) {
   const bind = opt.bind || '127.0.0.1'
   const port = Number(opt.port) || 7374
   const dataDir = opt.data ? path.resolve(opt.data) : null
+  // 올린 첨부를 save 전까지 두는 자리(그림 · 첨부 검토 A3) — 레포 밖. `--data` 가 없으면 임시 폴더
+  const stagingDir = dataDir ? path.join(dataDir, 'staging') : path.join(os.tmpdir(), 'cdp-staging')
   const log = makeLog(dataDir)
 
   if (!LOOPBACK.test(bind) && !opt.auth) {
@@ -635,6 +639,7 @@ export async function runServe(opt = {}) {
               write: a.write,
               admin: !!a.admin, // 등록부 정리(rename · merge · retire)는 admin 만
               mirror: !!opt.mirror,
+              staging: stagingDir, // assets[].ref 를 여기서 꺼낸다
               log: (m) => log.line(m),
             })
             store.reload(name) // 화면이 방금 커밋한 것을 봐야 한다
@@ -1556,8 +1561,44 @@ export async function runServe(opt = {}) {
           log.req({ ip, user: a.user, method: req.method, tool: '/api', key: name, ms: Date.now() - t0, status: 404 })
           return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 레포가 없다' } })
         }
-        const view = await store.view(name)
         const sub = apiM[2] || '/'
+
+        // POST /api/<repo>/assets — 첨부 올리기(그림 · 첨부 검토 A2~A4). 몸통 = 파일 바이트 그대로.
+        //
+        // **레포를 바꾸지 않는다** — 바이트를 `staging` 에 내용 해시로 두고 `ref` 를 준다. 레포에 넣는 것은
+        // 그 ref 를 실은 `save` 이고 작업 기록 · 섹션과 한 커밋이다. 에이전트는 `curl -H "Authorization: Bearer
+        // $CDP_TOKEN" --data-binary @파일` 로 부른다(MCP 가 쓰는 그 토큰). 화면은 쿠키로.
+        if (sub === '/assets') {
+          if (req.method !== 'POST') return json(res, 405, { error: { code: 'E_INPUT', message: 'POST 로 파일 바이트를 보낸다' } })
+          if (!a.write) {
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/assets', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '첨부는 쓰기 권한(writer 이상)이 있어야 올린다' } })
+          }
+          const got = overLimit(req, assets.ASSET_MAX) ? { tooLarge: true } : await readBody(req, assets.ASSET_MAX)
+          if (got.tooLarge) {
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/assets', ms: Date.now() - t0, status: 413, code: 'E_INPUT' })
+            res.setHeader('connection', 'close')
+            return json(res, 413, { error: { code: 'E_INPUT', message: `파일 하나는 ${assets.ASSET_MAX / 1024 / 1024} MB 까지다` } })
+          }
+          try {
+            await assets.sweep(stagingDir).catch(() => 0)
+            const st = await assets.stage(stagingDir, got)
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/assets', key: st.ref.slice(7, 19) + ' ' + st.size + 'B', ms: Date.now() - t0, status: 200 })
+            return json(res, 200, {
+              ref: st.ref,
+              size: st.size,
+              type: st.type,
+              expiresInHours: assets.STAGING_TTL_MS / 3600000,
+              next: `save 의 assets 에 { ref: "${st.ref}", name: "<이름>${st.ext[0]}" } 를 싣는다 — work/assets/<작업 기록 id>/<이름> 에 들어간다`,
+            })
+          } catch (e) {
+            const status = /종류/.test(e?.message || '') ? 415 : 400
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/assets', ms: Date.now() - t0, status, code: e?.code || 'E_INPUT' })
+            return json(res, status, { error: { code: e?.code || 'E_INPUT', message: e?.message || String(e), detail: e?.detail } })
+          }
+        }
+
+        const view = await store.view(name)
         const sendV = (r, status, body, headers = {}) => {
           const buf = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body)
           r.writeHead(status, {
@@ -1775,10 +1816,12 @@ export async function runServe(opt = {}) {
   // `Expect: 100-continue` — 큰 몸통을 보내기 전에 물어보는 것이다.
   // 여기서 거절하면 클라이언트는 **2MB 를 보내지도 않는다.**
   server.on('checkContinue', (req, res) => {
-    if (overLimit(req, MAX_BODY)) {
+    // 첨부 올리기는 상한이 다르다(10 MB) — curl 은 1 MB 가 넘으면 `Expect: 100-continue` 를 먼저 보낸다
+    const limit = /^\/api\/[^/]+\/assets\/?$/.test(new URL(req.url, 'http://x').pathname) ? assets.ASSET_MAX : MAX_BODY
+    if (overLimit(req, limit)) {
       log.req({ ip: req.socket.remoteAddress, method: req.method, key: new URL(req.url, 'http://x').pathname, ms: 0, status: 413, code: 'E_INPUT' })
       res.setHeader('connection', 'close')
-      return json(res, 413, { error: { code: 'E_INPUT', message: '요청이 2MB 상한을 넘는다' } })
+      return json(res, 413, { error: { code: 'E_INPUT', message: `요청이 ${limit / 1024 / 1024}MB 상한을 넘는다` } })
     }
     res.writeContinue()
     onRequest(req, res)

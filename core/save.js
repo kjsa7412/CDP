@@ -24,6 +24,8 @@ import { CtxError, checkCoord, checkId, sliceSection } from './tools.js'
 import { withLock } from './lock.js'
 import { enqueuePush, lastPush, describe as mirrorLine } from './mirror.js'
 import { topApplied } from './frontmatter.js'
+import { take as takeAsset, checkAssetName, ASSETS_COUNT_MAX, ASSETS_TOTAL_MAX } from './assets.js'
+import { repoPath, mdRefs } from './repopath.js'
 
 const NL = String.fromCharCode(10)
 const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
@@ -71,6 +73,15 @@ class Snap {
       await fs.mkdir(d).catch(() => {})
       this.made.push(d)
     }
+  }
+  // 첨부 — **새 파일만** 쓴다(A5). 경로는 서버가 정한 `work/assets/<id>/<이름>` 이고 id 는 새 기록이라
+  // 있을 수 없지만, 있으면 남의 파일을 덮는 것이니 거절한다. 되돌리면 지운다(`before` 가 null).
+  async writeBin(rel, buf) {
+    const abs = this.abs(rel)
+    if (await fs.access(abs).then(() => true).catch(() => false)) throw new CtxError('E_EXISTS', '그 자리에 파일이 이미 있다', { path: rel })
+    this.before.set(rel, null)
+    await this.mkdirs(path.dirname(abs))
+    await fs.writeFile(abs, buf)
   }
   async write(rel, text) {
     const abs = this.abs(rel)
@@ -156,6 +167,17 @@ function checkSchema(input) {
   for (const v of input.vocab || []) {
     checkCoord(v.coord)
     if (!v.label) throw new CtxError('E_INPUT', 'vocab[].label 이 없다', { coord: v.coord })
+  }
+  const assets = input.assets || []
+  if (!Array.isArray(assets)) throw new CtxError('E_INPUT', 'assets 는 배열이다', { field: 'assets' })
+  if (assets.length > ASSETS_COUNT_MAX) throw new CtxError('E_INPUT', `첨부는 save 한 번에 ${ASSETS_COUNT_MAX}개까지다`, { count: assets.length })
+  const names = new Set()
+  for (const a of assets) {
+    checkAssetName(a?.name)
+    // 대소문자만 다른 이름은 Windows · macOS 에서 한 파일이다
+    const k = a.name.toLowerCase()
+    if (names.has(k)) throw new CtxError('E_INPUT', 'assets[].name 이 겹친다', { name: a.name })
+    names.add(k)
   }
   return w
 }
@@ -259,9 +281,9 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
-export async function save(root, input, { user, write = false, admin = false, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS } = {}) {
+export async function save(root, input, { user, write = false, admin = false, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS, staging = null } = {}) {
   const out = await withLock(path.resolve(root), async () => {
-    const r = await run(root, input, { user, write, admin, now })
+    const r = await run(root, input, { user, write, admin, now, staging })
 
     // 10 커밋 — 바뀐 경로만. 실패하면 되돌린다 — **git 이 정말 커밋하지 않았을 때만.**
     //
@@ -305,6 +327,7 @@ export async function save(root, input, { user, write = false, admin = false, mi
       vocab: r.vocab,
       managed: r.managedChanges.length,
       ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
+      ...(r.assets.length ? { assets: r.assets } : {}),
       warnings: r.warnings,
       mirror: 'off',
     }
@@ -338,7 +361,7 @@ export async function save(root, input, { user, write = false, admin = false, mi
   return out
 }
 
-async function run(root, input, { user, write, admin, mirror, now }) {
+async function run(root, input, { user, write, admin, mirror, now, staging }) {
   // 1 권한
   if (!write) throw new CtxError('E_FORBIDDEN', '쓰기 권한이 없다', { user })
 
@@ -396,6 +419,23 @@ async function run(root, input, { user, write, admin, mirror, now }) {
       )
     }
     warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
+  }
+
+  // 3.8 첨부 꺼내기 — **파일을 만지기 전에.** 없는 ref · 종류 어긋남 · 상한은 여기서 걸린다. 쓰는 것은 6.5
+  const pulled = []
+  if ((input.assets || []).length) {
+    if (!staging) throw new CtxError('E_INPUT', '이 서버는 첨부를 받지 않는다(올리기 자리가 없다)', { field: 'assets' })
+    let total = 0
+    for (const a of input.assets) {
+      const got = await takeAsset(staging, a.ref, { now })
+      const ext = path.extname(a.name).toLowerCase()
+      if (!got.ext.includes(ext)) {
+        throw new CtxError('E_INPUT', `assets[].name 의 확장자(${ext})가 올린 파일의 종류(${got.type})와 다르다`, { name: a.name, type: got.type })
+      }
+      total += got.buf.length
+      if (total > ASSETS_TOTAL_MAX) throw new CtxError('E_INPUT', `첨부는 save 한 번에 합 ${ASSETS_TOTAL_MAX / 1024 / 1024} MB 까지다`, { total })
+      pulled.push({ name: a.name, buf: got.buf, type: got.type })
+    }
   }
 
   try {
@@ -456,6 +496,7 @@ async function run(root, input, { user, write, admin, mirror, now }) {
 
     // 6 섹션
     const byDoc = new Map()
+    const written = [{ file: workRel, text: w.body }] // A7 — 이 save 가 쓴 본문과 그 파일(링크는 그 파일 기준이다)
     for (const s of sections) {
       const hit = resolveCoord(registry, s.coord)
       if (!hit) {
@@ -515,11 +556,45 @@ async function run(root, input, { user, write, admin, mirror, now }) {
         })
       }
       byDoc.set(hit.doc, res.text)
+      written.push({ file: hit.doc, text: s.body })
     }
     for (const [doc, text] of byDoc) await snap.write(doc, text)
 
-    // 7 기록 — TEMPLATE 순서의 프론트매터. author 는 토큰의 user 다.
-    await snap.write(workRel, renderWork(w, user))
+    // 6.5 첨부 — 올리기 API 가 들고 있던 바이트를 `work/assets/<id>/<이름>` 에(A1 · A5). 작업 기록 · 섹션과
+    // 같은 커밋이고, 검사에서 걸리면 같이 되돌린다(`Snap` 이 새 파일을 지운다).
+    const assetsOut = []
+    for (const a of pulled) {
+      const rel = `work/assets/${w.id}/${a.name}`
+      await snap.writeBin(rel, a.buf)
+      assetsOut.push({ path: rel, size: a.buf.length, type: a.type })
+    }
+
+    // 6.7 본문이 가리키는 그림 · 첨부(A7) — **경고다.** 편입 원문의 깨진 링크는 원문의 것이라 거절하지 않는다.
+    // 화면과 같은 규칙(`core/repopath.js`)으로 풀어야 「save 는 조용했는데 화면에서 깨진다」 가 안 생긴다.
+    const pointed = new Set()
+    const missingImgs = []
+    for (const { file, text } of written) {
+      for (const ref of mdRefs(text)) {
+        const r = repoPath(file, ref.href)
+        if (!r) continue
+        if (!r.outside) pointed.add(r.path)
+        if (!ref.image) continue
+        if (r.outside) missingImgs.push(`${ref.href} (레포 밖 · ${file})`)
+        else if (!(await fs.access(path.join(root, r.path)).then(() => true).catch(() => false))) missingImgs.push(`${r.path} (${file})`)
+      }
+    }
+    if (missingImgs.length) {
+      warnings.push(`본문이 가리키는 그림 ${missingImgs.length}개가 레포에 없다 — 화면에서 「그림을 찾을 수 없음」 으로 나온다: ${missingImgs.slice(0, 5).join(' · ')}${missingImgs.length > 5 ? ' …' : ''}`)
+    }
+    const unlinked = assetsOut.filter((a) => !pointed.has(a.path))
+    if (unlinked.length) {
+      warnings.push(
+        `올린 첨부 ${unlinked.length}개를 어느 본문도 가리키지 않는다 — 관리 문서에서는 ![설명](../${unlinked[0].path}), 작업 기록에서는 ![설명](${unlinked[0].path.slice('work/'.length)}): ${unlinked.map((a) => a.path).join(' · ')}`
+      )
+    }
+
+    // 7 기록 — TEMPLATE 순서의 프론트매터. author 는 토큰의 user 다. 첨부는 `attachments` 로 — 화면의 첨부 목록이 이것을 읽는다
+    await snap.write(workRel, renderWork(w, user, assetsOut.map((a) => a.path.slice('work/'.length))))
 
     // 9→8 **인덱스를 검사보다 먼저 만든다.**
     //
@@ -552,14 +627,14 @@ async function run(root, input, { user, write, admin, mirror, now }) {
     }
     for (const f of res.findings.filter((x) => x.sev === 'warn')) warnings.push(`${f.label} ${f.items.length}건`)
 
-    return { snap, id: w.id, title: w.title, sections: sections.length, vocab: added, managedChanges: plan?.events || [], warnings }
+    return { snap, id: w.id, title: w.title, sections: sections.length, vocab: added, managedChanges: plan?.events || [], assets: assetsOut.map(({ path: p, size }) => ({ path: p, size })), warnings }
   } catch (e) {
     await snap.restore()
     throw e
   }
 }
 
-function renderWork(w, user) {
+function renderWork(w, user, attachments = []) {
   const fm = ['---', `id: ${w.id}`, `title: ${yamlStr(w.title)}`, `date: ${w.date || ''}`, `author: ${yamlStr(user)}`]
   if (w.source) fm.push(`source: ${yamlStr(w.source.trim())}`)
   // 0개는 `touches: []` — 빈 `touches:` 는 YAML 로 null 이라 "0개임을 확인했다" 는 선언이 안 된다.
@@ -568,6 +643,7 @@ function renderWork(w, user) {
   for (const c of touches) fm.push(`  - ${c}`)
   if (!touches.length && w.touchesEmpty) fm.push(`touchesEmpty: ${yamlStr(w.touchesEmpty.trim())}`)
   if (w.supersedes) fm.push(`supersedes: ${w.supersedes}`)
+  if (attachments.length) fm.push(`attachments: [${attachments.map(yamlStr).join(', ')}]`)
   fm.push(`tags: [${(w.tags || []).map(yamlStr).join(', ')}]`, '---', '')
   return fm.join(NL) + NL + w.body.replace(/\s*$/, '') + NL
 }

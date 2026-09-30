@@ -1640,6 +1640,9 @@ await run('git', ['-C', MU, 'remote', 'add', 'origin', MBARE])
 await run('git', ['-C', MU, 'push', '-q', '-u', 'origin', 'HEAD'])
 await ctx('serve', 'user', 'add', '--auth', F.auth, '--name', 'mw', '--repos', '*', '--role', 'writer', '--data', F.data)
 const TMW = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'mw', '--data', F.data)).stdout.trim()
+// 읽기만 하는 사람 — 첨부 올리기가 403 인지(112)
+await ctx('serve', 'user', 'add', '--auth', F.auth, '--name', 'mv', '--repos', '*', '--data', F.data)
+const TMV = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'mv', '--data', F.data)).stdout.trim()
 const SM = serve(['--root', MROOT, '--port', String(MPORT), '--auth', F.auth, '--data', MDATA, '--mirror', '--web', path.join(ROOT, 'ops/out/web')])
 await ready(MPORT)
 const HM = http(`http://127.0.0.1:${MPORT}`)
@@ -1873,6 +1876,49 @@ try {
     must(!/`term:\*`/.test(await fs.readFile(path.join(MU, '_managed.md'), 'utf8')), '행이 남았다')
     return `커밋 +1 · where ${w.registry.doc} · 행 note · writer retire E_FORBIDDEN · admin retire ${ok.commit}`
   })
+  await check(112, '첨부 올리기 — curl 과 같은 요청(Bearer · 바이트) → ref → save assets → 커밋 하나 · 트리 깨끗 · /api/<repo>/file 이 그 그림 · viewer 403 · svg 415 · 10MB 초과 413', async () => {
+    // 1×1 PNG — curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @구성도.png <서버>/api/mu/assets 와 같은 요청
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082', 'hex')
+    const up = (tk, body) => AM('/api/mu/assets', { method: 'POST', headers: { authorization: 'Bearer ' + tk, 'content-type': 'application/octet-stream' }, body })
+    const r = await up(TMW, png)
+    eq(r.status, 200, 'writer 올리기')
+    const u = await r.json()
+    must(/^sha256:[0-9a-f]{64}$/.test(u.ref) && u.type === 'image/png' && u.size === png.length, JSON.stringify(u))
+    eq((await up(TMV, png)).status, 403, 'viewer')
+    eq((await up(TMW, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).status, 415, 'svg')
+    let big
+    for (let i = 0; ; i++) {
+      try {
+        big = await up(TMW, Buffer.alloc(10 * 1024 * 1024 + 1, 0x89))
+        break
+      } catch (e) {
+        if (i >= 1 || !/fetch failed/.test(String(e?.message))) throw e
+      }
+    }
+    eq(big.status, 413, '10MB 초과')
+    eq(await gitq('status', '--porcelain'), '', '올리기만으로 트리가 바뀌었다')
+
+    const id = '2026-0930-그림첨부'
+    const coord = 'table:rp_plnd_mst'
+    const n0 = Number(await gitq('rev-list', '--count', 'HEAD'))
+    const s = await mtool('section', { coord }, TMW)
+    const o = await mtool('save', {
+      work: { id, title: '그림 첨부', date: '2026-09-30 18:00', touches: [coord], body: `구성도를 넣었다.${NL}${NL}![구성도](<assets/${id}/구성 도.png>)` },
+      sections: [{ coord, applied: s.applied, body: s.content + NL + NL + `![구성도](<../work/assets/${id}/구성 도.png>)` }],
+      assets: [{ ref: u.ref, name: '구성 도.png' }],
+    }, TMW)
+    must(o.commit, JSON.stringify(o.error))
+    eq(o.assets, [{ path: `work/assets/${id}/구성 도.png`, size: png.length }], 'assets')
+    must(!o.warnings.some((w) => /그림|첨부/.test(w)), 'warnings: ' + o.warnings.join(' / '))
+    eq(Number(await gitq('rev-list', '--count', 'HEAD')), n0 + 1, '커밋 하나')
+    eq(await gitq('status', '--porcelain'), '', '트리')
+    must((await gitq('show', '--name-only', '--format=', 'HEAD')).split(NL).includes(`work/assets/${id}/구성 도.png`), '커밋에 그림')
+    const f = await AM('/api/mu/file?path=' + encodeURIComponent(o.assets[0].path), { headers: { authorization: 'Bearer ' + TMW } })
+    eq(f.status, 200, 'file')
+    eq(f.headers.get('content-type'), 'image/png', 'content-type')
+    must(Buffer.from(await f.arrayBuffer()).equals(png), '바이트')
+    return `ref ${u.ref.slice(7, 15)} · viewer 403 · svg 415 · 413 · 커밋 ${o.commit} · file 200`
+  })
 } finally {
   SM.kill()
   await fs.writeFile(path.join(TMP, 'mirror', 'server.stderr.log'), SM.err()).catch(() => {})
@@ -1977,6 +2023,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

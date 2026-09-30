@@ -51,7 +51,7 @@ const CARD = {
     '이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다',
   version: '이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다',
   save:
-    '작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘. 검사를 통과해야 커밋된다. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것 · 이슈로 보낸 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다. `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 등록부에 안 걸리는 새 타입이면 `managed: [{ pattern: "term:*", doc: "docs/용어집.md" }]` 로 행 · 관리 문서를 같이 만든다(섹션은 `sections` 에 같이 · 만들기 · 붙이기 · 정리는 【좌표 판정】 에 **【등록부 변경】** 으로 보이고 같은 승인을 받는다 · rename · merge · retire 는 admin 만). 밖에서 온 문서를 들이면 `source` 에 원문 출처를 적는다. `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
+    '작업 단위 하나를 기록한다: 작업 기록 1건 + 그 작업이 바꾼 좌표의 관리 문서 섹션 + 신규 어휘. 검사를 통과해야 커밋된다. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것 · 이슈로 보낸 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 거부된다. `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 등록부에 안 걸리는 새 타입이면 `managed: [{ pattern: "term:*", doc: "docs/용어집.md" }]` 로 행 · 관리 문서를 같이 만든다(섹션은 `sections` 에 같이 · 만들기 · 붙이기 · 정리는 【좌표 판정】 에 **【등록부 변경】** 으로 보이고 같은 승인을 받는다 · rename · merge · retire 는 admin 만). 밖에서 온 문서를 들이면 `source` 에 원문 출처를 적는다. 그림 · pdf 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(`work/assets/<id>/<name>` 에 같은 커밋으로 들어간다 · 관리 문서에서는 `![설명](../work/assets/<id>/<name>)`). `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
 }
 
 // ── 레포 캐시 (§2.6) ────────────────────────────────────────────────────────
@@ -315,6 +315,11 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
                 .strict()
             )
             .max(10)
+            .optional(),
+          // 첨부 — 올리기 API(`POST /api/<repo>/assets`)가 준 ref 와 파일 이름. 바이트는 여기 싣지 않는다(검토 ㉠)
+          assets: z
+            .array(z.object({ ref: z.string().max(80), name: z.string().max(120) }).strict())
+            .max(20)
             .optional(),
         },
       },
