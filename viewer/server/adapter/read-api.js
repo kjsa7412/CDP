@@ -130,7 +130,9 @@ export async function handleRead({ p, method, url, res, send, store }) {
     const ext = path.extname(r.abs).toLowerCase()
     // `download=1` — 새 탭에 여는 대신 파일로 받는다(연결 · 삭제 · 내려받기 TODO K9). 한글 이름은 RFC 5987 로
     const dl = url.searchParams.get('download') === '1' ? { 'content-disposition': attachment(path.basename(r.abs)) } : {}
-    send(res, 200, await fs.readFile(r.abs), { 'content-type': MIME[ext] || 'application/octet-stream', ...dl })
+    // SVG 는 문서다 — 「원문」 으로 새 탭에 열면 안의 스크립트가 이 출처 · 세션 쿠키로 돈다. `<img>` 로 쓸 때는 영향 없다(그림 · 첨부 검토 G5)
+    const svg = ext === '.svg' ? { 'content-security-policy': "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'" } : {}
+    send(res, 200, await fs.readFile(r.abs), { 'content-type': MIME[ext] || 'application/octet-stream', ...svg, ...dl })
     return true
   }
 

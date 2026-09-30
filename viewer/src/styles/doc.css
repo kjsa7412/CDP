@@ -486,6 +486,32 @@
   max-width: 100%;
   border-radius: var(--r-badge);
 }
+/* 본문 그림 — 누르면 원본(G4) */
+.doc img[data-file] {
+  cursor: zoom-in;
+}
+/* 못 읽은 그림 — 깨진 아이콘 대신 무엇이 없는지(G3) */
+.doc-img-missing {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px dashed var(--warn);
+  border-radius: var(--r-badge);
+  color: var(--warn);
+  font-size: 12.5px;
+  max-width: 100%;
+}
+.doc-img-missing--outside {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.doc-img-missing code {
+  font-size: 11.5px;
+  color: var(--text-3);
+  word-break: break-all;
+}
 
 /* 제목 앵커 */
 .doc .anchor {

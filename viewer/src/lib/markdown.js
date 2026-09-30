@@ -98,6 +98,23 @@ md.core.ruler.after('inline', 'tasklist', (state) => {
 
 // 표는 자체 스크롤 컨테이너로 감싼다. 본문(body)은 절대 가로 스크롤되지
 // 않고 넓은 요소만 각자 스크롤한다(§27.3).
+// 그림 — 상대 경로는 `src` 가 아니라 `data-src` 로 낸다(그림 · 첨부 검토 v0.1 G2).
+//
+// 렌더 결과는 원문을 키로 캐시되므로 **어느 문서의 것인지 모른다.** 그림 파일은 파일 API 로만 나오고 그 주소는
+// 문서 경로에 달렸다 — 그래서 붙이는 것은 화면(`DocView` · `Manual`)이다. `src` 로 두면 붙이기 전에 브라우저가
+// 화면 주소 기준으로 한 번씩 부르고, 그것이 운영자가 본 깨진 그림이었다(`../work/assets/%EC…` → SPA 의 HTML).
+const imageRule = md.renderer.rules.image
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const t = tokens[idx]
+  const src = t.attrGet('src') || ''
+  if (!/^(https?:|data:)/i.test(src)) {
+    t.attrs = t.attrs.filter(([k]) => k !== 'src')
+    t.attrSet('data-src', src)
+  }
+  t.attrSet('loading', 'lazy')
+  return imageRule(tokens, idx, options, env, self)
+}
+
 md.renderer.rules.table_open = () => '<div class="tablewrap wide"><table>'
 md.renderer.rules.table_close = () => '</table></div>'
 
@@ -130,7 +147,7 @@ export function renderMarkdown(text) {
   const env = {}
   const raw = md.render(src, env)
   const html = DOMPurify.sanitize(raw, {
-    ADD_ATTR: ['target', 'data-lang', 'data-copy', 'data-coord', 'data-alias', 'aria-hidden'],
+    ADD_ATTR: ['target', 'data-lang', 'data-copy', 'data-coord', 'data-alias', 'data-src', 'loading', 'aria-hidden'],
     FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form'],
   })
   const out = { html, toc: env.toc || [] }
@@ -211,6 +228,35 @@ export async function enhance(root, { myCoords = [], coordIndex = null, coordLin
       })
     }
   })
+}
+
+// 렌더 뒤 — `data-src` 그림에 주소를 붙인다(G2 · G3). `resolve(src)` 는 `{ url, label }` · 레포 밖이면
+// `{ outside: true, label }` · 풀 수 없으면 null. **못 읽은 그림은 깨진 아이콘으로 두지 않는다** — 무엇이 없는지
+// 경로를 적은 상자로 바꾼다(첨부 목록의 「경로를 찾을 수 없음」 과 같은 말). 그림은 `data-file` 로 원본을 연다.
+export function bindImages(root, resolve) {
+  if (!root) return
+  for (const img of root.querySelectorAll('img[data-src]')) {
+    if (img.dataset.bound) continue
+    img.dataset.bound = '1'
+    const r = resolve(img.dataset.src)
+    const fail = (outside, label) => {
+      const box = document.createElement('span')
+      box.className = 'doc-img-missing' + (outside ? ' doc-img-missing--outside' : '')
+      box.append(outside ? '레포 밖을 가리키는 그림' : '그림을 찾을 수 없음')
+      if (img.alt) box.append(' · ' + img.alt)
+      const c = document.createElement('code')
+      c.textContent = label
+      box.append(c)
+      img.replaceWith(box)
+    }
+    if (!r || r.outside) {
+      fail(!!r?.outside, r?.label || img.dataset.src)
+      continue
+    }
+    img.addEventListener('error', () => fail(false, r.label), { once: true })
+    img.dataset.file = r.url
+    img.src = r.url
+  }
 }
 
 // 텍스트 노드만 훑어 좌표를 감싼다. 코드·링크·제목 안은 건드리지 않는다 —

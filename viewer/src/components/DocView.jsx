@@ -7,7 +7,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, currentRepo } from '../lib/api.js'
 import { load, peek } from '../lib/cache.js'
-import { renderMarkdown, enhance, sectionSlug } from '../lib/markdown.js'
+import { renderMarkdown, enhance, sectionSlug, bindImages } from '../lib/markdown.js'
+import { repoPath } from '../../../core/repopath.js'
 import { summaryText } from '../lib/format.js'
 import ValidityBlock from './ValidityBlock.jsx'
 import SectionRail from './SectionRail.jsx'
@@ -71,6 +72,12 @@ export default function DocView({
   // 렌더 후처리 — 하이라이팅·4섹션 마킹·좌표 링크(§19 · §27.8)
   useEffect(() => {
     if (!rendered || !bodyRef.current) return
+    // 그림 먼저 — 하이라이팅(`enhance`)은 hljs 를 기다린다. 그림은 그 전에 부르기 시작한다
+    bindImages(bodyRef.current, (src) => {
+      const r = repoPath(doc.path, src)
+      if (!r) return null
+      return r.outside ? { outside: true, label: src } : { url: api.fileUrl(r.path), label: r.path }
+    })
     enhance(bodyRef.current, {
       myCoords,
       coordIndex,
@@ -85,18 +92,30 @@ export default function DocView({
         onCoord(t.dataset.coord)
         return
       }
+      // 본문 그림 — 원본을 새 탭에(G4). 도식은 본문 폭에 줄어 보인다
+      const img = e.target.closest('img[data-file]')
+      if (img && !e.target.closest('a')) {
+        window.open(img.dataset.file, '_blank', 'noopener')
+        return
+      }
       const a = e.target.closest('a')
       if (!a) return
       const href = a.getAttribute('href') || ''
       // 문서 간 상대 링크는 뷰어 내부 이동으로 가로챈다(§27.1)
-      if (/^https?:/i.test(href)) {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href)) {
         a.target = '_blank'
         a.rel = 'noreferrer noopener'
         return
       }
       if (href.startsWith('#')) return
       e.preventDefault()
-      const id = href.replace(/^\.\//, '').replace(/\.md$/i, '').split('/').pop()
+      // `.md` 가 아닌 것(pdf · xlsx · 그림)은 문서가 아니라 파일이다 — 파일로 연다. 전에는 `x.pdf` 라는 문서를 찾다 끝났다
+      const file = repoPath(doc.path, href)
+      if (file && !file.outside && /\.[a-z0-9]{1,8}$/i.test(file.path) && !/\.(md|markdown)$/i.test(file.path)) {
+        window.open(api.fileUrl(file.path), '_blank', 'noopener')
+        return
+      }
+      const id = href.replace(/^\.\//, '').replace(/#.*$/, '').replace(/\.md$/i, '').split('/').pop()
       onOpen(id)
     }
     bodyRef.current.addEventListener('click', onClick)
@@ -346,11 +365,17 @@ function Attachment({ path, base, onOpen }) {
   // v0.2 는 `knowledge/` 하나뿐이라 그것을 붙였는데, CDP 는 `work/` 와 `docs/`
   // 두 층이다. 그대로 두면 `work/assets/…` 에 멀쩡히 있는 파일이 전부
   // "경로를 찾을 수 없음" 으로 나온다 -- 실측에서 그랬다.
-  const dir = String(base || '').replace(/[^/]*$/, '')
-  const rel = /^(work|docs|knowledge)\//.test(path) ? path : dir + path
+  //
+  // 규칙은 본문 그림과 **한 함수**다(`core/repopath.js` · 그림 · 첨부 검토 v0.1 G1).
+  const resolved = repoPath(base, path)
+  const rel = resolved && !resolved.outside ? resolved.path : null
 
   useEffect(() => {
     let dead = false
+    if (!rel) {
+      setState(resolved?.outside ? 'outside' : 'missing')
+      return
+    }
     fetch(api.fileUrl(rel), { method: 'HEAD' })
       .then((r) => !dead && setState(r.ok ? 'ok' : r.status === 403 ? 'outside' : 'missing'))
       .catch(() => !dead && setState('missing'))

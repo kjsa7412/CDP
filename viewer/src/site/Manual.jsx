@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { site } from '../lib/api.js'
 import { useResource } from '../lib/cache.js'
 import { navigate, Link, useTitle } from '../lib/router.jsx'
-import { renderMarkdown, enhance } from '../lib/markdown.js'
+import { renderMarkdown, enhance, bindImages } from '../lib/markdown.js'
 import Icon from '../components/Icon.jsx'
 
 const safeDecode = (v) => {
@@ -23,6 +23,8 @@ const safeDecode = (v) => {
 }
 
 const GITHUB = 'https://github.com/kjsa7412/CDP/blob/main/'
+// 그림은 blob 이 아니라 raw 로 — blob 은 HTML 페이지다(그림 · 첨부 검토 v0.1 G6)
+const GITHUB_RAW = 'https://github.com/kjsa7412/CDP/raw/main/'
 // 책이 소스 레포 어디에 있나 — `../` 링크를 풀 때 기준이 된다
 const BASE_OF = (id) => (id === '설치절차' ? 'ops/deploy/' : 'manual/')
 const ICON_OF = { 사용자_설명서: 'book', 관리자_설명서: 'shield', 개발자_설명서: 'gear', 설치절차: 'server' }
@@ -50,6 +52,14 @@ export default function Manual({ info, id: asked, hash }) {
     const root = bodyRef.current
     if (!root || !rendered) return
     enhance(root, { coordLinks: false })
+    bindImages(root, (src) => {
+      try {
+        const url = new URL(src, GITHUB_RAW + BASE_OF(id)).href
+        return { url, label: src }
+      } catch {
+        return null
+      }
+    })
     for (const a of root.querySelectorAll('a[href]')) {
       const href = a.getAttribute('href') || ''
       if (href.startsWith('#')) continue
