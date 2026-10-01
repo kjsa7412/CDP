@@ -54,7 +54,7 @@ export async function runRepo(opt) {
         if (r.origin) out(`  origin  ${r.origin}${r.pushed ? '  (push 완료)' : r.pushError ? '  (push 실패: ' + r.pushError + ')' : '  (push 안 함 — --push)'}`)
         out('')
         out('다음 —')
-        out('  1. 안 쓰는 문서를 지우고 _managed.md 에서 그 패턴도 지운다 (README.md 첫날 5단계)')
+        out('  1. 안 쓰는 문서를 지운다 — bin/ctx docs 로 보고 bin/ctx docs drop <문서…> --dry-run (README.md 「첫날」)')
         out('  2. bin/ctx check 가 이상 없음이면 시작할 수 있다')
         if (!r.origin) out('  3. 원격이 있으면 git remote add origin <url> && git push -u origin HEAD')
         return r.pushError ? 1 : 0

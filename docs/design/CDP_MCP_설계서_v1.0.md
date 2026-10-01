@@ -624,6 +624,14 @@ bin/ctx serve token list --auth <auth.json>        # user · note · 남은 일�
 > - **`brief({ repo })`** — `repo` 가 이 연결의 기본(`/mcp/<이름>`)과 다르면 경고 줄. 스킬이 `.claude/cdp.json` 의 repo 를 넘긴다.
 > - 응답 `edits: [{ file, line }]` · `examples: { coords, sections, kept, left }`(있을 때만).
 
+> **정정(2026-10-01 · v0.22.0 · 관리문서 정리 검토 v0.1)** — 패키지 40종 중 안 쓰는 문서를 지울 길이 서버형에 없었고(`retire` 는 행만 · `merge` 는 서식을 남의 문서로 옮긴다), 셸에서 파일만 지우면 검사가 침묵했다(행이 없는 파일을 가리켜도 첫 `touches` 전까지 조용 — 그 뒤 레포 전체가 막힌다).
+> - **`managed: [{ op: "drop", doc, reason?, reviewed? }]`(admin)** — 파일 · 그 문서를 가리키는 **모든** 행 · 그 문서로만 가던 예시 좌표(`example:`)를 지우고 `_managed.md` 끝 「지운 관리 문서」 표(`| 문서 | 지운 기록 | 사유 |` · 첫 칸에 콜론이 없어 규칙이 아니다)에 한 줄. **거절** — 작업 기록이 쓴 좌표 섹션(`E_INPUT { realSections }`) · `touches` 이력(`{ touchedBy }`). 비대상 문서는 내용 판정 없이 admin 판단. `필수 제출 예` 는 경고.
+> - **5.6 가리키는 줄** — 열쇠 셋(경로 · 관리번호 · 이름)을 링크 · 백틱에서 찾는다(`core/docrefs.js` · 생성 블록 · 규칙 행 · `work/` · 도구 층 제외 · 백틱 밖 이름은 `prose`). 같은 drop 묶음 안의 파일은 뺀다. edits 를 적용한 **뒤**에도 남은 줄이 `reviewed` 에 없으면 `E_INPUT { refs: [{ file, line, text, docs, kind, suggest }] }` — `suggest` 는 `drop-row` · `unlink` · `review`.
+> - **`dryRun: true`** — 계획 · 거절 · 검사까지 돌고 `Snap` 으로 되돌린다. 커밋 · 미러 0. 응답 `dryRun: true` · `dropped: { docs, vocabRemoved, vocabKept, refs[{…, left, edit}] }` — `edit` 은 제안의 edits 초안(`review` 는 null).
+> - **`edits`** 가 뿌리 md(`README.md` · `관리번호.md` — 도구 층 · `INDEX*` 제외)도 받는다.
+> - **`check`** — `registry-missing`(행이 없는 파일 · warn) · `doc-ref-dangling`(없는 docs/ · 뿌리 md 로 가는 링크 · 지운 문서의 이름 · 번호 · warn).
+> - **`docs`** 목록의 문서마다 `usage { kind, required, sections{total,written}, touchedBy, mentionedBy, refsIn, refFiles, lastChange, state }` — 도구 수는 14 그대로. HTTP `GET /api/<repo>/managed-docs`(+ `blocked`) · `POST /api/<repo>/docs-drop`(admin · 작업 기록을 지어 같은 `save`) · 콘솔 새 레포 `drop: [경로]`(세움 커밋 다음 drop save). 모드 A 는 `ctx docs drop`(같은 계획 · 파일만).
+
 > **정정(v0.12.0 · 동시 기록 검토 v0.1 D3 · D5 · D6 · D7)** — 처리 순서에 **3.5 트리** 가 들어갔다: `git status` 한 번 → 커밋 안 된 변경이 있으면 `E_GIT { reason: 'dirty', dirty, paths }` 로 거절(뮤텍스 안 · 파일을 만지기 전). **6 섹션** 의 `E_CONFLICT` detail 은 `{ coord, expected, current, currentWork: { id, title, author, date }, content, truncated }` — 지금 본문(8,000자)이 실려 `section` 을 다시 부르지 않고 그 위에 다시 만든다. 등록부의 `—`(문서 전체) 규칙은 **문서 첫 줄의 `<!-- applied: … -->`** 가 applied 이고 치환은 파일 전체다(`frontmatter.topApplied` · 전에는 정규식 예외로 `E_REPO`). **11 미러** 는 뮤텍스 밖 · 큐 · 1.5초까지 기다린다 — 응답 `mirror` 는 `off · ok · queued · lag · diverged` 이고 `mirrorReason` · `mirrorLast { state, reason, at, ahead, behind }` · 이상이면 `warnings` 에 한 줄. 응답 예시 —
 > `{ "commit": "a1b2c3d", "id": "…", "sections": 1, "vocab": 0, "warnings": [], "mirror": "ok", "mirrorReason": null, "mirrorLast": { "state": "ok", … } }`.
 > `serve.log` 의 `save` 줄은 key = `work.id` · 결과 코드 · 도구 시간이다(전에는 `-` · 200 · 핸들러 시각).

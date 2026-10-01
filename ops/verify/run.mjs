@@ -1960,6 +1960,35 @@ try {
     eq(await gitq('status', '--porcelain'), '', '거절 뒤 트리')
     return `커밋 ${o.commit} · 낡은 old E_CONFLICT · 좌표 섹션 · 문서 전체 E_INPUT`
   })
+  await check(115, '관리 문서 지우기 — docs 의 usage · writer drop 은 E_FORBIDDEN · admin dryRun 은 커밋 없이 refs · 초안 edits 로 지우면 커밋 하나 · 파일 · 지운 기록 · /managed-docs 의 blocked', async () => {
+    const DOC = 'docs/프로그램목록.md'
+    const list = await mtool('docs', {}, TMW)
+    const u = list.docs.find((d) => d.path === DOC)?.usage
+    must(u && u.kind === '비대상' && typeof u.refsIn === 'number' && u.lastChange?.commit, 'usage: ' + JSON.stringify(u))
+    const md = await AM('/api/mu/managed-docs', { headers: { authorization: 'Bearer ' + TMW } })
+    eq(md.status, 200, '/managed-docs')
+    const mj = await md.json()
+    must(mj.docs.some((d) => d.blocked), '작업 기록이 쓴 문서의 blocked')
+    const work = (id) => ({ id, title: '관리 문서 정리', date: '2026-10-01 10:00', touches: [], touchesEmpty: '관리 문서 정리', body: '이 사업은 프로그램목록을 쓰지 않는다.' })
+    const bad = await mtool('save', { work: work('2026-1001-정리-writer'), managed: [{ op: 'drop', doc: DOC }] }, TMW)
+    eq(bad.error?.code, 'E_FORBIDDEN', JSON.stringify(bad))
+    const n0 = Number(await gitq('rev-list', '--count', 'HEAD'))
+    const pre = await mtool('save', { work: work('2026-1001-정리'), managed: [{ op: 'drop', doc: DOC }], dryRun: true }, TKA)
+    must(pre.dryRun && !pre.commit, JSON.stringify(pre.error || pre))
+    eq(Number(await gitq('rev-list', '--count', 'HEAD')), n0, 'dryRun 커밋')
+    eq(await gitq('status', '--porcelain'), '', 'dryRun 트리')
+    const refs = pre.dropped.refs
+    const edits = refs.filter((x) => x.edit).map((x) => x.edit)
+    const reviewed = refs.filter((x) => !x.edit).map((x) => x.file + ':' + x.line)
+    const o = await mtool('save', { work: work('2026-1001-정리'), managed: [{ op: 'drop', doc: DOC, reason: '쓰지 않는다', ...(reviewed.length ? { reviewed } : {}) }], ...(edits.length ? { edits } : {}) }, TKA)
+    must(o.commit, JSON.stringify(o.error))
+    eq(Number(await gitq('rev-list', '--count', 'HEAD')), n0 + 1, '커밋 하나')
+    eq(await gitq('status', '--porcelain'), '', '트리')
+    must(!(await fs.access(path.join(MU, DOC)).then(() => true).catch(() => false)), '파일이 남았다')
+    must(/## 지운 관리 문서[\s\S]*`docs\/프로그램목록\.md` \| `2026-1001-정리` \| 쓰지 않는다/.test(await fs.readFile(path.join(MU, '_managed.md'), 'utf8')), '지운 기록')
+    eq((await mtool('check', {}, TMW)).errors, 0, 'check')
+    return `usage · writer E_FORBIDDEN · dryRun refs ${refs.length} · 고침 ${edits.length} · 알고 둠 ${reviewed.length} · 커밋 ${o.commit}`
+  })
 } finally {
   SM.kill()
   await fs.writeFile(path.join(TMP, 'mirror', 'server.stderr.log'), SM.err()).catch(() => {})
@@ -1995,7 +2024,7 @@ skip(63, '전환 메뉴에 권한 밖 레포가 없다', '6.2 브라우저 실�
 skip(64, '레포를 바꾸면 화면 상태 초기화', '6.2 브라우저 실측 — 전환이 주소 이동이라 구조적으로 성립')
 skip(65, '/r/<repo>/doc/<id> 를 새 창에 붙여넣으면 열린다', '6.2 브라우저 실측')
 skip(66, '⌘K 가 다른 레포의 좌표를 안 낸다', '6.2 — 모든 호출이 /api/<repo> 기준(45번이 경로를 덮는다)')
-skip(67, '서버 모드 관리 메뉴 — 현황 · 작업 레포 · 정보 셋(「콘솔」 · 「문서로 돌아가기」 없음)', '브라우저 실측 — 2026-09-28 화면 · 권한 검토 v0.1 R2(TODO 「나온 것」 · kjsa · hong 둘 다 3)')
+skip(67, '서버 모드 관리 메뉴 — 현황 · 관리 문서 · 작업 레포 · 정보 넷(「콘솔」 · 「문서로 돌아가기」 없음)', '브라우저 실측 — 2026-09-28 화면 · 권한 검토 v0.1 R2 · 2026-10-01 관리문서 정리 검토 §4.9 가 「관리 문서」 를 더했다(TODO 「나온 것」)')
 skip(68, '공통 상단 바 — 표식(→ 소개) · 설명서 · 레포 · 콘솔(관리자) · 이름 · 역할 칩 · 로그아웃 · 얼굴을 넘어도 같은 문서', '브라우저 실측 — 2026-09-28 화면 · 권한 검토 v0.1 R5 · R7(얼굴 순회 navigation 1 · timeOrigin 불변)')
 skip(69, '레포 메뉴는 서버 모드에서 항상 — 쓰기/읽기 칩 · 관리자에게 콘솔 › 지식 레포 줄', '6.2 브라우저 실측 — 2026-09-23 확인 (레포 하나여도 메뉴)')
 
@@ -2064,6 +2093,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114 + 관리 문서 정리 115)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)
