@@ -23,6 +23,8 @@ import { parseRegistry } from './managed.js'
 import { parseVocab } from './vocab.js'
 import { readText } from './scan.js'
 import { CtxError } from './tools.js'
+import { docNo } from './docrefs.js'
+import { requiredOf } from './docusage.js'
 
 export const MANIFEST = '_package.json'
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
@@ -135,6 +137,14 @@ export async function listPackages(dir) {
       patterns: st.patterns.length,
       coords: st.coords,
       examples: st.examples.length,
+      // 문서 고르기(관리문서 정리 검토 §4.9) — 새 레포 화면이 안 쓸 문서를 빼고 세운다. 세운 뒤 같은 drop save 가 지운다
+      docList: await Promise.all(
+        st.docs.map(async (rel) => {
+          const text = readText(await fs.readFile(path.join(p, rel), 'utf8').catch(() => ''))
+          const h = text.split('\n').find((l) => /^#\s/.test(l))
+          return { path: rel, no: docNo(rel), title: h ? h.replace(/^#\s+/, '').trim() : rel.split('/').pop().replace(/\.md$/i, ''), required: requiredOf(text), registered: st.patterns.some((x) => x.doc.toLowerCase() === rel.toLowerCase()) }
+        })
+      ),
     })
   }
   return out

@@ -437,3 +437,28 @@
   cursor: pointer;
   color: var(--text-2);
 }
+
+/* ── 관리 문서 (관리문서 정리 검토 §4.9) ─────────────────────────────────── */
+.adocs__bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 8px; flex-wrap: wrap; }
+.adocs__seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.adocs__segbtn { padding: 4px 10px; font-size: 11.5px; color: var(--text-2); background: transparent; border: 0; cursor: pointer; }
+.adocs__segbtn + .adocs__segbtn { border-left: 1px solid var(--border); }
+.adocs__segbtn[aria-selected='true'] { color: var(--text); background: var(--surface-3); font-weight: 600; }
+.adocs__q, .adocs__reason { flex: 1; min-width: 160px; padding: 5px 9px; font: inherit; font-size: 12px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+.adocs__scroll { overflow-x: auto; }
+.adocs__table tr.is-idle td { color: var(--text-2); }
+.adocs__table tr.is-picked td { background: var(--accent-bg, var(--surface-2)); }
+.adocs__title { font-weight: 600; color: var(--text); }
+.adocs__path { font: 10.5px var(--font-mono); color: var(--text-3); word-break: break-all; }
+.adocs__act { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.adocs__list { margin: 0; padding-left: 18px; font-size: 12px; }
+.adocs__refs { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.adocs__refshead { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.adocs__ref { display: grid; grid-template-columns: minmax(140px, 220px) 1fr auto; gap: 4px 12px; align-items: start; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 11.5px; }
+.adocs__refloc { color: var(--text-3); word-break: break-all; }
+.adocs__reftext { color: var(--text-2); word-break: break-word; }
+.adocs__refpick { display: flex; gap: 10px; white-space: nowrap; }
+.adocs__refpick label { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+@media (max-width: 720px) {
+  .adocs__ref { grid-template-columns: 1fr; }
+}

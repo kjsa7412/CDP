@@ -28,12 +28,15 @@ import WorkRepos from './WorkRepos.jsx'
 import WorkReposServer from './WorkReposServer.jsx'
 import Diag from './Diag.jsx'
 import Info from './Info.jsx'
+import Docs from './Docs.jsx'
 
 // 서버 모드에서는 **이 PC 를 만지는 화면이 없다**(MCP 설계서 §6.6.3).
 // 지우는 것이 아니라 내지 않는 것이다 — 라우트도 404 이므로 화면만 숨겨서
 // API 가 살아 있는 구멍이 생기지 않는다(§6.2). `local: true` 는 로컬에만, `server: true` 는 서버에만.
 export const MENU = [
   { key: 'overview', icon: 'check', label: '현황', sub: '지금 쓸 수 있는 상태인가' },
+  // 관리 문서 — 목록 · 사용 현황 · 안 쓰는 문서 지우기(관리문서 정리 검토 §4.9). 로컬 · 서버 둘 다(지우기는 서버형 admin)
+  { key: 'docs', icon: 'doc', label: '관리 문서', sub: '쓰는가 · 안 쓰는 문서 지우기' },
   // 로컬 — 이 PC 의 경로를 고른다. 서버에는 고를 경로가 없고, 목록은 「레포 ▾」 · 세우기는 콘솔이다(R2).
   { key: 'repo', icon: 'managed', label: '지식 레포', sub: '어디를 보고 있나', local: true },
   // **서버 모드에는 없다.** 모드 B 에서 git 을 도는 것은 서버 자신이다 —
@@ -120,6 +123,7 @@ export default function AdminView({
           {cur === 'repo' && !server && (
             <Repo state={state} repo={repo} diag={diag} firstRun={firstRun} onOpened={onOpened} say={say} />
           )}
+          {cur === 'docs' && <Docs me={me} say={say} />}
           {cur === 'sync' && <Sync sync={sync} onSync={onSync} say={say} />}
           {cur === 'work' && (server ? <WorkReposServer say={say} /> : <WorkRepos state={state} patch={patch} say={say} />)}
           {cur === 'diag' && <Diag diag={diag} repo={repo} say={say} />}

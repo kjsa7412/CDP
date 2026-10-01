@@ -603,6 +603,41 @@ export async function runServe(opt = {}) {
     }
   }
 
+  // reviewed 는 op 하나에 50줄 — drop op 들에 나눠 싣는다(save 는 전부 모아 본다)
+  const spreadReviewed = (ops, reviewed) => {
+    if (reviewed.length > ops.length * 50) throw new CtxError('E_INPUT', `알고 둘 줄이 ${reviewed.length}개다 — 한 번에 ${ops.length * 50}줄까지. 문서를 나눠 지운다`, { total: reviewed.length })
+    return ops.map((o, i) => {
+      const r = reviewed.slice(i * 50, i * 50 + 50)
+      return r.length ? { ...o, reviewed: r } : o
+    })
+  }
+
+  // 세운 직후 안 쓸 문서를 지운다 — 미리보기(dryRun)의 제안 초안을 그대로 싣고 review 줄은 reviewed 로. 10종씩 나눠 save 한다
+  const dropAtCreate = async (repoRoot, docs, actor) => {
+    const d = new Date()
+    const p2 = (n) => String(n).padStart(2, '0')
+    const day = `${d.getFullYear()}-${p2(d.getMonth() + 1)}${p2(d.getDate())}`
+    const out = { docs: [], commits: [], reviewed: 0 }
+    for (let i = 0; i < docs.length; i += 10) {
+      const part = docs.slice(i, i + 10)
+      const input = (extra = {}) => ({
+        work: { id: `${day}-세울때-뺀-문서-${i / 10 + 1}`, title: `세울 때 뺀 관리 문서 — ${part.length}종`, date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`, touches: [], touchesEmpty: '관리 문서 정리', tags: ['docs-prune'], body: ['레포를 세울 때 이 프로젝트에 쓰지 않을 문서로 골라 뺐다.', '', ...part.map((x) => `- \`${x}\``), ''].join('\n') },
+        ...extra,
+      })
+      const pre = await doSave(repoRoot, input({ managed: part.map((doc) => ({ op: 'drop', doc, reason: '세울 때 뺌' })), dryRun: true }), { user: actor, write: true, admin: true })
+      const refs = pre.dropped?.refs || []
+      // edits 는 save 한 번에 20건 — 넘는 줄은 알고 둔다(검사 「없는 관리 문서를 가리키는 줄」 이 계속 말한다)
+      const fix = refs.filter((x) => x.edit).slice(0, 20)
+      const edits = fix.map((x) => x.edit)
+      const reviewed = refs.filter((x) => !fix.includes(x)).map((x) => x.file + ':' + x.line)
+      const r = await doSave(repoRoot, input({ managed: spreadReviewed(part.map((doc) => ({ op: 'drop', doc, reason: '세울 때 뺌' })), reviewed), ...(edits.length ? { edits } : {}) }), { user: actor, write: true, admin: true, mirror: !!opt.mirror, log: (m) => log.line(m) })
+      out.docs.push(...part)
+      out.commits.push(r.commit)
+      out.reviewed += reviewed.length
+    }
+    return out
+  }
+
   // 요청마다 서버를 새로 만든다(stateless). 레포 캐시는 store 가 들고 있으므로
   // 여기서 만드는 것은 **등록표뿐**이다 -- 레포를 다시 읽지 않는다.
   const handler = createMcpHandler(
@@ -1189,7 +1224,7 @@ export async function runServe(opt = {}) {
               })
             }
             okLog('/repos', '-')
-            return json(res, 200, { repos: rows, packages: pk ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => ({ name: p.name, title: p.manifest?.title ?? null, version: p.manifest?.version ?? null, description: p.manifest?.description ?? null, docs: p.docs })) : [], users: db.users.filter((u) => u.active !== false).map((u) => ({ name: u.name, label: u.label ?? null, all: (u.repos || []).includes('*') })) })
+            return json(res, 200, { repos: rows, packages: pk ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => ({ name: p.name, title: p.manifest?.title ?? null, version: p.manifest?.version ?? null, description: p.manifest?.description ?? null, docs: p.docs, docList: p.docList })) : [], users: db.users.filter((u) => u.active !== false).map((u) => ({ name: u.name, label: u.label ?? null, all: (u.repos || []).includes('*') })) })
           }
           if (sub === '/repos' && req.method === 'POST') {
             const body = await readJson()
@@ -1207,6 +1242,12 @@ export async function runServe(opt = {}) {
               }
               if (granted.length) await commit(`repo grant · ${a.user} · ${name} · users=${granted.join(',')}`)
               out.body.granted = granted
+            }
+            // 문서 고르기(관리문서 정리 검토 §4.9) — 세움 커밋 **다음에** 같은 drop save 를 한 번 더. 세우는 길에 두 번째
+            // 지우기 코드를 만들지 않는다. 가리키는 줄은 제안(drop-row · unlink)대로 고치고 산문은 알고 둔다 — 남은 수를 돌려준다
+            if (out.status === 200 && Array.isArray(body.drop) && body.drop.length) {
+              out.body.dropped = await dropAtCreate(path.join(root, name), body.drop.map(String), a.user).catch((e) => ({ error: { code: e?.code || 'E_REPO', message: e?.message || String(e), detail: e?.detail } }))
+              await store.refresh()
             }
             okLog('/repos', name, out.status)
             return json(res, out.status, out.body)
@@ -1633,7 +1674,7 @@ export async function runServe(opt = {}) {
                 tags: ['docs-prune'],
                 body: [`${reason || '(미리보기)'}`, '', '지운 관리 문서 —', '', ...body.docs.map((x) => `- \`${x}\``), ''].join('\n'),
               },
-              managed: body.docs.map((doc, i) => ({ op: 'drop', doc, ...(reason ? { reason } : {}), ...(i === 0 && Array.isArray(body.reviewed) && body.reviewed.length ? { reviewed: body.reviewed } : {}) })),
+              managed: spreadReviewed(body.docs.map((doc) => ({ op: 'drop', doc, ...(reason ? { reason } : {}) })), Array.isArray(body.reviewed) ? body.reviewed.map(String) : []),
               ...(Array.isArray(body.edits) && body.edits.length ? { edits: body.edits } : {}),
               ...(body.dryRun ? { dryRun: true } : {}),
             }

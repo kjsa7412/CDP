@@ -192,3 +192,13 @@
 /* 링크로 그린 메뉴 · 표식 — 밑줄 없음 */
 .admin__menu a.astep, .admin__menu a.astep:hover { text-decoration: none; }
 .rowact a.abtn, .rowact a.abtn:hover { text-decoration: none; }
+
+/* 새 레포 — 문서 고르기 (관리문서 정리 검토 §4.9) */
+.docpick { align-self: stretch; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.docpick__group summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; padding: 3px 0; }
+.docpick__all { margin-left: auto; font-size: 11px; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.docpick__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 12px; padding: 4px 0 6px 4px; }
+.docpick__list label { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.docpick__list label.is-off { color: var(--text-3); text-decoration: line-through; }
+.docpick__tag { font-size: 10px; padding: 0 5px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); }
+.docpick__tag--req { background: var(--warn-bg); color: var(--warn); }

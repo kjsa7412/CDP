@@ -242,6 +242,9 @@ export const api = {
   check: () => req('/check'),
   status: () => req('/status'),
   managed: () => req('/managed'),
+  // 관리 문서 목록 · 사용 현황 · 지우기(관리문서 정리 검토 §4.9). 지우기는 서버형 admin — 거절은 detail 째 받는다(refs)
+  managedDocs: () => req('/managed-docs'),
+  docsDrop: (body) => req('/docs-drop', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 403, 404, 409] }),
   coord: (c) => req(`/coord?coord=${encodeURIComponent(c)}`),
   state: () => (isServer() ? Promise.resolve(localState()) : req('/state')),
   saveState: (patch) =>

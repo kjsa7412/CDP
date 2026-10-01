@@ -288,7 +288,9 @@ export default function Repos({ say }) {
           <b>{done.name}</b> — {done.cloned ? '받아 왔다' : '세웠다'} · 커밋 <Mono>{done.commit}</Mono>
           {done.files ? ` · 파일 ${done.files}` : ''}
           {done.origin ? (done.cloned ? '' : done.pushed ? ' · origin 에 보냈다' : ` · origin push 실패: ${done.pushError || ''}`) : ''}
-          {done.granted?.length ? ` · 접근 ${done.granted.join(', ')}` : ''}{' '}
+          {done.granted?.length ? ` · 접근 ${done.granted.join(', ')}` : ''}
+          {done.dropped?.docs?.length ? ` · 뺀 문서 ${done.dropped.docs.length}종${done.dropped.reviewed ? ` (남은 언급 ${done.dropped.reviewed}줄 — 검사가 알려 준다)` : ''}` : ''}
+          {done.dropped?.error ? ` · 문서 빼기 실패: ${done.dropped.error.message} — 레포의 관리 › 관리 문서에서 다시` : ''}{' '}
           <Link className="abtn" to={'/r/' + encodeURIComponent(done.name) + '/'}>열기</Link>
         </Note>
       )}
@@ -325,10 +327,49 @@ export default function Repos({ say }) {
   )
 }
 
+// 패키지 문서 목록 — 체크가 「남긴다」. 폴더별로 묶고 폴더 단위로 켜고 끈다. 관리번호의 끝자리만 다른 것(TE_201~203)이 한 묶음이다
+function DocPick({ list, drop, onChange }) {
+  const off = new Set(drop)
+  const folders = [...new Set(list.map((d) => d.path.split('/').slice(0, -1).join('/')))]
+  const set = (paths, keep) => {
+    const n = new Set(off)
+    for (const p of paths) keep ? n.delete(p) : n.add(p)
+    onChange([...n])
+  }
+  return (
+    <div className="docpick">
+      {folders.map((fo) => {
+        const items = list.filter((d) => d.path.split('/').slice(0, -1).join('/') === fo)
+        const kept = items.filter((d) => !off.has(d.path)).length
+        return (
+          <details key={fo} className="docpick__group">
+            <summary>
+              <span className="mono">{fo.replace(/^docs\/?/, '') || 'docs'}</span> <span className="amuted">{kept}/{items.length}</span>
+              <button type="button" className="docpick__all" onClick={(e) => { e.preventDefault(); set(items.map((d) => d.path), kept < items.length) }}>
+                {kept < items.length ? '전부 남기기' : '전부 빼기'}
+              </button>
+            </summary>
+            <div className="docpick__list">
+              {items.map((d) => (
+                <label key={d.path} className={off.has(d.path) ? 'is-off' : ''}>
+                  <input type="checkbox" checked={!off.has(d.path)} onChange={(e) => set([d.path], e.target.checked)} />
+                  <span className="mono">{d.no || ''}</span> {d.title.replace(d.no || '\u0000', '').trim()}
+                  {d.registered && <span className="docpick__tag">좌표</span>}
+                  {d.required && <span className="docpick__tag docpick__tag--req">필수</span>}
+                </label>
+              ))}
+            </div>
+          </details>
+        )
+      })}
+    </div>
+  )
+}
+
 function NewRepo({ data, busy, onClose, onOk }) {
   const pkgs = data.packages || []
   const [tab, setTab] = useState('package')
-  const [f, setF] = useState({ name: '', pkg: pkgs.length === 1 ? pkgs[0].name : '', origin: '', clone: '', grant: [], examples: true })
+  const [f, setF] = useState({ name: '', pkg: pkgs.length === 1 ? pkgs[0].name : '', origin: '', clone: '', grant: [], examples: true, drop: [] })
   const okName = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(f.name.trim())
   const ok = okName && (tab === 'package' ? !!f.pkg : !!f.clone.trim())
   const grantable = (data.users || []).filter((u) => !u.all)
@@ -351,7 +392,7 @@ function NewRepo({ data, busy, onClose, onOk }) {
             onClick={() =>
               onOk(
                 tab === 'package'
-                  ? { name: f.name.trim(), package: f.pkg, origin: f.origin.trim() || undefined, grant: f.grant, ...(f.examples ? {} : { examples: false }) }
+                  ? { name: f.name.trim(), package: f.pkg, origin: f.origin.trim() || undefined, grant: f.grant, ...(f.examples ? {} : { examples: false }), ...(f.drop.length ? { drop: f.drop } : {}) }
                   : { name: f.name.trim(), clone: f.clone.trim(), grant: f.grant }
               )
             }
@@ -377,7 +418,7 @@ function NewRepo({ data, busy, onClose, onOk }) {
                   서버에 패키지 폴더가 없다. <code>ctx serve --packages &lt;dir&gt;</code> 로 가리키거나 산출물의 <code>packages/</code> 를 둔다. 그 전에는 clone 으로만 둘 수 있다.
                 </div>
               ) : (
-                <select value={f.pkg} onChange={(e) => setF({ ...f, pkg: e.target.value })}>
+                <select value={f.pkg} onChange={(e) => setF({ ...f, pkg: e.target.value, drop: [] })}>
                   {pkgs.length > 1 && <option value="">— 패키지를 고른다 —</option>}
                   {pkgs.map((p) => (
                     <option key={p.name} value={p.name}>
@@ -400,6 +441,14 @@ function NewRepo({ data, busy, onClose, onOk }) {
                 </label>
               </div>
             </Field>
+            {pkg?.docList?.length > 0 && (
+              <Field
+                label={`문서 고르기 — ${pkg.docList.length - f.drop.length} / ${pkg.docList.length}종`}
+                hint="이 프로젝트에 안 쓸 문서의 체크를 푼다. 세운 커밋 다음에 「세울 때 뺀 관리 문서」 커밋 하나로 지우고, 그 문서를 가리키는 목록 행 · 링크는 같이 고친다(산문 언급은 남고 검사가 알려 준다). 나중에 레포의 관리 › 관리 문서에서도 뺄 수 있다."
+              >
+                <DocPick list={pkg.docList} drop={f.drop} onChange={(drop) => setF({ ...f, drop })} />
+              </Field>
+            )}
             <Field label="origin (선택)" hint="있으면 첫 커밋을 바로 보낸다. 서버는 GitLab 프로젝트를 만들 수 없다 — 웹에서 빈 프로젝트를 먼저 만든다.">
               <input className="mono" value={f.origin} onChange={(e) => setF({ ...f, origin: e.target.value })} spellCheck={false} placeholder="http://<gitlab>/<그룹>/<프로젝트>.git" />
             </Field>
