@@ -3,6 +3,28 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.22.0
+
+**안 쓰는 관리 문서를 지울 길이 없던 것** — `core/save.js` · `core/managedops.js` · `core/docdrop.js` · `core/docrefs.js` — 패키지 40종을 다 쓰는 사업은 드문데 서버형에는 문서를 지우는 연산이 없었고(`retire` 는 행만 · `merge` 는 서식을 남의 문서로 옮긴다), 셸에서 파일만 지우면 그 문서를 가리키던 「어디로」 표 · README 목록 · `_vocab` 판정표가 그대로 남았다
+- `save` 입력 `managed: [{ op: "drop", doc, reason? }]`(admin) — 파일 · 그 문서를 가리키는 등록부 행 · 그 문서로만 가던 예시 좌표를 한 커밋에 지우고 `_managed.md` 끝 「지운 관리 문서」 표에 남긴다. 작업 기록이 쓴 섹션 · `touches` 이력이 있는 문서는 거절(`merge` · `retire` 로)
+- 그 문서를 가리키는 다른 줄(링크 · 백틱 이름 · 관리번호)은 같은 save 의 `edits` 로 고치거나 `managed[].reviewed` 로 알고 둬야 커밋된다 — 남으면 `E_INPUT { refs: [{ file, line, text, kind, suggest }] }`(`drop-row` · `unlink` · `review`) · 같이 지우는 문서끼리의 참조는 뺀다
+- `save` 입력 `dryRun: true` — 계획 · 거절 · 검사까지 돌고 커밋하지 않는다. 응답 `dropped.refs[].edit` 이 제안의 edits 초안
+- `edits` 가 레포 뿌리의 md(`README.md` · `관리번호.md`)도 받는다(도구 층 · `INDEX*` 제외)
+
+**문서를 지워도 검사가 침묵하던 것** — `core/check.js` — 등록부 행이 없는 파일을 가리켜도 「오류 없음」 이었고, 그 타입에 작업 기록이 처음 닿는 순간 레포의 모든 커밋이 막혔다
+- `registry-missing`(행이 없는 파일을 가리킨다) · `doc-ref-dangling`(없는 관리 문서로 가는 링크 · 지운 문서의 이름) — 둘 다 경고
+
+**어느 문서를 쓰는지 볼 곳이 없던 것** — `core/docusage.js` · `viewer/src/components/admin/Docs.jsx` · `viewer/src/console/Repos.jsx`
+- MCP `docs` 목록의 문서마다 `usage` — 작업 기록이 쓴 섹션 · 닿은 작업 기록 · 들어오는 참조 · 필수 제출 · 마지막 변경 · `state`(`쓰는 중` · `서식 그대로`). 도구 수는 14 그대로
+- 레포 › 관리 › 「관리 문서」 — 목록 · 거르기 · 사용 현황 / admin 은 골라서(같은 묶음 제안) 미리보기 → 줄마다 「행 지우기 · 링크만 풀기 · 알고 둔다」 → 사유 → 지우기 · 「지운 관리 문서」 기록
+- 콘솔 새 레포의 「문서 고르기」 — 안 쓸 문서의 체크를 풀면 세움 커밋 다음에 「세울 때 뺀 관리 문서」 커밋 하나로 지운다
+- HTTP `GET /api/<repo>/managed-docs` · `POST /api/<repo>/docs-drop`(admin) · 모드 A `ctx docs`(사용 현황) · `ctx docs drop <문서…> [--dry-run] [--apply-suggest]`
+
+- 스킬 — `cdp-managed` 「문서 정리」(후보 표 → dryRun → 줄마다 판정 · 산문은 고쳐 쓴다 → 승인) · `cdp-save` 【등록부 변경】 의 지우기 줄
+- 패키지 README 셋의 「첫날」 — 지우기를 한 번에(서버형 화면 · 셸 · 에이전트) · 「2를 빠뜨리면 조용하지 않다」 를 고쳤다
+- 하네스 115 · `test/docs-drop.test.mjs`
+- 검토 · TODO — `docs/design/CDP_관리문서_정리_검토_v0.1.md` · `docs/dev/관리문서_정리_TODO.md`
+
 ## v0.21.0
 
 **등록부를 바꾸면 사본 문구가 거짓으로 남던 것** — `core/regen.js` · `core/save.js` · `core/check.js` — `managed: add` 로 행을 더해도 문서 머리 표의 `등록부` 칸(「비대상」)과 `_vocab.md` 의 타입 목록 · 규칙(「`회의록:` 타입이 없다 · 13개가 전부다」)은 그대로였고 고칠 길도, `check` 가 잡을 규칙도 없었다
