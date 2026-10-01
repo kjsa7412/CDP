@@ -4,20 +4,24 @@
 // 지울 문서의 (경로 → 새 글) 지도 · 사건 목록 · 경고를 돌려주고, 쓰는 것은 부르는 쪽(`save` 의 `Snap`)이다 —
 // 그래서 검사에서 걸리면 한 번에 되돌린다.
 //
-// 네 동작 — `add`(writer) · `rename` · `merge` · `retire`(admin). 앞 동작이 만든 상태 위에서 뒤 동작이 돈다.
+// 다섯 동작 — `add`(writer) · `rename` · `merge` · `retire` · `drop`(admin). `drop` 은 관리문서 정리 검토 v0.1 §4.2 —
+// 파일 · 그 문서를 가리키는 행을 지우고 「지운 관리 문서」 표에 한 줄을 남긴다. 거절 조건 · 예시 좌표 · 참조는 `docdrop.js`.
+// 앞 동작이 만든 상태 위에서 뒤 동작이 돈다.
 // 기존 행은 `add` 로 바뀌지 않는다 — 새 행은 **언제나 마지막 규칙 행 바로 뒤**(먼저 걸리는 행이 이긴다).
 
 import { CtxError } from './tools.js'
+import { DROPPED_HEAD } from './docrefs.js'
 import { parseRegistry, globContains, globIntersects, patternProblem, docPathProblem, registryRow, outsideFences, ADDED_NOTE } from './managed.js'
 
 export const MAX_OPS = 10
-export const OPS = ['add', 'rename', 'merge', 'retire']
+export const OPS = ['add', 'rename', 'merge', 'retire', 'drop']
 // op 마다 받는 키 — 이 밖의 키는 거절한다(오타가 조용히 버려지지 않게)
 const KEYS = {
   add: { need: ['pattern', 'doc'], may: ['level', 'title', 'reviewed'] },
   rename: { need: ['doc', 'to'], may: [] },
   merge: { need: ['doc', 'into'], may: [] },
   retire: { need: ['pattern'], may: [] },
+  drop: { need: ['doc'], may: ['reason', 'reviewed'] },
 }
 
 const NL = '\n'
@@ -33,7 +37,7 @@ export function checkManagedShape(list) {
     const at = `managed[${i}]`
     if (!m || typeof m !== 'object' || Array.isArray(m)) throw new CtxError('E_INPUT', `${at} 는 객체다`, { field: at })
     const op = m.op == null ? 'add' : m.op
-    if (!OPS.includes(op)) throw new CtxError('E_INPUT', `${at}.op 는 add · rename · merge · retire 중 하나다`, { field: at + '.op' })
+    if (!OPS.includes(op)) throw new CtxError('E_INPUT', `${at}.op 는 add · rename · merge · retire · drop 중 하나다`, { field: at + '.op' })
     const k = KEYS[op]
     for (const key of Object.keys(m)) {
       if (key === 'op') continue
@@ -48,6 +52,9 @@ export function checkManagedShape(list) {
     if (m.title != null && (typeof m.title !== 'string' || !m.title.trim() || m.title.length > 200 || /[\r\n]/.test(m.title))) {
       throw new CtxError('E_INPUT', `${at}.title 은 한 줄 1~200자다`, { field: at + '.title' })
     }
+    if (m.reason != null && (typeof m.reason !== 'string' || m.reason.length > 200 || /[\r\n]/.test(m.reason))) {
+      throw new CtxError('E_INPUT', `${at}.reason 은 한 줄 200자까지다`, { field: at + '.reason' })
+    }
     // 등록부 사본 검토 X8 — 어긋난다고 걸린 산문 중 **맞는 줄**이라고 확인한 것(`파일:행`). 확인했다는 선언이 커밋에 남는다
     if (m.reviewed != null && (!Array.isArray(m.reviewed) || m.reviewed.length > 50 || m.reviewed.some((x) => typeof x !== 'string' || !/^[^:\s][^\n]{0,240}:\d{1,6}$/.test(x)))) {
       throw new CtxError('E_INPUT', `${at}.reviewed 는 "파일:행" 문자열 50개까지다 (예: "_vocab.md:53")`, { field: at + '.reviewed' })
@@ -56,7 +63,7 @@ export function checkManagedShape(list) {
   })
 }
 
-// 정리(rename · merge · retire)가 하나라도 있는가 — admin 만
+// 정리(rename · merge · retire · drop)가 하나라도 있는가 — admin 만
 export const needsAdmin = (ops) => (ops || []).some((o) => (o.op ?? 'add') !== 'add')
 
 function bad(at, field, msg, detail = {}) {
@@ -213,6 +220,19 @@ export async function planManaged({ ops, registryText, docPaths, read, workId })
       continue
     }
 
+    if (op.op === 'drop') {
+      // 경로 문법은 읽기만 — 손으로 둔 옛 문서도 지울 수 있어야 한다. 레포 밖은 `Snap` 이 한 번 더 막는다
+      const doc = pathOf(op.doc)
+      if (!doc) throw new CtxError('E_NOT_FOUND', `${op.doc} 문서가 없다`, { doc: op.doc })
+      if (!/^docs\//.test(doc)) throw bad(i, 'doc', 'drop 은 docs/ 아래 관리 문서만 지운다', { doc })
+      const rows = rulesOf(doc)
+      for (const r of [...rows].sort((a, b) => b.line - a.line)) text = removeRow(text, r.line)
+      setFile(doc, null)
+      text = addDropped(text, { doc, workId, reason: op.reason })
+      events.push({ op: 'drop', doc, rules: rows.map((r) => r.pattern) })
+      continue
+    }
+
     // rename · merge — 둘 다 문서 하나를 다룬다
     badPath(i, 'doc', op.doc)
     const from = pathOf(op.doc)
@@ -252,6 +272,32 @@ export async function planManaged({ ops, registryText, docPaths, read, workId })
   }
 
   return { registryText: text, changed: text !== (registryText ?? ''), files, events, warnings, added }
+}
+
+// 「지운 관리 문서」 표에 한 줄 — 없으면 파일 끝에 표째 만든다. 첫 칸에 콜론이 없어 규칙으로 읽히지 않는다
+const DROPPED_INTRO = ['', DROPPED_HEAD, '', '`drop` 이 지운 문서다. 되살리려면 그 작업 기록의 커밋 바로 앞에서 꺼낸다. **손으로 고치지 않는다.**', '', '| 문서 | 지운 기록 | 사유 |', '|---|---|---|']
+export function addDropped(text, { doc, workId, reason }) {
+  const why = String(reason || '').replace(/[|\r\n]/g, ' ').trim() || '—'
+  const row = '| `' + doc + '` | `' + workId + '` | ' + why + ' |'
+  const lines = String(text || '').split(NL)
+  const at = lines.findIndex((l) => l.replace(/\r$/, '').trim() === DROPPED_HEAD)
+  if (at < 0) {
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
+    return [...lines, ...DROPPED_INTRO, row, ''].join(NL)
+  }
+  // 그 절의 마지막 표 행 뒤
+  let last = -1
+  for (let i = at + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) break
+    if (/^\s*\|/.test(lines[i])) last = i
+  }
+  if (last < 0) {
+    lines.splice(at + 1, 0, '', '| 문서 | 지운 기록 | 사유 |', '|---|---|---|', row)
+    return lines.join(NL)
+  }
+  const cr = lines[last].endsWith('\r') ? '\r' : ''
+  lines.splice(last + 1, 0, row + cr)
+  return lines.join(NL)
 }
 
 // 합칠 문서에서 **앵커 레벨의 첫 헤딩부터 끝까지**를 뗀다. 그 앞(머리)에 제목과 빈 줄 · 주석 말고 글이 있으면 거절한다 —

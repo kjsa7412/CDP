@@ -13,6 +13,7 @@
 import { CtxError } from './tools.js'
 import { docEscapes, parseManagedSections, resolveCoord, parseRegistry, outsideFences } from './managed.js'
 import { vocabStructLines, registryRowLines, blockRange, BLOCK_OPEN, BLOCK_CLOSE } from './regen.js'
+import { isRefFile } from './docrefs.js'
 
 export const EDITS_MAX = 20
 export const OLD_MAX = 20000
@@ -24,12 +25,13 @@ const APPLIED = /<!--\s*applied\s*:/i
 
 const bad = (i, msg, detail = {}) => new CtxError('E_INPUT', msg, { field: `edits[${i}]`, ...detail })
 
-// 받는 파일 — 이미 있는 `docs/**.md` · `_vocab.md` · `_managed.md`. 작업 기록은 고치지 않는다(정정은 새 기록)
+// 받는 파일 — 이미 있는 `docs/**.md` · `_vocab.md` · `_managed.md` · 뿌리의 md(`README.md` · `관리번호.md` — 패키지가 붓는다).
+// 뿌리의 도구 층(`CLAUDE.md` · `MANUAL*.md` · `TEMPLATE-work.md`)과 생성물(`INDEX*.md`)은 뺀다 — kit-refresh · save 가 덮는다.
+// 작업 기록은 고치지 않는다(정정은 새 기록). 관리문서 정리 검토 N9 — 문서를 지우면 README 목록의 링크를 고칠 길이 있어야 한다
 export function editableFile(rel) {
   const v = String(rel ?? '')
-  if (v === '_vocab.md' || v === '_managed.md') return true
   if (docEscapes(v)) return false
-  return /^docs\/.+\.md$/i.test(v)
+  return isRefFile(v)
 }
 
 export function checkEditsShape(list) {
@@ -39,7 +41,7 @@ export function checkEditsShape(list) {
   return list.map((e, i) => {
     if (!e || typeof e !== 'object' || Array.isArray(e)) throw bad(i, `edits[${i}] 는 객체다`)
     for (const k of Object.keys(e)) if (!['file', 'old', 'new'].includes(k)) throw bad(i, `edits[${i}].${k} 는 받지 않는다 (file · old · new)`)
-    if (!editableFile(e.file)) throw bad(i, 'edits[].file 은 docs/ 아래 관리 문서 · _vocab.md · _managed.md 다 — 작업 기록은 고치지 않는다(정정은 supersedes 를 단 새 기록)', { file: String(e.file ?? '').slice(0, 120) })
+    if (!editableFile(e.file)) throw bad(i, 'edits[].file 은 docs/ 아래 관리 문서 · _vocab.md · _managed.md · 뿌리의 README.md 같은 md 다(도구 층 · INDEX 제외) — 작업 기록은 고치지 않는다(정정은 supersedes 를 단 새 기록)', { file: String(e.file ?? '').slice(0, 120) })
     if (typeof e.old !== 'string' || !e.old.trim() || e.old.length > OLD_MAX) throw bad(i, `edits[].old 는 1~${OLD_MAX}자다 — 바꿀 자리의 지금 글을 그대로(docs({ doc }) 의 text 에서)`)
     if (typeof e.new !== 'string' || e.new.length > NEW_MAX) throw bad(i, `edits[].new 는 0~${NEW_MAX}자 문자열이다 (지우려면 "")`)
     return { file: e.file, old: e.old, new: e.new }

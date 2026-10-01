@@ -14,6 +14,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { resolveInside } from './security.js'
 import { zip } from '../../../core/zip.js'
+import { toolDocs } from '../../../core/tools.js'
+import { lastChanges } from '../../../core/git.js'
+import { dropBlockers } from '../../../core/docusage.js'
+import { droppedDocs } from '../../../core/docrefs.js'
 
 // 화면 자산도 이 표를 쓴다(관리 서비스의 `serveWeb`). **`.js` 가 빠지면
 // 브라우저가 모듈 실행을 거부한다** — 화면이 통째로 안 뜬다.
@@ -103,6 +107,20 @@ export async function handleRead({ p, method, url, res, send, store }) {
 
   if (p === '/managed') {
     send(res, 200, store.managedList())
+    return true
+  }
+
+  // 관리 문서 목록 · 사용 현황(관리문서 정리 검토 §4.6) — MCP `docs` 와 같은 함수. 문서마다 `blocked` 는 지우기를 거절할
+  // 까닭(작업 기록이 쓴 섹션 · touches) — 화면이 그 행을 고르지 못하게 한다. 지우기 자체는 서버형의 POST /docs-drop(admin)
+  if (p === '/managed-docs' && method === 'GET') {
+    const lastChange = await lastChanges(store.root).catch(() => new Map())
+    const out = toolDocs(store, { lastChange })
+    for (const d of out.docs) {
+      const b = dropBlockers(store, d.path)
+      d.blocked = b.realSections.length || b.touchedBy.length ? { realSections: b.realSections.length, touchedBy: b.touchedBy.length } : null
+    }
+    out.dropped = droppedDocs(store.managedText)
+    send(res, 200, out)
     return true
   }
 

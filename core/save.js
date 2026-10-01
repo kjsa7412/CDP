@@ -29,6 +29,8 @@ import { repoPath, mdRefs } from './repopath.js'
 import { regenerate, proseConflicts } from './regen.js'
 import { planPurge } from './examples.js'
 import { checkEditsShape, planEdits } from './edits.js'
+import { checkDrop, dropVocab, dropRefs, refsError } from './docdrop.js'
+import { suggestEdit } from './docrefs.js'
 
 const NL = String.fromCharCode(10)
 const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
@@ -173,6 +175,8 @@ function checkSchema(input) {
   }
   // 예시 정리(등록부 사본 검토 X10) — 값은 하나다. 다른 값이 조용히 무시되면 「지웠다」 고 답하게 된다
   if (input.examples != null && input.examples !== 'purge') throw new CtxError('E_INPUT', 'examples 는 "purge" 하나다', { field: 'examples' })
+  // 미리보기(관리문서 정리 검토 N10) — 계획 · 거절 · 검사까지 돌고 쓰지 않는다. 화면이 계획을 따로 세우지 않게
+  if (input.dryRun != null && typeof input.dryRun !== 'boolean') throw new CtxError('E_INPUT', 'dryRun 은 true · false 다', { field: 'dryRun' })
   const assets = input.assets || []
   if (!Array.isArray(assets)) throw new CtxError('E_INPUT', 'assets 는 배열이다', { field: 'assets' })
   if (assets.length > ASSETS_COUNT_MAX) throw new CtxError('E_INPUT', `첨부는 save 한 번에 ${ASSETS_COUNT_MAX}개까지다`, { count: assets.length })
@@ -290,6 +294,24 @@ export async function save(root, input, { user, write = false, admin = false, mi
   const out = await withLock(path.resolve(root), async () => {
     const r = await run(root, input, { user, write, admin, now, staging })
 
+    // 미리보기 — 검사까지 지난 트리를 되돌리고 커밋하지 않는다. 색인에는 아무것도 올리지 않았다
+    if (r.dryRun) {
+      await r.snap.restore()
+      return {
+        dryRun: true,
+        id: r.id,
+        sections: r.sections,
+        vocab: r.vocab,
+        managed: r.managedChanges.length,
+        ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
+        ...(r.edits.length ? { edits: r.edits } : {}),
+        ...(r.examples ? { examples: r.examples } : {}),
+        ...(r.dropped ? { dropped: r.dropped } : {}),
+        warnings: r.warnings,
+        mirror: 'off',
+      }
+    }
+
     // 10 커밋 — 바뀐 경로만. 실패하면 되돌린다 — **git 이 정말 커밋하지 않았을 때만.**
     //
     // 시간이 다 돼 실패로 돌아와도 Windows 에서는 진짜 git 이 살아서 커밋을 마쳤다. 그때 곧장 되돌리면
@@ -335,6 +357,7 @@ export async function save(root, input, { user, write = false, admin = false, mi
       ...(r.assets.length ? { assets: r.assets } : {}),
       ...(r.edits.length ? { edits: r.edits } : {}),
       ...(r.examples ? { examples: r.examples } : {}),
+      ...(r.dropped ? { dropped: r.dropped } : {}),
       warnings: r.warnings,
       mirror: 'off',
     }
@@ -350,7 +373,7 @@ export async function save(root, input, { user, write = false, admin = false, mi
   //
   // 상한(1.5초)까지는 기다려 **실제 결과**를 답한다 — 빠른 원격에서 `queued` 는 아무것도
   // 알리지 않는 말이었다. 넘으면 `queued` 이고 마지막 실제 상태를 `mirrorLast` 로 싣는다(D3).
-  if (mirror) {
+  if (mirror && !out.dryRun) {
     const p = enqueuePush(root, { log }).catch((e) => {
       log?.('미러 오류: ' + (e?.message || e))
       return null
@@ -389,7 +412,7 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
 
   // 2.5 구조 정리는 admin 만 — **파일을 만지기 전에.** 행을 더하는 것(add)은 덧붙임이라 writer 도 한다
   if (needsAdmin(managedOps) && !admin) {
-    throw new CtxError('E_FORBIDDEN', '등록부 정리(rename · merge · retire)는 admin 만 한다 — admin 에게 요청한다', { user, need: 'admin' })
+    throw new CtxError('E_FORBIDDEN', '등록부 정리(rename · merge · retire · drop)는 admin 만 한다 — admin 에게 요청한다', { user, need: 'admin' })
   }
 
   // 3 존재 — 기존 기록은 고치지도 지우지도 않는다. 정정은 supersedes 를 단 새 기록이다.
@@ -479,11 +502,15 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
 
     // 5.2 섹션 밖 쓰기(X15~X19) — 머리말 · 산문 · 비대상 문서. 등록부 계획(5.5)이 고친 글을 읽도록 그 앞에서
     let editsDone = []
+    const edited = new Map() // edits 가 고친 글 — 지우기 참조 판정(5.6)이 「고친 뒤」 로 본다
     if (editOps.length) {
       const vt = (await readRaw(vocabPath)) ?? ''
       const { parseVocab } = await import('./vocab.js')
       const e = await planEdits({ edits: editOps, read: readRaw, registry: r0.registry, vocabCoords: new Set(parseVocab(readText(vt)).coords.keys()) })
-      for (const [rel, text] of e.files) await snap.write(rel, text)
+      for (const [rel, text] of e.files) {
+        await snap.write(rel, text)
+        edited.set(rel, readText(text))
+      }
       editsDone = e.done
     }
     for (const c of [...(w.touches || []), ...sections.map((s) => s.coord)]) {
@@ -494,6 +521,7 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     // 새 행은 마지막 규칙 행 뒤에 붙으므로 기존 좌표의 자리는 바뀌지 않는다. 6단계는 **새 등록부**로 판정한다.
     let registry = r0.registry
     let plan = null
+    let dropped = null
     if (managedOps.length) {
       const regText = await fs.readFile(path.join(root, '_managed.md'), 'utf8').catch(() => null)
       plan = await planManaged({
@@ -522,6 +550,32 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
           )
         }
         if (seen.length) warnings.push(`어긋나 보이는 문구 ${seen.length}줄을 맞다고 확인했다(reviewed): ${seen.map((h) => h.file + ':' + h.line).join(' · ')}`)
+      }
+      // 5.6 지우기(관리문서 정리 검토 §4.3) — 내용이 있는 문서는 거절 · 그 문서로만 가던 예시 좌표는 같이 · 가리키는 줄은
+      // edits 로 고쳤거나 reviewed 로 넘겼어야 한다. 판정은 **지우기 전** 레포(r0)로 — 섹션 · 작업 기록 · 행이 아직 있다
+      const drops = plan.events.filter((e) => e.op === 'drop').map((e) => e.doc)
+      if (drops.length) {
+        warnings.push(...checkDrop(r0, drops))
+        const after = new Map(r0.bodies)
+        for (const [rel, text] of edited) after.set(rel, text)
+        const reviewed = managedOps.filter((o) => o.op === 'drop').flatMap((o) => o.reviewed || [])
+        const refs = dropRefs({ before: r0.bodies, after, targets: drops, paths: r0.managedDocs.map((d) => d.path), reviewed })
+        if (refs.left.length && !input.dryRun) throw refsError(refs.left)
+        if (refs.seen.length) warnings.push(`지울 문서를 가리키는 줄 ${refs.seen.length}개를 알고 두었다(reviewed): ${refs.seen.map((x) => x.file + ':' + x.line).join(' · ')}`)
+        const v = dropVocab(await readRaw(vocabPath), r0.registry, drops)
+        if (v.vocabText != null) await snap.write(vocabPath, v.vocabText)
+        if (v.kept.length) warnings.push(`지운 문서로 가던 어휘 좌표 ${v.kept.length}개는 남겼다 — 이제 등록부 밖 좌표다(작업 기록이 원천): ${v.kept.slice(0, 5).join(' · ')}${v.kept.length > 5 ? ' …' : ''}`)
+        const leftKey = new Set(refs.left.map((x) => x.file + ':' + x.line))
+        // 미리보기에는 줄마다 제안의 edits 초안(`edit`)을 싣는다 — 화면이 원문을 따로 읽어 계획을 세우지 않게(판정 한 곳)
+        const raws = new Map()
+        if (input.dryRun) for (const x of refs.refs) if (!raws.has(x.file)) raws.set(x.file, (await readRaw(x.file)) ?? '')
+        dropped = {
+          docs: drops,
+          vocabRemoved: v.removed,
+          vocabKept: v.kept,
+          refs: refs.refs.map((x) => ({ ...x, left: leftKey.has(x.file + ':' + x.line), ...(input.dryRun ? { edit: suggestEdit(raws.get(x.file), x, drops) } : {}) })),
+          ...(input.dryRun ? { left: refs.left } : {}),
+        }
       }
       if (plan.changed) {
         await snap.write('_managed.md', plan.registryText)
@@ -700,6 +754,8 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
       assets: assetsOut.map(({ path: p, size }) => ({ path: p, size })),
       edits: editsDone,
       examples: purged,
+      dropped,
+      dryRun: !!input.dryRun,
       warnings,
     }
   } catch (e) {

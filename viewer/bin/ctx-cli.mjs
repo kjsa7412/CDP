@@ -28,6 +28,9 @@ import { runSync } from '../../core/sync.js'
 import * as T from '../../core/tools.js'
 import { regenerate } from '../../core/regen.js'
 import { planPurge } from '../../core/examples.js'
+import { planManaged } from '../../core/managedops.js'
+import { checkDrop, dropVocab, dropRefs } from '../../core/docdrop.js'
+import { suggestEdit } from '../../core/docrefs.js'
 
 // 번들 시각. `tools/build-ctx.mjs` 가 치환한다.
 //
@@ -43,7 +46,9 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
 
   ctx check [--json]        커밋 가능한가. 오류가 있으면 exit 1
   ctx index                 INDEX.md / INDEX-by-coord.md 재생성 · 머리 표 등록부 칸 · _vocab.md 생성 블록을 등록부에서 다시 찍는다
-  ctx docs [<문서|관리번호>] 관리 문서 목록 · 등록부 대상인가 / 그 문서 원문 (MCP docs 와 같다)
+  ctx docs [<문서|관리번호>] 관리 문서 목록 · 사용 현황 / 그 문서 원문 (MCP docs 와 같다)
+  ctx docs drop <문서...> [--dry-run] [--apply-suggest] [--reason 사유]
+                            안 쓰는 관리 문서를 지운다 — 파일 · 등록부 행 · 예시 좌표 · 지운 기록(파일만 · 커밋은 사람이)
   ctx examples [--purge]    서식 예시 좌표 · 짝 섹션 목록 / --purge 는 파일만 지운다(커밋은 사람이)
   ctx match <이름...>       이름 -> 정본 좌표 (대조)
   ctx where <좌표...>       그 좌표의 상태가 어느 문서 어느 섹션에 · 얼마나 되나
@@ -92,6 +97,10 @@ function parseArgs(argv) {
     if (a === '--json') out.json = true
     else if (a === '--pull') out.pull = true
     else if (a === '--purge') out.purge = true
+    else if (a === '--dry-run') out.dryRun = true
+    else if (a === '--apply-suggest') out.applySuggest = true
+    else if (a === '--reason') out.reason = argv[++i]
+    else if (a === '--work') out.work = argv[++i]
     else if (a === '--no-examples') out.noExamples = true
     else if (a === '--repo') { const v = argv[++i]; out.repos.push(v); if (out.repo == null) out.repo = v }
     else if (a === '--root') out.root = argv[++i]
@@ -324,18 +333,95 @@ async function cmdIndex(r) {
 
 // 관리 문서 목록 · 한 문서 — MCP `docs` 와 같은 함수(등록부 사본 검토 X20)
 async function cmdDocs(r, opt) {
-  const res = T.toolDocs(r, { doc: opt.args[0] })
+  if (opt.args[0] === 'drop') return cmdDocsDrop(r, opt)
+  const res = T.toolDocs(r, { doc: opt.args[0], lastChange: opt.args[0] ? undefined : await git.lastChanges(r.root) })
   if (opt.json) {
     out(JSON.stringify(res, null, 2))
     return 0
   }
   if (res.docs) {
-    for (const d of res.docs) out(`${d.registered ? '●' : '○'} ${(d.no || '').padEnd(7)} ${d.path}${d.rules.length ? '  ' + d.rules.map((x) => x.pattern).join(' · ') : ''}`)
-    out(`\n관리 문서 ${res.total} · 등록부 대상 ${res.registered} (● 대상 · ○ 비대상)`)
+    for (const d of res.docs) {
+      const u = d.usage
+      const use = u ? `  [${u.state}] 섹션 ${u.sections.written}/${u.sections.total} · 작업 ${u.touchedBy + u.mentionedBy} · 참조 ${u.refsIn}${u.required ? ' · 필수' : ''}${u.lastChange ? ' · ' + u.lastChange.date : ''}` : ''
+      out(`${d.registered ? '●' : '○'} ${(d.no || '').padEnd(7)} ${d.path}${d.rules.length ? '  ' + d.rules.map((x) => x.pattern).join(' · ') : ''}${use}`)
+    }
+    const idle = res.docs.filter((d) => d.usage?.state === '서식 그대로').length
+    out(`\n관리 문서 ${res.total} · 등록부 대상 ${res.registered} (● 대상 · ○ 비대상) · 서식 그대로 ${idle}`)
+    if (idle) out('안 쓰는 문서를 지우려면 ctx docs drop <문서...> --dry-run 으로 먼저 본다')
     return 0
   }
   out(res.text ?? '')
   return 0
+}
+
+// 안 쓰는 관리 문서 지우기 — 관리문서 정리 검토 §4.9 의 모드 A. 서버형 save 의 managed drop 과 **같은 계획 함수**다.
+// 파일만 고친다 — 커밋은 사람이 하고 훅이 검사한다. 참조 줄은 보이기만 하고 --apply-suggest 일 때 drop-row · unlink 만 고친다
+async function cmdDocsDrop(r, opt) {
+  const want = opt.args.slice(1)
+  if (!want.length) {
+    err('ctx docs drop <문서|관리번호...> — 지울 문서를 적는다')
+    return 2
+  }
+  try {
+    const docs = want.map((w) => T.toolDocs(r, { doc: w }).path)
+    const paths = r.managedDocs.map((d) => d.path)
+    const warnings = checkDrop(r, docs)
+    // 원문 그대로 읽는다(r.* 는 LF 로 고친 글) — 고쳐 쓸 때 파일의 줄 끝을 바꾸지 않게
+    const raw = (rel) => fs.readFile(path.join(r.root, rel), 'utf8').catch(() => null)
+    const plan = await planManaged({
+      ops: docs.map((doc) => ({ op: 'drop', doc, ...(opt.reason ? { reason: opt.reason } : {}) })),
+      registryText: await raw('_managed.md'),
+      docPaths: paths,
+      read: raw,
+      workId: opt.work || '(손으로)',
+    })
+    const refs = dropRefs({ before: r.bodies, after: r.bodies, targets: docs, paths })
+    const v = dropVocab(await raw('_vocab.md'), r.registry, docs)
+    const edits = []
+    if (opt.applySuggest) for (const x of refs.refs) {
+      const e = suggestEdit((await raw(x.file)) || '', x, docs)
+      if (e) edits.push({ ref: x, e })
+    }
+    const fixed = edits.map((x) => x.ref.file + ':' + x.ref.line)
+    const rules = plan.events.flatMap((e) => e.rules || [])
+    const allWarnings = [...warnings, ...plan.warnings]
+    if (!opt.dryRun) {
+      await fs.writeFile(path.join(r.root, '_managed.md'), plan.registryText, 'utf8')
+      for (const [rel, body] of plan.files) {
+        if (body === null) await fs.rm(path.join(r.root, rel), { force: true })
+        else await fs.writeFile(path.join(r.root, rel), body, 'utf8')
+      }
+      if (v.vocabText != null) await fs.writeFile(path.join(r.root, '_vocab.md'), v.vocabText, 'utf8')
+      const byFile = new Map()
+      for (const { e } of edits) byFile.set(e.file, [...(byFile.get(e.file) || []), e])
+      for (const [file, list] of byFile) {
+        let text = await fs.readFile(path.join(r.root, file), 'utf8')
+        for (const e of list) if (text.split(e.old).length === 2) text = text.replace(e.old, () => e.new)
+        await fs.writeFile(path.join(r.root, file), text, 'utf8')
+      }
+    }
+    if (opt.json) {
+      out(JSON.stringify({ docs, rules, vocabRemoved: v.removed, vocabKept: v.kept, refs: refs.refs, fixed, warnings: allWarnings, written: !opt.dryRun }, null, 2))
+      return 0
+    }
+    out(opt.dryRun ? '지울 것 (미리보기 — 아무것도 안 고쳤다)' : '지웠다')
+    for (const d of docs) out('  - ' + d)
+    if (rules.length) out(`등록부 행 ${rules.length}: ${rules.join(' · ')}`)
+    if (v.removed.length) out(`예시 좌표 ${v.removed.length}: ${v.removed.join(' · ')}`)
+    for (const w of allWarnings) out('[경고] ' + w)
+    if (refs.refs.length) {
+      out(`\n지울 문서를 가리키는 줄 ${refs.refs.length}${fixed.length ? ` (제안대로 고침 ${fixed.length})` : ''}`)
+      for (const x of refs.refs) out(`  ${fixed.includes(x.file + ':' + x.line) ? '✓' : ' '} ${x.file}:${x.line}  [${x.suggest}]  ${x.text.slice(0, 90)}`)
+    }
+    const left = refs.refs.length - fixed.length
+    if (opt.dryRun) out('\n지우려면 --dry-run 을 빼고 · drop-row · unlink 제안을 같이 고치려면 --apply-suggest')
+    else out(`\n파일만 고쳤다 — ctx index 로 사본을 다시 찍고 git diff 로 본 뒤 커밋한다.${left ? ` 남은 줄 ${left}개는 손으로 고치거나 둔다(ctx check 가 끊긴 링크를 경고한다)` : ''}`)
+    return 0
+  } catch (e) {
+    err('ctx docs drop: ' + (e.message || e))
+    if (e.detail) err(JSON.stringify(e.detail, null, 2).slice(0, 2000))
+    return 1
+  }
 }
 
 // 서식 예시 — 목록 · --purge 는 파일만 고친다(커밋은 사람이). 서버형은 save 의 examples: "purge"(X13)

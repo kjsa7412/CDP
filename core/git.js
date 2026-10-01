@@ -471,3 +471,19 @@ export function unpushedWarning(st, { days = 1, now = Date.now() } = {}) {
 function firstLine(s) {
   return String(s || '').split('\n').find((l) => l.trim()) || null
 }
+
+// 경로마다 마지막으로 바꾼 커밋 — 관리문서 정리 검토 §4.6 의 `lastChange`. 문서 40개에 git 40번이 아니라 **한 번**이다.
+// 읽기라 잠그지 않는다. git 이 없거나 레포가 아니면 빈 지도(사용 현황은 그 칸만 비운다).
+export async function lastChanges(root, prefix = 'docs') {
+  const r = await run(root, [...READ_ONLY, 'log', '--format=%x01%h%x09%ad%x09%an%x09%s', '--date=short', '--name-only', '--no-renames', '--', prefix], { timeout: 30000 })
+  const out = new Map()
+  if (!r.ok) return out
+  let cur = null
+  for (const line of r.out.split('\n')) {
+    if (line.startsWith('\x01')) {
+      const [commit, date, author, ...s] = line.slice(1).split('\t')
+      cur = { commit, date, author, subject: s.join('\t') }
+    } else if (line.trim() && cur && !out.has(line.trim())) out.set(line.trim(), cur)
+  }
+  return out
+}

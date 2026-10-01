@@ -24,7 +24,8 @@
 //
 // 남는 값이 없으므로 규칙은 "값이 있으면 오류" 하나다. 다만 미결·제안은
 // 갈 곳을 알려 줘야 하므로 메시지를 따로 낸다.
-import { normValue, lintRegistry } from './managed.js'
+import { normValue, lintRegistry, docEscapes } from './managed.js'
+import { danglingRefs } from './docrefs.js'
 import { lintGenerated, proseLint } from './regen.js'
 
 const AGENDA = new Set(['미결', '제안'])
@@ -290,6 +291,29 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       '한 관리 문서에 앵커 레벨이 둘 — 섹션이 겹친다',
       lint.levelMix.map((x) => ({ path: x.doc, detail: `${x.doc} ${x.levels.map((l) => (l ? '#'.repeat(l) : '—')).join(' · ')}` }))
     )
+
+    // **등록부 행이 없는 파일을 가리킨다**(관리문서 정리 검토 Q4 · K2). 셸에서 파일만 지우면 지금까지 조용했고, 그 타입에
+    // 처음 touches 가 닿는 순간 파생 대조(`… 문서가 없음`)가 레포의 모든 커밋을 막았다. 미리 말한다 — error 로 올리면
+    // 이미 그런 레포가 업그레이드 순간 잠긴다(registry-outside 와 같은 판단)
+    const paths = new Set(docs.map((d) => d.path.toLowerCase()))
+    push(
+      'warn',
+      'registry-missing',
+      '등록부 행이 없는 관리 문서를 가리킴 — 그 타입에 작업 기록이 닿으면 커밋이 막힌다',
+      (managedIndex.registry?.rules || []).filter((r) => !docEscapes(r.doc) && !paths.has(r.doc.toLowerCase())).map((r) => ({ detail: `_managed.md:${r.line} \`${r.pattern}\` → ${r.doc}` })),
+      '서버형은 admin 이 save 의 managed: retire(행만) · 모드 A 는 그 행을 지운다'
+    )
+    // **끊긴 참조**(K3) — 없는 관리 문서로 가는 링크 · 지운 문서의 이름. drop 은 거절로 막지만 셸에서 지운 것 · reviewed 로 넘긴 것이
+    // 계속 보여야 한다
+    if (bodies) {
+      push(
+        'warn',
+        'doc-ref-dangling',
+        '없는 관리 문서를 가리키는 줄',
+        danglingRefs({ texts: bodies, exists: (p) => paths.has(String(p).toLowerCase()), managedText }).map((x) => ({ path: x.file, detail: `${x.file}:${x.line} → ${x.docs.join(' · ')}` })),
+        '쓰기 권한자가 save 의 edits 로 그 줄을 고친다 · 모드 A 는 손으로'
+      )
+    }
 
     // **등록부의 사본이 원본과 다르다**(등록부 사본 검토 X6). 머리 표의 `등록부` 칸 · `_vocab.md` 생성 블록은 등록부에서
     // 찍는 것이라 어긋나면 정본이 스스로와 모순한다 — 확신 있게 틀린 답을 내는 자리라 error. 서버형은 save 가 검사

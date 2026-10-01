@@ -19,6 +19,8 @@ import { outline } from './frontmatter.js'
 import { reconcile } from './vocab.js'
 import { resolveCoord } from './managed.js'
 import { cmpDateDesc } from './validity.js'
+import { docNo } from './docrefs.js'
+import { docUsage } from './docusage.js'
 
 const NL = String.fromCharCode(10)
 
@@ -467,10 +469,8 @@ export function guardSize(obj, what) {
 // 비대상 문서(회의록 같은 날짜축)는 `section` 으로 읽을 길도 없다 — `save` 의 `edits` 는 `old` 를 원문에서 떼야 한다.
 
 // 파일 이름 앞의 관리번호 — `BM_411_회의록.md` → `BM_411`. 사람이 부르는 이름이 그것이다
-export function docNo(p) {
-  const m = String(p).split('/').pop().match(/^([A-Za-z]{1,6}[_-]\d{1,5})(?=[_ -])/)
-  return m ? m[1] : null
-}
+// 정의는 `docrefs.js` — 참조 찾기가 같은 열쇠를 쓴다
+export { docNo }
 
 function docTitle(r, p) {
   const t = r.bodies.get(p) || ''
@@ -484,8 +484,11 @@ function rulesOf(r, p) {
   return (r.registry?.rules || []).filter((x) => x.doc.toLowerCase() === p.toLowerCase())
 }
 
-export function toolDocs(r, { doc } = {}) {
+// 목록의 각 문서에 `usage`(관리문서 정리 검토 §4.6) — 실제로 쓴 섹션 · 작업 기록 · 들어오는 참조 · 필수 제출 · 마지막 변경.
+// `state` 는 제안이다. 지우는 것은 admin 이 save 의 managed: [{ op: "drop" }] 로
+export function toolDocs(r, { doc, lastChange } = {}) {
   if (doc == null || doc === '') {
+    const usage = docUsage(r, { lastChange: lastChange || new Map() })
     const docs = r.managedDocs
       .map((d) => {
         const rules = rulesOf(r, d.path)
@@ -497,6 +500,7 @@ export function toolDocs(r, { doc } = {}) {
           registered: rules.length > 0,
           rules: rules.map((x) => ({ pattern: x.pattern, anchor: anchorText(x) })),
           sections: (d.managedSections || []).filter((s) => (levels.size ? levels.has(s.level) : s.level === 2)).length,
+          usage: usage.get(d.path),
         }
       })
       .sort((a, b) => a.path.localeCompare(b.path))

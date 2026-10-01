@@ -17,6 +17,7 @@ import { createMcpHandler } from '@modelcontextprotocol/server'
 import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
 import { save as doSave } from '../../core/save.js'
+import { CtxError } from '../../core/tools.js'
 import { zip } from '../../core/zip.js'
 import * as wr from '../../core/workrepos.js'
 import { kitHash, mergeClaude, mcpEntryServer, mergeMcpJson } from '../../core/setup.js'
@@ -1595,6 +1596,56 @@ export async function runServe(opt = {}) {
             const status = /종류/.test(e?.message || '') ? 415 : 400
             log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/assets', ms: Date.now() - t0, status, code: e?.code || 'E_INPUT' })
             return json(res, status, { error: { code: e?.code || 'E_INPUT', message: e?.message || String(e), detail: e?.detail } })
+          }
+        }
+
+        // POST /api/<repo>/docs-drop — 안 쓰는 관리 문서 지우기(관리문서 정리 검토 §4.9). **admin** · 화면의 「관리 문서」 탭.
+        //
+        // 파일을 따로 만지지 않는다 — 작업 기록 하나를 지어 `save` 의 `managed: [{ op: "drop" }]` 로 보낸다(MCP 와 같은 검사 ·
+        // 한 커밋 · 같은 로그). 몸통 { docs: [경로], reason, edits?, reviewed?, dryRun? }. 미리보기는 dryRun 이다.
+        if (sub === '/docs-drop') {
+          if (req.method !== 'POST') return json(res, 405, { error: { code: 'E_INPUT', message: 'POST 다' } })
+          if (!a.admin) {
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/docs-drop', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '관리 문서 지우기는 admin 만 한다' } })
+          }
+          const got = await readBody(req, 512 * 1024)
+          let body = null
+          try {
+            body = got?.tooLarge ? null : JSON.parse(got.toString('utf8') || '{}')
+          } catch {}
+          try {
+            if (!body || !Array.isArray(body.docs) || !body.docs.length || body.docs.length > 10 || body.docs.some((d) => typeof d !== 'string')) {
+              throw new CtxError('E_INPUT', 'docs 는 지울 문서 경로 1~10개다', { field: 'docs' })
+            }
+            const reason = String(body.reason || '').trim()
+            if (!reason && !body.dryRun) throw new CtxError('E_INPUT', '사유를 적는다 — 「지운 관리 문서」 표와 작업 기록에 남는다', { field: 'reason' })
+            const d = new Date()
+            const p2 = (n) => String(n).padStart(2, '0')
+            const id = `${d.getFullYear()}-${p2(d.getMonth() + 1)}${p2(d.getDate())}-관리문서-정리-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`
+            const input = {
+              work: {
+                id,
+                title: `관리 문서 정리 — ${body.docs.length}종`,
+                date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`,
+                touches: [],
+                touchesEmpty: '관리 문서 정리',
+                tags: ['docs-prune'],
+                body: [`${reason || '(미리보기)'}`, '', '지운 관리 문서 —', '', ...body.docs.map((x) => `- \`${x}\``), ''].join('\n'),
+              },
+              managed: body.docs.map((doc, i) => ({ op: 'drop', doc, ...(reason ? { reason } : {}), ...(i === 0 && Array.isArray(body.reviewed) && body.reviewed.length ? { reviewed: body.reviewed } : {}) })),
+              ...(Array.isArray(body.edits) && body.edits.length ? { edits: body.edits } : {}),
+              ...(body.dryRun ? { dryRun: true } : {}),
+            }
+            const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: true, mirror: !!opt.mirror, log: (m) => log.line(m) })
+            if (!out.dryRun) store.reload(name)
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/docs-drop', key: (body.dryRun ? '미리보기 ' : '') + body.docs.length + '종', ms: Date.now() - t0, status: 200 })
+            return json(res, 200, out)
+          } catch (e) {
+            const code = e?.code || 'E_REPO'
+            const status = code === 'E_FORBIDDEN' ? 403 : code === 'E_CONFLICT' ? 409 : code === 'E_NOT_FOUND' ? 404 : 400
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/docs-drop', ms: Date.now() - t0, status, code })
+            return json(res, status, { error: { code, message: e?.message || String(e), detail: e?.detail } })
           }
         }
 
