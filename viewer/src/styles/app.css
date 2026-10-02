@@ -1170,6 +1170,9 @@
   overflow-x: auto;
   overflow-y: hidden;
   scroll-behavior: smooth;
+  /* 열 폭을 이 칸의 폭으로 나눈다(아래 @container) — 끝으로 밀었을 때 왼쪽 열이 반쯤 잘려 「리문서 1」 「업문서 4」 로
+     보였다(실서버 종합 시험 L8). 보이는 열 수가 정수가 되게 */
+  container-type: inline-size;
 }
 .xp__empty { padding: 26px 16px; color: var(--text-3); font-size: 12px; line-height: 1.7; }
 .xp__empty p { margin: 0 0 8px; }
@@ -1180,8 +1183,7 @@
    생기고 각 열은 240px 을 지킨다. 전에는 226px 고정이라 400px 패널에
    한 개 반이 들어갔고 — 그러면 "가로로 뻗는다"가 성립하지 않는다. */
 .xp__col {
-  flex: 1 0 240px;
-  max-width: 420px;
+  flex: 1 0 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1193,6 +1195,10 @@
 }
 /* 열이 하나뿐이면 왼쪽 전부를 쓴다 — 옆을 비워 둘 이유가 없다 */
 .xp__col:only-child { max-width: none; }
+/* 칸 폭에 열이 꼭 맞게 — 240px 이상씩, 넘치면 정수 개가 보인다. 열이 적으면 grow 로 채운다 */
+@container (min-width: 480px) { .xp__col { flex-basis: 50%; } }
+@container (min-width: 720px) { .xp__col { flex-basis: 33.333%; } }
+@container (min-width: 960px) { .xp__col { flex-basis: 25%; } }
 .xp__head {
   display: flex;
   align-items: center;
@@ -1341,7 +1347,8 @@
   display: flex;
   flex-direction: column;
   flex: none;
-  width: 74px;
+  /* 74px 에서는 「시스템…」 「사업분…」 처럼 이름이 잘렸다(F16) — 한글 여섯 자 + 수 */
+  width: 112px;
   padding: 4px 0 4px 6px;
   gap: 1px;
   overflow-y: auto;

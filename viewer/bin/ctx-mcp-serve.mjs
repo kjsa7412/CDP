@@ -210,9 +210,28 @@ async function titleOf(root) {
   if (h < 0) return null
   for (const l of lines.slice(h + 1)) {
     const t = l.trim()
-    if (t && !t.startsWith('#')) return t.replace(/[*`]/g, '').slice(0, 80)
+    // 인용(`>`) 표지 · 링크 · 강조를 벗기고 표 · 주석 줄은 건너뛴다 — 전에는 「> dpms v1.0.0 에서 복제 · …」 가 그대로 나오고
+    // 80자에서 낱말 한가운데가 잘렸다(실서버 종합 시험 W2)
+    if (!t || t.startsWith('#') || t.startsWith('|') || t.startsWith('<!--')) continue
+    return oneLine(t)
   }
   return lines[h].slice(2).trim() || null
+}
+
+export function oneLine(md, max = 80) {
+  const s = String(md)
+    .replace(/^(>\s*)+/, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*`_]{1,2}([^*`_]+)[*`_]{1,2}/g, '$1')
+    .replace(/[*`]/g, '')
+    .trim()
+  if (s.length <= max) return s
+  // 문장 끝(다. · . )이 안에 있으면 거기까지, 아니면 마지막 빈칸에서 자르고 「…」
+  const head = s.slice(0, max)
+  const end = Math.max(head.lastIndexOf('다. '), head.lastIndexOf('. '))
+  if (end > max * 0.4) return head.slice(0, end + 1).trim()
+  const sp = head.lastIndexOf(' ')
+  return (sp > max * 0.5 ? head.slice(0, sp) : head).trim() + '…'
 }
 
 // ── 인증 (§4.4) ─────────────────────────────────────────────────────────────

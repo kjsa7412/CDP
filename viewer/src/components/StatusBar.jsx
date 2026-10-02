@@ -121,7 +121,8 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
   return (
     <div className="statusbar">
       <span className="statusbar__quiet">
-        문서 <b className="num">{repo.docs}</b>
+        {/* 「문서」 는 작업문서 수였다 — 관리문서와 헷갈렸다(실서버 종합 시험 F18) */}
+        작업 <b className="num">{repo.docs}</b>
         <span className="statusbar__sep">·</span>
         좌표 <b className="num">{repo.coords}</b>
       </span>

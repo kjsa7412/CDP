@@ -138,7 +138,7 @@ export default function Landing({ info }) {
             <div className="fcard">
               <h3>에이전트</h3>
               <p>
-                Claude Code 가 MCP 로 붙는다. 읽기 도구 12종 + <code>save</code>. 스킬 7종이 절차를 든다 — 검토 → 주입 → 기록.
+                Claude Code 가 MCP 로 붙는다. 읽기 도구 13종 + <code>save</code>(서버형 14). 스킬 7종이 절차를 든다 — 검토 → 주입 → 기록.
               </p>
             </div>
             <div className="fcard">

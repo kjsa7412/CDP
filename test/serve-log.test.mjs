@@ -48,3 +48,13 @@ test('saveStats — 주소와 다른 레포에 쓴 save 를 7일 안에서 한 �
   assert.equal(s.recent[0].via, 'gdi')
   await fs.rm(dir, { recursive: true, force: true })
 })
+
+test('oneLine — 레포 한 줄 설명: 인용 · 링크 · 강조를 벗기고 낱말에서 자른다(W2)', async () => {
+  const { oneLine } = await import('../viewer/bin/ctx-mcp-serve.mjs')
+  assert.equal(oneLine('> **public-si** 패키지에서 세웠다'), 'public-si 패키지에서 세웠다')
+  assert.equal(oneLine('[설명서](docs/a.md) 를 본다'), '설명서 를 본다')
+  const long = '경상북도 연구원 연구관리시스템(GDI) 구축 프로젝트의 지식 레포. 화면 설계서와 테이블 정의서를 정본으로 두고 화면 하나를 고칠 때마다 작업 기록을 남기며 좌표로 잇는다'
+  assert.equal(oneLine(long), '경상북도 연구원 연구관리시스템(GDI) 구축 프로젝트의 지식 레포.')
+  const r = oneLine('가나다 '.repeat(30))
+  assert.ok(r.endsWith('…') && !/가나$/.test(r.replace('…', '')), r)
+})

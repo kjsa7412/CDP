@@ -63,7 +63,7 @@ export default function Overview({ repo, sync, diag, me = null, onGo, onCheck, o
             <Mono>{(repo?.root || '').split(/[\\/]/).filter(Boolean).pop()}</Mono>
           </Row>
           <Row label="담긴 것">
-            문서 <b className="num">{repo?.docs ?? 0}</b> · 좌표 <b className="num">{repo?.coords ?? 0}</b>
+            작업문서 <b className="num">{repo?.docs ?? 0}</b> · 좌표 <b className="num">{repo?.coords ?? 0}</b>
           </Row>
           {/* 서버형에는 감시도 스캔 시각도 없다(`save` 뒤 재스캔) — 없는 상태를 그리지 않는다(불변조건 7) */}
           {!isServer() && (

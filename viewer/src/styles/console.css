@@ -163,10 +163,12 @@
 /* 모달 폼 — .overlay · .overlay__box 위에 얹는다 */
 .overlay__box--form { width: min(560px, 94vw); background: var(--surface); }
 .overlay__box--wide { width: min(720px, 94vw); background: var(--surface); }
-.mform { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px 18px; }
+/* 몸통만 스크롤하고 바닥줄은 늘 보인다 — 상자가 max-height 78vh · overflow hidden 이라, 문서 고르기를 펼치면
+   [세우기] 가 상자 밖으로 밀려 보이지 않았다(실서버 종합 시험 L11) */
+.mform { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px 18px; flex: 1; min-height: 0; overflow: auto; }
 .mform .seg { width: 100%; }
 .mform .seg button { flex: 1; justify-content: center; }
-.mfoot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface-2); }
+.mfoot { display: flex; flex: none; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface-2); }
 .mfoot .sp { flex: 1; }
 .mtabs { display: flex; gap: 2px; padding: 12px 18px 0; }
 .mtabs button { padding: 7px 12px; font-size: 13px; color: var(--text-2); border-radius: var(--r-sm) var(--r-sm) 0 0; border: 1px solid transparent; }

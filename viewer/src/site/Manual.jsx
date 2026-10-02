@@ -39,6 +39,8 @@ export default function Manual({ info, id: asked, hash }) {
   const text = res.data ?? null
   const err = res.error?.message || null
   const [cur, setCur] = useState(null)
+  // 휴대폰 폭에서는 목차를 접어 둔다 — 100여 줄이 본문 앞에 펼쳐져 본문까지 한참 내려가야 했다(실서버 종합 시험 L10). 넓으면 CSS 가 늘 편다
+  const [tocOpen, setTocOpen] = useState(false)
   const bodyRef = useRef(null)
 
   useEffect(() => {
@@ -136,13 +138,18 @@ export default function Manual({ info, id: asked, hash }) {
         ))}
         {info && !books.length && <div className="anote anote--warn">이 서버에 설명서가 없습니다.</div>}
         {rendered && rendered.toc.length > 0 && (
-          <div className="man__toc">
-            {rendered.toc.map((t) => (
-              <a key={t.slug} href={'#' + t.slug} className={t.level === 3 ? 'is-h3' : undefined} aria-current={cur === t.slug ? 'true' : undefined} title={t.text}>
-                {t.text}
-              </a>
-            ))}
-          </div>
+          <>
+            <button type="button" className="man__tocbtn" aria-expanded={tocOpen} onClick={() => setTocOpen((o) => !o)}>
+              목차 {rendered.toc.length} {tocOpen ? '▴' : '▾'}
+            </button>
+            <div className="man__toc" data-open={tocOpen ? '1' : '0'} onClick={(e) => e.target.closest('a') && setTocOpen(false)}>
+              {rendered.toc.map((t) => (
+                <a key={t.slug} href={'#' + t.slug} className={t.level === 3 ? 'is-h3' : undefined} aria-current={cur === t.slug ? 'true' : undefined} title={t.label ?? t.text}>
+                  {t.label ?? t.text}
+                </a>
+              ))}
+            </div>
+          </>
         )}
       </nav>
       <div className="man__body">

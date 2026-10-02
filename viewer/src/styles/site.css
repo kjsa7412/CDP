@@ -53,9 +53,10 @@
   align-items: center;
   padding: 64px 0 44px;
 }
+/* 머리글은 본문 글꼴로 — 고정폭 + 자간이면 한글이 「맥 락 배 포」 로 벌어졌다(실서버 종합 시험 L3) */
 .hero__eyebrow {
-  font: 600 11.5px var(--font-mono);
-  letter-spacing: 0.08em;
+  font: 600 12px var(--font-sans);
+  letter-spacing: 0.01em;
   color: var(--text-3);
 }
 .hero h1 {
@@ -193,6 +194,7 @@
 .man__book[aria-current='page'] { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: var(--shadow-thumb); }
 .man__book small { margin-left: auto; font: 10.5px var(--font-mono); color: var(--text-3); }
 .man__toc { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.man__tocbtn { display: none; }
 .man__toc a {
   display: block;
   padding: 3px 9px;
@@ -206,6 +208,8 @@
 .man__toc a.is-h3 { padding-left: 20px; font-size: 11.5px; color: var(--text-3); }
 .man__toc a[aria-current='true'] { color: var(--accent); border-left-color: var(--accent); }
 .man__body { padding: 28px 44px 64px; }
+/* 그리드 칸은 min-width:auto 라 안의 표(.tablewrap) 폭만큼 늘어났다 — 휴대폰에서 문서가 820px 로 가로로 넘쳤다. 0 이면 표만 제 상자에서 스크롤한다 */
+.man__body, .man__nav { min-width: 0; }
 .man__crumb { font-size: 12px; color: var(--text-2); margin-bottom: 8px; }
 .man__body .doc { max-width: 780px; --doc-size: 14.5px; }
 .doc table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 12px 0; }
@@ -283,6 +287,9 @@
   .cards3, .cards2, .mcpflow { grid-template-columns: 1fr; }
   .man { grid-template-columns: 1fr; background: none; }
   .man__nav { position: static; max-height: none; border-bottom: 1px solid var(--border); }
+  /* 목차는 접힌 단추로(L10) */
+  .man__tocbtn { display: block; margin-top: 12px; padding: 6px 10px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); cursor: pointer; }
+  .man__toc[data-open='0'] { display: none; }
   .man__body { padding: 20px 20px 48px; }
   .wrap { width: min(1080px, 100% - 32px); }
 }

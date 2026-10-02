@@ -66,7 +66,10 @@ md.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
     if (seen) slug = `${slug}-${seen}`
     t.attrSet('id', slug)
     env.toc = env.toc || []
-    env.toc.push({ level: Number(t.tag[1]), text, slug })
+    // `label` — 목차에 **보이는** 글. 원문(`text`)의 인라인 코드 · 굵게 표시를 벗긴 것 — 전에는 백틱과 별표가 그대로
+    // 보였다(실서버 종합 시험 L7). 좌표 맞추기(sectionSlug)와 앵커는 원문으로 그대로 한다
+    const label = (inline?.children || []).filter((c) => c.type === 'text' || c.type === 'code_inline').map((c) => c.content).join('') || text
+    env.toc.push({ level: Number(t.tag[1]), text, label, slug })
   }
   return self.renderToken(tokens, idx, options)
 }

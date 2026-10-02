@@ -862,7 +862,7 @@ export default function App() {
                 onToggleToc={() => patch({ panes: { toc: state.panes?.toc === false } })}
               />
             ) : (
-              <Landing repo={repo} docs={docs} onOpen={openDoc} />
+              <Landing repo={repo} docs={docs} managed={managedList.length} onOpen={openDoc} />
             )}
           </main>
         </div>
@@ -966,23 +966,24 @@ function shortRoot(root) {
 }
 
 // 문서를 안 골랐을 때 — 레포가 지금 무엇을 담고 있는지(§26.2)
-function Landing({ repo, docs, onOpen }) {
+function Landing({ repo, docs, managed = 0, onOpen }) {
   const settled = docs.filter((d) => d.settledCoords > 0)
   return (
     <div className="docpane">
       <div className="docwrap">
         <h1 style={{ fontSize: 20, margin: '32px 0 4px' }}>{repo.root.split(/[\\/]/).pop()}</h1>
         <p style={{ color: 'var(--text-2)' }}>
-          문서 {docs.length}건 · 좌표 {repo.coords}개
-          {settled.length > 0 && ` · 후속이 있는 문서 ${settled.length}건`}
+          {/* 무엇을 세는지 이름을 붙인다 — 「문서 8」 이 작업문서인지 관리문서인지 몰랐다(F18) */}
+          작업문서 {docs.length}건 · 관리문서 {managed}종 · 좌표 {repo.coords}개
+          {settled.length > 0 && ` · 후속이 있는 작업문서 ${settled.length}건`}
         </p>
         <p style={{ color: 'var(--text-3)', marginTop: 24 }}>
           왼쪽 <b>목록</b>에서 하나를 고르면 <b>뻗어나가기</b>가 켜집니다.{' '}
           <span className="kbd">{kbd('⌘K')}</span> 로 자연어 검색, <span className="kbd">\</span> 로 왼쪽 전환.
         </p>
         {docs.slice(0, 5).map((d) => (
-          <div className="nextread" key={d.id}>
-            <span className="num" style={{ color: 'var(--text-3)', fontSize: 11.5 }}>{d.date}</span>
+          <div className="nextread nextread--home" key={d.id}>
+            <span className="num nowrap" style={{ color: 'var(--text-3)', fontSize: 11.5 }}>{d.date}</span>
             <a href="#" onClick={(e) => { e.preventDefault(); onOpen(d.id) }}>{d.title}</a>
           </div>
         ))}

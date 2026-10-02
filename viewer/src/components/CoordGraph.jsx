@@ -74,8 +74,10 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
   // `base` — **맞춤이 정하는 내부 배율.** `zoom` 은 그 위에 얹는 사용자 배율이라
   // 맞춘 상태가 늘 100% 다. 전에는 둘이 한 값이어서 열자마자 57% 같은 숫자가
   // 떴고, 그 숫자는 아무 기준도 가리키지 않았다.
+  // `spin` 기본 **끔** — 돌고 있으면 노드를 겨누기 어렵고, 맞춤은 그 순간의 각도로 재므로 돌수록 위아래가 잘렸다
+  // (실서버 종합 시험 F16). 「회전」 단추로 켠다
   const stRef = useRef({
-    rx: -0.2, ry: 0.5, spin: true, hover: null, lock: null, drag: null, pts: [],
+    rx: -0.2, ry: 0.5, spin: false, hover: null, lock: null, drag: null, pts: [],
     base: 1, zoom: 1, px: 0, py: 0, needFit: true, touched: false, center: null,
   })
   // 카테고리 선택 — 고른 그룹만 색이 붙는다

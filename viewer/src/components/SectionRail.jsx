@@ -108,9 +108,9 @@ export default memo(function SectionRail({ doc, scrollRef, toc = [], open = true
               data-current={current === t.slug}
               data-level={t.level}
               onClick={() => jump(t.slug)}
-              title={t.text}
+              title={t.label ?? t.text}
             >
-              {t.text}
+              {t.label ?? t.text}
             </button>
           ))}
         </nav>
