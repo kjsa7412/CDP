@@ -377,7 +377,8 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
         const focus = H != null && p.i === H
         const nbr = H != null && !focus && g.nbr[H].has(p.i)
         // Roboto Mono — `font.css` 에 파일째 심었다. 폐쇄망에서도 이 폰트가 뜬다
-        const face = `'Roboto Mono', ui-monospace, Consolas, monospace`
+        // 한글 좌표 이름은 Roboto Mono 에 없다 — generic monospace 로 떨어지면 글자 사이가 벌어져 라벨이 길어지고 서로 겹쳤다(실서버 종합 시험 F16)
+        const face = `'Roboto Mono', ui-monospace, Consolas, 'Malgun Gothic', 'Apple SD Gothic Neo', monospace`
         ctx.font = `${focus || nbr ? '600 ' : ''}${fs}px ${face}`
         const w = ctx.measureText(n.v).width
         const h = fs + 2

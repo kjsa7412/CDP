@@ -44,7 +44,15 @@ export default function Server({ say, route }) {
   const logLines = useMemo(() => {
     if (!log) return []
     const k = q.trim()
-    return log.lines.filter((l) => !k || l.includes(k))
+    // 경로 칸이 퍼센트 인코딩(`/docs/docs%2F2.%EA%B0%9C…`)이라 사람이 못 읽었다(실서버 종합 시험 F15) — 보일 때만 푼다. 거르기도 푼 글로
+    const plain = (l) => {
+      try {
+        return /%[0-9A-Fa-f]{2}/.test(l) ? decodeURIComponent(l) : l
+      } catch {
+        return l
+      }
+    }
+    return log.lines.map(plain).filter((l) => !k || l.includes(k))
   }, [log, q])
 
   if (!sv) return <span className="amuted">읽는 중…</span>
