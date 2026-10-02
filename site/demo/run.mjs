@@ -31,7 +31,7 @@ async function stage() {
   await fs.mkdir(F.repos, { recursive: true })
   for (const name of ['library', 'library-ops']) {
     const dir = path.join(F.repos, name)
-    await ctx('repo', 'new', dir, '--package', 'dpms')
+    await ctx('repo', 'new', dir, '--package', 'public-si')
     await git(dir, 'config', 'user.name', 'lead')
     await git(dir, 'config', 'user.email', 'lead@example.invalid')
     // 첫날 — 예시를 걷고 초안을 넣는다(사람이 하는 일 · 한 커밋)

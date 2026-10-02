@@ -149,7 +149,7 @@ export default function Server({ say, route }) {
             </Row>
           ))}
           <Note>
-            패키지 이름은 자리표시자다 — 적용하는 프로젝트 이름으로 바꾼다(<code>ctx package rename</code> · 개발 PC). 패키지 이름 ≠ 레포 이름.
+            패키지는 일하는 방식의 서식이다 — 프로젝트에 맞추는 일은 세운 레포 안에서(문서 고르기 · 관리 문서 지우기 · 어휘 등록). 패키지 이름 ≠ 레포 이름.
           </Note>
         </Card>
       </div>

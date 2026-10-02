@@ -1073,10 +1073,10 @@ await check(70, 'GET /packages 가 패키지를 낸다 (권한과 무관)', asyn
   const r = await H.call('/packages', { headers: { authorization: 'Bearer ' + TK3 } })
   eq(r.status, 200, 'status')
   const j = await r.json()
-  must(j.packages.some((p) => p.name === 'dpms'), 'dpms 가 없다 — ' + JSON.stringify(j).slice(0, 120))
-  const d = j.packages.find((p) => p.name === 'dpms')
+  must(j.packages.some((p) => p.name === 'public-si'), 'public-si 가 없다 — ' + JSON.stringify(j).slice(0, 120))
+  const d = j.packages.find((p) => p.name === 'public-si')
   must(d.docs >= 40 && d.patterns >= 10, `문서 ${d.docs} · 패턴 ${d.patterns}`)
-  return `${j.packages.length}개 · dpms v${d.version} · 문서 ${d.docs}`
+  return `${j.packages.length}개 · public-si v${d.version} · 문서 ${d.docs}`
 })
 
 // 읽기 전용 사용자 — write 없는 사람이 레포를 세울 수 없어야 한다
@@ -1088,15 +1088,15 @@ const TR = (await ctx('serve', 'token', '--auth', F.auth, '--user', 'ro', '--dat
 const PKGS = path.join(ROOT, 'agent', 'packages')
 await check(71, 'ctx repo new — 이름 형식 · 중복 · 없는 패키지를 거절한다 (콘솔 POST /admin/repos 와 같은 core/reponew)', async () => {
   const fail = async (args) => (await ctx('repo', 'new', ...args).catch((e) => e)).stderr || ''
-  must(/이름 형식/.test(await fail([path.join(F.repos, '한글 이름'), '--package', 'dpms', '--packages', PKGS])), '이름 형식')
-  must(/있다|exists|E_EXISTS/.test(await fail([path.join(F.repos, 'alpha'), '--package', 'dpms', '--packages', PKGS])), '이미 있는 레포')
+  must(/이름 형식/.test(await fail([path.join(F.repos, '한글 이름'), '--package', 'public-si', '--packages', PKGS])), '이름 형식')
+  must(/있다|exists|E_EXISTS/.test(await fail([path.join(F.repos, 'alpha'), '--package', 'public-si', '--packages', PKGS])), '이미 있는 레포')
   must(/패키지/.test(await fail([path.join(F.repos, 'zeta'), '--package', '없는패키지', '--packages', PKGS])), '없는 패키지')
   must((await fs.stat(path.join(F.repos, 'zeta')).catch(() => null)) === null, '거절한 것은 남기지 않는다')
   return '이름 형식 · 중복 · 없는 패키지'
 })
 
 await check(72, 'ctx repo new 로 세운 레포가 다음 요청부터 MCP · 목록에 든다 (서버 재시작 없음)', async () => {
-  const o = await ctx('repo', 'new', path.join(F.repos, 'delta'), '--package', 'dpms', '--packages', PKGS)
+  const o = await ctx('repo', 'new', path.join(F.repos, 'delta'), '--package', 'public-si', '--packages', PKGS)
   const j = { commit: /[0-9a-f]{7,40}/.exec(o.stdout)?.[0] || '', files: Number(/파일\s*(\d+)/.exec(o.stdout)?.[1] || 0) }
   must(/^[0-9a-f]{7,}$/.test(j.commit || ''), '첫 커밋이 없다 — 훅이 막았나 · ' + o.stdout.slice(0, 160))
   // 서버는 새 폴더를 그 이름으로 가는 첫 요청에서 알아본다(관리자 설명서 3.4)
@@ -1138,12 +1138,12 @@ await check(73, '세운 레포에 save 가 한 번 성공한다 (등록부 · �
   return `commit ${ok.commit} · 섹션 ${ok.sections}`
 })
 
-// 패키지가 여럿이다 — dpms 하나만 보면 복제한 패키지가 깨져도 초록이다. 전부 본다.
+// 패키지가 여럿이다 — 하나만 보면 다른 패키지가 깨져도 초록이다. 전부 본다(빈 패키지 blank 포함).
 await check(74, '패키지 검사 — ctx package check --all 이 모든 패키지를 ok 로 낸다', async () => {
   const r = await ctx('package', 'check', '--all', '--json')
   const j = JSON.parse(r.stdout)
   must(j.length >= 1, '패키지가 없다')
-  must(j.some((p) => p.name === 'dpms'), 'dpms 가 없다')
+  must(j.some((p) => p.name === 'public-si'), 'public-si 가 없다')
   const bad = j.filter((p) => !p.ok)
   must(!bad.length, bad.map((p) => `${p.name}: ${JSON.stringify(p.problems).slice(0, 120)}`).join(' / '))
   return `${j.length}개 ok — ` + j.map((p) => `${p.name}(문서 ${p.docs} · 패턴 ${p.patterns})`).join(' · ')
@@ -1572,16 +1572,16 @@ await wait(80)
 const BR = (t) => ({ authorization: 'Bearer ' + t, 'content-type': 'application/json' })
 
 await check(98, 'writer 의 POST /repos → 404 — 레포 화면의 세우기는 「막은 것이 아니라 없는 것」', async () => {
-  const r = await A('/repos', { method: 'POST', headers: BR(TW), body: JSON.stringify({ name: 'zz-writer', package: 'dpms' }) })
+  const r = await A('/repos', { method: 'POST', headers: BR(TW), body: JSON.stringify({ name: 'zz-writer', package: 'public-si' }) })
   eq(r.status, 404, 'writer')
-  eq((await A('/repos', { method: 'POST', headers: BR(TKA), body: JSON.stringify({ name: 'zz-admin', package: 'dpms' }) })).status, 404, 'admin 도 — 길은 콘솔 하나')
+  eq((await A('/repos', { method: 'POST', headers: BR(TKA), body: JSON.stringify({ name: 'zz-admin', package: 'public-si' }) })).status, 404, 'admin 도 — 길은 콘솔 하나')
   must((await fs.stat(path.join(F.repos, 'zz-writer')).catch(() => null)) === null, '아무것도 만들지 않았다')
   return 'writer 404 · admin 404'
 })
 
 await check(99, 'writer 의 POST /admin/repos → 403 — 지식 레포를 세우는 것은 admin(콘솔 · 재인증)', async () => {
-  eq((await A('/admin/repos', { method: 'POST', headers: BR(TW), body: JSON.stringify({ name: 'zz', package: 'dpms' }) })).status, 403, 'writer')
-  eq((await A('/admin/repos', { method: 'POST', headers: BR(TKA), body: JSON.stringify({ name: 'zz', package: 'dpms' }) })).status, 401, 'admin 도 재인증 없이는 401 E_REAUTH')
+  eq((await A('/admin/repos', { method: 'POST', headers: BR(TW), body: JSON.stringify({ name: 'zz', package: 'public-si' }) })).status, 403, 'writer')
+  eq((await A('/admin/repos', { method: 'POST', headers: BR(TKA), body: JSON.stringify({ name: 'zz', package: 'public-si' }) })).status, 401, 'admin 도 재인증 없이는 401 E_REAUTH')
   return 'writer 403 · admin 재인증 401'
 })
 

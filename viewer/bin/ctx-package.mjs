@@ -110,9 +110,11 @@ export async function runPackage(opt) {
         return 0
       }
       out(`패키지 ${list.length}개 — ${pk.dir} (${pk.how})`)
-      out(`${pad('이름', 12)}${pad('판', 8)}${pad('문서', 6)}${pad('타입', 6)}${pad('패턴', 6)}제목`)
+      // 이름 칸은 가장 긴 이름에 맞춘다 — `agile-product` 처럼 12자를 넘으면 판 칸에 붙어 읽혔다
+      const w = Math.max(12, ...list.map((p) => p.name.length + 2))
+      out(`${pad('이름', w)}${pad('판', 8)}${pad('문서', 6)}${pad('타입', 6)}${pad('패턴', 6)}제목`)
       for (const p of list) {
-        out(pad(p.name, 12) + pad(p.manifest.version || '-', 8) + pad(p.docs, 6) + pad(p.types, 6) + pad(p.patterns, 6) + (p.manifest.title || (p.manifest.present ? '' : '(매니페스트 없음)')))
+        out(pad(p.name, w) + pad(p.manifest.version || '-', 8) + pad(p.docs, 6) + pad(p.types, 6) + pad(p.patterns, 6) + (p.manifest.title || (p.manifest.present ? '' : '(매니페스트 없음)')))
       }
       return 0
     }
@@ -148,6 +150,7 @@ export async function runPackage(opt) {
       }
       let bad = 0
       const results = []
+      const w = Math.max(12, ...names.map((n) => n.length + 1))
       for (const name of names) {
         const dir = path.join(pk.dir, name)
         // 소스면 조립해서 본다 — 검사한 것과 나가는 것이 같은 모양이어야 한다(TODO 4.5)
@@ -162,7 +165,7 @@ export async function runPackage(opt) {
         results.push(r)
         if (!r.ok) bad++
         if (!opt.json) {
-          out(`${r.ok ? 'ok  ' : 'FAIL'} ${pad(name, 12)} 문서 ${r.docs} · 패턴 ${r.patterns} · 타입 ${r.types} · 예시 ${r.examples}${r.warnings.length ? '  (경고 ' + r.warnings.join(' · ') + ')' : ''}`)
+          out(`${r.ok ? 'ok  ' : 'FAIL'} ${pad(name, w)} 문서 ${r.docs} · 패턴 ${r.patterns} · 타입 ${r.types} · 예시 ${r.examples}${r.warnings.length ? '  (경고 ' + r.warnings.join(' · ') + ')' : ''}`)
           for (const p of r.problems) out(`       ${p.kind}: ${p.detail}`)
         }
       }

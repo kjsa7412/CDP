@@ -272,8 +272,8 @@ test('사용 현황 — 서식 그대로 · 쓰는 중 · 필수 · 들어오는
 })
 
 // 패키지 그대로 — 검토 Q5 의 실측(TE_202 하나 · 시험 3벌)을 못박는다
-test('dpms 패키지 — TE_202 를 가리키는 줄 · 묶음이면 서로의 참조가 빠진다', () => {
-  const root = path.resolve('agent/packages/dpms')
+test('public-si 패키지 — TE_202 를 가리키는 줄 · 묶음이면 서로의 참조가 빠진다', () => {
+  const root = path.resolve('agent/packages/public-si')
   const files = []
   ;(function walk(d, rel = '') {
     for (const f of fs.readdirSync(d)) {
@@ -288,7 +288,7 @@ test('dpms 패키지 — TE_202 를 가리키는 줄 · 묶음이면 서로의 �
   const one = findDocRefs({ texts, targets: [p], paths })
   assert.deepEqual(
     one.map((x) => x.file.split('/').pop() + ':' + x.line).sort(),
-    ['README.md:81', 'TE_201_성능테스트계획서.md:21', 'TE_203_성능테스트결과서.md:12', 'TE_203_성능테스트결과서.md:21', 'TE_203_성능테스트결과서.md:56', '_vocab.md:32', '관리번호.md:141'].sort()
+    ['README.md:90', 'TE_201_성능테스트계획서.md:21', 'TE_203_성능테스트결과서.md:12', 'TE_203_성능테스트결과서.md:21', 'TE_203_성능테스트결과서.md:56', '_vocab.md:32', '관리번호.md:141'].sort()
   )
   const three = ['TE_201_성능테스트계획서', 'TE_202_성능테스트시나리오', 'TE_203_성능테스트결과서'].map((n) => `docs/2.개발/${n}.md`)
   const b = findDocRefs({ texts, targets: three, paths })

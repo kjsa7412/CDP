@@ -8,7 +8,7 @@
 
 import path from 'node:path'
 import { newRepo, listRepos } from '../../core/reponew.js'
-import { listPackages } from '../../core/packages.js'
+import { listPackages, statsOf } from '../../core/packages.js'
 import { toError } from '../../core/tools.js'
 import { resolvePackages, materializePackage } from './ctx-package.mjs'
 
@@ -54,7 +54,10 @@ export async function runRepo(opt) {
         if (r.origin) out(`  origin  ${r.origin}${r.pushed ? '  (push 완료)' : r.pushError ? '  (push 실패: ' + r.pushError + ')' : '  (push 안 함 — --push)'}`)
         out('')
         out('다음 —')
-        out('  1. 안 쓰는 문서를 지운다 — bin/ctx docs 로 보고 bin/ctx docs drop <문서…> --dry-run (README.md 「첫날」)')
+        // 첫 일은 패키지가 정한다 — 문서를 부었으면 안 쓰는 것을 걷고, 빈 패키지(blank)면 첫 관리 문서를 세운다
+        const docs = (await statsOf(r.dest)).docs.length
+        if (docs) out('  1. 안 쓰는 문서를 지운다 — bin/ctx docs 로 보고 bin/ctx docs drop <문서…> --dry-run (README.md 「첫날」)')
+        else out('  1. 첫 관리 문서를 세운다 — 등록부 행 · 문서 · 어휘를 같이 (README.md 「첫날」)')
         out('  2. bin/ctx check 가 이상 없음이면 시작할 수 있다')
         if (!r.origin) out('  3. 원격이 있으면 git remote add origin <url> && git push -u origin HEAD')
         return r.pushError ? 1 : 0

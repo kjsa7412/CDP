@@ -1,4 +1,4 @@
-// 등록부 사본 · 모순 — dpms_wiki `75a3c90` 사례를 dpms 패키지로 그대로 다시 돌린다(수용 기준 1~5).
+// 등록부 사본 · 모순 — dpms_wiki `75a3c90` 사례를 public-si 패키지(옛 dpms)로 그대로 다시 돌린다(수용 기준 1~5).
 // 등록부 사본 검토 v0.1 · TODO ⑨. 쓰기 권한만 있고 admin 이 아닌 계정(writer)으로 `save` 를 **직접** 부른다.
 
 import { test } from 'node:test'
@@ -19,7 +19,7 @@ const run = promisify(execFile)
 const hasGit = await run('git', ['--version']).then(() => true).catch(() => false)
 const g = (cwd, ...args) => run('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@x', ...args])
 const skip = !hasGit && 'git 이 없다'
-const PKG = path.resolve('agent/packages/dpms')
+const PKG = path.resolve('agent/packages/public-si')
 const BM = 'docs/1.관리/BM_411_회의록.md'
 const writer = { user: 'hong', write: true }
 

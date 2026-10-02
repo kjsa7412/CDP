@@ -92,7 +92,7 @@ test('누출 규칙 — 사내 흔적은 잡고 제품 이름은 놓는다', () 
   for (const s of ['http://10.10.20.188:7374', 'author: kjsa', 'C:\\Users\\someone\\x', 'soln1/cdp.git', 'rp_pre_rview_mst', 'Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCD']) {
     assert.ok(findLeaks(s).length, `못 잡았다: ${s}`)
   }
-  for (const s of ['패키지 dpms · 공공 SI 산출물', '테이블정의서:bk_loan_mst', 'http://<서버>:7374', 'phone', 'lead · dev.a · dev.b']) {
+  for (const s of ['패키지 public-si · 공공 SI 산출물', '테이블정의서:bk_loan_mst', 'http://<서버>:7374', 'phone', 'lead · dev.a · dev.b']) {
     assert.deepEqual(findLeaks(s), [], `잘못 잡았다: ${s}`)
   }
 })

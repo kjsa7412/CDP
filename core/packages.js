@@ -239,7 +239,7 @@ export async function checkPackage(dir, { assemble = null } = {}) {
  * 것이 아니다(원본 xlsx 가 없으면 돌지도 않는다).
  *
  * README 도 고친다 — 패키지의 `README.md` 는 조립되어 지식 레포의 루트 README 가
- * 된다. 복제한 채로 두면 `project_1` 레포를 연 사람이 "dpms" 라는 제목을 읽고,
+ * 된다. 복제한 채로 두면 새 패키지로 세운 레포를 연 사람이 원본의 제목을 읽고,
  * 어디서 왔는지는 아무 데도 없다. 첫 제목을 새 이름으로 바꾸고 출처 한 줄을 넣는다.
  * 나머지 본문(문서 목록 · 첫날 할 일)은 그대로다 — 그것을 고치는 것이 사람의 일이다.
  */
@@ -292,8 +292,8 @@ export async function newPackage(packagesDir, { name, from, title = null, descri
 /**
  * 패키지 이름을 바꾼다 — 폴더 · 매니페스트 `name` · README 첫 제목을 한 번에.
  *
- * 패키지는 서식이라 **적용하는 프로젝트에 맞춰 이름이 바뀌는 것이 정상**이다 —
- * `project_1` 같은 이름은 자리표시자다. 셋 중 하나만 바꾸면 `readManifest` 가
+ * 패키지 이름은 **일하는 방식의 서식 이름**이다(프로젝트 맞춤은 세운 레포 안에서) —
+ * 내용을 말하지 못하는 이름(`dpms` → `public-si`)은 바꾼다. 셋 중 하나만 바꾸면 `readManifest` 가
  * "name 이 폴더명과 다르다" 로 거절하거나(매니페스트), 레포를 연 사람이 옛 이름을
  * 읽는다(README). 그래서 하나의 동작이다.
  *
