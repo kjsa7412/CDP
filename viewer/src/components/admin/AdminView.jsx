@@ -69,6 +69,8 @@ export default function AdminView({
   me = null,
   built = null,
   repoName = null,
+  // 관리에서 레포를 바꾼 뒤(관리 문서 지우기) — 상단 「검증 N」 · 문서 목록이 옛 값으로 남지 않게 레포를 다시 읽는다(F9)
+  onChanged = null,
 }) {
   const server = isServer()
   const [diag, setDiag] = useState(null)
@@ -123,7 +125,7 @@ export default function AdminView({
           {cur === 'repo' && !server && (
             <Repo state={state} repo={repo} diag={diag} firstRun={firstRun} onOpened={onOpened} say={say} />
           )}
-          {cur === 'docs' && <Docs me={me} say={say} />}
+          {cur === 'docs' && <Docs me={me} say={say} onChanged={onChanged} />}
           {cur === 'sync' && <Sync sync={sync} onSync={onSync} say={say} />}
           {cur === 'work' && (server ? <WorkReposServer say={say} /> : <WorkRepos state={state} patch={patch} say={say} />)}
           {cur === 'diag' && <Diag diag={diag} repo={repo} say={say} />}

@@ -848,7 +848,9 @@ export class Store {
 
   check() {
     return runBuiltinCheck({
-      gitStatus: this._git || null,
+      // 서버형(`settings.server`)은 git 훅을 보지 않는다 — save 가 같은 계산으로 커밋 전에 막는다. 전에는 서버 트리에
+      // hooksPath 가 없다고 「커밋 검사가 돌지 않습니다」 를 내서 검사가 꺼진 것처럼 보였다(실서버 종합 시험 F7)
+      gitStatus: this.settings.server ? null : this._git || null,
       docs: this.docs,
       vocab: this.vocab,
       validity: this.validity,

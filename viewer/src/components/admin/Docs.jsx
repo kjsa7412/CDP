@@ -23,7 +23,7 @@ const CHOICE = { 'drop-row': '행 지우기', unlink: '링크만 풀기', review
 // 같은 묶음 — 관리번호의 끝자리만 다른 것(`TE_201` · `TE_202` · `TE_203`). 안 쓰는 단위는 대개 묶음이다(검토 Q2'')
 const groupOf = (no) => (no && /\d{2,}$/.test(no) ? no.slice(0, -1) : null)
 
-export default function Docs({ me = null, say }) {
+export default function Docs({ me = null, say, onChanged = null }) {
   const server = isServer()
   const canDrop = server && !!me?.admin
   const [data, setData] = useState(null)
@@ -111,6 +111,7 @@ export default function Docs({ me = null, say }) {
       setPreview(null)
       setReason('')
       await load()
+      onChanged?.()
     } catch (e) {
       say?.(e.message || String(e), 'warn')
       setPreview({ ...preview, error: e.message || String(e), detail: e.detail })

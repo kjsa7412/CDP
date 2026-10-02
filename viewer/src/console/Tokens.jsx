@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { invalidate, useResource } from '../lib/cache.js'
+import { navigate } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
 import { PageHead, Toolbar, Search, Note, Modal, Field, Seg, Chip, Confirm, Prompt, TokenReveal, when, daysText } from './ui.jsx'
@@ -25,10 +26,13 @@ export default function Tokens({ me, say, route }) {
   useEffect(() => {
     if (error) say(error.message, 6000)
   }, [error, say])
-  // 사용자 페이지의 [발급] 이 `?user=` 를 들고 온다
+  // 사용자 페이지의 [발급] 이 `?user=` 를 들고 온다 — **한 번 열고 주소에서 지운다.** 전에는 쿼리가 남아, 발급 · 재발급 ·
+  // 만료 창을 닫을 때마다(목록을 다시 읽을 때마다) 발급 창이 또 떴고 한 번 더 누르면 토큰이 하나 더 생겼다(실서버 종합 시험 F3)
   useEffect(() => {
     const u = route.query.get('user')
-    if (u && data) setIssuing({ user: u })
+    if (!u || !data) return
+    setIssuing({ user: u })
+    navigate('/console/tokens', { replace: true })
   }, [route.query, data])
 
   const act = async (fn, ok) => {
@@ -55,6 +59,9 @@ export default function Tokens({ me, say, route }) {
 
   if (!data) return <span className="amuted">읽는 중…</span>
   const nActive = data.tokens.filter((t) => t.status === 'active').length
+  // 만료 기본은 **토큰 주인의 역할**이 정한다 — 전에는 「내 토큰이면 30」 이라 writer 토큰 창에도 관리자 문구가 나왔다(F12)
+  const roleOf = (name) => data.users.find((u) => u.name === name)?.role || null
+  const defaultDays = (name) => (roleOf(name) === 'admin' ? 30 : 90)
 
   return (
     <>
@@ -135,7 +142,7 @@ export default function Tokens({ me, say, route }) {
                         {!off && (
                           <>
                             <button className="abtn" onClick={() => setConfirm({ kind: 'reissue', t })}>재발급</button>
-                            <button className="abtn" onClick={() => setPrompt({ kind: 'expires', t })}>연장</button>
+                            <button className="abtn" onClick={() => setPrompt({ kind: 'expires', t })} title="만료 바꾸기 — 늘리거나 줄인다">만료</button>
                           </>
                         )}
                         <button className="abtn" onClick={() => setPrompt({ kind: 'note', t })}>메모</button>
@@ -175,7 +182,7 @@ export default function Tokens({ me, say, route }) {
       {confirm?.kind === 'reissue' && (
         <Confirm
           title="재발급"
-          text={`${confirm.t.user} 의 토큰 ${confirm.t.id} 를 폐기하고 새 토큰을 발급합니다 — 한 동작입니다. 사용자는 CDP_TOKEN 만 바꿉니다. 권한은 사람에 붙어 있어 잃는 것이 없습니다.`}
+          text={`${confirm.t.user} 의 토큰 ${confirm.t.id} 를 폐기하고 새 토큰을 발급합니다 — 한 동작입니다. 새 토큰의 만료는 역할 기본(${defaultDays(confirm.t.user)}일)이고, 바꾸려면 발급 뒤 [만료] 로. 사용자는 CDP_TOKEN 만 바꿉니다. 권한은 사람에 붙어 있어 잃는 것이 없습니다.`}
           okLabel="폐기하고 새로 발급"
           busy={busy}
           onClose={() => setConfirm(null)}
@@ -215,7 +222,7 @@ export default function Tokens({ me, say, route }) {
           title={`만료 — ${prompt.t.user} · ${prompt.t.id}`}
           label="만료"
           hint="일수(예: 90) · 날짜(YYYY-MM-DD) · never. 지금부터 센다."
-          initial={me.user === prompt.t.user ? '30' : '90'}
+          initial={String(defaultDays(prompt.t.user))}
           mono
           busy={busy}
           onClose={() => setPrompt(null)}
@@ -225,7 +232,10 @@ export default function Tokens({ me, say, route }) {
             return (await act(() => admin.tokenSet(prompt.t.id, { expires }), '만료를 고쳤다')) && setPrompt(null)
           }}
         >
-          <Note>지금 만료 {prompt.t.expires === 'never' ? '무기한' : prompt.t.expires}. 관리자 토큰은 30일 안으로 둔다.</Note>
+          <Note>
+            지금 만료 {prompt.t.expires === 'never' ? '무기한' : prompt.t.expires}.
+            {roleOf(prompt.t.user) === 'admin' ? ' 관리자 토큰은 30일 안으로 둔다.' : ` 기본은 ${defaultDays(prompt.t.user)}일.`}
+          </Note>
         </Prompt>
       )}
     </>
@@ -233,7 +243,8 @@ export default function Tokens({ me, say, route }) {
 }
 
 function Issue({ users, initialUser, busy, onClose, onOk }) {
-  const [user, setUser] = useState(initialUser && users.some((u) => u.name === initialUser) ? initialUser : users[0]?.name || '')
+  // 기본은 **아무도 아니다** — 전에는 명부 첫 사람(대개 나)이라, 사람을 안 고르고 누르면 엉뚱한 사람 토큰이 나왔다(F13)
+  const [user, setUser] = useState(initialUser && users.some((u) => u.name === initialUser) ? initialUser : '')
   const [note, setNote] = useState('')
   const [exp, setExp] = useState('default')
   const [days, setDays] = useState('')
@@ -265,6 +276,9 @@ function Issue({ users, initialUser, busy, onClose, onOk }) {
     >
       <Field label="사용자">
         <select value={user} onChange={(e) => setUser(e.target.value)}>
+          <option value="" disabled>
+            — 사람을 고른다 —
+          </option>
           {users.map((x) => (
             <option key={x.name} value={x.name}>
               {x.name}
@@ -277,13 +291,14 @@ function Issue({ users, initialUser, busy, onClose, onOk }) {
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="기기 — 노트북 · 폐쇄망 PC …" />
       </Field>
       <Field label="만료" hint={`기본은 역할이 정한다 — ${u?.role === 'admin' ? 'admin 30일' : '90일'}. 무기한은 감시용 계정에만.`}>
+        {/* 단추 순서는 **고정**이다 — 전에는 역할마다 30 · 90 자리가 바뀌어 손이 엉뚱한 것을 눌렀다(F13). 「기본」 꼬리표만 옮긴다.
+            사람을 바꾸면 고르지 않은 동안은 그 사람의 기본을 따라간다('default') */}
         <Seg
-          value={exp}
+          value={exp === 'default' ? String(dflt) : exp}
           onChange={setExp}
           options={[
-            ['default', `${dflt}일`, '기본'],
-            // 기본과 같은 고정 항목은 뺀다 — admin 에게 30일이 둘 보이면 안 된다
-            ...[['30', '30일'], ['90', '90일']].filter(([v]) => Number(v) !== Number(dflt)),
+            ['30', '30일', dflt === 30 ? '기본' : undefined],
+            ['90', '90일', dflt === 90 ? '기본' : undefined],
             ['custom', '일수…'],
             ['never', '무기한'],
           ]}

@@ -206,22 +206,7 @@ export function Empty({ children }) {
 
 export const daysText = (t) => (t.expires === 'never' || t.daysLeft === null ? '무기한' : `${t.daysLeft}일`)
 
-// auth.log 한 줄 — `시각 · 행위 …`. 콘솔의 것은 `admin <행위> · <행위자> · …`, 셸의 것은 행위자가 없다.
-export function parseAudit(line) {
-  const i = line.indexOf(' · ')
-  const time = i > 0 ? line.slice(0, i) : ''
-  const rest = i > 0 ? line.slice(i + 3) : line
-  let actor = '(셸)'
-  let text = rest
-  // 콘솔은 `admin <행위> · <행위자> · …`, 마법사는 `setup · <행위> · <이름> · …` — 사이 점이 다르다.
-  const m = /^(admin|setup)(?: ·)? ([^·]+?) · ([^·]+?)(?: · (.*))?$/.exec(rest)
-  if (m) {
-    actor = m[3].trim()
-    text = `${m[2].trim()}${m[4] ? ' · ' + m[4] : ''}`
-    if (m[1] === 'setup') actor = '(마법사) ' + actor
-  }
-  return { time, actor, text }
-}
+export { parseAudit } from '../lib/audit.js'
 
 export const shortTime = (iso) => {
   if (!iso) return ''

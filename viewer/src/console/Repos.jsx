@@ -298,7 +298,7 @@ export default function Repos({ say }) {
         <Note tone="accent">
           <b>{gone.name}</b> — 휴지통으로 옮겼다 · <Mono>{gone.trash}</Mono>
           {gone.revoked?.length ? ` · 접근을 뺀 사람 ${gone.revoked.join(', ')}` : ''}
-          {gone.workrepos ? ` · 작업 레포 등록 ${gone.workrepos}건은 기록으로 남는다` : ''}. 되살리려면 셸에서 그 폴더를 서버 root 로 되돌려 놓는다.
+          {gone.workrepos ? ` · 작업 레포 등록 ${gone.workrepos}건은 「지식 레포 없음」 으로 남는다 — 콘솔 › 작업 레포에서 지운다` : ''}. 되살리려면 셸에서 그 폴더를 서버 root 로 되돌려 놓는다.
         </Note>
       )}
       <Note>

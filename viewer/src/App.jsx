@@ -592,7 +592,12 @@ export default function App() {
 
             {/* 검증 — **아침에 제일 먼저 보는 값이다.** 0건이면 조용하다. */}
             {c.error > 0 ? (
-              <button className="pill pill--error" onClick={() => setCheckOpen(true)} title="검사 결과 — 커밋이 거부된다">
+              <button
+                className="pill pill--error"
+                onClick={() => setCheckOpen(true)}
+                // 서버형 save 는 **레포 전체** 검사에서 오류가 하나라도 있으면 거절한다 — 건드린 문서가 아니어도(core/save.js 8)
+                title={isServer() ? '검사 오류 — 고칠 때까지 이 레포의 save 가 전부 거절된다' : '검사 결과 — 커밋이 거부된다'}
+              >
                 <Icon name="block" size={13} /> 검증 {c.error}
               </button>
             ) : c.warn > 0 ? (
@@ -694,6 +699,7 @@ export default function App() {
           sync={sync}
           onSync={syncNow}
           onCheck={() => setCheckOpen(true)}
+          onChanged={() => reload().catch(() => {})}
           repoName={isServer() ? here.repo : repoName}
           built={session?.info?.built || null}
           say={(m) => say(m, 6000)}

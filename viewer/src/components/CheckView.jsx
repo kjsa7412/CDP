@@ -8,10 +8,11 @@
 // 훅이 안 걸린 PC 에서는 이 화면이 그 1초를 대신한다.
 
 import { useState } from 'react'
-import { api, currentRepo } from '../lib/api.js'
+import { api, currentRepo, isServer } from '../lib/api.js'
 import { useResource } from '../lib/cache.js'
 import Icon from './Icon.jsx'
 import { copyText } from '../lib/clip.js'
+import { plainDetail } from '../lib/format.js'
 
 const SEV = {
   error: { icon: 'block', label: '커밋이 거부될 것' },
@@ -65,10 +66,17 @@ export default function CheckView({ onOpen }) {
           <span>출처:</span>
           <code>core/check.js</code>
           <span className="src"><Icon name="check" size={12} /> ctx check 와 같은 코드</span>
-          <span style={{ color: 'var(--text-2)' }}>
-            — 커밋을 막는 것은 git 훅의 <code>bin/ctx check</code> 다. 그 레포의
-            번들이 낡았으면 결과가 다를 수 있다 (<code>ctx version</code>)
-          </span>
+          {isServer() ? (
+            // 서버형 — 훅이 아니라 save 가 이 계산으로 커밋 전에 막는다. 오류가 하나라도 있으면 그 레포의 save 가 전부 거절된다(F7)
+            <span style={{ color: 'var(--text-2)' }}>
+              — 서버형은 <code>save</code> 가 이 계산으로 커밋 전에 막는다. 오류가 하나라도 있으면 이 레포의 save 가 전부 거절된다
+            </span>
+          ) : (
+            <span style={{ color: 'var(--text-2)' }}>
+              — 커밋을 막는 것은 git 훅의 <code>bin/ctx check</code> 다. 그 레포의
+              번들이 낡았으면 결과가 다를 수 있다 (<code>ctx version</code>)
+            </span>
+          )}
           <span className="topbar__spacer" />
           <button style={{ color: 'var(--accent)' }} onClick={run} disabled={busy}>
             {busy ? '실행 중…' : '재실행'}
@@ -117,7 +125,8 @@ export default function CheckView({ onOpen }) {
                         {it.id}
                       </button>
                     )}
-                    {it.detail && <span style={{ color: 'var(--text-2)' }}>{it.detail}</span>}
+                    {/* 문장이 id 로 시작하면 떼고 · 백틱을 벗긴다 — id 는 바로 앞 단추에 있다. CLI 는 그 줄만 보니 문장에 id 를 둔다(W4 · L7) */}
+                    {it.detail && <span style={{ color: 'var(--text-2)' }}>{plainDetail(it.detail, it.id)}</span>}
                     {/* 고치는 방법을 같이 준다 */}
                     {it.suggest && (
                       <span className="finding__suggest">

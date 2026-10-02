@@ -119,3 +119,11 @@ export function summaryText(doc) {
   lines.push(`좌표: ${doc.touches.join(', ')}`)
   return lines.join('\n')
 }
+
+// 검사 문장(화면용) — 앞의 id 를 떼고(바로 앞 단추가 그 id 다) 인라인 코드 백틱을 벗긴다. CLI 는 그 줄만 보니 문장에 id 를 둔다
+// (실서버 종합 시험 W4 · L7)
+export function plainDetail(detail, id = null) {
+  let s = String(detail)
+  if (id && s.startsWith(id + ' ')) s = s.slice(id.length + 1)
+  return s.replace(/`([^`]+)`/g, '$1')
+}

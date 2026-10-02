@@ -140,7 +140,7 @@ export function makeStore(root, log) {
       found.push({ name: e.name, root: dir })
       if (!caches.has(e.name)) caches.set(e.name, makeRepoCache(dir))
       if (!views.has(e.name)) {
-        views.set(e.name, new Store({ root: dir, settings: { watch: false, settledness: { excludeTypes: ['domain'] } } }))
+        views.set(e.name, new Store({ root: dir, settings: { watch: false, server: true, settledness: { excludeTypes: ['domain'] } } }))
       }
     }
     const before = repos.map((r) => r.name).join(',')
@@ -1727,7 +1727,9 @@ export async function runServe(opt = {}) {
               ...(body.dryRun ? { dryRun: true } : {}),
             }
             const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: true, mirror: !!opt.mirror, log: (m) => log.line(m) })
-            if (!out.dryRun) store.reload(name)
+            // **다 읽고 답한다.** 전에는 재스캔을 기다리지 않아, 화면이 곧바로 다시 읽은 목록 · 「지운 관리 문서」 · 검사가
+            // 지우기 전 것이었다(실서버 종합 시험 F9)
+            if (!out.dryRun) await store.reload(name)
             log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/docs-drop', key: (body.dryRun ? '미리보기 ' : '') + body.docs.length + '종', ms: Date.now() - t0, status: 200 })
             return json(res, 200, out)
           } catch (e) {
