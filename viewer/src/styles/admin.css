@@ -127,6 +127,8 @@
 .arow--stack .arow__value { display: block; }
 
 .amuted { color: var(--text-3); }
+/* 값 아래 작은 줄 — 판 아래 빌드처럼. 한 줄에 「· 빌드 …」 로 붙이면 좁을 때 줄이 「·」 로 시작했다(실서버 종합 시험 L6) */
+.asub { flex-basis: 100%; font-size: 11.5px; line-height: 1.5; }
 .awarn { color: var(--warn); display: inline-flex; align-items: center; gap: 5px; }
 .amono, .amono code {
   font: 11.5px var(--font-mono);
@@ -144,7 +146,10 @@
   font: 11.5px var(--font-mono);
   color: var(--text);
   text-align: left;
-  word-break: break-all;
+  /* 공백 · 한글 어절에서 먼저 끊고, 그래도 넘치는 긴 토큰만 아무 데서나. break-all 은 「<GitLab 계|정>」 「cdp-s|erver」 처럼
+     낱말 한가운데서 끊었다(실서버 종합 시험 L4) */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--r-xs);

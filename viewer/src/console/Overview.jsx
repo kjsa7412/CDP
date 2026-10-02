@@ -8,6 +8,7 @@ import { admin } from '../lib/api.js'
 import { invalidate, useResource } from '../lib/cache.js'
 import { Link, navigate } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
+import { skewText } from '../lib/clock.js'
 import { PageHead, Card, Row, Note, Btn, when, parseAudit, shortTime } from './ui.jsx'
 
 export default function Overview({ say }) {
@@ -33,6 +34,11 @@ export default function Overview({ say }) {
   if (!d) return <span className="amuted">읽는 중…</span>
   const m = d.repos.mirror
   const wr = d.workrepos
+  // 시계 — 서버는 이 PC 의 시계를 모른다. 화면이 잰다(clock.js · 실서버 종합 시험 F4)
+  const skew = skewText()
+  const alerts = skew
+    ? [...d.alerts, { level: 'warn', text: `${skew} — 「N분 전」 은 서버 시각으로 보인다. 기록 id 의 날짜 · 토큰 만료가 두 기계에서 갈릴 수 있다 → 서버 timedatectl · PC w32tm /resync` }]
+    : d.alerts
   return (
     <>
       <PageHead title="현황" sub="이 서버를 지금 쓸 수 있는 상태인가 — 카드마다 자기 페이지로 간다">
@@ -42,14 +48,14 @@ export default function Overview({ say }) {
         </Btn>
       </PageHead>
 
-      {d.alerts.length > 0 && (
+      {alerts.length > 0 && (
         <div className="alerts">
-          {d.alerts.map((a, i) => (
+          {alerts.map((a, i) => (
             <div key={i} className={a.level === 'bad' ? 'alert alert--bad' : 'alert'}>
               <Icon name={a.level === 'bad' ? 'block' : 'warn'} size={14} />
               <span>{a.text}</span>
               <span className="sp" />
-              {a.to && <Link to={'/console/' + a.to}>{({ users: '사용자', tokens: '토큰', repos: '지식 레포', server: '서버' })[a.to] || a.to} →</Link>}
+              {a.to && <Link to={'/console/' + a.to}>{({ users: '사용자', tokens: '토큰', repos: '지식 레포', workrepos: '작업 레포', server: '서버' })[a.to] || a.to} →</Link>}
             </div>
           ))}
         </div>
@@ -62,9 +68,12 @@ export default function Overview({ say }) {
             <Stat n={m.lag} l={m.diverged ? `미러 밀림 · 갈림 ${m.diverged}` : '미러 밀림'} warn={m.lag > 0 && !m.diverged} bad={m.diverged > 0} />
             <Stat n={d.packages} l="패키지" />
           </div>
+          {/* 판과 빌드를 두 줄로 — 한 줄에 두면 좁을 때 둘째 줄이 「·」 로 시작했다(실서버 종합 시험 L6) */}
           <Row label="판">
             <span className="amono">{d.version ? `v${d.version}` : '—'}</span>
-            <span className="amuted">· 빌드 {d.built} · node {d.node}</span>
+            <div className="amuted asub">
+              빌드 {d.built} · node {d.node}
+            </div>
           </Row>
           <Row label="기동">
             <span className="amuted">{when(new Date(d.startedAt).toISOString())}</span>
@@ -127,7 +136,13 @@ export default function Overview({ say }) {
             <time>{shortTime(s.at)}</time>
             <span className="who2">{s.user}</span>
             <span className="what">
-              <b>{s.repo}</b> · {s.id || '(id 없음)'} ·{' '}
+              <b>{s.repo}</b>
+              {s.via && (
+                <span className="awarn" title={`/mcp/${s.via} 로 붙어서 ${s.repo} 에 썼다 — 그 작업 레포의 .mcp.json 과 .claude/cdp.json 이 갈렸다`}>
+                  {' '}(주소 {s.via})
+                </span>
+              )}{' '}
+              · {s.id || '(id 없음)'} ·{' '}
               {s.result === 'ok' ? <span>기록됨</span> : <span style={{ color: 'var(--warn)', fontWeight: 600 }}>{s.result}</span>}
               {s.ms != null ? <span className="amuted"> · {s.ms}ms</span> : null}
             </span>

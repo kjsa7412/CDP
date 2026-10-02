@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import Icon from '../Icon.jsx'
 import { copyText } from '../../lib/clip.js'
+import { serverNow } from '../../lib/clock.js'
 
 export function Card({ title, hint, children, actions, id }) {
   return (
@@ -116,7 +117,8 @@ export function Btn({ children, onClick, disabled, kind = 'quiet', title }) {
 
 // 시각 — **상대 + 절대를 같이 쓴다**(§17.3). "3주 전"만 있으면 언제인지 모르고
 // 절대 시각만 있으면 감각이 없다.
-export function when(iso, { now = Date.now() } = {}) {
+// `now` 은 **서버 시각**이다 — 찍은 쪽이 서버라서(clock.js · 실서버 종합 시험 F4)
+export function when(iso, { now = serverNow() } = {}) {
   if (!iso) return null
   const t = new Date(iso).getTime()
   if (Number.isNaN(t)) return null

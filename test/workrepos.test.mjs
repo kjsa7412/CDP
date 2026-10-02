@@ -50,3 +50,14 @@ test('remove — 없는 등록은 던진다', () => {
   assert.equal(db.repos.length, 0)
   assert.throws(() => wr.remove(db, row.id), (e) => e.code === 'E_NOT_FOUND')
 })
+
+// 실서버 종합 시험 F5 — 레포를 휴지통으로 보낸 뒤 남은 등록은 표지가 있어야 지울 수 있다
+test('list — known 을 주면 지식 레포가 없어진 등록에 orphan', () => {
+  const db = { repos: [] }
+  wr.add(db, { name: 'a', knowledge: 'alpha' }, ctx)
+  wr.add(db, { name: 'b', knowledge: 'beta' }, ctx)
+  const rows = wr.list(db, { known: ['alpha'] })
+  assert.deepEqual(rows.map((r) => [r.name, r.orphan]), [['a', false], ['b', true]])
+  // known 이 없으면 표지를 달지 않는다(옛 호출 그대로)
+  assert.equal('orphan' in wr.list(db)[0], false)
+})

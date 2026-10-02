@@ -19,6 +19,7 @@
 // 받은 뒤 URL 에서 지운다 — 주소창과 히스토리에 토큰을 남기지 않는다. 라우터가 주소를 읽기 전(모듈 로드)이다.
 
 import { navigate, modeOf } from './router.jsx'
+import { noteServerDate } from './clock.js'
 
 const KEY = 'cdp.token'
 
@@ -188,6 +189,8 @@ async function req(path, opts = {}) {
       ...init.headers,
     },
   })
+  // 서버 시계를 잰다 — 「N분 전」 의 기준(clock.js · 실서버 종합 시험 F4)
+  noteServerDate(res.headers.get('date'))
   if (!res.ok && allowStatus.includes(res.status)) return res.json()
   if (res.status === 401) {
     let j = null
@@ -264,7 +267,8 @@ export const api = {
   registryAdd: (body) => req('/workrepos', { absolute: true, method: 'POST', body: JSON.stringify(body) }),
   registryDel: (id) => req('/workrepos/' + encodeURIComponent(id), { absolute: true, method: 'DELETE' }),
   // 설치 꾸러미. **토큰은 들어 있지 않다**(§6.7.3) — 브라우저가 그냥 받는다.
-  kitUrl: (id) => `/kit/${encodeURIComponent(currentRepo())}?workrepo=${encodeURIComponent(id)}`,
+  // 레포는 그 등록의 것 — 지금 보는 레포와 다르면 서버가 409 로 막는다(실서버 종합 시험 F1)
+  kitUrl: (id, repo = currentRepo()) => `/kit/${encodeURIComponent(repo)}?workrepo=${encodeURIComponent(id)}`,
   // git — GET 은 읽기만. pull/push 는 사람이 누른 것이어야 하므로 POST. **로컬만** — 서버에는 `/git` 이 없다(R4)
   git: (doFetch) => req('/git' + (doFetch ? '?fetch=1' : '')),
   gitPull: () => req('/git/pull', { method: 'POST', body: '{}', allowStatus: [409] }),

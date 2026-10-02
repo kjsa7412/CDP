@@ -103,6 +103,13 @@ export function state(row, kitNow) {
   return row.applied.kit === kitNow ? '최신' : '낡음'
 }
 
-export function list(db, { kits = {} } = {}) {
-  return db.repos.map((r) => ({ ...r, kitNow: kits[r.knowledge] ?? null, state: state(r, kits[r.knowledge] ?? null) }))
+// `known` — 지금 서버에 있는 지식 레포 이름들. 주면 거기 없는 등록에 `orphan: true` 를 단다 — 레포를 휴지통으로
+// 보낸 뒤에도 등록은 기록으로 남는데, 전에는 표지가 없어 「미설치」 로만 보였고 지울 길도 없었다(실서버 종합 시험 F5).
+export function list(db, { kits = {}, known = null } = {}) {
+  return db.repos.map((r) => ({
+    ...r,
+    kitNow: kits[r.knowledge] ?? null,
+    state: state(r, kits[r.knowledge] ?? null),
+    ...(known ? { orphan: !known.includes(r.knowledge) } : {}),
+  }))
 }

@@ -525,7 +525,11 @@ async function fetchKit(server, repo, workrepo, token) {
     const j = await r.json().catch(() => ({}))
     return { error: `kit 을 받지 못했습니다 — ${j?.error?.message || '404'}${NL}레포 이름 · 등록 id 가 맞는지, 그 레포에 권한이 있는지 봅니다(권한 밖 레포는 없는 것으로 보입니다).` }
   }
-  if (!r.ok) return { error: `kit 을 받지 못했습니다 — HTTP ${r.status}` }
+  // 409 — 등록의 지식 레포가 --repo 와 다르다(실서버 종합 시험 F1). 서버 문장이 어디서 다시 받는지 말한다
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}))
+    return { error: `kit 을 받지 못했습니다 — ${j?.error?.message || 'HTTP ' + r.status}` }
+  }
   const j = await r.json().catch(() => null)
   if (!j || !Array.isArray(j.files)) return { error: 'kit 응답이 이상합니다 — 서버 판을 확인하세요.' }
 

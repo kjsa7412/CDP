@@ -11,6 +11,7 @@ import { api, currentRepo } from '../../lib/api.js'
 import { useResource } from '../../lib/cache.js'
 import Icon from '../Icon.jsx'
 import { Card, Row, Mono, Note, Btn, Cmd } from './ui.jsx'
+import { Confirm } from '../../console/ui.jsx'
 
 // 표시 세 가지. **정상은 조용하다** — `ui.jsx` 의 규칙 그대로다.
 const MARK = { 최신: 'ok', 낡음: 'warn', 미설치: 'none' }
@@ -21,9 +22,12 @@ export default function WorkReposServer({ say }) {
   const [open, setOpen] = useState(null)
   const [form, setForm] = useState({ name: '', owner: '', note: '' })
   const [busy, setBusy] = useState(false)
+  const [removing, setRemoving] = useState(null)
+  // 서버의 규칙과 같다 — `core/workrepos.js` NAME_RE
+  const nameOk = /^[^\s/\\][^/\\]{0,79}$/.test(form.name.trim())
 
   const submit = async (e) => {
-    e.preventDefault()
+    e?.preventDefault()
     if (!form.name.trim()) return
     setBusy(true)
     try {
@@ -40,14 +44,33 @@ export default function WorkReposServer({ say }) {
 
   if (!data) return <Note>{error ? '대장을 읽지 못했습니다 — ' + error.message : '대장을 읽는 중입니다…'}</Note>
 
-  const stale = data.repos.filter((r) => r.state === '낡음')
+  // **이 레포의 등록만.** 대장(`/workrepos`)은 볼 수 있는 레포 전부를 낸다 — 전에는 그것을 다 그려서 gdi 화면에
+  // dpms_wiki 소속 작업 레포가 나오고, 그 행의 설치 명령이 gdi 로 나갔다(실서버 종합 시험 F1). 관리 › 현황 카드와 같은 거름
+  const repos = data.repos.filter((r) => r.knowledge === currentRepo())
+  const stale = repos.filter((r) => r.state === '낡음')
+
+  const remove = async () => {
+    const r = removing
+    setBusy(true)
+    try {
+      await api.registryDel(r.id)
+      setRemoving(null)
+      if (open === r.id) setOpen(null)
+      await load()
+      say?.(`${r.name} — 대장에서 지웠습니다`)
+    } catch (e) {
+      say?.(e.message || '지우지 못했습니다')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <>
       {stale.length > 0 && <UpdateAll rows={stale} />}
       <Card title="작업 레포" hint="어디에 무엇이 깔려 있나">
-        {data.repos.length === 0 && <Note>등록된 작업 레포가 없습니다. 아래에서 등록하세요.</Note>}
-        {data.repos.map((r) => (
+        {repos.length === 0 && <Note>등록된 작업 레포가 없습니다. 아래에서 등록하세요.</Note>}
+        {repos.map((r) => (
           <Row key={r.id} label={r.name} mark={MARK[r.state] || 'none'} stack>
             <span className="wr-line">
               <span className="wr-state">{r.state}</span>
@@ -60,12 +83,28 @@ export default function WorkReposServer({ say }) {
               <Btn onClick={() => setOpen(open === r.id ? null : r.id)}>
                 <Icon name="plug" size={13} /> 설치 방법
               </Btn>
+              {data.write && (
+                <Btn kind="quiet" onClick={() => setRemoving(r)} title="대장에서 지운다 — 작업 레포의 파일은 그대로다">
+                  삭제
+                </Btn>
+              )}
             </span>
           </Row>
         ))}
 
-        {open && <HowTo row={data.repos.find((r) => r.id === open)} />}
+        {open && <HowTo row={repos.find((r) => r.id === open)} />}
       </Card>
+      {removing && (
+        <Confirm
+          title={`${removing.name} — 대장에서 지우기`}
+          text={`작업 레포 ${removing.name}(${removing.id}) 의 등록을 지웁니다. 그 레포에 깔린 파일과 Claude Code 연결은 그대로입니다 — 대장이 그 레포를 더 세지 않을 뿐입니다. 감사에 남습니다.`}
+          okLabel="지운다"
+          danger
+          busy={busy}
+          onClose={() => setRemoving(null)}
+          onOk={remove}
+        />
+      )}
 
       {!data.write ? (
         <Card title="등록" hint="쓰기 권한이 필요합니다">
@@ -74,26 +113,29 @@ export default function WorkReposServer({ say }) {
           </Note>
         </Card>
       ) : (
-      <Card title="등록" hint="담당자는 명부에 있어야 합니다">
-        <div className="wr-form">
+      <Card title="등록" hint="담당자는 이 레포를 볼 수 있는 사람 중에서">
+        {/* <form> — Enter 로 등록된다(F10). 이름 형식은 칸 아래에서 말한다 — 말없이 꺼진 단추로 두지 않는다 */}
+        <form className="wr-form" onSubmit={submit}>
           <input
             placeholder="작업 레포 이름 (예: my-app)"
+            aria-label="작업 레포 이름"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
-          <select value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })}>
+          <select aria-label="담당자" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })}>
             <option value="">담당자 —</option>
-            {(data.users || []).map((u) => (
+            {(data.usersByRepo?.[currentRepo()] ?? data.users ?? []).map((u) => (
               <option key={u} value={u}>
                 {u}
               </option>
             ))}
           </select>
-          <input placeholder="메모 (선택)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-          <Btn onClick={submit} disabled={busy || !form.name.trim()}>
+          <input placeholder="메모 (선택)" aria-label="메모" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <button type="submit" className="abtn abtn--quiet" disabled={busy || !nameOk}>
             등록
-          </Btn>
-        </div>
+          </button>
+        </form>
+        {form.name && !nameOk && <Note tone="warn">이름에 / \ 는 쓸 수 없고 공백으로 시작할 수 없다 — 80자 안</Note>}
       </Card>
       )}
     </>
@@ -190,7 +232,8 @@ function UpdateAll({ rows }) {
 function HowTo({ row }) {
   const [shell, setShell] = useState(guessShell)
   if (!row) return null
-  const cmd = installCommand(shell, { origin: window.location.origin, repo: currentRepo(), id: row.id })
+  // 레포는 **행의 것**이다 — 지금 보는 레포가 아니다(F1). 서버 `/kit` 도 둘이 다르면 409 로 막는다
+  const cmd = installCommand(shell, { origin: window.location.origin, repo: row.knowledge, id: row.id })
   return (
     <div className="howto">
       <ol>
@@ -228,7 +271,7 @@ function HowTo({ row }) {
       <details className="howto-more">
         <summary>Node 가 없거나 파일로 받아 손으로 옮길 때 — 꾸러미 zip</summary>
         <div>
-          <a className="btn" href={api.kitUrl(row.id)} download>
+          <a className="btn" href={api.kitUrl(row.id, row.knowledge)} download>
             <Icon name="copy" size={13} /> cdp-kit-{row.name}.zip 내려받기
           </a>
         </div>

@@ -427,24 +427,49 @@ async function mirrorCounts(list) {
 
 // `save` 의 흐름 — `serve.log` 의 `save` 줄만 읽는다(누가 · 언제 · 어느 레포 · 어느 id · 결과 · 걸린 시간).
 // 본문 · 검색어는 원래 로그에 없다(§2.8). 새 로그 파일을 만들지 않는다(동시 기록 검토 v0.1 D10).
-async function saveStats(dataDir, { now = Date.now(), recent = 10 } = {}) {
-  const out = { recent: [], rejected24h: {}, total24h: 0 }
+// MCP 로그 줄의 레포 칸 — **실제로 쓴 레포**(`save` 의 대상). 주소(`/mcp/<레포>`)와 다르면 `실제←주소` 로 둘 다 남긴다.
+// 다르다는 것은 그 작업 레포의 `.mcp.json`(주소)과 `.claude/cdp.json`(repo 인자)이 갈렸다는 뜻이다(실서버 종합 시험 F2).
+export function logRepo(urlRepo, actual) {
+  const u = urlRepo ? decodeURIComponent(urlRepo) : null
+  if (!actual || actual === u) return u || '-'
+  return u ? `${actual}←${u}` : actual
+}
+
+// `serve.log` 의 save 줄 하나 → 행. 레포 칸의 `실제←주소` 를 가른다(옛 줄은 화살표가 없다 — 주소 레포 하나).
+export function parseSaveLine(line) {
+  const f = line.split(' · ')
+  if (f.length < 8 || !f[0].startsWith('20') || f[4].trim() !== 'save') return null
+  const code = f[7].trim()
+  const [repo, via = null] = f[2].trim().split('←')
+  return { at: f[0].trim(), user: f[1].trim(), repo, via, id: f[5].trim() === '-' ? null : f[5].trim(), result: code === '200' ? 'ok' : code, ms: Number(String(f[6]).replace('ms', '')) || null }
+}
+
+export async function saveStats(dataDir, { now = Date.now(), recent = 10 } = {}) {
+  const out = { recent: [], rejected24h: {}, total24h: 0, mismatch7d: [] }
   if (!dataDir) return out
   const rows = []
   for (const name of ['serve.log.1', 'serve.log']) {
     const body = await fs.readFile(path.join(dataDir, 'logs', name), 'utf8').catch(() => null)
     if (!body) continue
     for (const line of body.split(NL)) {
-      const f = line.split(' · ')
-      if (f.length < 8 || !f[0].startsWith('20') || f[4].trim() !== 'save') continue
-      const code = f[7].trim()
-      rows.push({ at: f[0].trim(), user: f[1].trim(), repo: f[2].trim(), id: f[5].trim() === '-' ? null : f[5].trim(), result: code === '200' ? 'ok' : code, ms: Number(String(f[6]).replace('ms', '')) || null })
+      const r = parseSaveLine(line)
+      if (r) rows.push(r)
     }
   }
   out.recent = rows.slice(-recent).reverse()
   const since = now - 24 * 3600 * 1000
+  const week = now - 7 * 24 * 3600 * 1000
+  const seen = new Set()
   for (const r of rows) {
     const t = new Date(r.at).getTime()
+    // 주소와 다른 레포에 쓴 save — 작업 레포 · 주소 · 실제 레포가 같은 것은 한 줄로
+    if (r.via && t >= week) {
+      const k = `${r.user}|${r.via}|${r.repo}`
+      if (!seen.has(k)) {
+        seen.add(k)
+        out.mismatch7d.push({ user: r.user, via: r.via, repo: r.repo, at: r.at })
+      }
+    }
     if (!(t >= since)) continue
     out.total24h++
     if (r.result !== 'ok') out.rejected24h[r.result] = (out.rejected24h[r.result] || 0) + 1
@@ -679,10 +704,12 @@ export async function runServe(opt = {}) {
               log: (m) => log.line(m),
             })
             store.reload(name) // 화면이 방금 커밋한 것을 봐야 한다
-            if (ctxStore) ctxStore.outcome = { code: null, ms: Date.now() - t0, key: input?.work?.id ?? null }
+            // `repo` — **실제로 쓴 레포.** 도구가 `repo` 인자로 주소(/mcp/<레포>)와 다른 레포에 쓰면 로그가 주소 레포를 적어
+            // 콘솔 최근 기록이 거짓이었다(실서버 종합 시험 F2)
+            if (ctxStore) ctxStore.outcome = { code: null, ms: Date.now() - t0, key: input?.work?.id ?? null, repo: name }
             return out
           } catch (e) {
-            if (ctxStore) ctxStore.outcome = { code: e?.code || 'E_REPO', ms: Date.now() - t0, key: input?.work?.id ?? null }
+            if (ctxStore) ctxStore.outcome = { code: e?.code || 'E_REPO', ms: Date.now() - t0, key: input?.work?.id ?? null, repo: name }
             throw e
           }
         },
@@ -1078,7 +1105,7 @@ export async function runServe(opt = {}) {
             const tokens = auth.tokenList(db)
             const active = tokens.filter((t) => t.status === 'active')
             const soon = active.filter((t) => t.daysLeft !== null && t.daysLeft <= 7)
-            const wrows = wr.list(await wr.load(dataDir), { kits })
+            const wrows = wr.list(await wr.load(dataDir), { kits, known: list.map((r) => r.name) })
             const byState = { 최신: 0, 낡음: 0, 미설치: 0 }
             for (const w of wrows) byState[w.state] = (byState[w.state] || 0) + 1
             const alerts = []
@@ -1101,6 +1128,15 @@ export async function runServe(opt = {}) {
             if (!list.length) alerts.push({ level: 'warn', text: '지식 레포가 없다 — 지식 레포에서 세우거나 origin 에서 받아 온다', to: 'repos' })
             const audit = await tailLog(dataDir, 'auth.log', 5)
             const saves = await saveStats(dataDir)
+            if (saves.mismatch7d.length) {
+              alerts.push({
+                level: 'warn',
+                text: `주소와 다른 레포에 쓴 save ${saves.mismatch7d.length} — ${saves.mismatch7d.map((m) => `${m.user} · 주소 ${m.via} → ${m.repo}`).join(' · ')} · 그 작업 레포의 .mcp.json(주소)과 .claude/cdp.json(레포)이 갈렸다 → 그 지식 레포의 관리 › 작업 레포에서 설치 한 줄을 다시`,
+                to: 'workrepos',
+              })
+            }
+            const orphans = wrows.filter((w) => w.orphan)
+            if (orphans.length) alerts.push({ level: 'warn', text: `지식 레포가 없어진 작업 레포 등록 ${orphans.length} — ${orphans.map((w) => `${w.name}(${w.knowledge})`).join(' · ')} → 작업 레포에서 지운다`, to: 'workrepos' })
             okLog('/overview', '-')
             return json(res, 200, {
               version: VERSION,
@@ -1430,9 +1466,11 @@ export async function runServe(opt = {}) {
           // ── 작업 레포 — 대장 전부(레포 무관). 등록 · 꾸러미는 그 레포의 관리 화면에서(§4.7).
           if (sub === '/workrepos' && req.method === 'GET') {
             const kits = {}
-            for (const r of await store.list()) kits[r.name] = (await kitHash(r.root).catch(() => ({ hash: null }))).hash
+            const all = await store.list()
+            for (const r of all) kits[r.name] = (await kitHash(r.root).catch(() => ({ hash: null }))).hash
             okLog('/workrepos', '-')
-            return json(res, 200, { repos: wr.list(await wr.load(dataDir), { kits }) })
+            // `known` — 휴지통으로 간 레포의 등록은 `orphan` 이다. 콘솔이 「지식 레포 없음」 과 [삭제] 를 단다(F5)
+            return json(res, 200, { repos: wr.list(await wr.load(dataDir), { kits, known: all.map((r) => r.name) }), known: all.map((r) => r.name) })
           }
 
           // ── 서버 — 진단 · 설정값 · 로그. 전부 읽기다(D7 · D8).
@@ -1537,7 +1575,10 @@ export async function runServe(opt = {}) {
             // 못 할 일을 띄워 놓고 누른 뒤에 403 을 내는 것은 화면이 아니다.
             // 명부 이름(`users`)은 등록 칸(담당자 select)의 재료라 **write 에게만** 낸다 — viewer 화면은 안 쓰는데 API 만 열려
             // 있던 모양(화면 · 권한 검토 v0.1 P4 · R4).
-            return json(res, 200, { repos: rows, users: a.write ? await usersOf(opt.auth) : [], write: !!a.write })
+            // `usersByRepo` — 담당자 후보는 **그 레포를 볼 수 있는 사람**이다. 전에는 명부 전부라 zz-test 의 담당자 후보에
+            // zz-test 를 못 보는 사람이 나왔다(실서버 종합 시험 F22)
+            const byRepo = a.write ? await usersByRepo(opt.auth, mine.map((m) => m.name)) : {}
+            return json(res, 200, { repos: rows, users: a.write ? await usersOf(opt.auth) : [], usersByRepo: byRepo, write: !!a.write })
           }
           // **등록·삭제는 `write` 가 있어야 한다.**
           //
@@ -1556,7 +1597,7 @@ export async function runServe(opt = {}) {
             // 방금 세운 레포를 바로 등록할 수 있게 — 모르는 이름이면 폴더를 다시 훑는다
             if (body.knowledge) await store.ensure(String(body.knowledge))
             const known = (await store.list()).filter((r) => !a.allow || a.allow(r.name)).map((r) => r.name)
-            const row = wr.add(db, body, { users: await usersOf(opt.auth), repos: known })
+            const row = wr.add(db, body, { users: (await usersByRepo(opt.auth, [String(body.knowledge || '')]))[String(body.knowledge || '')] || [], repos: known })
             await wr.save(dataDir, db)
             await auth.audit(dataDir, `workrepo add · ${a.user} · ${row.id} · ${row.name} · ${row.knowledge}`)
             log.req({ ip, user: a.user, method: 'POST', tool: '/workrepos', key: row.id, ms: Date.now() - t0, status: 200 })
@@ -1576,9 +1617,16 @@ export async function runServe(opt = {}) {
           const dm = /^\/workrepos\/([^/]+)$/.exec(url.pathname)
           if (dm && req.method === 'DELETE') {
             const gone = db.repos.find((r) => r.id === dm[1])
+            // **그 등록의 레포를 볼 수 있어야 지운다.** 전에는 write 이기만 하면 남의 레포 등록도 지웠다. 레포가 휴지통으로
+            // 간 등록(고아)은 admin 만 — 콘솔 › 작업 레포의 [삭제](F5). 권한 밖은 없는 것으로 답한다(§4.6)
+            const exists = gone && (await store.list()).some((r) => r.name === gone.knowledge)
+            if (!gone || (exists && !mine.some((m) => m.name === gone.knowledge)) || (!exists && !a.admin)) {
+              log.req({ ip, user: a.user, method: 'DELETE', tool: '/workrepos', key: dm[1], ms: Date.now() - t0, status: 404, code: 'E_NOT_FOUND' })
+              return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 등록이 없다' } })
+            }
             wr.remove(db, dm[1])
             await wr.save(dataDir, db)
-            await auth.audit(dataDir, `workrepo del · ${a.user} · ${dm[1]} · ${gone?.name ?? '-'}`)
+            await auth.audit(dataDir, `workrepo del · ${a.user} · ${dm[1]} · ${gone.name} · ${gone.knowledge}${exists ? '' : ' · 고아'}`)
             log.req({ ip, user: a.user, method: 'DELETE', tool: '/workrepos', key: dm[1], ms: Date.now() - t0, status: 200 })
             return json(res, 200, { ok: true })
           }
@@ -1741,6 +1789,19 @@ export async function runServe(opt = {}) {
           const db = await wr.load(dataDir)
           const row = db.repos.find((r) => r.id === wid)
           if (!row) return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 등록이 없다' } })
+          // **등록의 지식 레포와 주소의 레포가 같아야 한다.** 전에는 보지 않아서, gdi 화면이 dpms_wiki 소속 등록의 명령을
+          // `--repo gdi` 로 내면 그 작업 레포가 gdi 에 붙었다 — .mcp.json 은 gdi, 기록은 repo 인자로 dpms_wiki(실서버 종합 시험 F1 · F2).
+          // 이미 그렇게 깔린 PC 의 `--update` 도 여기서 멈추고 이 문장을 본다
+          if (row.knowledge !== name) {
+            log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name, ms: Date.now() - t0, status: 409, code: 'E_INPUT' })
+            return json(res, 409, {
+              error: {
+                code: 'E_INPUT',
+                message: `그 등록(${row.id} · ${row.name})은 ${row.knowledge} 의 것이다 — ${name} 가 아니다. ${row.knowledge} 의 관리 › 작업 레포에서 설치 한 줄을 다시 받는다`,
+                detail: { workrepo: row.id, knowledge: row.knowledge, asked: name },
+              },
+            })
+          }
           const origin = publicOrigin(req, opt)
           const claudeTpl = files.find((f) => f.name === '.claude/work-repo/CLAUDE.md')
           const kit = (await kitHash(found.root)).hash
@@ -1847,7 +1908,7 @@ export async function runServe(opt = {}) {
         log.req({
           ip,
           user: a.user,
-          repo: /^\/mcp\/([^/]+)/.exec(url.pathname)?.[1] || '-',
+          repo: logRepo(/^\/mcp\/([^/]+)/.exec(url.pathname)?.[1], oc?.repo),
           method: seen.method,
           tool: seen.tool,
           key: seen.key || oc?.key || null,
@@ -2322,6 +2383,15 @@ async function usersOf(authFile) {
   if (!authFile) return []
   const db = await auth.load(authFile).catch(() => auth.emptyDb())
   return db.users.filter((u) => u.active !== false).map((u) => u.name)
+}
+
+// 레포마다 그 레포를 볼 수 있는 활성 사용자 — `repos` 에 '*' 이나 그 이름이 있는 사람
+async function usersByRepo(authFile, names) {
+  const out = {}
+  if (!authFile) return out
+  const db = await auth.load(authFile).catch(() => auth.emptyDb())
+  for (const n of names) out[n] = db.users.filter((u) => u.active !== false && (u.repos || []).some((r) => r === '*' || r === n)).map((u) => u.name)
+  return out
 }
 
 // 클라이언트가 서버를 부를 주소.
