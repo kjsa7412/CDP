@@ -39,6 +39,15 @@ export function missingFor(url, g) {
   return null
 }
 
+// 퍼센트 인코딩을 사람이 읽는 모양으로 — 깨진 인코딩이면 그대로
+const safeDecode = (x) => {
+  try {
+    return decodeURIComponent(x)
+  } catch {
+    return x
+  }
+}
+
 export default function GitAuth({ say, prefix = '/opt/cdp' }) {
   const withSudo = useSudo()
   const { data: g, refresh } = useResource('/admin/gitauth', admin.gitauth)
@@ -149,7 +158,8 @@ export default function GitAuth({ say, prefix = '/opt/cdp' }) {
             {g.https?.entries?.length ? (
               g.https.entries.map((e, i) => (
                 <Chip key={i} kind="off">
-                  {e.scheme}://{e.user}@{e.host}
+                  {/* git-credential 저장소는 host 의 「:」 를 %3a 로 적는다 — 그대로 보이면 주소가 아니다(실서버 종합 시험 F19) */}
+                  {e.scheme}://{e.user}@{safeDecode(e.host)}
                 </Chip>
               ))
             ) : (

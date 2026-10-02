@@ -107,6 +107,9 @@
 .matrix td:first-child { text-align: left; }
 .matrix input { width: 15px; height: 15px; accent-color: var(--accent); }
 .matrix .all { color: var(--text-3); font-size: 11px; }
+/* [접근] 으로 온 레포 열(F20) */
+.matrix .is-pick { background: var(--accent-bg); }
+.matrix th.is-pick { color: var(--accent); }
 
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 4px 0 6px; }
 .stat { display: flex; flex-direction: column; gap: 1px; }
@@ -208,3 +211,10 @@
 .docpick__list label.is-off { color: var(--text-3); text-decoration: line-through; }
 .docpick__tag { font-size: 10px; padding: 0 5px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); }
 .docpick__tag--req { background: var(--warn-bg); color: var(--warn); }
+
+/* 상태 → 단추 표(지식 레포 안내 · W1) */
+.ckeys { width: 100%; margin: 6px 0; border-collapse: collapse; font-size: 12px; }
+.ckeys th { width: 9em; padding: 3px 8px 3px 0; text-align: left; font-weight: 600; color: var(--text); white-space: nowrap; vertical-align: top; }
+.ckeys td { padding: 3px 8px 3px 0; color: var(--text-2); vertical-align: top; }
+.ckeys td:last-child { white-space: nowrap; color: var(--text); }
+@media (max-width: 720px) { .ckeys td:last-child { white-space: normal; } }

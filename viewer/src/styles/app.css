@@ -440,7 +440,8 @@
   left: 50%;
   bottom: calc(var(--statusbar-h) + 16px);
   transform: translateX(-50%);
-  z-index: 45;
+  /* 모달(.overlay 50) 위 — 전에는 45 라 모달 안에서 낸 오류(「만료는 일수 · …」)가 흐린 배경 밑에 깔렸다(실서버 종합 시험 F14) */
+  z-index: 60;
   max-width: min(560px, 80vw);
   padding: 9px 16px;
   font-size: 12.5px;

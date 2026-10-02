@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { invalidate, useResource } from '../lib/cache.js'
 import { navigate } from '../lib/router.jsx'
+import { josa } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
 import { PageHead, Toolbar, Search, Note, Modal, Field, Seg, Chip, Confirm, Prompt, TokenReveal, when, daysText } from './ui.jsx'
@@ -183,7 +184,7 @@ export default function Tokens({ me, say, route }) {
       {confirm?.kind === 'reissue' && (
         <Confirm
           title="재발급"
-          text={`${confirm.t.user} 의 토큰 ${confirm.t.id} 를 폐기하고 새 토큰을 발급합니다 — 한 동작입니다. 새 토큰의 만료는 역할 기본(${defaultDays(confirm.t.user)}일)이고, 바꾸려면 발급 뒤 [만료] 로. 사용자는 CDP_TOKEN 만 바꿉니다. 권한은 사람에 붙어 있어 잃는 것이 없습니다.`}
+          text={`${confirm.t.user} 의 토큰 ${josa(confirm.t.id, '을/를')} 폐기하고 새 토큰을 발급합니다 — 한 동작입니다. 새 토큰의 만료는 역할 기본(${defaultDays(confirm.t.user)}일)이고, 바꾸려면 발급 뒤 [만료] 로. 사용자는 CDP_TOKEN 만 바꿉니다. 권한은 사람에 붙어 있어 잃는 것이 없습니다.`}
           okLabel="폐기하고 새로 발급"
           busy={busy}
           onClose={() => setConfirm(null)}
@@ -199,7 +200,7 @@ export default function Tokens({ me, say, route }) {
       {confirm?.kind === 'revoke' && (
         <Confirm
           title="폐기"
-          text={`${confirm.t.user} 의 토큰 ${confirm.t.id} 를 폐기합니다. 다음 요청부터 막히고, 줄은 회색으로 남습니다. 되돌릴 수 없습니다 — 다시 쓰려면 새로 발급합니다.`}
+          text={`${confirm.t.user} 의 토큰 ${josa(confirm.t.id, '을/를')} 폐기합니다. 다음 요청부터 막히고, 줄은 회색으로 남습니다. 되돌릴 수 없습니다 — 다시 쓰려면 새로 발급합니다.`}
           okLabel="폐기"
           danger
           busy={busy}

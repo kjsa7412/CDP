@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { Link, navigate } from '../lib/router.jsx'
 import { invalidate, put, useResource } from '../lib/cache.js'
+import { josa } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
 import { useSession } from '../lib/session.jsx'
@@ -20,6 +21,7 @@ import { PageHead, Note, Modal, Field, Chip, Mono, Confirm } from './ui.jsx'
 const ORIGIN_EX = ['http://<gitlab>/<그룹>/<프로젝트>.git', 'ssh://git@<gitlab>:<포트>/<그룹>/<프로젝트>.git']
 // 서버 `core/reponew.ORIGIN_RE` 와 같은 모양
 const ORIGIN_RE = /^(https?:\/\/|ssh:\/\/|git@|file:\/\/|\/|[A-Za-z]:[\\/])/
+const originOk = (u) => ORIGIN_RE.test(u) && !/\s/.test(u)
 
 // 상태 다섯 — 사실만(동시 기록 검토 v0.1 D4 · §5.7). 갈라짐은 기계가 못 푸는 것이라 bad.
 const MIRROR = { ok: [null, '최신'], lag: ['warn', '밀림'], diverged: ['bad', '갈림'], behind: ['warn', 'origin 앞섬'], off: ['off', '원격 없음'] }
@@ -73,7 +75,7 @@ export default function Repos({ say }) {
     try {
       const r = await withSudo(() => admin.repoNew(body))
       setDone(r)
-      say(`${r.name} 을 ${r.cloned ? '받아 왔다' : '세웠다'}`)
+      say(`${josa(r.name, '을/를')} ${r.cloned ? '받아 왔다' : '세웠다'}`)
       setAdding(false)
       invalidate('/admin/')
       await load()
@@ -267,7 +269,7 @@ export default function Repos({ say }) {
                         <Link className="abtn" to={'/r/' + encodeURIComponent(r.name) + '/'}>
                           <Icon name="doc" size={12} /> 열기
                         </Link>
-                        <button className="abtn" onClick={() => navigate('/console/users#matrix')}>접근</button>
+                        <button className="abtn" onClick={() => navigate(`/console/users?repo=${encodeURIComponent(r.name)}#matrix`)}>접근</button>
                         <button className="abtn" disabled={!!acting} onClick={() => setLinking(r)} title={r.remote ? `origin: ${r.remote} — 바꾸거나 다시 보낸다` : '원격 저장소에 잇고 첫 push 를 한다'}>
                           {acting === r.name + ':origin' ? '잇는 중…' : r.remote ? 'origin' : 'origin 연결'}
                         </button>
@@ -301,8 +303,19 @@ export default function Repos({ say }) {
           {gone.workrepos ? ` · 작업 레포 등록 ${gone.workrepos}건은 「지식 레포 없음」 으로 남는다 — 콘솔 › 작업 레포에서 지운다` : ''}. 되살리려면 셸에서 그 폴더를 서버 root 로 되돌려 놓는다.
         </Note>
       )}
+      {/* 상태 다섯과 그 단추 — 한 문단에 다섯을 몰아 쓰면 읽히지 않았다(실서버 종합 시험 W1). 표 하나로 */}
       <Note>
-        커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. <b>밀림</b>은 사유와 함께 뜹니다(인증 실패면 PAT · 셸). <b>origin 앞섬</b>은 누군가 서버 밖에서 쓴 것 — 「origin 과 맞추기」(ff-only). <b>갈림</b>은 기계가 합치지 않습니다 — 셸에서 rebase 한 뒤 「다시 보내기」. <b>트리 더러움</b>은 <code>save</code> 가 거절되는 상태 — 「트리 되돌리기」. <b>에이전트 세팅 다름</b>은 레포 안의 스킬 · 도구 · 훅이 이 서버 판이 아닌 것 — 작업 레포가 옛 스킬을 받는다. upgrade 가 갈지만 그때 건너뛴 레포(더러움 · origin 앞섬)는 치운 뒤 「에이전트 세팅 갱신」. 전부 관리자 확인 뒤에 돌고 감사에 남습니다(설명서 7.6).
+        커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 표의 칩이 이상을 말하면 —
+        <table className="ckeys">
+          <tbody>
+            <tr><th>밀림</th><td>사유와 함께 뜬다(인증 실패면 PAT · 셸)</td><td>「다시 보내기」</td></tr>
+            <tr><th>origin 앞섬</th><td>누군가 서버 밖에서 썼다</td><td>「origin 과 맞추기」(ff-only)</td></tr>
+            <tr><th>갈림</th><td>기계가 합치지 않는다</td><td>셸에서 rebase 뒤 「다시 보내기」</td></tr>
+            <tr><th>트리 더러움</th><td><code>save</code> 가 거절되는 상태</td><td>「트리 되돌리기」</td></tr>
+            <tr><th>에이전트 세팅 다름</th><td>레포의 스킬 · 도구 · 훅이 이 서버 판이 아니다 — 작업 레포가 옛 스킬을 받는다</td><td>「에이전트 세팅 갱신」</td></tr>
+          </tbody>
+        </table>
+        upgrade 가 갈지만 그때 건너뛴 레포(더러움 · origin 앞섬)는 치운 뒤 「에이전트 세팅 갱신」. 전부 관리자 확인 뒤에 돌고 감사에 남습니다(설명서 7.6).
       </Note>
 
       {restoring && (
@@ -352,7 +365,7 @@ function DocPick({ list, drop, onChange }) {
             <div className="docpick__list">
               {items.map((d) => (
                 <label key={d.path} className={off.has(d.path) ? 'is-off' : ''}>
-                  <input type="checkbox" checked={!off.has(d.path)} onChange={(e) => set([d.path], e.target.checked)} />
+                  <input type="checkbox" aria-label={d.title} checked={!off.has(d.path)} onChange={(e) => set([d.path], e.target.checked)} />
                   <span className="mono">{d.no || ''}</span> {d.title.replace(d.no || '\u0000', '').trim()}
                   {d.registered && <span className="docpick__tag">좌표</span>}
                   {d.required && <span className="docpick__tag docpick__tag--req">필수</span>}
@@ -371,7 +384,7 @@ function NewRepo({ data, busy, onClose, onOk }) {
   const [tab, setTab] = useState('package')
   const [f, setF] = useState({ name: '', pkg: pkgs.length === 1 ? pkgs[0].name : '', origin: '', clone: '', grant: [], examples: true, drop: [] })
   const okName = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(f.name.trim())
-  const ok = okName && (tab === 'package' ? !!f.pkg : !!f.clone.trim())
+  const ok = okName && (tab === 'package' ? !!f.pkg && (!f.origin.trim() || originOk(f.origin.trim())) : originOk(f.clone.trim()))
   const grantable = (data.users || []).filter((u) => !u.all)
   const pkg = pkgs.find((p) => p.name === f.pkg)
   return (
@@ -409,6 +422,8 @@ function NewRepo({ data, busy, onClose, onOk }) {
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="레포 이름" hint="폴더명 = 레포 이름 = 주소 조각. 영문 · 숫자 · . _ -">
           <input className="mono" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} spellCheck={false} autoFocus placeholder="예: alpha" />
+          {/* 왜 단추가 꺼졌는지 칸 아래에서 말한다 — 전에는 말없이 꺼져 있었다(실서버 종합 시험 F10) */}
+          {f.name.trim() && !okName && <span className="field__h field__h--bad">영문 · 숫자 · . _ - 만 — 첫 글자는 영문이나 숫자, 64자 안. 한글 · 빈칸은 주소 조각이 될 수 없다</span>}
         </Field>
         {tab === 'package' ? (
           <>
@@ -451,11 +466,13 @@ function NewRepo({ data, busy, onClose, onOk }) {
             )}
             <Field label="origin (선택)" hint="있으면 첫 커밋을 바로 보낸다. 서버는 GitLab 프로젝트를 만들 수 없다 — 웹에서 빈 프로젝트를 먼저 만든다.">
               <input className="mono" value={f.origin} onChange={(e) => setF({ ...f, origin: e.target.value })} spellCheck={false} placeholder="http://<gitlab>/<그룹>/<프로젝트>.git" />
+              {f.origin.trim() && !originOk(f.origin.trim()) && <span className="field__h field__h--bad">http(s)://… 또는 ssh://git@… 모양이어야 한다 — 비우면 origin 없이 세운다</span>}
             </Field>
           </>
         ) : (
           <Field label="origin 주소" hint="이미 있는 지식 레포를 받아 온다. 서버의 git 자격(PAT · 셸)으로 clone 한다 — _vocab.md 가 없으면 지식 레포가 아니라서 지운다.">
             <input className="mono" value={f.clone} onChange={(e) => setF({ ...f, clone: e.target.value })} spellCheck={false} placeholder="http://<gitlab>/<그룹>/<프로젝트>.git" />
+            {f.clone.trim() && !originOk(f.clone.trim()) && <span className="field__h field__h--bad">http(s)://… 또는 ssh://git@… 모양이어야 한다</span>}
           </Field>
         )}
         <Field label="볼 수 있는 사람" hint="세우면서 repos 에 넣는다 — 전체(*) 인 사람은 이미 본다.">
@@ -508,6 +525,7 @@ function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
       )}
       <Field label="origin 주소" hint="GitLab 에서 빈 프로젝트를 먼저 만든다 — 서버는 프로젝트를 만들 수 없다. 원격에 커밋이 있으면 거절된다(남의 이력을 덮지 않는다).">
         <input className="mono" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} autoFocus placeholder={ORIGIN_EX[0]} />
+        {u && !ok && <span className="field__h field__h--bad">http(s)://… 또는 ssh://git@… 모양이어야 한다 — 아래 두 모양 중 하나</span>}
       </Field>
       <div className="anote" style={{ fontSize: 12, lineHeight: 1.7 }}>
         두 모양 다 받는다 — <Mono>{ORIGIN_EX[0]}</Mono> 은 서버에 넣은 <b>PAT</b>(셸의 <code>ctx serve git-auth</code>) 로,{' '}
@@ -551,7 +569,7 @@ function Remove({ repo, busy, onClose, onOk }) {
         서버 root 에서 빼서 <code>data/trash/</code> 로 옮긴다 — 영구 삭제는 없다. 화면 · MCP 에서 사라지고, 명부의 할당에서 이 이름이 빠진다(전체 * 인 사람은 그대로).
       </p>
       {only && <div className="anote anote--warn" style={{ fontSize: 12 }}>{only} 휴지통의 폴더가 남은 사본이다.</div>}
-      <Field label={`확인 — 레포 이름 ${repo.name} 을 그대로 친다`}>
+      <Field label={`확인 — 레포 이름 ${josa(repo.name, '을/를')} 그대로 친다`}>
         <input className="mono" value={v} onChange={(e) => setV(e.target.value)} spellCheck={false} autoFocus />
       </Field>
     </Modal>

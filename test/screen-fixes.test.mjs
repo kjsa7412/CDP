@@ -61,3 +61,16 @@ test('kbd — Mac 이 아니면 Ctrl · Alt · Shift · Enter 로(F17)', async (
   assert.equal(isMac('MacIntel'), true)
   assert.equal(isMac('Win32'), false)
 })
+
+test('josa — 받침에 맞는 조사(W6)', async () => {
+  const { josa } = await import('../viewer/src/lib/format.js')
+  assert.equal(josa('zz-test-writer', '을/를'), 'zz-test-writer를')
+  assert.equal(josa('hong', '을/를'), 'hong을')
+  assert.equal(josa('9ab001c8', '을/를'), '9ab001c8을')
+  assert.equal(josa('c06d5d3d', '을/를'), 'c06d5d3d를')
+  assert.equal(josa('관리자', '이/가'), '관리자가')
+  assert.equal(josa('레포', '을/를'), '레포를')
+  assert.equal(josa('명부', '은/는'), '명부는')
+  assert.equal(josa('gdi', '이/가'), 'gdi가')
+  assert.equal(josa('dpms_wiki', '을/를'), 'dpms_wiki를')
+})

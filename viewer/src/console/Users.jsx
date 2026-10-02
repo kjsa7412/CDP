@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { navigate } from '../lib/router.jsx'
 import { invalidate, useResource } from '../lib/cache.js'
+import { josa } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from './Console.jsx'
 import { PageHead, Toolbar, Search, Card, Note, Modal, Field, Seg, Chip, RoleChip, Confirm, when } from './ui.jsx'
@@ -36,6 +37,8 @@ export default function Users({ me, say, route }) {
   useEffect(() => {
     if (route.hash === '#matrix' && data) document.getElementById('matrix')?.scrollIntoView({ block: 'start' })
   }, [route.hash, data])
+  // 지식 레포의 [접근] 이 `?repo=` 를 들고 온다 — 그 열을 칠한다. 전에는 표로만 가서 어느 열인지 다시 찾아야 했다(실서버 종합 시험 F20)
+  const pickRepo = route.query?.get?.('repo') || null
 
   const act = async (fn, ok) => {
     setBusy(true)
@@ -179,7 +182,9 @@ export default function Users({ me, say, route }) {
                 <tr>
                   <th>사용자</th>
                   {repos.map((r) => (
-                    <th key={r}>{r}</th>
+                    <th key={r} className={r === pickRepo ? 'is-pick' : undefined}>
+                      {r}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -191,11 +196,12 @@ export default function Users({ me, say, route }) {
                     </td>
                     {repos.map((r) =>
                       u.repos.includes('*') ? (
-                        <td key={r} className="all">●</td>
+                        <td key={r} className={r === pickRepo ? 'all is-pick' : 'all'} aria-label={`${u.name} · ${r} — 전체`}>●</td>
                       ) : (
-                        <td key={r}>
+                        <td key={r} className={r === pickRepo ? 'is-pick' : undefined}>
                           <input
                             type="checkbox"
+                            aria-label={`${u.name} · ${r}`}
                             checked={u.repos.includes(r)}
                             disabled={busy}
                             onChange={(e) => {
@@ -217,7 +223,7 @@ export default function Users({ me, say, route }) {
         </Note>
       </Card>
 
-      {adding && <AddUser repos={repos} busy={busy} onClose={() => setAdding(false)} onOk={async (body) => (await act(() => admin.userAdd(body), `${body.name} 을 넣었다`)) && setAdding(false)} />}
+      {adding && <AddUser repos={repos} busy={busy} onClose={() => setAdding(false)} onOk={async (body) => (await act(() => admin.userAdd(body), `${josa(body.name, '을/를')} 넣었다`)) && setAdding(false)} />}
 
       {editRole && (
         <Modal
@@ -247,7 +253,7 @@ export default function Users({ me, say, route }) {
       {toggle && (
         <Confirm
           title={toggle.active ? '다시 활성으로' : '비활성으로'}
-          text={toggle.active ? `${toggle.name} 을 다시 활성으로 돌립니다. 그 사람의 토큰이 다음 요청부터 다시 통합니다.` : `${toggle.name} 을 비활성으로 둡니다. 그 사람의 토큰 전부가 다음 요청부터 막힙니다 — 삭제가 아니라 되돌릴 수 있고, 커밋의 author 와 감사 로그는 그대로 이어집니다.`}
+          text={toggle.active ? `${josa(toggle.name, '을/를')} 다시 활성으로 돌립니다. 그 사람의 토큰이 다음 요청부터 다시 통합니다.` : `${josa(toggle.name, '을/를')} 비활성으로 둡니다. 그 사람의 토큰 전부가 다음 요청부터 막힙니다 — 삭제가 아니라 되돌릴 수 있고, 커밋의 author 와 감사 로그는 그대로 이어집니다.`}
           okLabel={toggle.active ? '재활성' : '비활성'}
           danger={!toggle.active}
           busy={busy}

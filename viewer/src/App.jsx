@@ -587,12 +587,18 @@ export default function App() {
               </button>
               {/* 관리도 **화면**이다. 레포 여섯 곳의 설치 상태와 이력 스무 줄은
                   380px 팝오버에 안 들어간다 — 그래프를 화면으로 올린 것과 같다. */}
-              <button aria-pressed={topMode === 'admin'} onClick={() => setTopMode('admin')} title="레포 · 동기화 · 에이전트 설치">
+              <button
+                aria-pressed={topMode === 'admin'}
+                onClick={() => setTopMode('admin')}
+                // 제목이 접근 이름이 된다 — 옛 메뉴(레포 · 동기화 · 에이전트 설치)가 남아 화면 글과 달랐다(실서버 종합 시험 F21)
+                aria-label="관리"
+                title={isServer() ? '관리 — 현황 · 관리 문서 · 작업 레포 · 정보' : '관리 — 현황 · 지식 레포 · 동기화 · 작업 레포 · 진단 · 정보'}
+              >
                 <Icon name="gear" size={14} /> 관리
               </button>
             </div>
 
-            <button className="topbar__search" onClick={() => setPaletteOpen(true)}>
+            <button className="topbar__search" onClick={() => setPaletteOpen(true)} aria-label={`검색 · 이동 (${kbd('⌘K')})`}>
               <Icon name="search" size={14} />
               <span>검색 · 이동</span>
               <span className="topbar__spacer" />

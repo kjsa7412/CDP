@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { admin, api } from '../lib/api.js'
 import { Link } from '../lib/router.jsx'
 import { invalidate, useResource } from '../lib/cache.js'
+import { josa } from '../lib/format.js'
 import { PageHead, Toolbar, Note, Chip, Confirm } from './ui.jsx'
 
 const STATE = { 최신: null, 낡음: 'warn', 미설치: 'off' }
@@ -135,7 +136,7 @@ export default function WorkRepos({ say }) {
       {removing && (
         <Confirm
           title={`${removing.name} — 대장에서 지우기`}
-          text={`지식 레포 ${removing.knowledge} 가 없어진 등록 ${removing.name}(${removing.id}) 를 대장에서 지웁니다. 작업 레포의 파일은 그대로입니다. 감사에 남습니다.`}
+          text={`지식 레포 ${josa(removing.knowledge, '이/가')} 없어진 등록 ${removing.name}(${removing.id})${josa(removing.id, '을/를').slice(removing.id.length)} 대장에서 지웁니다. 작업 레포의 파일은 그대로입니다. 감사에 남습니다.`}
           okLabel="지운다"
           danger
           busy={busy}

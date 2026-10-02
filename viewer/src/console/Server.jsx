@@ -19,7 +19,7 @@ export default function Server({ say, route }) {
 
   // 셋 다 캐시(R8) — 진단은 서버도 60초 캐시라 같은 ttl. 로그는 다시 열면 새것(ttl 기본)
   const { data: sv, error } = useResource('/admin/server', admin.server)
-  const { data: doc } = useResource('/admin/doctor', () => admin.doctor(), { ttl: 60_000 })
+  const { data: doc, loading: docLoading } = useResource('/admin/doctor', () => admin.doctor(), { ttl: 60_000 })
   const { data: log } = useResource('/admin/log?200', () => admin.log(200))
   useEffect(() => {
     if (error) say(error.message, 6000)
@@ -61,11 +61,12 @@ export default function Server({ say, route }) {
         <Card title="이 프로세스">
           <Row label="판">
             <Mono>{sv.version ? `v${sv.version}` : '—'}</Mono>
-            <span className="amuted">· 빌드 {sv.built}</span>
+            {/* 둘째 줄이 「·」 로 시작하지 않게 — 값 아래 작은 줄로(실서버 종합 시험 L6) */}
+            <div className="amuted asub">빌드 {sv.built}</div>
           </Row>
           <Row label="실행">
             <span className="amuted">
-              node {sv.node} · pid {sv.pid} · 기동 {when(new Date(sv.startedAt).toISOString())}
+              node {sv.node} · pid {sv.pid} · 기동 <span className="nowrap">{when(new Date(sv.startedAt).toISOString())}</span>
             </span>
           </Row>
           <Row label="bind">
@@ -109,7 +110,8 @@ export default function Server({ say, route }) {
 
       <Card id="doctor" title="진단" hint={doc ? `ctx serve doctor 와 같은 줄 · ${when(new Date(doc.at).toISOString())} · 60초 캐시` : 'ctx serve doctor 와 같은 줄'} actions={doc && <span className="tcount">ok {doc.rows.length - doc.fails - doc.warns} · warn {doc.warns} · fail {doc.fails}</span>}>
         {!doc ? (
-          <span className="amuted">{busy ? '검사 중…' : '아직 검사하지 않았다 — 다시 검사'}</span>
+          // 처음 읽는 동안은 「아직 안 했다」 가 아니다 — 서버가 레포마다 origin 을 보느라 몇 초 걸린다(실서버 종합 시험 F23)
+          <span className="amuted">{busy ? '검사 중…' : docLoading ? '진단을 읽는 중… 레포마다 origin 에 닿는지 보느라 몇 초 걸린다' : '아직 검사하지 않았다 — 다시 검사'}</span>
         ) : (
           <div className="doctor">
             {doc.rows.map((r, i) => {
@@ -145,7 +147,11 @@ export default function Server({ say, route }) {
           {sv.packagesList.length === 0 && <span className="amuted">없다 — --packages</span>}
           {sv.packagesList.map((p) => (
             <Row key={p.name} label={<Mono>{p.name}</Mono>}>
-              {p.version ? `v${p.version}` : ''} <span className="amuted">· {p.title || ''} · 문서 {p.docs}{p.types != null ? ` · 타입 ${p.types}` : ''}</span>
+              {p.version ? `v${p.version}` : ''}
+              <div className="amuted asub">
+                {p.title || ''} · 문서 {p.docs}
+                {p.types != null ? ` · 타입 ${p.types}` : ''}
+              </div>
             </Row>
           ))}
           <Note>

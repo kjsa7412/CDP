@@ -227,6 +227,8 @@
 .field { display: flex; flex-direction: column; align-items: stretch; gap: 5px; }
 .field__l { font-size: 11.5px; font-weight: 600; color: var(--text-2); }
 .field__h { font-size: 11.5px; color: var(--text-2); }
+/* 입력이 왜 안 되는지 — 단추를 말없이 끄지 않는다(실서버 종합 시험 F10) */
+.field__h--bad { color: var(--danger); }
 /* 체크박스 · 라디오는 **빼고** — 전에는 Field 안의 체크박스까지 width:100% · padding 을 받아 「문서 고르기」 의 체크박스가
    칸을 다 먹고 제목이 「착수보|고서」 로 눌렸다(실서버 종합 시험 L2) */
 .field input:not([type='checkbox']):not([type='radio']), .field select, .field textarea {

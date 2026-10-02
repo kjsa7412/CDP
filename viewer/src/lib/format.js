@@ -127,3 +127,18 @@ export function plainDetail(detail, id = null) {
   if (id && s.startsWith(id + ' ')) s = s.slice(id.length + 1)
   return s.replace(/`([^`]+)`/g, '$1')
 }
+
+// 조사 — 이름 끝소리에 맞춘다. 「zz-test-writer 을 넣었다」 처럼 받침 없는 이름에 「을」 이 붙었다(실서버 종합 시험 W6).
+// 한글은 받침으로, 숫자는 읽는 소리(영 · 일 · 삼 · 육 · 칠 · 팔 이 받침)로, 영문은 l · m · n · ng 로 끝나면 받침으로 친다
+// (writer → 라이터 · test → 테스트 · hong → 홍). 어림이라 틀릴 수 있지만 「을(를)」 보다 읽힌다.
+export function josa(word, pair) {
+  const [a, b] = pair.split('/') // a = 받침 있을 때(을 · 이 · 은 · 과), b = 없을 때
+  const w = String(word ?? '')
+  const s = w.replace(/[^0-9A-Za-z가-힣]+$/, '')
+  const last = s.slice(-1)
+  let batchim = false
+  if (/[가-힣]/.test(last)) batchim = (last.charCodeAt(0) - 0xac00) % 28 !== 0
+  else if (/[0-9]/.test(last)) batchim = '013678'.includes(last)
+  else if (/[A-Za-z]/.test(last)) batchim = /(l|m|n|ng)$/i.test(s)
+  return w + (batchim ? a : b)
+}
