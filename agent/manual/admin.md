@@ -144,8 +144,8 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 
 ### ④ 관리 문서 — 몇 종인지는 **패키지가 정한다**
 
-부었으면 이미 들어와 있다. `agent/packages/dpms` 는 46개고, 다른 패키지는
-다르다. 숫자를 외울 것이 아니라 **좌표를 갖는 것과 안 갖는 것이 섞여 있다**
+부었으면 이미 들어와 있다. 패키지마다 다르다 — `public-si` 40 · `agile-product` 14 ·
+`cloud-native` 13 · `ai-service` 12 · `blank` 0(첫 관리 문서를 직접 세운다). 숫자를 외울 것이 아니라 **좌표를 갖는 것과 안 갖는 것이 섞여 있다**
 는 것을 알면 된다.
 
 아래는 패키지 없이 세울 때의 **CDP 기본 세트 16종**이다.
@@ -174,7 +174,7 @@ mkdir -p work/assets docs .githooks bin .claude/skills
 `bin/ctx` 와 문서 골격·등록부·어휘가 **한 번에** 들어온다. exe 는 ⑥에서 넣는다.
 
 ```
-xcopy /E /I <배포본>\knowledge-repo-dpms C:\cdp
+xcopy /E /I <배포본>\knowledge-repo-<고른 패키지> C:\cdp
 cd /d C:\cdp
 git init && git config core.hooksPath .githooks
 ```

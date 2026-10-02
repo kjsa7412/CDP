@@ -152,6 +152,7 @@ cat <<EOF
 [install]   3장  git 자격      sudo -u $SVC_USER -H git config --global credential.helper 'store --file=$PREFIX/.git-credentials'   (설치절차 3장 · 비밀은 셸에서)
 [install]   브라우저           http://$BIND:$PORT/setup  → 첫 관리자(위 코드) → 콘솔 /console 에서 지식 레포 · 사용자 · 토큰
 [install]   셸로 하려면        sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs serve init --auth $PREFIX/auth.json --data $PREFIX/data --name <이름>
-[install]                      sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs repo new $PREFIX/repos/<이름> --package dpms --packages $PREFIX/packages [--origin <url> --push]
+[install]                      sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs repo new $PREFIX/repos/<이름> --package <패키지> --packages $PREFIX/packages [--origin <url> --push]
+[install]                      패키지 목록       sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs package list --packages $PREFIX/packages   (blank · public-si · agile-product · cloud-native · ai-service)
 [install]   확인               sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs serve doctor --root $PREFIX/repos --auth $PREFIX/auth.json --data $PREFIX/data --web $PREFIX/web --manual $PREFIX/manual --packages $PREFIX/packages --bind $BIND --port $PORT
 EOF

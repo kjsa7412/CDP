@@ -21,7 +21,7 @@ tools/          prerender · 누출 검사(leaks.mjs · leak-names.txt) · 판 �
 | `npm run site:demo` | 데모 서버를 세우고 예제 다섯을 녹화하고 화면 28장을 찍는다. Chrome 또는 Edge 가 있어야 한다. **판을 올릴 때 사람이 돌리고 PNG 를 넘겨 본 뒤 커밋한다** |
 
 **화면은 진짜이고 내용은 가상이다.** 데모 레포(「도서관 대출 관리 시스템 개편」 · 사람 `lead` · `dev.a` · `dev.b`)는
-`ctx repo new --package dpms` 로 세우고 작업 기록은 전부 `save` 로 넣는다. 실물 fixture(`viewer/fixture`)와 기존 검토 그림은
+`ctx repo new --package public-si` 로 세우고 작업 기록은 전부 `save` 로 넣는다. 실물 fixture(`viewer/fixture`)와 기존 검토 그림은
 사내 흔적이 있어 쓰지 않는다. 새 이름 · 주소가 보이면 `tools/leak-names.txt` · `tools/leaks.mjs` 에 더한다.
 
 Vercel — 설정은 레포 루트 [`../vercel.json`](../vercel.json). 도메인은 환경변수 `CDP_SITE_URL`(없으면 Vercel 프로덕션 주소).

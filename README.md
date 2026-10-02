@@ -15,6 +15,7 @@
 | **화면 · 권한** | [`docs/design/CDP_화면_권한_검토_v0.1.md`](docs/design/CDP_화면_권한_검토_v0.1.md) — 관리(레포 하나) 對 콘솔(서버 전부) · viewer/writer/admin 별 화면과 API 경계 · SPA 전환 깜빡임의 근본 원인과 권장안. **v0.13.0 에 구현** — [`docs/dev/화면_권한_TODO.md`](docs/dev/화면_권한_TODO.md) |
 | **동시 기록** | [`docs/design/CDP_동시기록_검토_v0.1.md`](docs/design/CDP_동시기록_검토_v0.1.md) — 여럿이 같은 관리 문서에 쓸 때 · 미러 · 서버 트리 ↔ origin · [`docs/dev/동시기록_TODO.md`](docs/dev/동시기록_TODO.md) — 단계 · 실측 |
 | **공식 사이트** | [`site/`](site) — 제품 소개 정적 SPA(Vercel · 사외). 화면 · 예제는 가상 데모 레포를 진짜 서버로 띄워 찍고 녹화한다 · [`docs/design/CDP_공식사이트_제작검토_v0.1.md`](docs/design/CDP_공식사이트_제작검토_v0.1.md) · [`docs/dev/공식사이트_TODO.md`](docs/dev/공식사이트_TODO.md) |
+| **패키지** | [`agent/packages/`](agent/packages) — 지식 레포를 세울 때 고르는 서식 다섯(`blank` · `public-si` · `agile-product` · `cloud-native` · `ai-service`) · [`docs/design/CDP_패키지_재편_검토_v0.1.md`](docs/design/CDP_패키지_재편_검토_v0.1.md) · [`docs/dev/패키지_재편_TODO.md`](docs/dev/패키지_재편_TODO.md) |
 | 바뀐 것 | [`CHANGELOG.md`](CHANGELOG.md) — 태그마다 한 절. 릴리스 노트가 여기서 나온다 |
 | `docs/` 의 판정 | [`docs/README.md`](docs/README.md) — **보존되는가.** 작업 메모(`dev/`)는 보존 대상이 아니다 |
 

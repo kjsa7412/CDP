@@ -213,10 +213,10 @@ cd C:\cdp && bin\ctx check      → 이상 없음
 지식 레포를 다시 세우지 않는다. **덮어쓰는 것은 도구뿐이다.**
 
 ```
-copy <새 배포본>\knowledge-repo-dpms\bin\*         C:\cdp\bin\
+copy <새 배포본>\knowledge-repo-<패키지>\bin\*         C:\cdp\bin\        ← 도구 층은 패키지마다 같다 — 어느 폴더여도 된다
 copy <새 배포본>\cdp.exe                             C:\cdp\tools\
-copy <새 배포본>\knowledge-repo-dpms\MANUAL*.md    C:\cdp\
-copy <새 배포본>\knowledge-repo-dpms\.gitattributes C:\cdp\     ← 도구 파일이다 (*.cmd eol=crlf · 2026-09-23)
+copy <새 배포본>\knowledge-repo-<패키지>\MANUAL*.md    C:\cdp\
+copy <새 배포본>\knowledge-repo-<패키지>\.gitattributes C:\cdp\     ← 도구 파일이다 (*.cmd eol=crlf · 2026-09-23)
 C:\cdp\tools\cdp.exe ctx setup C:\work\alpha   ← skill 도 같이 갱신된다
 ```
 
