@@ -113,15 +113,16 @@ export default function Tokens({ me, say, route }) {
                       <span className="name">{t.user}</span>
                     </td>
                     <td>{t.note || <span className="dim">—</span>}</td>
-                    <td className="dim">{t.issued || '—'}</td>
+                    <td className="dim nowrap">{t.issued || '—'}</td>
                     <td>
                       {soon ? (
                         <span className="awarn">
-                          <Icon name="warn" size={12} /> {t.expires} · {daysText(t)}
+                          <Icon name="warn" size={12} /> <span className="nowrap">{t.expires}</span> · <span className="nowrap">{daysText(t)}</span>
                         </span>
                       ) : (
                         <>
-                          {t.expires === 'never' ? '무기한' : t.expires} {t.expires !== 'never' && <span className="dim">· {daysText(t)}</span>}
+                          <span className="nowrap">{t.expires === 'never' ? '무기한' : t.expires}</span>{' '}
+                          {t.expires !== 'never' && <span className="dim nowrap">· {daysText(t)}</span>}
                         </>
                       )}
                     </td>

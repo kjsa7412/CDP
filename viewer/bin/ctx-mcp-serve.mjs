@@ -1916,7 +1916,9 @@ export async function runServe(opt = {}) {
           key: seen.key || oc?.key || null,
           ms: oc?.ms ?? Date.now() - t0,
           status: out.status,
-          code: oc?.code || null,
+          // save 를 불렀는데 saver 가 돌지 않았다 = 인자 형식에서 SDK 가 거절했다(HTTP 200 · isError). 전에는 코드가 비어
+          // 콘솔 최근 기록에 「기록됨」 으로 떴다(실서버 종합 시험 2차 실측). 아무것도 커밋되지 않았다
+          code: oc?.code || (seen.tool === 'save' && out.status === 200 && !oc ? 'E_SCHEMA' : null),
           tid: a.tokenId,
         })
         return

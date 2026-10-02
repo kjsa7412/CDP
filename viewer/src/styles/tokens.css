@@ -96,7 +96,9 @@
    * 박스문자 다이어그램의 정렬이 맞는다(§27.2). 없으면 라틴만 정확하고 한글
    * 정렬은 어긋난다 — 근본 해결이 없는 알려진 한계이므로 번들하지 않는다. */
   --font-mono: D2Coding, 'Sarasa Mono K', 'Cascadia Mono', 'Cascadia Code', Consolas, 'Nanum Gothic Coding',
-    monospace;
+    /* 한글 폴백 — 위 글꼴에 한글이 없으면(D2Coding 이 없는 Windows 가 대부분) generic monospace 의 한글(굴림체 류)로
+     * 떨어져 「관 리 자 토 큰」 처럼 글자 사이가 벌어졌다(실서버 종합 시험 L3). 라틴은 위가 받고 한글만 본문 글꼴로 */
+    'Malgun Gothic', 'Apple SD Gothic Neo', Pretendard, monospace;
 }
 
 /* 어두운 테마 — 값은 'dark' | 'light' 둘뿐이다(`api.js` applyTheme · index.html 인라인). 옛 'auto-dark' 셀렉터는 쓰는 곳이 없어 뺐다 */
@@ -154,6 +156,10 @@ body {
   color: var(--text);
   font: 13px/1.5 var(--font-sans);
   letter-spacing: -0.003em;
+  /* 한글은 어절 단위로 끊는다 — 전에는 문서 본문(doc.css)에만 있어서 콘솔 · 소개 · 설명서 · 모달의 한글이 음절마다 끊겼다
+   * (「서|버」 「프로|젝트」 「않습|니다」 · 실서버 종합 시험 L1). 어절 하나가 칸보다 길 때만 그 안에서 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow: hidden;

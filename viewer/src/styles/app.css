@@ -927,25 +927,9 @@
   text-decoration: underline;
 }
 
-.field {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-1) 0;
-}
-/* 경로 입력처럼 라벨 아래로 내려가야 하는 줄 */
-.field--stack {
-  display: block;
-}
-.field--stack > span:first-child {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--text-2);
-}
-.field > span:first-child {
-  flex: 1;
-  color: var(--text-2);
-}
+/* `.field` 는 여기 없다 — 옛 설정 팝오버의 줄(가로 flex · 가운데 맞춤 · 첫 span flex:1)이었는데 쓰는 곳이 사라진 채
+ * 남아, site.css 의 `.field`(세로 flex)와 한 번들에서 겹쳤다. 그 결과 콘솔 모달의 라벨 · 힌트가 가운데로 몰리고
+ * 로그인 · 관리자 확인의 토큰 칸이 내용 폭(~200px)으로 줄었다(실서버 종합 시험 L2). 정의는 site.css 하나다. */
 /* 세그먼트 정의는 상단 바 절(§L0)에 하나뿐이다. 전에는 여기 또 있었고,
    나중 것이 이겨서 고른 칸이 파랑으로 채워졌다 — 파랑은 이 화면에서
    "누를 수 있는 것"이므로 채우면 나머지 칸이 죽은 것처럼 보인다. */
