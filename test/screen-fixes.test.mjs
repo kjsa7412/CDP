@@ -51,3 +51,13 @@ test('store.check — 서버형은 git 훅 경고를 내지 않는다(F7)', asyn
   server._git = { repo: true, hooksPath: null }
   assert.equal(hasHooks(server), false)
 })
+
+test('kbd — Mac 이 아니면 Ctrl · Alt · Shift · Enter 로(F17)', async () => {
+  const { kbd, isMac } = await import('../viewer/src/lib/keys.js')
+  assert.equal(kbd('⌘K', false), 'Ctrl+K')
+  assert.equal(kbd('⌥←', false), 'Alt+←')
+  assert.equal(kbd('⇧⏎', false), 'Shift+Enter')
+  assert.equal(kbd('⌘K', true), '⌘K')
+  assert.equal(isMac('MacIntel'), true)
+  assert.equal(isMac('Win32'), false)
+})

@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, currentRepo } from '../lib/api.js'
 import { load, peek } from '../lib/cache.js'
 import { renderMarkdown, enhance, sectionSlug, bindImages } from '../lib/markdown.js'
+import { kbd } from '../lib/keys.js'
 import { repoPath } from '../../../core/repopath.js'
 import { summaryText } from '../lib/format.js'
 import ValidityBlock from './ValidityBlock.jsx'
@@ -312,7 +313,7 @@ export default function DocView({
           <section className="docsec docsec--copy">
             <div className="docsec__title">복사 {copied && <span className="count">· {copied} 복사됨</span>}</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12 }}>
-              {doc.isUnit && <button style={{ color: 'var(--accent)' }} onClick={() => copy('요약', summaryText(doc))}>요약 (⇧C)</button>}
+              {doc.isUnit && <button style={{ color: 'var(--accent)' }} onClick={() => copy('요약', summaryText(doc))}>요약 ({kbd('⇧C')})</button>}
               <button style={{ color: 'var(--accent)' }} onClick={() => copy('id', doc.id)}>id</button>
               {doc.touches.length > 0 && (
                 <button style={{ color: 'var(--accent)' }} onClick={() => copy('좌표', doc.touches.join(', '))}>좌표</button>

@@ -19,6 +19,7 @@ import { api } from '../lib/api.js'
 import { shortDate } from '../lib/format.js'
 import Icon from './Icon.jsx'
 import { copyText } from '../lib/clip.js'
+import { kbd } from '../lib/keys.js'
 
 export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
   const [q, setQ] = useState('')
@@ -103,7 +104,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="palette" role="dialog" aria-label="검색">
         <div className="palette__input">
-          <span style={{ color: 'var(--text-3)' }}>⌘K</span>
+          <span style={{ color: 'var(--text-3)' }}>{kbd('⌘K')}</span>
           <input
             ref={inputRef}
             value={q}
@@ -129,7 +130,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
                 <br />
                 문서 <code>id</code> 를 붙여넣으면 바로 이동한다.
                 <br />
-                <span className="kbd">⇧⏎</span> 본문까지 찾기
+                <span className="kbd">{kbd('⇧⏎')}</span> 본문까지 찾기
               </div>
             </div>
           )}
@@ -224,7 +225,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
               </div>
               {!res.fullTextRan && (
                 <button className="palette__hit" style={{ color: 'var(--accent)' }} onClick={() => setForce(true)}>
-                  본문까지 찾기 (⇧⏎)
+                  본문까지 찾기 ({kbd('⇧⏎')})
                 </button>
               )}
             </div>
@@ -239,7 +240,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
               ) : (
                 <>
                   <span>이름에서 찾았습니다</span>
-                  <button onClick={() => setForce(true)}>본문까지 찾기 (⇧⏎)</button>
+                  <button onClick={() => setForce(true)}>본문까지 찾기 ({kbd('⇧⏎')})</button>
                 </>
               )}
             </div>
@@ -254,7 +255,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
             <span className="kbd">⏎</span> 열기
           </span>
           <span>
-            <span className="kbd">⇧⏎</span> 본문까지
+            <span className="kbd">{kbd('⇧⏎')}</span> 본문까지
           </span>
           <span>
             <span className="kbd">esc</span> 닫기

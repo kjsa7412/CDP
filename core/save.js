@@ -363,9 +363,10 @@ export async function save(root, input, { user, write = false, admin = false, mi
     }
   })
 
-  // 등록부를 바꿨으면 로그에 한 줄 — 누가 · 무엇을(행은 사라지기도 한다 · 작업 기록 id 가 그 이유다)
+  // 등록부를 바꿨으면 로그에 한 줄 — 누가 · 무엇을(행은 사라지기도 한다 · 작업 기록 id 가 그 이유다).
+  // 미리보기(dryRun)는 아무것도 안 바꿨다 — 전에는 실제 지우기와 같은 줄이 남아 로그만 보면 지운 줄 알았다(실서버 종합 시험 F15)
   for (const e of out.managedChanges || []) {
-    log?.(`등록부 ${e.op} ${user} ${e.pattern || e.doc}${e.to ? ' → ' + e.to : ''}${e.into ? ' → ' + e.into : ''} (${out.id})`)
+    log?.(`${out.dryRun ? '(미리보기) ' : ''}등록부 ${e.op} ${user} ${e.pattern || e.doc}${e.to ? ' → ' + e.to : ''}${e.into ? ' → ' + e.into : ''} (${out.id})`)
   }
 
   // 11 미러 — **뮤텍스 밖 · 큐 하나.** push 가 늦거나 실패해도 커밋은 서버 트리에 있고,

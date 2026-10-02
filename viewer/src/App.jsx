@@ -31,7 +31,7 @@ import CheckView from './components/CheckView.jsx'
 import Palette from './components/Palette.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import AdminView, { menuFor } from './components/admin/AdminView.jsx'
-import { KEYS } from './lib/keys.js'
+import { KEYS, kbd } from './lib/keys.js'
 import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
@@ -83,6 +83,17 @@ export default function App() {
   // 뻗어나가기의 뿌리. 목록에서 고른 것 하나. { kind, key, label }
   const [root, setRoot] = useState(boot.at?.root || null)
   const [docId, setDocId] = useState(boot.at?.docId || null)
+  // 900px 아래 — 왼쪽은 문서 **위에 뜬다**(app.css). 문서를 고르거나 문서 쪽을 누르면 덮개를 걷는다. 전에는 골라도 그대로
+  // 덮고 있어서 ◀ 를 찾아야 읽혔다(실서버 종합 시험 F11). 읽기 모드(reading.mode)와 달리 **기억하지 않는다** — 넓히면 원래대로
+  const narrowQ = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 900px)') : null
+  const [narrow, setNarrow] = useState(() => !!narrowQ?.matches)
+  const [drawerShut, setDrawerShut] = useState(false)
+  useEffect(() => {
+    if (!narrowQ) return
+    const on = () => setNarrow(narrowQ.matches)
+    narrowQ.addEventListener?.('change', on)
+    return () => narrowQ.removeEventListener?.('change', on)
+  }, [])
   // 문서 안에서 갈 자리 — { value, seq }. 섹션(좌표) 줄을 눌러 왔을 때만 있다.
   const [docAt, setDocAt] = useState(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -315,6 +326,7 @@ export default function App() {
     (id, at = null) => {
       if (!id) return
       setDocId(id)
+      if (narrowQ?.matches) setDrawerShut(true)
       // 문서 안에서 갈 자리 — 뻗어나가기에서 섹션(좌표)을 눌러 온 경우.
       // 같은 줄을 다시 눌러도 다시 가야 하므로 seq 를 붙인다.
       setDocAt(at ? { value: at, seq: ++atSeqRef.current } : null)
@@ -393,7 +405,8 @@ export default function App() {
       }
       if (mod && e.key === '.') {
         e.preventDefault()
-        // 읽기 모드 — 왼쪽을 통째로 접는다. 상태는 기억된다(§27.5)
+        // 읽기 모드 — 왼쪽을 통째로 접는다. 상태는 기억된다(§27.5). 좁은 창에서 덮개만 걷혀 있었으면 다시 편다(F11)
+        if (narrow && drawerShut && reading.mode !== 'focus') return setDrawerShut(false)
         return patch({ reading: { mode: reading.mode === 'focus' ? 'browse' : 'focus' } })
       }
       if (mod && (e.key === '=' || e.key === '+')) {
@@ -538,7 +551,7 @@ export default function App() {
   // 전에는 통째로 `display:none` 이라, 문서를 안 골랐으면 고를 방법 자체가
   // 없어져서 `docId` 가 있을 때만 접히게 막아 두었다. 지금은 30px 띠가 늘
   // 남고 그 띠 전체가 펴는 버튼이므로 그 예외가 필요 없다.
-  const effectiveMode = reading.mode === 'focus' && topMode === 'doc' ? 'focus' : 'browse'
+  const effectiveMode = (reading.mode === 'focus' || (narrow && drawerShut && docId)) && topMode === 'doc' ? 'focus' : 'browse'
   const c = repo.checkCounts || { error: 0, warn: 0, info: 0 }
   const repoName = repo.root.split(/[\\/]/).pop()
 
@@ -583,7 +596,7 @@ export default function App() {
               <Icon name="search" size={14} />
               <span>검색 · 이동</span>
               <span className="topbar__spacer" />
-              <span className="kbd">⌘K</span>
+              <span className="kbd">{kbd('⌘K')}</span>
             </button>
 
             {/* 동기화 — **하루에 제일 먼저 누르는 것이다.** 도는 동안 단계와 경과 초가 이 버튼에 뜬다.
@@ -641,7 +654,7 @@ export default function App() {
             >
               <span className="menu__ico"><Icon name="panel" size={15} /></span>
               {reading.mode === 'focus' ? '왼쪽 펴기' : '읽기 모드 — 왼쪽 접기'}
-              <span className="menu__hint kbd">⌘.</span>
+              <span className="menu__hint kbd">{kbd('⌘.')}</span>
             </button>
             <div className="menu__hr" />
             <div className="menu__cap">글자 크기</div>
@@ -728,10 +741,13 @@ export default function App() {
             {effectiveMode === 'focus' && (
               <button
                 className="lbar"
-                onClick={() => patch({ reading: { mode: 'browse' } })}
+                onClick={() => {
+                  setDrawerShut(false)
+                  patch({ reading: { mode: 'browse' } })
+                }}
                 aria-expanded="false"
                 aria-label="왼쪽 펴기"
-                title="왼쪽 펴기 (⌘.)"
+                title={`왼쪽 펴기 (${kbd('⌘.')})`}
               >
                 <Icon name="panelExpand" size={15} />
                 <span className="lbar__cap">{leftMode === 'explore' ? '뻗어나가기' : '찾기'}</span>
@@ -786,7 +802,7 @@ export default function App() {
               <button
                 className="lhead__fold"
                 onClick={() => patch({ reading: { mode: 'focus' } })}
-                title="왼쪽 접기 (⌘.)"
+                title={`왼쪽 접기 (${kbd('⌘.')})`}
                 aria-label="왼쪽 접기"
               >
                 <Icon name="panelCollapse" size={15} />
@@ -821,7 +837,7 @@ export default function App() {
             onCommit={(w) => patch({ panes: leftMode === 'explore' ? { explore: w } : { list: w } })}
           />
 
-          <main className="pane pane--doc">
+          <main className="pane pane--doc" onMouseDown={() => narrow && docId && effectiveMode === 'browse' && setDrawerShut(true)}>
             {docId ? (
               <DocView
                 docId={docId}
@@ -956,7 +972,7 @@ function Landing({ repo, docs, onOpen }) {
         </p>
         <p style={{ color: 'var(--text-3)', marginTop: 24 }}>
           왼쪽 <b>목록</b>에서 하나를 고르면 <b>뻗어나가기</b>가 켜집니다.{' '}
-          <span className="kbd">⌘K</span> 로 자연어 검색, <span className="kbd">\</span> 로 왼쪽 전환.
+          <span className="kbd">{kbd('⌘K')}</span> 로 자연어 검색, <span className="kbd">\</span> 로 왼쪽 전환.
         </p>
         {docs.slice(0, 5).map((d) => (
           <div className="nextread" key={d.id}>
