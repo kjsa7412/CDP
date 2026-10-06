@@ -38,13 +38,13 @@ test('toError — CtxError 는 코드 그대로 · 그 밖은 E_REPO', () => {
   assert.equal(toError('문자열').message, '문자열')
 })
 
-test('sectionState — 다섯을 셋으로 접는다', () => {
+test('sectionState — 다섯을 셋으로 접는다(v1.0 — derive-pending 은 pending)', () => {
   assert.equal(sectionState(null), 'missing')
   assert.equal(sectionState({ state: 'doc-missing' }), 'missing')
   assert.equal(sectionState({ state: 'anchor-missing' }), 'missing')
-  assert.equal(sectionState({ state: 'stale' }), 'derive-pending')
-  assert.equal(sectionState({ state: 'unwritten' }), 'derive-pending')
-  assert.equal(sectionState({ state: 'orphan' }), 'derive-pending')
+  assert.equal(sectionState({ state: 'stale' }), 'pending')
+  assert.equal(sectionState({ state: 'unwritten' }), 'pending')
+  assert.equal(sectionState({ state: 'orphan' }), 'pending')
   assert.equal(sectionState({ state: 'ok' }), 'ok')
   assert.equal(sectionState({ state: 'empty' }), 'ok')
 })

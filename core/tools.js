@@ -21,27 +21,15 @@ import { resolveCoord } from './managed.js'
 import { cmpDateDesc } from './validity.js'
 import { docNo } from './docrefs.js'
 import { docUsage } from './docusage.js'
+import { CtxError } from './errors.js'
 
 const NL = String.fromCharCode(10)
 
 // ── 오류 ────────────────────────────────────────────────────────────────────
 //
-// 설계서 §2.3 의 코드 9종. `isError: true` 로 싸는 것은 부르는 쪽(MCP 서버 ·
-// CLI)의 일이다 -- 여기서는 던지기만 한다.
+// 정의는 `core/errors.js` — 여기서는 옛 import 자리(`from './tools.js'`)를 위해 다시 내보낸다.
 
-export class CtxError extends Error {
-  constructor(code, message, detail) {
-    super(message)
-    this.name = 'CtxError'
-    this.code = code
-    this.detail = detail
-  }
-}
-
-export function toError(e) {
-  if (e instanceof CtxError) return { code: e.code, message: e.message, detail: e.detail }
-  return { code: 'E_REPO', message: String(e?.message || e) }
-}
+export { CtxError, toError } from './errors.js'
 
 // ── 입력 검증 (§2.7) ────────────────────────────────────────────────────────
 //
@@ -126,18 +114,75 @@ export function sliceSection(r, coord) {
   }
 }
 
-// 섹션 상태를 **셋으로 접는다.** `validity.js` 의 다섯(ok·stale·unwritten·
-// empty·orphan)은 `ctx check` 만 읽는 내부 값이고 그 파일이 "화면에 나가지
-// 않는다"고 못박아 두었다. 도구는 그 규칙을 그대로 따른다 (§2.2).
+// 섹션 상태를 **셋으로 접는다**(v1.0 개편안 §4.4).
 //
-//   ok              그 섹션이 지금 상태다
-//   derive-pending  뒤에 반영 안 된 작업이 있다 — 답에 그 사실을 적어야 한다
-//   missing         문서나 앵커가 없다 — 주입해도 빈손이다
-export function sectionState(sec) {
+//   ok        그 섹션이 지금 상태다
+//   pending   그 좌표를 건드린 **미반영 기록**이 있다 — 섹션과 함께 그 기록을 읽고, 답에 그 사실을 적는다
+//   missing   문서나 앵커가 없다 — 주입해도 빈손이다
+//
+// 미반영은 큐레이션 계산(`core/curation.js`)이 정한다 — 큐레이션된 레포는 「그 좌표를 건드린 대기 기록」,
+// 옛 레포는 옛 판정(applied 뒤 후속). `r` 이 없으면(옛 호출) 옛 판정으로 접는다.
+export function sectionState(sec, r = null) {
   if (!sec) return 'missing'
   if (sec.state === 'doc-missing' || sec.state === 'anchor-missing') return 'missing'
-  if (sec.state === 'stale' || sec.state === 'unwritten' || sec.state === 'orphan') return 'derive-pending'
+  if (r?.curation) return r.curation.stateOf(sec.coord, sec)
+  if (sec.state === 'stale' || sec.state === 'unwritten' || sec.state === 'orphan') return 'pending'
   return 'ok'
+}
+
+// 미반영 기록의 본문 — `section` 이 섹션과 함께 싣는다(I7 · 보증은 도구가 한다). 응답이 불어나지 않게 상한을 둔다:
+// 기록 8건 · 한 건 6,000자 · 합 30,000자. 넘으면 자르고 `truncated` · 남은 건수는 `pendingOmitted` 로 알린다.
+export const PENDING_MAX = 8
+export const PENDING_BODY_MAX = 6000
+export const PENDING_TOTAL_MAX = 30000
+// 본문이 가리키는 좌표의 정본 섹션 — **한 단계** · 5개 · 한 섹션 3,000자(개편안 V10 · K10)
+export const REFS_MAX = 5
+export const REF_BODY_MAX = 3000
+
+const RE_BODY_COORD = /`([a-z가-힣][a-z0-9가-힣_-]*:[^`\s]+)`/gi
+
+function pendingRecords(r, list) {
+  let total = 0
+  const out = []
+  for (const p of list.slice(0, PENDING_MAX)) {
+    const d = r.byId.get(p.id)
+    if (!d) continue
+    const text = (r.bodies.get(d.path) || '').slice(d.bodyOffset || 0).replace(/^\s+/, '')
+    const room = Math.max(0, Math.min(PENDING_BODY_MAX, PENDING_TOTAL_MAX - total))
+    const body = text.slice(0, room)
+    total += body.length
+    out.push({ id: d.id, title: d.title ?? null, date: d.date ?? null, author: d.author ?? null, touches: d.touches || [], body, truncated: body.length < text.length })
+  }
+  return out
+}
+
+function bodyRefs(r, coord, content) {
+  const seen = new Set([coord])
+  const out = []
+  for (const m of String(content || '').matchAll(RE_BODY_COORD)) {
+    const c = m[1]
+    if (seen.has(c)) continue
+    seen.add(c)
+    if (!r.vocab.coords.has(c)) continue
+    const cut = sliceSection(r, c)
+    if (!cut || cut.missing) continue
+    const text = cut.content || ''
+    out.push({ coord: c, doc: cut.doc, anchor: cut.anchor, state: sectionState(r.sections.find((x) => x.coord === c) || null, r), content: text.slice(0, REF_BODY_MAX), truncated: text.length > REF_BODY_MAX })
+    if (out.length >= REFS_MAX) break
+  }
+  return out
+}
+
+// 관리 문서의 서식 표지 — H1 바로 아래 `<!-- cdp:form <묶음>/<번호> -->`(개편안 §4.3 · V6)
+export function formIdOfText(text) {
+  const lines = String(text || '').split(NL)
+  const h = lines.findIndex((l) => /^#\s/.test(l))
+  if (h < 0) return null
+  for (let i = h + 1; i < Math.min(h + 4, lines.length); i++) {
+    const m = /^\s*<!--\s*cdp:form\s+(\S+?)\s*-->\s*$/.exec(lines[i])
+    if (m) return m[1]
+  }
+  return null
 }
 
 // ── match ───────────────────────────────────────────────────────────────────
@@ -209,7 +254,8 @@ export function toolWhere(r, { coord, limit = 5 } = {}) {
           line: cut?.line ?? null,
           end: cut?.end ?? null,
           applied: sec?.applied ?? null,
-          state: sectionState(sec),
+          state: sectionState(sec, r),
+          pending: r.curation ? r.curation.pendingOf(c).length : (sec?.count ?? 0),
         }
       : null,
     works: works.slice(0, n).map((d) => ({ id: d.id, date: d.date ?? null, title: d.title ?? null })),
@@ -224,9 +270,27 @@ export function toolWhere(r, { coord, limit = 5 } = {}) {
 // 없으면 **`body: null` 로 알린다.** 오류로 던지지 않는다 -- 등록부에 없는
 // 타입은 관리 문서가 없는 것이 정상이고(명함), 그것은 실패가 아니다.
 
+//
+// **미반영 기록을 같이 싣는다**(v1.0 개편안 I7 · V10). 섹션은 큐레이터가 반영한 데까지만 지금이다 — 그 뒤에 그 좌표를
+// 건드린 기록(`pending`)이 있으면 그 본문(`pendingRecords`)을 함께 읽어야 지금을 안다. 이것을 스킬에 맡기면 보증이
+// LLM 의 선의에 걸린다(H6). 섹션이 없어도(새 좌표 · 등록부 없는 타입) 미반영 기록은 낸다 — 그때는 그 기록이
+// 유일한 근거다. 본문이 가리키는 좌표의 정본 섹션도 한 단계 따라가 싣는다(`refs`) — 큐레이터가 같은 사실을
+// 섹션마다 복제하지 않고 정본 좌표를 걸 수 있는 짝이다.
+
 export function toolSection(r, { coord } = {}) {
   const c = checkCoord(coord)
   const cut = sliceSection(r, c)
+  const sec = r.sections.find((x) => x.coord === c) || null
+  const pending = r.curation ? r.curation.pendingOf(c) : []
+  // 섹션이 없는 좌표 — 대기열 기록 중 이 좌표를 건드린 것이 근거다
+  const loose = r.curation && (!cut || cut.missing) ? (r.coords.byCoord.get(c) || []).filter((d) => r.curation.statusOf(d.id)?.state === 'queued') : []
+  const pendingList = pending.length ? pending : loose.map((d) => ({ id: d.id, title: d.title ?? null, date: d.date ?? null, author: d.author ?? null }))
+  const records = pendingRecords(r, pendingList)
+  const extra = {
+    pending: pendingList,
+    ...(records.length ? { pendingRecords: records } : {}),
+    ...(pendingList.length > PENDING_MAX ? { pendingOmitted: pendingList.length - PENDING_MAX } : {}),
+  }
   if (!cut || cut.missing) {
     return {
       coord: c,
@@ -237,9 +301,12 @@ export function toolSection(r, { coord } = {}) {
       applied: null,
       heading: null,
       body: null,
+      state: 'missing',
       reason: !cut ? 'unregistered' : cut.missing === 'doc' ? 'doc-missing' : 'anchor-missing',
+      ...extra,
     }
   }
+  const refs = bodyRefs(r, c, cut.content)
   return {
     coord: c,
     doc: cut.doc,
@@ -250,6 +317,10 @@ export function toolSection(r, { coord } = {}) {
     heading: cut.heading,
     body: cut.body,
     content: cut.content,
+    state: sectionState(sec, r),
+    form: formIdOfText(r.bodies.get(cut.doc)),
+    ...extra,
+    ...(refs.length ? { refs } : {}),
   }
 }
 
@@ -273,7 +344,11 @@ export function toolWork(r, { id } = {}) {
       touchesEmpty: doc.touchesEmpty ?? null,
       supersedes: doc.supersedes ?? null,
       tags: doc.tags ?? [],
+      ...(doc.curates ? { curates: doc.curates } : {}),
+      ...(doc.baseline ? { baseline: doc.baseline } : {}),
     },
+    // 이 기록의 큐레이션 상태 — 대기 · 반영됨(into) · 기록으로 둠(reason) · system(큐레이션 · 기준선 · 옛 기계 기록)
+    curation: r.curation ? r.curation.statusOf(doc.id) : null,
     body: text.slice(doc.bodyOffset || 0),
   }
 }
@@ -413,7 +488,9 @@ export function toolCheck(r) {
 export function toolBrief(r, { built = null, now = Date.now() } = {}) {
   const st = repoStatus(r)
   const parts = [`작업 기록 ${st.works}`, `관리 문서 ${st.managedDocs}`]
-  if (st.pendingDerive.length) parts.push(`파생 남음 ${st.pendingDerive.length}`)
+  const cs = r.curation?.stats
+  if (cs?.queue) parts.push(`큐레이션 대기 ${cs.queue}${cs.oldestDays != null ? ` (가장 오래된 ${cs.oldestDays}일)` : ''}`)
+  if (cs?.pendingSections) parts.push(`미반영 섹션 ${cs.pendingSections} — section 이 미반영 기록을 같이 준다`)
   if (st.unregistered.length) parts.push(`미등재 좌표 ${st.unregistered.length}`)
   if (st.legacyPending.length) {
     parts.push(`미결 ${st.legacyPending.length} — 이슈 대장으로 이관 (최장 ${st.legacyPending[0].days}일)`)
@@ -425,7 +502,7 @@ export function toolBrief(r, { built = null, now = Date.now() } = {}) {
   ]
   const age = bundleAgeNotice(built, now)
   if (age) lines.push(age)
-  return { lines, ...st }
+  return { lines, ...st, ...(cs ? { curation: cs } : {}) }
 }
 
 // ── 응답 상한 (§8) ──────────────────────────────────────────────────────────

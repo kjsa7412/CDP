@@ -13,6 +13,7 @@ import { scan, countIndexRows, readText } from './scan.js'
 import { parseVocab } from './vocab.js'
 import { parseRegistry, buildManagedIndex } from './managed.js'
 import { buildCoordIndex, buildSectionStatus, buildValidity, cmpDateDesc } from './validity.js'
+import { buildCuration } from './curation.js'
 
 // CRLF 는 여기서 이미 없앤다 (scan.js `readText` 주석 참고)
 async function readOr(root, name, fallback = '') {
@@ -56,6 +57,7 @@ export async function loadRepo(root, { cache = new Map(), settings = {}, onProgr
   for (const d of works) for (const c of d.touches) all.add(c)
   for (const [c, e] of vocab.coords) if (!e.example) all.add(c)
   const allCoords = [...all].sort()
+  const sections = buildSectionStatus(coords, managedIndex, allCoords)
 
   return {
     root,
@@ -73,7 +75,9 @@ export async function loadRepo(root, { cache = new Map(), settings = {}, onProgr
     coords,
     managedIndex,
     allCoords,
-    sections: buildSectionStatus(coords, managedIndex, allCoords),
+    sections,
+    // 대기열 · 기록의 큐레이션 상태 · 섹션의 미반영(v1.0 개편안 §4.4)
+    curation: buildCuration({ works, sections, managedIndex, coords, bodies }),
     validity: buildValidity(works),
     byId: new Map(works.map((d) => [d.id, d])),
     byPath: new Map(docs.map((d) => [d.path, d])),

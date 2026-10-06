@@ -86,6 +86,45 @@ export function normalizeSupersedes(v) {
   return (Array.isArray(v) ? v : [v]).map(one).filter(Boolean)
 }
 
+// 큐레이션 판정 — v1.0 개편안 §4.2. 큐레이션 기록의 `curates` 는 그 기록이 다룬 작업 기록과 판정이다.
+//
+//   - { id, verdict: reflect | new | keep, into: [좌표], reason }
+//
+// **읽는 경계에서는 너그럽게 모양만 맞춘다** — 틀린 판정은 버리지 않고 `bad` 를 달아 둔다. 거르면 「이 기록은
+// 큐레이션됐다」 가 조용히 사라지고 그 기록이 대기열로 돌아온다(조용한 실패). 판정은 `check` · `save` 가 한다.
+// 문자열 하나(`- 2026-0930-…`)는 판정 없이 다룬 것으로 읽는다(verdict null → check 가 오류로 낸다).
+export const VERDICTS = ['reflect', 'new', 'keep']
+
+export function normalizeCurates(v) {
+  if (v == null) return null
+  const list = Array.isArray(v) ? v : [v]
+  return list
+    .map((x) => {
+      if (x == null) return null
+      if (typeof x === 'string') return { id: x.trim(), verdict: null, into: [], reason: null, bad: '판정이 없다' }
+      if (typeof x !== 'object') return { id: String(x).trim(), verdict: null, into: [], reason: null, bad: '모양이 아니다' }
+      const id = x.id != null ? String(x.id).trim() : ''
+      const verdict = x.verdict != null ? String(x.verdict).trim() : null
+      const into = toArray(x.into)
+      const reason = x.reason != null && String(x.reason).trim() ? String(x.reason).trim() : null
+      let bad = null
+      if (!id) bad = 'id 가 없다'
+      else if (!VERDICTS.includes(verdict)) bad = `verdict 는 ${VERDICTS.join(' · ')} 중 하나다`
+      else if (verdict === 'keep' && into.length) bad = 'keep 에는 into 가 없다'
+      else if (verdict !== 'keep' && !into.length) bad = `${verdict} 에는 into(좌표)가 하나 이상 있다`
+      return { id, verdict, into, reason, ...(bad ? { bad } : {}) }
+    })
+    .filter(Boolean)
+}
+
+// 기준선 기록 — 코드 · DB 에서 기계로 뽑은 블록을 갈아 끼운 기록(개편안 §3.2). `{ source, asof }`
+export function normalizeBaseline(v) {
+  if (v == null) return null
+  if (typeof v === 'string') return { source: v.trim() || null, asof: null }
+  if (typeof v !== 'object') return null
+  return { source: v.source != null ? String(v.source).trim() || null : null, asof: v.asof != null ? normDate(v.asof) : null }
+}
+
 // 본문의 실제 제목을 뽑는다. 코드펜스 안의 ## 은 건너뛴다 — 지식 문서는
 // 코드펜스 안에 마크다운 예시를 넣는다.
 export function outline(body) {
@@ -180,8 +219,11 @@ export function parseDoc(path, text) {
     supersedes: normalizeSupersedes(fm.supersedes),
     attachments: toArray(fm.attachments),
     tags: toArray(fm.tags),
+    // 큐레이션 기록 · 기준선 기록(v1.0) — 키가 있으면 그 기록이다. 없으면 null
+    curates: normalizeCurates(fm.curates),
+    baseline: normalizeBaseline(fm.baseline),
     unknownFields: Object.keys(fm).filter(
-      (k) => !['id', 'title', 'date', 'author', 'source', 'status', 'touches', 'touchesEmpty', 'supersedes', 'attachments', 'tags'].includes(k)
+      (k) => !['id', 'title', 'date', 'author', 'source', 'status', 'touches', 'touchesEmpty', 'supersedes', 'attachments', 'tags', 'curates', 'baseline'].includes(k)
     ),
     headings,
     bodyChars: weight.chars,
