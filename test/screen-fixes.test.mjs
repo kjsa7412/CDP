@@ -39,13 +39,14 @@ test('clock — 서버 Date 로 차를 재고 5분 넘게 어긋나면 말한다
   assert.ok(Math.abs(clockSkew() + 3600_000) < 2000, '못 읽는 머리는 무시한다')
 })
 
-test('store.check — 서버형은 git 훅 경고를 내지 않는다(F7)', async () => {
+test('store.check — 훅 경고를 내지 않는다(F7 · v1.0 V5)', async () => {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'viewer', 'fixture')
   const local = new Store({ root, settings: { watch: false } })
   await local.load()
   local._git = { repo: true, hooksPath: null }
   const hasHooks = (s) => s.check().findings.some((f) => f.key === 'hooks-off' || /git 훅이 설치되지 않음/.test(f.label))
-  assert.equal(hasHooks(local), true)
+  // v1.0 — 훅 경고는 어디서도 내지 않는다(서버 save 는 훅 없이 같은 검사를 커밋 전에 돈다 · 개편안 V5)
+  assert.equal(hasHooks(local), false)
   const server = new Store({ root, settings: { watch: false, server: true } })
   await server.load()
   server._git = { repo: true, hooksPath: null }

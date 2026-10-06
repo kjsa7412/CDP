@@ -23,7 +23,6 @@ import { runBuiltinCheck, newErrors } from './check.js'
 import { resolveCoord, parseRegistry, docEscapes, normValue } from './managed.js'
 import { planManaged, checkManagedShape } from './managedops.js'
 import { readText } from './scan.js'
-import { renderIndex, renderByCoord } from './indexes.js'
 import * as git from './git.js'
 import { CtxError, checkCoord, checkId, sliceSection } from './tools.js'
 import { withLock } from './lock.js'
@@ -36,7 +35,6 @@ import { formsLib } from './formslib.js'
 import { take as takeAsset, checkAssetName, ASSETS_COUNT_MAX, ASSETS_TOTAL_MAX } from './assets.js'
 import { repoPath, mdRefs } from './repopath.js'
 import { htmlExternal, proseLength } from './visuals.js'
-import { regenerate, proseConflicts } from './regen.js'
 import { planPurge } from './examples.js'
 import { checkEditsShape, planEdits } from './edits.js'
 import { checkDrop, dropVocab, dropRefs, refsError } from './docdrop.js'
@@ -672,25 +670,8 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
         forms,
       })
       warnings.push(...plan.warnings)
-      // 5.4 **어긋나는 산문**(X7 · X8) — 새 행이 거짓으로 만드는 머리말 · 규칙 줄. 판정은 edits 를 적용한 **뒤**의 글로
-      const adds = plan.events.filter((e) => e.op === 'add').map((e) => ({ type: e.pattern.slice(0, e.pattern.indexOf(':')), doc: e.doc }))
-      if (adds.length) {
-        const pre = new Map()
-        for (const rel of new Set(['_vocab.md', ...adds.map((a) => a.doc)])) pre.set(rel, plan.files.has(rel) ? plan.files.get(rel) : await readRaw(rel))
-        pre.set('_managed.md', plan.registryText)
-        const hits = proseConflicts({ adds, texts: (rel) => pre.get(rel) ?? null })
-        const ok = new Set(managedOps.flatMap((o) => o.reviewed || []))
-        const left = hits.filter((h) => !ok.has(h.file + ':' + h.line))
-        const seen = hits.filter((h) => ok.has(h.file + ':' + h.line))
-        if (left.length) {
-          throw new CtxError(
-            'E_INPUT',
-            `새 등록부 행과 어긋나는 문구 ${left.length}줄이 남는다 — 같은 save 의 edits 로 고치거나, 맞는 줄이면 managed[].reviewed 에 "파일:행" 을 적는다: ${left.slice(0, 4).map((h) => h.file + ':' + h.line).join(' · ')}${left.length > 4 ? ' …' : ''}`,
-            { lines: left.slice(0, 50), total: left.length }
-          )
-        }
-        if (seen.length) warnings.push(`어긋나 보이는 문구 ${seen.length}줄을 맞다고 확인했다(reviewed): ${seen.map((h) => h.file + ':' + h.line).join(' · ')}`)
-      }
+      // 5.4 어긋나는 산문 검사는 걷었다(v1.0) — 서식에서 찍은 문서에는 등록부를 베낀 산문이 없다. 옛 레포의 그런 문구는
+      // 이행(`ctx migrate`)이 정리하고, 남은 것은 큐레이터가 edits 로 고친다.
       // 5.6 지우기(관리문서 정리 검토 §4.3) — 내용이 있는 문서는 거절 · 그 문서로만 가던 예시 좌표는 같이 · 가리키는 줄은
       // edits 로 고쳤거나 reviewed 로 넘겼어야 한다. 판정은 **지우기 전** 레포(r0)로 — 섹션 · 작업 기록 · 행이 아직 있다
       const drops = plan.events.filter((e) => e.op === 'drop').map((e) => e.doc)
@@ -867,22 +848,8 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     // 7 기록 — TEMPLATE 순서의 프론트매터. author 는 토큰의 user 다. 첨부는 `attachments` 로 — 화면의 첨부 목록이 이것을 읽는다
     await snap.write(workRel, renderWork(w, user, assetsOut.map((a) => a.path.slice('work/'.length)), curates))
 
-    // 9→8 **인덱스를 검사보다 먼저 만든다.**
-    //
-    // 설계서 §4.5 는 8 검사 → 9 인덱스 순이었다. 그러면 검사가 **항상 낡은
-    // INDEX 를 본다** — 작업 기록을 방금 하나 더했으니 행 수가 반드시 어긋나고,
-    // "INDEX.md 불일치" 경고가 `save` 마다 빠짐없이 나온다. 매번 나오는 경고는
-    // 아무것도 알리지 않는다. 검사는 **커밋될 트리**를 봐야 한다.
-    let r0b = await loadRepo(root, { settings: SETTINGS })
-    // 9.5 등록부 사본(X1 · X3 · X5) — 머리 표 칸 · _vocab.md 생성 블록을 **지금 등록부**로 찍는다. INDEX 와 같은 층의 파생물이다
-    const gen = regenerate({ registry: r0b.registry, vocab: r0b.vocab, docs: await docTexts(r0b.managedDocs), vocabText: await readRaw(vocabPath) })
-    for (const [rel, text] of gen.files) await snap.write(rel, text)
-    if (gen.heads.length || gen.block) {
-      warnings.push(`등록부 사본을 등록부에 맞췄다 — ${[...gen.heads.map((h) => h.path + ':' + h.line + ' 머리 표'), ...(gen.block ? ['_vocab.md 생성 블록'] : [])].join(' · ')}`)
-      r0b = await loadRepo(root, { settings: SETTINGS })
-    }
-    await snap.write('INDEX.md', renderIndex(r0b))
-    await snap.write('INDEX-by-coord.md', renderByCoord(r0b))
+    // INDEX 두 파일 · 등록부 사본(문서 머리 표 칸 · _vocab.md 생성 블록)은 **더 만들지 않는다**(v1.0 I9 · V4) — 레포에는
+    // 지식만 둔다. 목록과 좌표별 색인은 화면 · 도구가 계산하고, 등록부는 `_managed.md` 한 곳이다(사본은 반드시 낡는다).
 
     // 8 검사 — 갱신된 트리로 다시 본다. **이 save 가 새로 만든 오류**면 되돌리고 커밋하지 않는다(v1.0 I10 · V21).
     // 레포에 원래 있던 오류는 막지 않고 경고로 싣는다 — 그 오류를 만든 것도 고칠 권한도 이 save 가 아니다.

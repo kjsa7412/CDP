@@ -1,3 +1,4 @@
+// v1.0 — 등록부 사본(머리 표 · 생성 블록) · 산문 모순 시험은 걷었다(사본을 만들지 않는다 · 개편안 V4). 남은 것은 예시 정리 · 섹션 밖 손질 · docs
 // 등록부 사본 · 모순 — dpms_wiki `75a3c90` 사례를 public-si 패키지(옛 dpms)로 그대로 다시 돌린다(수용 기준 1~5).
 // 등록부 사본 검토 v0.1 · TODO ⑨. 쓰기 권한만 있고 admin 이 아닌 계정(writer)으로 `save` 를 **직접** 부른다.
 
@@ -82,69 +83,6 @@ async function refused(R, fn, code, re) {
   return err
 }
 
-test('R2 — 옛 문구가 남은 레포에 managed add 회의록:* → E_INPUT · 고칠 파일 · 행 셋(BM_411:3 · _vocab.md 규칙 4 · _managed.md 32종) · 트리 그대로', { skip }, async () => {
-  const R = await repo({ old: true })
-  try {
-    const e = await refused(R, () => save(R.r, { work: work('2026-0930-회의록-등록부'), managed: [{ pattern: '회의록:*', doc: BM }] }, writer), 'E_INPUT', /어긋나는 문구 3줄/)
-    const lines = e.detail.lines.map((x) => x.file + ':' + x.line)
-    assert.ok(lines.includes(BM + ':3'), lines.join(' '))
-    assert.ok(lines.some((l) => l.startsWith('_vocab.md:')), lines.join(' '))
-    assert.ok(lines.some((l) => l.startsWith('_managed.md:')), lines.join(' '))
-  } finally {
-    await R.rm()
-  }
-})
-
-test('R1 · R4 — 같은 save 의 edits 로 문구를 고치고 생성 블록 표식을 넣으면 한 커밋 — BM_411 머리 표 · _vocab 블록이 등록부를 따른다', { skip }, async () => {
-  const R = await repo({ old: true })
-  try {
-    const c0 = await commits(R.r)
-    const bm = await read(R.r, BM)
-    const line3 = bm.split('\n')[2]
-    const out = await save(
-      R.r,
-      {
-        work: work('2026-0930-회의록-등록부'),
-        managed: [{ pattern: '회의록:*', doc: BM }],
-        edits: [
-          { file: BM, old: line3, new: '날짜축. 회의 하나가 섹션 하나다 — `회의록:<날짜>` 로 등록부에 있다.' },
-          { file: '_vocab.md', old: OLD_RULE4, new: '| 4 | **등록부에 행이 없는 타입은 파생되지 않는다.** 파생되는 타입은 아래 「지금 등록부」 가 전부다 |\n\n<!-- cdp:registry -->\n<!-- /cdp:registry -->' },
-          { file: '_managed.md', old: OLD_HEAD, new: '## 등록부 대상이 아닌 관리 문서' },
-        ],
-      },
-      writer
-    )
-    assert.equal(await commits(R.r), c0 + 1)
-    assert.equal(await porcelain(R.r), '')
-    assert.equal(out.edits.length, 3)
-    const head = (await read(R.r, BM)).split('\n').find((l) => l.startsWith('| 등록부 |'))
-    assert.equal(head, '| 등록부 | `회의록:*` → `## {값}` |')
-    const v = await read(R.r, '_vocab.md')
-    assert.match(v, /\| `회의록` \| `회의록:\*` \| `docs\/1\.관리\/BM_411_회의록\.md` \| `## \{값\}` \|/)
-    const files = await changed(R.r)
-    for (const f of [BM, '_vocab.md', '_managed.md']) assert.ok(files.includes(f), `${f} 가 그 커밋에 없다: ${files.join(' ')}`)
-    assert.ok(out.warnings.some((w) => /등록부 사본을 등록부에 맞췄다/.test(w)), out.warnings.join('\n'))
-    const c = toolCheck(await loadRepo(R.r))
-    assert.ok(!c.findings.some((f) => f.kind === 'registry-head' || f.kind === 'registry-prose'), JSON.stringify(c.findings.map((f) => f.kind)))
-  } finally {
-    await R.rm()
-  }
-})
-
-test('R1 — 새 패키지(생성 블록 있음)는 add 한 번에 머리 표 · 블록이 같이 바뀐다 · 남는 산문은 BM_411:3 하나 → reviewed 로 통과(경고에 남는다)', { skip }, async () => {
-  const R = await repo()
-  try {
-    const e = await refused(R, () => save(R.r, { work: work('2026-0930-회의록-등록부'), managed: [{ pattern: '회의록:*', doc: BM }] }, writer), 'E_INPUT')
-    assert.deepEqual(e.detail.lines.map((x) => x.file + ':' + x.line), [BM + ':3'])
-    const out = await save(R.r, { work: work('2026-0930-회의록-등록부'), managed: [{ pattern: '회의록:*', doc: BM, reviewed: [BM + ':3'] }] }, writer)
-    assert.ok(out.warnings.some((w) => /reviewed/.test(w) && w.includes(BM + ':3')))
-    assert.match(await read(R.r, BM), /\| 등록부 \| `회의록:\*` → `## \{값\}` \|/)
-    assert.match(await read(R.r, '_vocab.md'), /`회의록:\*`/)
-  } finally {
-    await R.rm()
-  }
-})
-
 test('R3 — writer 가 examples: "purge" 한 번에 예시 18건 · 짝 섹션을 지운다 · 한 커밋 · 그 뒤 example-coord 0', { skip }, async () => {
   const R = await repo()
   try {
@@ -211,27 +149,6 @@ test('R4 — edits 로 BM_411 머리말을 고친다 · 작업 기록이 남는�
   }
 })
 
-test('R2 — 손으로 넣은 어긋난 머리 표는 check 오류(registry-head · fix) · regenerate 가 맞춘다', { skip }, async () => {
-  const R = await repo()
-  try {
-    const T = path.join(R.r, 'docs/2.개발/DE_431_테이블정의서.md')
-    await fs.writeFile(T, (await fs.readFile(T, 'utf8')).replace('| 등록부 | `테이블정의서:*` → `## {값}` |', '| 등록부 | **비대상** — 손으로 |'))
-    const r = await loadRepo(R.r)
-    const c = toolCheck(r)
-    const f = c.findings.find((x) => x.kind === 'registry-head')
-    assert.equal(c.ok, false)
-    assert.equal(f.sev, 'error')
-    assert.match(f.items[0].detail, /DE_431/)
-    assert.match(f.fix, /ctx index/)
-    const docs = new Map(r.managedDocs.map((d) => [d.path, r.bodies.get(d.path)]))
-    const gen = regenerate({ registry: r.registry, vocab: r.vocab, docs, vocabText: r.vocabText })
-    assert.equal(gen.heads.length, 1)
-    assert.match(gen.files.get('docs/2.개발/DE_431_테이블정의서.md'), /\| 등록부 \| `테이블정의서:\*` → `## \{값\}` \|/)
-  } finally {
-    await R.rm()
-  }
-})
-
 test('R5 — docs 한 번에 관리 문서 40 · 등록부 여부 / match(["회의록"]) 이 BM_411 을 준다(좌표는 여전히 미등재)', { skip }, async () => {
   const R = await repo()
   try {
@@ -255,14 +172,6 @@ test('R5 — docs 한 번에 관리 문서 40 · 등록부 여부 / match(["회�
   } finally {
     await R.rm()
   }
-})
-
-test('산문 어림 — 새 패키지 그대로면 check 의 registry-prose · registry-head 는 0 · 「`시스템아키텍처:` 넷만 예시가 아니다」 는 안 걸린다', async () => {
-  const r = await loadRepo(PKG)
-  const c = toolCheck(r)
-  assert.ok(!c.findings.some((f) => f.kind === 'registry-prose' || f.kind === 'registry-head'), JSON.stringify(c.findings.filter((f) => /registry/.test(f.kind))))
-  const hits = proseConflicts({ adds: [{ type: '시스템아키텍처', doc: 'docs/2.개발/DE_101_시스템아키텍처정의서.md' }], texts: (rel) => (rel === '_vocab.md' ? r.vocabText : rel === '_managed.md' ? r.managedText : r.bodies.get(rel) ?? null), counts: false })
-  assert.deepEqual(hits, [])
 })
 
 test('세울 때 예시 빼기 — purgeTree 가 planPurge 와 같은 것을 지운다', async () => {

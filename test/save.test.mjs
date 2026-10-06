@@ -332,7 +332,6 @@ test('save — 훅이 시간을 넘겨도 「빈 커밋 + 옛 파일」 은 남�
       assert.ok(res.v.commit && h1.startsWith(res.v.commit), '응답의 commit 이 HEAD 다')
       assert.ok(res.v.warnings.some((w) => w.includes('늦게 끝났다')), res.v.warnings.join(' / '))
       assert.ok(await fs.stat(rec).catch(() => null), '커밋은 됐는데 파일이 되돌려졌다')
-      assert.match(await fs.readFile(path.join(R.r, 'INDEX.md'), 'utf8'), /느린훅/, 'INDEX 가 커밋과 어긋난다')
     } else {
       // git 이 정말 멈췄다 — 전부 안 된 것
       assert.equal(res.ok, false)

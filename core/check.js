@@ -26,7 +26,6 @@
 // 갈 곳을 알려 줘야 하므로 메시지를 따로 낸다.
 import { normValue, lintRegistry, docEscapes } from './managed.js'
 import { danglingRefs } from './docrefs.js'
-import { lintGenerated, proseLint } from './regen.js'
 
 const AGENDA = new Set(['미결', '제안'])
 const REQUIRED = ['id', 'title', 'date', 'author']
@@ -158,21 +157,7 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       .map((d) => ({ id: d.id, path: d.path, detail: `status: ${d.status} — 지식공유문서는 완료된 것만 옵니다` }))
   )
 
-  // INDEX.md 불일치 — 프로토콜 §10.5 "어긋난 인덱스는 없는 것보다 나쁘다"
-  if (indexInfo?.exists && indexInfo.rows !== units.length) {
-    findings.push({
-      sev: 'warn',
-      kind: 'index-stale',
-      label: 'INDEX.md 불일치',
-      items: [
-        {
-          detail: `집계 ${units.length}건 / INDEX.md ${indexInfo.rows}행 — ctx index 실행 필요`,
-          missing: indexInfo.missing || [],
-        },
-      ],
-      fix: 'ctx index (커밋 훅 · 서버형 save 는 저절로 한다)',
-    })
-  }
+  // INDEX.md 불일치 검사는 걷었다(v1.0 I9) — 레포에 INDEX 를 두지 않는다. 옛 레포의 INDEX 는 이행이 지운다
 
   // 본문 형식은 검사하지 않는다 — 자유 형식이다 (수행 v1.0 §13).
   //
@@ -305,29 +290,7 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       )
     }
 
-    // **등록부의 사본이 원본과 다르다**(등록부 사본 검토 X6). 머리 표의 `등록부` 칸 · `_vocab.md` 생성 블록은 등록부에서
-    // 찍는 것이라 어긋나면 정본이 스스로와 모순한다 — 확신 있게 틀린 답을 내는 자리라 error. 서버형은 save 가 검사
-    // **전에** 다시 찍으므로 여기 걸리지 않는다. 모드 A 는 손으로 등록부를 고친 뒤 `ctx index` 를 안 돌린 것이다.
-    const docTexts = new Map()
-    if (bodies) for (const d of managedIndex.docs || []) if (bodies.has(d.path)) docTexts.set(d.path, bodies.get(d.path))
-    push(
-      'error',
-      'registry-head',
-      '등록부 사본(머리 표 · 생성 블록)이 등록부와 다르다',
-      lintGenerated({ registry: managedIndex.registry, vocab, docs: docTexts, vocabText }),
-      'ctx index 가 등록부에서 다시 찍는다 · 서버형은 다음 save 가 맞춘다'
-    )
-    // 생성하지 않는 산문 — **어림이라 경고**다(X9). 막으면 사람이 검사를 끈다
-    if (bodies) {
-      const texts = (rel) => (rel === '_vocab.md' ? vocabText : rel === '_managed.md' ? managedText : docTexts.get(rel) ?? null)
-      push(
-        'warn',
-        'registry-prose',
-        '등록부와 어긋나 보이는 문구 — 등록부 행이 있는데 「비대상 · 타입 없음」 이라고 적혀 있다',
-        proseLint({ registry: managedIndex.registry, texts }).map((h) => ({ path: h.file, detail: `${h.file}:${h.line} ${h.text}` })),
-        '쓰기 권한자가 save 의 edits 로 그 줄을 고친다(작업 기록 하나) · 모드 A 는 손으로'
-      )
-    }
+    // 등록부 사본(머리 표 · 생성 블록) · 어긋나는 산문 검사는 걷었다(v1.0 V4) — 사본을 만들지 않는다
   }
 
   // 등록부의 applied 가 없는 작업 기록을 가리킨다 — 이름을 잘못 적었거나
@@ -384,16 +347,7 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
     push('error', 'curates-shape', '큐레이션 판정이 틀렸다 — 대상이 없거나 모양이 아니다', bad, '큐레이터가 바른 판정으로 다시 큐레이션한다(가장 늦은 판정이 이긴다)')
   }
 
-  // 훅 미설치 — **조용한 실패다.** 커밋은 통과하고 검사는 안 돈다.
-  //
-  // 훅은 clone 을 따라오지 않는다. 실측해 보니 `core.hooksPath` 를 지운 상태에서
-  // 미등재 좌표를 가진 작업 기록이 **그대로 커밋됐다.** 앱이 이것을 보여주지
-  // 않으면 사용자는 검사가 도는 줄로 안다.
-  if (gitStatus && gitStatus.repo && !gitStatus.hooksPath) {
-    push('warn', 'hooks-off', 'git 훅이 설치되지 않음 — 커밋 검사가 돌지 않습니다', [
-      { detail: 'git config core.hooksPath .githooks' },
-    ])
-  }
+  // 훅 미설치 경고는 걷었다(v1.0 V5) — 서버 save 는 훅 없이 같은 검사를 커밋 전에 돈다
 
   // 좌표 1개짜리 문서 — 프로토콜 §9.3
   push(
