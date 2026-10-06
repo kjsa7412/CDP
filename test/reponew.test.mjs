@@ -1,9 +1,7 @@
-// 지식 레포 세우기 — `core/reponew.js`. 검토 §3.5 · 제품화 TODO 5.1.
+// 지식 레포 세우기 — `core/reponew.js`. v1.0 개편안 §8.2 · §9.1.
 //
-// git 을 실제로 부른다 — 첫 커밋에서 **훅이 도는 것**이 이 함수의 값이라서다.
-// 훅은 `bin/ctx` → `bin/ctx.mjs` 를 부르므로 완성 폴더에 실행되는 번들이 있어야
-// 한다. 여기서는 작은 가짜 번들(`process.exit(0)`)을 둔다 — 훅이 **돌았다는 것**만
-// 본다. 판정의 정답은 다른 테스트(check · validity)의 몫이다.
+// git 을 실제로 부른다 — 빈 틀 · 첫 커밋 · 원격 · 휴지통이 이 모듈의 값이라서다. 새 레포는 **지식만** 담는다
+// (README · 어휘 · 등록부 · docs/ · work/ · git 설정 둘) — 훅 · 도구 층 · 서식 예시가 없다(I9).
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -15,37 +13,6 @@ import { promisify } from 'node:util'
 import { newRepo, cloneRepo, connectOrigin, trashRepo, listRepos, REPO_NAME_RE } from '../core/reponew.js'
 
 const run = promisify(execFile)
-const HOOK = `#!/bin/sh
-repo=$(git rev-parse --show-toplevel)
-sh "$repo/bin/ctx" check --repo "$repo"
-rc=$?
-[ "$rc" -eq 127 ] && exit 0
-exit $rc
-`
-const CTX_SH = `#!/bin/sh
-here=$(dirname "$0")
-exec node "$here/ctx.mjs" "$@"
-`
-
-async function completedFolder(dir, { hookFails = false } = {}) {
-  const f = path.join(dir, 'pkg')
-  await fs.mkdir(path.join(f, 'docs'), { recursive: true })
-  await fs.mkdir(path.join(f, 'bin'), { recursive: true })
-  await fs.mkdir(path.join(f, '.githooks'), { recursive: true })
-  await fs.writeFile(path.join(f, '_vocab.md'), '# 어휘\n\n## table\n')
-  await fs.writeFile(path.join(f, '_managed.md'), '| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n| `table:*` | `docs/t.md` | `## {값}` |\n')
-  await fs.writeFile(path.join(f, 'docs', 't.md'), '# t\n')
-  await fs.writeFile(path.join(f, 'README.md'), '# repo\n')
-  await fs.writeFile(path.join(f, '.gitattributes'), '* text=auto eol=lf\n')
-  await fs.writeFile(path.join(f, '.gitignore'), '/tools/*.exe\n')
-  await fs.writeFile(path.join(f, '_package.json'), '{"name":"pkg"}')
-  await fs.writeFile(path.join(f, 'tools.exe'), 'not really')
-  await fs.writeFile(path.join(f, 'bin', 'ctx'), CTX_SH)
-  await fs.writeFile(path.join(f, 'bin', 'ctx.mjs'), hookFails ? 'console.error("[가짜] 검사 실패"); process.exit(1)\n' : 'process.exit(0)\n')
-  await fs.writeFile(path.join(f, '.githooks', 'pre-commit'), HOOK)
-  return f
-}
-
 const hasGit = await run('git', ['--version']).then(() => true).catch(() => false)
 
 test('REPO_NAME_RE', () => {
@@ -59,42 +26,44 @@ test('REPO_NAME_RE', () => {
 test('newRepo — dry 는 계획만 · 입력 검사', async (t) => {
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-rn-'))
   try {
-    const from = await completedFolder(d)
-    const plan = await newRepo({ from, dest: path.join(d, 'out', 'alpha'), origin: 'https://git.example/x.git', push: true, dry: true })
+    const plan = await newRepo({ dest: path.join(d, 'out', 'alpha'), origin: 'https://git.example/x.git', push: true, dry: true })
     assert.equal(plan.dry, true)
     assert.equal(plan.name, 'alpha')
     assert.ok(plan.steps.includes('remote add origin'))
     assert.ok(plan.steps.includes('push -u origin HEAD'))
     assert.equal(await fs.stat(path.join(d, 'out')).catch(() => null), null, 'dry 는 아무것도 만들지 않는다')
 
-    await assert.rejects(newRepo({ from: path.join(d, '없음'), dest: path.join(d, 'x') }), /복사할 폴더가 없다/)
-    await assert.rejects(newRepo({ from: d, dest: path.join(d, 'x') }), /_vocab\.md 없음/)
-    await assert.rejects(newRepo({ from, dest: path.join(d, '한글이름') }), /이름 형식/)
-    await assert.rejects(newRepo({ from, dest: path.join(d, 'x'), origin: 'not a url' }), /origin 주소 형식/)
+    await assert.rejects(newRepo({ dest: path.join(d, '한글이름') }), /이름 형식/)
+    await assert.rejects(newRepo({ dest: path.join(d, 'x'), origin: 'not a url' }), /origin 주소 형식/)
     await fs.mkdir(path.join(d, 'occupied'))
     await fs.writeFile(path.join(d, 'occupied', 'a'), 'x')
-    await assert.rejects(newRepo({ from, dest: path.join(d, 'occupied') }), /이미 무엇이 있다/)
+    await assert.rejects(newRepo({ dest: path.join(d, 'occupied') }), /이미 무엇이 있다/)
+    await assert.rejects(newRepo({ dest: path.join(d, 'y'), records: { root: d } }), /지식 레포가 아니다/)
   } finally {
     await fs.rm(d, { recursive: true, force: true })
   }
 })
 
-test('newRepo — 복사 · git init · hooksPath · 첫 커밋 (훅이 돈다) · exe 와 매니페스트는 안 담는다', { skip: !hasGit && 'git 이 없다' }, async () => {
+test('newRepo — 빈 틀 하나: 지식이 담길 자리만 · 훅 · 도구 층 · hooksPath 없음 · 첫 커밋 · 검사 오류 0', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const { loadRepo } = await import('../core/repo.js')
+  const { runBuiltinCheck } = await import('../core/check.js')
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-rn-'))
   try {
-    const from = await completedFolder(d)
     const dest = path.join(d, 'out', 'alpha')
-    const r = await newRepo({ from, dest, author: 'tester' })
+    const r = await newRepo({ dest, author: 'tester', title: '알파 팀의 지식' })
     assert.match(r.commit, /^[0-9a-f]{7,}$/)
-    assert.ok(r.files >= 8, String(r.files))
     assert.equal(r.pushed, false)
-    assert.equal(await fs.stat(path.join(dest, 'work', '.gitkeep')).then(() => true), true)
-    assert.equal(await fs.stat(path.join(dest, '_package.json')).catch(() => null), null, '매니페스트는 받는 사람에게 가지 않는다')
-    assert.equal(await fs.stat(path.join(dest, 'tools.exe')).catch(() => null), null, 'exe 는 담지 않는다')
-    const hp = (await run('git', ['-C', dest, 'config', '--get', 'core.hooksPath'])).stdout.trim()
-    assert.equal(hp, '.githooks')
-    const who = (await run('git', ['-C', dest, 'log', '-1', '--format=%an'])).stdout.trim()
-    assert.equal(who, 'tester')
+    const files = (await run('git', ['-C', dest, 'ls-files'])).stdout.trim().split('\n').sort()
+    assert.deepEqual(files, ['.gitattributes', '.gitignore', 'README.md', '_managed.md', '_vocab.md', 'docs/.gitkeep', 'work/.gitkeep'])
+    assert.equal(r.files, 7)
+    assert.match(await fs.readFile(path.join(dest, 'README.md'), 'utf8'), /^# alpha\n\n알파 팀의 지식\n/)
+    const hp = await run('git', ['-C', dest, 'config', '--get', 'core.hooksPath']).then((x) => x.stdout.trim()).catch(() => '')
+    assert.equal(hp, '', '훅 경로를 걸지 않는다')
+    const who = (await run('git', ['-C', dest, 'log', '-1', '--format=%an|%s'])).stdout.trim()
+    assert.equal(who, 'tester|지식 레포 세움 — 빈 틀')
+    const repo = await loadRepo(dest)
+    const errs = runBuiltinCheck(repo).findings.filter((f) => f.sev === 'error')
+    assert.deepEqual(errs, [], '빈 틀은 검사 오류가 없다')
 
     const list = await listRepos(path.join(d, 'out'))
     assert.equal(list.length, 1)
@@ -102,19 +71,7 @@ test('newRepo — 복사 · git init · hooksPath · 첫 커밋 (훅이 돈다) 
     assert.equal(list[0].vocab, true)
     assert.equal(list[0].git, true)
     assert.equal(list[0].upstream, null)
-    assert.equal(list[0].hooksPath, '.githooks')
-  } finally {
-    await fs.rm(d, { recursive: true, force: true })
-  }
-})
-
-test('newRepo — 훅이 막으면 E_CHECK 이고 반쪽 레포를 남기지 않는다', { skip: !hasGit && 'git 이 없다' }, async () => {
-  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-rn-'))
-  try {
-    const from = await completedFolder(d, { hookFails: true })
-    const dest = path.join(d, 'out', 'beta')
-    await assert.rejects(newRepo({ from, dest }), (e) => e.code === 'E_CHECK')
-    assert.equal(await fs.stat(dest).catch(() => null), null, '지웠다')
+    assert.equal(list[0].hooksPath, null)
   } finally {
     await fs.rm(d, { recursive: true, force: true })
   }
@@ -123,11 +80,10 @@ test('newRepo — 훅이 막으면 E_CHECK 이고 반쪽 레포를 남기지 않
 test('newRepo — origin 이 있으면 remote add · push 는 파일 원격으로 실제로', { skip: !hasGit && 'git 이 없다' }, async () => {
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-rn-'))
   try {
-    const from = await completedFolder(d)
     const bare = path.join(d, 'origin.git')
     await run('git', ['init', '-q', '--bare', bare])
     const dest = path.join(d, 'out', 'gamma')
-    const r = await newRepo({ from, dest, origin: bare, push: true })
+    const r = await newRepo({ dest, origin: bare, push: true })
     assert.equal(r.pushed, true)
     const remote = (await run('git', ['-C', bare, 'rev-parse', '--short', 'HEAD'])).stdout.trim()
     assert.equal(remote, r.commit)
@@ -139,19 +95,17 @@ test('newRepo — origin 이 있으면 remote add · push 는 파일 원격으�
   }
 })
 
-test('cloneRepo — origin 에서 받아 온다 · hooksPath · 자리에 무엇이 있으면 E_EXISTS · 지식 레포가 아니면 지운다 · 주소 형식', { skip: !hasGit && 'git 이 없다' }, async () => {
+test('cloneRepo — origin 에서 받아 온다 · 훅 경로는 걸지 않는다 · 자리에 무엇이 있으면 E_EXISTS · 지식 레포가 아니면 지운다 · 주소 형식', { skip: !hasGit && 'git 이 없다' }, async () => {
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-cl-'))
   try {
-    const src = await completedFolder(d)
-    await run('git', ['-C', src, 'init', '-q'])
-    await run('git', ['-C', src, 'add', '-A'])
-    await run('git', ['-C', src, '-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-qm', 'seed'])
+    const src = path.join(d, 'src', 'k0')
+    await newRepo({ dest: src })
     const dest = path.join(d, 'root', 'k1')
     const r = await cloneRepo({ url: src, dest })
     assert.ok(r.commit, 'head')
     assert.equal(r.origin, src)
-    assert.equal(await fs.readFile(path.join(dest, '_vocab.md'), 'utf8'), '# 어휘\n\n## table\n')
-    assert.equal((await run('git', ['-C', dest, 'config', '--get', 'core.hooksPath'])).stdout.trim(), '.githooks')
+    assert.equal(await fs.readFile(path.join(dest, '_vocab.md'), 'utf8'), await fs.readFile(path.join(src, '_vocab.md'), 'utf8'))
+    assert.equal(await run('git', ['-C', dest, 'config', '--get', 'core.hooksPath']).then((x) => x.stdout.trim()).catch(() => ''), '')
     // 이미 있는 자리
     await assert.rejects(cloneRepo({ url: src, dest }), /이미 무엇이/)
     // 지식 레포가 아닌 것 — _vocab.md 없는 git 레포. clone 은 되지만 지운다
@@ -175,9 +129,8 @@ test('cloneRepo — origin 에서 받아 온다 · hooksPath · 자리에 무엇
 test('connectOrigin — 원격 없이 세운 레포를 잇고 첫 push · 같은 주소면 다시 민다 · 주소 형식', { skip: !hasGit && 'git 이 없다' }, async () => {
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-co-'))
   try {
-    const from = await completedFolder(d)
     const dest = path.join(d, 'out', 'dpms_wiki')
-    const made = await newRepo({ from, dest })
+    const made = await newRepo({ dest })
     assert.equal((await listRepos(path.join(d, 'out')))[0].upstream, null, '처음엔 원격 없음')
     await assert.rejects(connectOrigin({ root: dest, url: 'not a url' }), /형식/)
     await assert.rejects(connectOrigin({ root: dest, url: 'http://x/a b.git' }), /형식/)
@@ -203,9 +156,8 @@ test('connectOrigin — 원격 없이 세운 레포를 잇고 첫 push · 같은
 test('connectOrigin — 원격에 남의 커밋이 있으면 non-ff 로 거절 · 원격 주소는 남는다(강제 push 없음)', { skip: !hasGit && 'git 이 없다' }, async () => {
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-co-'))
   try {
-    const from = await completedFolder(d)
     const dest = path.join(d, 'out', 'k')
-    await newRepo({ from, dest })
+    await newRepo({ dest })
     // 비어 있지 않은 원격 — 다른 이력 하나
     const other = path.join(d, 'other')
     await fs.mkdir(other)
@@ -232,9 +184,8 @@ test('connectOrigin — 원격에 남의 커밋이 있으면 non-ff 로 거절 �
 test('trashRepo — 휴지통으로 옮긴다 · 원래 자리는 빈다 · 지식 레포가 아니면 거절', { skip: !hasGit && 'git 이 없다' }, async () => {
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-tr-'))
   try {
-    const from = await completedFolder(d)
     const dest = path.join(d, 'out', 'gone')
-    await newRepo({ from, dest })
+    await newRepo({ dest })
     const trash = path.join(d, 'data', 'trash')
     const r = await trashRepo({ root: dest, trashDir: trash, now: new Date(2026, 8, 28, 9, 5, 7) })
     assert.equal(path.basename(r.to), 'gone-20260928-090507')
@@ -242,7 +193,7 @@ test('trashRepo — 휴지통으로 옮긴다 · 원래 자리는 빈다 · 지�
     assert.ok(await fs.stat(path.join(r.to, '_vocab.md')), '옮긴 자리에 있다')
     assert.ok(await fs.stat(path.join(r.to, '.git')), 'git 이력째')
     // 같은 초에 같은 이름을 또 치우면 뒤에 번호
-    await newRepo({ from, dest })
+    await newRepo({ dest })
     const r2 = await trashRepo({ root: dest, trashDir: trash, now: new Date(2026, 8, 28, 9, 5, 7) })
     assert.equal(path.basename(r2.to), 'gone-20260928-090507-2')
     // 지식 레포가 아닌 폴더 · 없는 폴더
@@ -261,11 +212,6 @@ test('newRepo records — 다시 세우기: 작업 기록 · 첨부 · 그 기�
   const { loadRepo } = await import('../core/repo.js')
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-rn-'))
   try {
-    const from = await completedFolder(d)
-    // 빈 틀 — 등록부도 어휘 타입도 없다
-    await fs.writeFile(path.join(from, '_vocab.md'), '# 어휘\n\n---\n\n## 아직 비어 있다\n\n첫 관리 문서를 세울 때 더한다.\n')
-    await fs.writeFile(path.join(from, '_managed.md'), '| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n')
-    await fs.rm(path.join(from, 'docs', 't.md'))
     const old = path.join(d, 'old')
     await fs.mkdir(path.join(old, 'work', 'assets', '2026-0902-b'), { recursive: true })
     await fs.mkdir(path.join(old, 'docs'), { recursive: true })
@@ -281,13 +227,14 @@ test('newRepo records — 다시 세우기: 작업 기록 · 첨부 · 그 기�
     await fs.writeFile(path.join(old, 'work', 'assets', '2026-0902-b', 'g.png'), 'png')
     await fs.writeFile(path.join(old, 'work', '2026-0903-prune.md'), rec('2026-0903-prune', [], ['docs-prune']).replace('touches:\n', 'touches: []\n'))
     const dest = path.join(d, 'out', 'fresh')
-    const r = await newRepo({ from, dest, records: { root: old } })
+    const r = await newRepo({ dest, records: { root: old }, now: new Date(2026, 9, 6) })
     assert.equal(r.records.records, 2)
     assert.equal(r.records.assets, 1)
     assert.deepEqual(r.records.skipped, [{ id: '2026-0903-prune', kind: 'system' }])
     assert.equal(await fs.readFile(path.join(dest, 'work', '2026-0901-a.md'), 'utf8'), await fs.readFile(path.join(old, 'work', '2026-0901-a.md'), 'utf8'), '기록은 글자 그대로')
     assert.ok(await fs.stat(path.join(dest, 'work', 'assets', '2026-0902-b', 'g.png')))
     assert.equal(await fs.stat(path.join(dest, 'docs', 't.md')).catch(() => null), null, '관리 문서는 안 옮긴다')
+    assert.match(await fs.readFile(path.join(dest, 'README.md'), 'utf8'), /old 의 작업 기록을 옮겨 다시 세운 지식 레포\(2026-10-06\)/)
     const v = await fs.readFile(path.join(dest, '_vocab.md'), 'utf8')
     assert.match(v, /`table:a` — 에이\n  aliases: 에이표/)
     assert.match(v, /## 이슈\n\n- `이슈:ISS-1`/)

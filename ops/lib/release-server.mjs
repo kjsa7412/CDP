@@ -1,4 +1,4 @@
-// 서버 산출물 — `cdp-server-v<버전>.tar.gz`. 검토 §3.2 · R2.
+// 서버 산출물 — `cdp-server-v<버전>.tar.gz`. 검토 §3.2 · R2 · v1.0 개편안 §8.2(산출물은 이것과 사이트 둘).
 //
 //     npm run release:server            package.json 의 version 으로
 //     npm run release:server -- 0.9.0   버전을 지정해서
@@ -10,17 +10,18 @@
 //   cdp-server-v<버전>/
 //     bin/ctx.mjs  bin/ctx  bin/ctx.cmd     서버 본체 (MCP · 관리 서비스 · ctx)
 //     web/                                  관리 서비스 화면
-//     packages/<이름>/                      완성된 지식 레포 폴더 (exe 없음) — ctx repo new 가 쓴다
-//     manual/                               설명서 세 권 + 그림 — 서버가 /manual 로 낸다
+//     forms/<묶음>/                         서식집 — 큐레이터가 새 관리 문서를 세울 때 고른다(팀 서식은 <data>/forms)
+//     kit/                                  작업 레포 kit — 스킬 다섯 · CLAUDE 블록 둘(writer · 큐레이터). 설치 한 줄이 받는다
+//     manual/                               설명서 + 그림 — 서버가 /manual 로 낸다
 //     deploy/                               유닛 · install.sh · upgrade.sh · Dockerfile · compose
 //     README.md                             버전 · 번들 시각 · 시작 한 줄
 //
-// `release.mjs` 와 **같은 조립 함수**를 쓴다(`assemble.mjs`).
+// 지식 레포 폴더(옛 `packages/<이름>/`)는 담지 않는다 — 새 레포는 서버가 빈 틀로 세운다(v1.0).
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { ROOT, assembleKnowledgeRepo, bundleStamp, copyDirLF, copyFileLF, listPackages, measure } from './assemble.mjs'
+import { ROOT, bundleStamp, copyDirLF, copyFileLF, copyKit, measure } from './bundle-files.mjs'
 import { zip } from '../../core/zip.js'
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
@@ -76,16 +77,10 @@ need('ops/deploy/설치절차.md', 'deploy/설치절차.md')
 need('manual', 'manual')
 for (const f of ['1_세_레포_구조.svg', '2_설치_5단계.svg', '7_MCP_두_모드.svg']) need(`docs/그림/${f}`, `manual/그림/${f}`)
 
-const packages = listPackages(ROOT)
-if (!packages.length) missing.push('agent/packages/<패키지>')
-for (const name of packages) {
-  const r = assembleKnowledgeRepo({ root: ROOT, name, dest: path.join(OUT, 'packages', name), exe: null })
-  missing.push(...r.missing)
-  // 매니페스트는 **산출물에는** 둔다 — `ctx package list` 가 읽는다. 조립된
-  // 레포 폴더 안에는 없다(받는 사람에게 갈 것이 아니다). 두 자리가 다르다.
-  const mf = path.join(ROOT, 'agent', 'packages', name, '_package.json')
-  if (fs.existsSync(mf)) copyFileLF(mf, path.join(OUT, 'packages', name, '_package.json'))
-}
+// 서식집 · kit — 서버가 새 문서를 찍고(managed.add { form }) 작업 레포에 스킬을 내는 자리(v1.0 §8)
+need('agent/forms', 'forms')
+const kit = copyKit(ROOT, path.join(OUT, 'kit'))
+missing.push(...kit.missing)
 
 // sh 실행 권한 — tar 가 이것을 그대로 싼다. Windows 에서는 아래 tar 에서 mode 를 준다.
 for (const f of ['bin/ctx', 'deploy/install.sh', 'deploy/upgrade.sh']) {
@@ -93,14 +88,6 @@ for (const f of ['bin/ctx', 'deploy/install.sh', 'deploy/upgrade.sh']) {
     fs.chmodSync(path.join(OUT, f), 0o755)
   } catch {}
 }
-for (const name of packages) {
-  for (const f of ['bin/ctx', '.githooks/pre-commit']) {
-    try {
-      fs.chmodSync(path.join(OUT, 'packages', name, f), 0o755)
-    } catch {}
-  }
-}
-
 const stamp = bundleStamp(ROOT)
 fs.writeFileSync(
   path.join(OUT, 'README.md'),
@@ -112,12 +99,15 @@ fs.writeFileSync(
 꺼내 옮기지 않는다.
 
 \`\`\`
-bin/ctx.mjs       서버 본체 — MCP(stdio · http) · 관리 서비스 · ctx.  Node 20 으로 돈다
+bin/ctx.mjs       서버 본체 — MCP(http) · 관리 서비스 · ctx.  Node 20 으로 돈다
 web/              관리 서비스 화면
-packages/<이름>/  완성된 지식 레포 폴더.  \`ctx repo new\` 가 여기서 복사한다 — ${packages.join(' · ')}
-manual/           설명서 세 권 + 그림.  서버가 /manual 로 낸다
+forms/            서식집 — 큐레이터가 새 관리 문서를 세울 때 고른다(팀 서식은 <data>/forms)
+kit/              작업 레포 kit — 스킬 ${kit.skills.length}(${kit.skills.join(' · ')}) · CLAUDE 블록 둘.  설치 한 줄이 받는다
+manual/           설명서 + 그림.  서버가 /manual 로 낸다
 deploy/           systemd 유닛 · install.sh · upgrade.sh · Dockerfile
 \`\`\`
+
+새 지식 레포는 콘솔 「새 지식 레포」(빈 틀 · 기록만 옮겨 오기) 또는 \`node bin/ctx.mjs repo new <root>/<이름>\`.
 
 ## 처음
 
@@ -137,9 +127,8 @@ sudo bash deploy/upgrade.sh <이 tar.gz>
 ## 확인
 
 \`\`\`
-node bin/ctx.mjs version                         ${stamp} · mcp: stdio · http
-node bin/ctx.mjs package list --packages packages
-node bin/ctx.mjs serve doctor --root … --auth … --data … --web web
+node bin/ctx.mjs version                         ${stamp} · mcp: http
+node bin/ctx.mjs serve doctor --root … --auth … --data … --web web     (kit · forms 는 번들 옆을 찾는다)
 \`\`\`
 `,
   'utf8'
@@ -179,7 +168,7 @@ const m = measure(OUT)
 log('')
 log(`완료: ${path.relative(ROOT, OUT)}  파일 ${m.files} · ${m.mb}MB · 번들 ${stamp}`)
 log(`      ${path.relative(ROOT, artifact)}  ${(fs.statSync(artifact).size / 1048576).toFixed(1)}MB`)
-log(`      패키지 ${packages.length}개 — ${packages.join(' · ') || '없음'}`)
+log(`      kit 스킬 ${kit.skills.length} — ${kit.skills.join(' · ') || '없음'} · 서식집 forms/`)
 if (missing.length) {
   log('')
   log(`⚠ 빠진 것 ${missing.length}개 — 배포 전에 확인하세요:`)

@@ -31,8 +31,7 @@ import { newRepo, cloneRepo, connectOrigin, trashRepo, REPO_NAME_RE } from '../.
 import { withLock } from '../../core/lock.js'
 import * as assets from '../../core/assets.js'
 import * as gitauth from '../../core/gitauth.js'
-import { listPackages as listPackageDirs } from '../../core/packages.js'
-import { resolvePackages, materializePackage } from './ctx-package.mjs'
+import { findFormsDir } from '../../core/formslib.js'
 import { parseCidrs, ipInCidrs, makeLimiter } from '../../core/net.js'
 import { appVersion } from '../../core/appinfo.js'
 import { doctorRows, resolveManualDir } from './ctx-serve-doctor.mjs'
@@ -350,7 +349,7 @@ function loginPage({ next = '/', failed = false } = {}) {
 }
 
 // 서버가 아는 첫 조각 — 이 밖의 GET 이 브라우저에서 오면 화면의 「없는 주소입니다」 다(아래 onRequest).
-const KNOWN_PREFIX = /^\/(api|admin|site|mcp|kit|workrepos|repos|packages|me|healthz|r|console|login|logout|setup|manual|assets)(\/|$)/
+const KNOWN_PREFIX = /^\/(api|admin|site|mcp|kit|workrepos|repos|me|healthz|r|console|login|logout|setup|manual|assets)(\/|$)/
 
 function cookieStr(name, value, { maxAge = 12 * 3600, secure = false } = {}) {
   const parts = [`${name}=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`]
@@ -543,9 +542,10 @@ export async function runServe(opt = {}) {
 
   const store = makeStore(root, log, { ...(personal ? { only: { name: personal.name, root: personal.repo } } : {}), formsOpt: { explicit: opt.forms || null, dataDir } })
   await store.refresh()
-  // 패키지 — 콘솔의 `POST /admin/repos` 가 여기서 복사한다(검토 §3.5 · 화면 · 권한 검토 v0.1 R1). 없어도 서버는 돈다.
-  const pk = await resolvePackages({ explicit: opt.packages, binDir: hereDir(import.meta.url) })
-  log.line(pk ? `패키지: ${pk.dir} (${pk.how})` : '패키지: 없음 — 화면에서 레포를 세우려면 --packages')
+  // 서식집 · kit — 새 문서의 서식과 작업 레포의 스킬은 번들에서 나간다(v1.0 §8). 없어도 서버는 돈다(진단이 알린다)
+  const formsDir = await findFormsDir({ explicit: opt.forms || null })
+  const kitDir = await kitFiles({ explicit: opt.kit || null }).then((k) => k.dir).catch(() => null)
+  log.line(`서식집: ${formsDir ? formsDir.dir + ' (' + formsDir.how + ')' : '없음 — --forms'} · kit: ${kitDir || '없음 — --kit'}`)
   // kit 은 서버 번들에서 낸다(v1.0 W5) — 레포마다 다르지 않다. writer kit 의 해시가 대장 「낡음」 의 기준이다.
   // 레포 안의 도구 층은 없다(I9) — 옛 「에이전트 세팅 갱신」(레포마다 도구 층 커밋)은 v1.0 에서 끝났다
   const bundleHash = async (role = 'writer') => (await kitFiles({ role, explicit: opt.kit || null })).hash
@@ -589,7 +589,7 @@ export async function runServe(opt = {}) {
   const runDoctorCached = async (fresh = false) => {
     if (!fresh && doctorCache.res && Date.now() - doctorCache.at < 60_000) return { at: doctorCache.at, ...doctorCache.res }
     if (!doctorCache.pending) {
-      doctorCache.pending = doctorRows({ root, auth: opt.auth, data: dataDir, web: opt.web ? webDir : null, manual: manualDir, packages: pk?.dir || null, bind, port, inProcess: true })
+      doctorCache.pending = doctorRows({ root, auth: opt.auth, data: dataDir, web: opt.web ? webDir : null, manual: manualDir, forms: opt.forms || null, kit: opt.kit || null, bind, port, inProcess: true })
         .then((r) => {
           doctorCache = { at: Date.now(), res: r, pending: null }
           return r
@@ -609,7 +609,9 @@ export async function runServe(opt = {}) {
   // 판정은 `core/reponew.js` 하나 — CLI `ctx repo new` 와 같은 함수다.
   // 서버의 SSH 배포 키가 있으면 그 한 줄 — ssh 원격을 쓰는 연결 · clone · 세우기가 레포 로컬 설정으로 건다(git 자격 TODO G2)
   const sshCmd = async () => (dataDir && (await gitauth.keyInfo(dataDir).catch(() => null))?.exists ? gitauth.sshCommand(dataDir) : null)
-  const buildRepo = async ({ name, pkgName = '', origin = null, clone = null, actor, examples = true, recordsFrom = null }) => {
+  // 등록 = 폴더를 두는 것(§4.2). 길이 둘 — 빈 틀로 세우기(다시 세우기면 옛 레포의 기록만 옮겨) · origin 에서 clone(검토 D9).
+  // v1.0 — 패키지 붓기는 없다(§8.2). 서식은 큐레이터가 서식집에서 고른다
+  const buildRepo = async ({ name, title = null, origin = null, clone = null, actor, recordsFrom = null }) => {
     if (!REPO_NAME_RE.test(name)) return { status: 400, body: { error: { code: 'E_INPUT', message: '레포 이름 형식이 아니다 (영문·숫자·._-)' } } }
     if ((await store.list()).some((r) => r.name === name) || (await fs.stat(path.join(root, name)).catch(() => null))) {
       return { status: 409, body: { error: { code: 'E_EXISTS', message: '그 이름의 레포가 이미 있다', detail: { name } } } }
@@ -625,37 +627,22 @@ export async function runServe(opt = {}) {
         return { status: code === 'E_EXISTS' ? 409 : 400, body: { error: { code, message: e.message, detail: e.detail } } }
       }
     }
-    if (!pk) return { status: 400, body: { error: { code: 'E_INPUT', message: '서버에 패키지 폴더가 없다 — --packages' } } }
-    // 다시 세우기(v1.0 §9.1) — 옛 레포의 작업 기록만 옮겨 빈 레포로. 패키지는 빈 틀(blank)이다
+    // 다시 세우기(v1.0 §9.1) — 옛 레포의 작업 기록만 옮겨 빈 틀로
     let oldRoot = null
     if (recordsFrom) {
       const o = (await store.list()).find((x) => x.name === recordsFrom)
       if (!o) return { status: 404, body: { error: { code: 'E_NOT_FOUND', message: `옮겨 올 레포가 없다 — ${recordsFrom}`, detail: { recordsFrom } } } }
       oldRoot = o.root
-      if (!pkgName) pkgName = 'blank'
-    }
-    if (!pkgName) return { status: 400, body: { error: { code: 'E_INPUT', message: 'package 가 필요하다' } } }
-    let mat
-    try {
-      mat = await materializePackage(pk, pkgName)
-    } catch (e) {
-      // 패키지가 여럿이면 이름을 알아야 고른다 — 없는 이름을 줬을 때 있는 것을 같이 낸다
-      const names = e.code === 'E_NOT_FOUND' ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => p.name) : []
-      return {
-        status: e.code === 'E_NOT_FOUND' ? 404 : 400,
-        body: { error: { code: e.code || 'E_INPUT', message: e.message + (names.length ? ' — 있는 패키지: ' + names.join(' · ') : ''), detail: names.length ? { packages: names } : undefined } },
-      }
     }
     try {
-      const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor, sshCommand: await sshCmd(), examples, records: oldRoot ? { root: oldRoot } : null })
+      const r = await newRepo({ dest: path.join(root, name), title, origin, push: !!origin, author: actor, sshCommand: await sshCmd(), records: oldRoot ? { root: oldRoot } : null })
       await store.refresh()
-      await auth.audit(dataDir, `admin repo new · ${actor} · ${name} · package=${pkgName}${examples ? '' : ' · 예시 뺌'}${recordsFrom ? ' · 기록 옮김=' + recordsFrom + '(' + (r.records?.records ?? 0) + '건)' : ''}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
-      return { status: 200, body: { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null, examples: r.examples || null, records: r.records || null } }
+      await auth.audit(dataDir, `admin repo new · ${actor} · ${name}${recordsFrom ? ' · 기록 옮김=' + recordsFrom + '(' + (r.records?.records ?? 0) + '건)' : ''}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
+      // `moved` — 화면이 「기록만 옮겨 오기」 가 먹었는지 숫자로 본다(V 계약 가정 2)
+      return { status: 200, body: { name, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null, records: r.records || null, moved: r.records?.records ?? 0 } }
     } catch (e) {
       const code = e?.code || 'E_REPO'
       return { status: code === 'E_EXISTS' ? 409 : 400, body: { error: { code, message: e.message, detail: e.detail } } }
-    } finally {
-      await mat.cleanup()
     }
   }
 
@@ -666,32 +653,6 @@ export async function runServe(opt = {}) {
       const r = reviewed.slice(i * 50, i * 50 + 50)
       return r.length ? { ...o, reviewed: r } : o
     })
-  }
-
-  // 세운 직후 안 쓸 문서를 지운다 — 미리보기(dryRun)의 제안 초안을 그대로 싣고 review 줄은 reviewed 로. 10종씩 나눠 save 한다
-  const dropAtCreate = async (repoRoot, docs, actor) => {
-    const d = new Date()
-    const p2 = (n) => String(n).padStart(2, '0')
-    const day = `${d.getFullYear()}-${p2(d.getMonth() + 1)}${p2(d.getDate())}`
-    const out = { docs: [], commits: [], reviewed: 0 }
-    for (let i = 0; i < docs.length; i += 10) {
-      const part = docs.slice(i, i + 10)
-      const input = (extra = {}) => ({
-        work: { id: `${day}-세울때-뺀-문서-${i / 10 + 1}`, title: `세울 때 뺀 관리 문서 — ${part.length}종`, date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`, touches: [], touchesEmpty: '관리 문서 정리', tags: ['docs-prune'], body: ['레포를 세울 때 이 프로젝트에 쓰지 않을 문서로 골라 뺐다.', '', ...part.map((x) => `- \`${x}\``), ''].join('\n') },
-        ...extra,
-      })
-      const pre = await doSave(repoRoot, input({ managed: part.map((doc) => ({ op: 'drop', doc, reason: '세울 때 뺌' })), dryRun: true }), { user: actor, write: true, admin: true })
-      const refs = pre.dropped?.refs || []
-      // edits 는 save 한 번에 20건 — 넘는 줄은 알고 둔다(검사 「없는 관리 문서를 가리키는 줄」 이 계속 말한다)
-      const fix = refs.filter((x) => x.edit).slice(0, 20)
-      const edits = fix.map((x) => x.edit)
-      const reviewed = refs.filter((x) => !fix.includes(x)).map((x) => x.file + ':' + x.line)
-      const r = await doSave(repoRoot, input({ managed: spreadReviewed(part.map((doc) => ({ op: 'drop', doc, reason: '세울 때 뺌' })), reviewed), ...(edits.length ? { edits } : {}) }), { user: actor, write: true, admin: true, mirror: !!opt.mirror, log: (m) => log.line(m) })
-      out.docs.push(...part)
-      out.commits.push(r.commit)
-      out.reviewed += reviewed.length
-    }
-    return out
   }
 
   // 요청마다 서버를 새로 만든다(stateless). 레포 캐시는 store 가 들고 있으므로
@@ -1024,7 +985,6 @@ export async function runServe(opt = {}) {
         url.pathname.startsWith('/admin/') ||
         url.pathname === '/me' ||
         url.pathname === '/repos' ||
-        url.pathname === '/packages' ||
         url.pathname.startsWith('/workrepos')
 
       const a = isBrowserPath
@@ -1186,12 +1146,11 @@ export async function runServe(opt = {}) {
               built: BUILT,
               startedAt,
               node: process.version,
-              repos: { count: list.length, mirror: counts, lag, diverged, behind, dirty, kitStale },
+              repos: { count: list.length, mirror: counts, lag, diverged, behind, dirty },
               saves,
               users: { count: users.length, active: users.filter((u) => u.active).length, admins: admins.length },
               tokens: { active: active.length, soon: soon.length, revoked: tokens.length - active.length },
               workrepos: { count: wrows.length, ...byState },
-              packages: pk ? (await listPackageDirs(pk.dir).catch(() => [])).length : 0,
               doctor: doctorCache.res ? { at: doctorCache.at, ok: doctorCache.res.ok, fails: doctorCache.res.fails, warns: doctorCache.res.warns, oks: doctorCache.res.rows.length - doctorCache.res.fails - doctorCache.res.warns } : null,
               alerts,
               audit: audit.lines.reverse(),
@@ -1303,13 +1262,13 @@ export async function runServe(opt = {}) {
               })
             }
             okLog('/repos', '-')
-            return json(res, 200, { repos: rows, packages: pk ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => ({ name: p.name, title: p.manifest?.title ?? null, version: p.manifest?.version ?? null, description: p.manifest?.description ?? null, docs: p.docs, docList: p.docList })) : [], users: db.users.filter((u) => u.active !== false).map((u) => ({ name: u.name, label: u.label ?? null, all: (u.repos || []).includes('*') })) })
+            return json(res, 200, { repos: rows, users: db.users.filter((u) => u.active !== false).map((u) => ({ name: u.name, label: u.label ?? null, all: (u.repos || []).includes('*') })) })
           }
           if (sub === '/repos' && req.method === 'POST') {
             const body = await readJson()
             if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
             const name = String(body.name || '').trim()
-            const out = await buildRepo({ name, pkgName: String(body.package || '').trim(), origin: body.origin ? String(body.origin).trim() : null, clone: body.clone ? String(body.clone).trim() : null, actor: a.user, examples: body.examples !== false, recordsFrom: body.recordsFrom ? String(body.recordsFrom).trim() : null })
+            const out = await buildRepo({ name, title: body.title ? String(body.title).trim().slice(0, 120) : null, origin: body.origin ? String(body.origin).trim() : null, clone: body.clone ? String(body.clone).trim() : null, actor: a.user, recordsFrom: body.recordsFrom ? String(body.recordsFrom).trim() : null })
             if (out.status === 200 && Array.isArray(body.grant) && body.grant.length) {
               // 세우면서 접근을 준다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다(검토 v0.1 §3.2).
               const granted = []
@@ -1321,12 +1280,6 @@ export async function runServe(opt = {}) {
               }
               if (granted.length) await commit(`repo grant · ${a.user} · ${name} · users=${granted.join(',')}`)
               out.body.granted = granted
-            }
-            // 문서 고르기(관리문서 정리 검토 §4.9) — 세움 커밋 **다음에** 같은 drop save 를 한 번 더. 세우는 길에 두 번째
-            // 지우기 코드를 만들지 않는다. 가리키는 줄은 제안(drop-row · unlink)대로 고치고 산문은 알고 둔다 — 남은 수를 돌려준다
-            if (out.status === 200 && Array.isArray(body.drop) && body.drop.length) {
-              out.body.dropped = await dropAtCreate(path.join(root, name), body.drop.map(String), a.user).catch((e) => ({ error: { code: e?.code || 'E_REPO', message: e?.message || String(e), detail: e?.detail } }))
-              await store.refresh()
             }
             okLog('/repos', name, out.status)
             return json(res, out.status, out.body)
@@ -1501,13 +1454,13 @@ export async function runServe(opt = {}) {
               data: dataDir,
               web: webDir,
               webOk,
-              packages: pk?.dir || null,
+              forms: formsDir?.dir || null,
+              kit: kitDir,
               manual: manualDir,
               mirror: !!opt.mirror,
               publicUrl: opt.publicUrl || null,
               adminFrom: adminFrom.map((c) => c.text),
               privatePages,
-              packagesList: pk ? (await listPackageDirs(pk.dir).catch(() => [])).map((p) => ({ name: p.name, title: p.manifest?.title ?? null, version: p.manifest?.version ?? null, docs: p.docs, types: p.types, patterns: p.patterns })) : [],
               manuals: manuals.list(),
             })
           }
@@ -1521,26 +1474,6 @@ export async function runServe(opt = {}) {
           return fail(e)
         }
         return denied(404, 'E_NOT_FOUND', '없는 관리 경로')
-      }
-
-      // GET /packages — 고를 수 있는 패키지. 권한과 무관하다 — 패키지는 서식이라
-      // 숨길 것이 없다(검토 §3.4). 목록 · 판 · 문서 수만 낸다.
-      if (url.pathname === '/packages' && req.method === 'GET') {
-        if (!pk) return json(res, 200, { dir: null, packages: [] })
-        const list = await listPackageDirs(pk.dir).catch(() => [])
-        log.req({ ip, user: a.user, method: 'GET', tool: '/packages', ms: Date.now() - t0, status: 200 })
-        return json(res, 200, {
-          dir: pk.dir,
-          packages: list.map((p) => ({
-            name: p.name,
-            title: p.manifest.title,
-            version: p.manifest.version,
-            description: p.manifest.description,
-            docs: p.docs,
-            types: p.types,
-            patterns: p.patterns,
-          })),
-        })
       }
 
       if (url.pathname === '/repos' && req.method === 'GET') {
@@ -1695,15 +1628,16 @@ export async function runServe(opt = {}) {
           }
         }
 
-        // POST /api/<repo>/docs-drop — 안 쓰는 관리 문서 지우기(관리문서 정리 검토 §4.9). **admin** · 화면의 「관리 문서」 탭.
+        // POST /api/<repo>/docs-drop — 안 쓰는 관리 문서 지우기(관리문서 정리 검토 §4.9). **그 레포의 큐레이터**(v1.0 — 관리 문서는
+        // 큐레이터만 바꾼다 · admin 은 모든 레포의 큐레이터) · 화면의 「관리 문서」 탭.
         //
         // 파일을 따로 만지지 않는다 — 작업 기록 하나를 지어 `save` 의 `managed: [{ op: "drop" }]` 로 보낸다(MCP 와 같은 검사 ·
         // 한 커밋 · 같은 로그). 몸통 { docs: [경로], reason, edits?, reviewed?, dryRun? }. 미리보기는 dryRun 이다.
         if (sub === '/docs-drop') {
           if (req.method !== 'POST') return json(res, 405, { error: { code: 'E_INPUT', message: 'POST 다' } })
-          if (!a.admin) {
+          if (!(a.curate ? a.curate(name) : !!a.admin)) {
             log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/docs-drop', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
-            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '관리 문서 지우기는 admin 만 한다' } })
+            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '관리 문서 지우기는 그 레포의 큐레이터가 한다', detail: { need: 'curate' } } })
           }
           const got = await readBody(req, 512 * 1024)
           let body = null
@@ -1733,7 +1667,7 @@ export async function runServe(opt = {}) {
               ...(Array.isArray(body.edits) && body.edits.length ? { edits: body.edits } : {}),
               ...(body.dryRun ? { dryRun: true } : {}),
             }
-            const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: true, mirror: !!opt.mirror, log: (m) => log.line(m) })
+            const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: !!a.admin, curate: true, mirror: !!opt.mirror, log: (m) => log.line(m) })
             // **다 읽고 답한다.** 전에는 재스캔을 기다리지 않아, 화면이 곧바로 다시 읽은 목록 · 「지운 관리 문서」 · 검사가
             // 지우기 전 것이었다(실서버 종합 시험 F9)
             if (!out.dryRun) await store.reload(name)

@@ -1,7 +1,8 @@
-// ctx repo — 지식 레포를 세우고 센다. 검토 §3.5 · 제품화 TODO 5단계.
+// ctx repo — 지식 레포를 세우고 센다. v1.0 개편안 §8.2 · §9.1.
 //
-//   ctx repo new  <경로> --package <이름> [--packages <dir>] [--origin <url>] [--push] [--dry] [--no-examples] [--records-from <옛 레포>]
-//                 --records-from — 다시 세우기(v1.0 §9.1): 옛 레포의 작업 기록 · 첨부 · 그 기록의 어휘만 옮긴다. 관리 문서는 큐레이션으로 다시
+//   ctx repo new  <경로> [--title <한 줄>] [--origin <url>] [--push] [--dry] [--records-from <옛 레포>]
+//                 빈 틀 하나로 선다(README · _vocab.md · _managed.md · docs/ · work/). 서식은 서식집 · 스킬은 서버 kit 이다
+//                 --records-from — 다시 세우기(§9.1): 옛 레포의 작업 기록 · 첨부 · 그 기록의 어휘만 옮긴다. 관리 문서는 큐레이션으로 다시
 //   ctx repo list --root <폴더>
 //
 // **계산은 `core/reponew.js` 가 한다.** 관리 서비스의 콘솔(`POST /admin/repos`)이 같은
@@ -9,9 +10,7 @@
 
 import path from 'node:path'
 import { newRepo, listRepos } from '../../core/reponew.js'
-import { listPackages, statsOf } from '../../core/packages.js'
 import { toError } from '../../core/tools.js'
-import { resolvePackages, materializePackage } from './ctx-package.mjs'
 
 const NL = String.fromCharCode(10)
 const out = (s = '') => process.stdout.write(s + NL)
@@ -25,51 +24,32 @@ export async function runRepo(opt) {
   const [sub, arg] = opt.args
   try {
     if (sub === 'new') {
-      if (!arg || !opt.package) {
-        err('ctx repo new <경로> --package <이름> [--origin <url>] [--push] [--dry] [--no-examples] [--records-from <옛 레포>]')
-        // 패키지가 여럿이면 이름을 알아야 고른다 — 있는 것을 같이 찍는다
-        const pk0 = await resolvePackages({ explicit: opt.packages }).catch(() => null)
-        const names = pk0
-          ? (await listPackages(pk0.dir).catch(() => [])).map((p) => p.name + (p.manifest?.title ? ' (' + p.manifest.title + ')' : ''))
-          : []
-        if (names.length) err('  패키지: ' + names.join(' · '))
+      if (!arg) {
+        err('ctx repo new <경로> [--title <한 줄>] [--origin <url>] [--push] [--dry] [--records-from <옛 레포>]')
         return 2
       }
-      const pk = await resolvePackages({ explicit: opt.packages })
-      if (!pk) {
-        err('ctx repo new: 패키지 폴더를 찾을 수 없다. --packages <dir> 또는 CDP_PACKAGES')
-        return 2
+      // v0.x 의 패키지는 v1.0 에서 없다 — 서식은 서식집(큐레이터가 문서를 세울 때 고른다). 주면 알리고 빈 틀로 간다
+      if (opt.package && opt.package !== 'blank') err(`ctx repo new: --package ${opt.package} 는 v1.0 에서 없다 — 빈 틀로 세운다. 서식은 큐레이터가 서식집(forms)에서 고른다`)
+      const r = await newRepo({ dest: arg, title: opt.title || null, origin: opt.origin || null, push: !!opt.push, dry: !!opt.dry, records: opt.recordsFrom ? { root: opt.recordsFrom } : null })
+      if (r.dry) {
+        out(`ctx repo new --dry: ${r.dest}`)
+        for (const s of r.steps) out('  ' + s)
+        return 0
       }
-      const { from, cleanup } = await materializePackage(pk, opt.package)
-      try {
-        const r = await newRepo({ from, dest: arg, origin: opt.origin || null, push: !!opt.push, dry: !!opt.dry, examples: !opt.noExamples, records: opt.recordsFrom ? { root: opt.recordsFrom } : null })
-        if (r.dry) {
-          out(`ctx repo new --dry: ${r.dest}`)
-          for (const s of r.steps) out('  ' + s)
-          return 0
-        }
-        out(`ctx repo new: ${r.dest}`)
-        out(`  패키지  ${opt.package}`)
-        out(`  첫 커밋 ${r.commit} · 파일 ${r.files}`)
-        if (r.records) {
-          out(`  옮긴 것  ${r.records.from} 의 작업 기록 ${r.records.records}건 · 첨부 ${r.records.assets}곳 · 어휘 ${r.records.vocab}줄${r.records.skipped.length ? ` · 옛 기계 기록 ${r.records.skipped.length}건은 두고 왔다` : ''}`)
-          if (r.records.missing.length) out(`  ⚠ 옛 어휘에 없던 좌표 ${r.records.missing.length}개 — ${r.records.missing.slice(0, 5).join(' · ')}${r.records.missing.length > 5 ? ' …' : ''} (check 가 미등재로 알린다)`)
-          out('  옮긴 기록은 전부 큐레이션 대기열에 선다 — 큐레이터가 cdp-curate 로 관리 문서를 세운다')
-        }
-        if (r.examples) out(`  서식 예시 뺌 — 좌표 ${r.examples.coords} · 섹션 ${r.examples.sections}${r.examples.left ? ` · 표에 남은 예시 행 ${r.examples.left}(ctx examples)` : ''}`)
-        if (r.origin) out(`  origin  ${r.origin}${r.pushed ? '  (push 완료)' : r.pushError ? '  (push 실패: ' + r.pushError + ')' : '  (push 안 함 — --push)'}`)
-        out('')
-        out('다음 —')
-        // 첫 일은 패키지가 정한다 — 문서를 부었으면 안 쓰는 것을 걷고, 빈 패키지(blank)면 첫 관리 문서를 세운다
-        const docs = (await statsOf(r.dest)).docs.length
-        if (docs) out('  1. 안 쓰는 문서를 지운다 — bin/ctx docs 로 보고 bin/ctx docs drop <문서…> --dry-run (README.md 「첫날」)')
-        else out('  1. 첫 관리 문서를 세운다 — 등록부 행 · 문서 · 어휘를 같이 (README.md 「첫날」)')
-        out('  2. bin/ctx check 가 이상 없음이면 시작할 수 있다')
-        if (!r.origin) out('  3. 원격이 있으면 git remote add origin <url> && git push -u origin HEAD')
-        return r.pushError ? 1 : 0
-      } finally {
-        await cleanup()
+      out(`ctx repo new: ${r.dest}`)
+      out(`  첫 커밋 ${r.commit} · 파일 ${r.files}`)
+      if (r.records) {
+        out(`  옮긴 것  ${r.records.from} 의 작업 기록 ${r.records.records}건 · 첨부 ${r.records.assets}곳 · 어휘 ${r.records.vocab}줄${r.records.skipped.length ? ` · 옛 기계 기록 ${r.records.skipped.length}건은 두고 왔다` : ''}`)
+        if (r.records.missing.length) out(`  ⚠ 옛 어휘에 없던 좌표 ${r.records.missing.length}개 — ${r.records.missing.slice(0, 5).join(' · ')}${r.records.missing.length > 5 ? ' …' : ''} (check 가 미등재로 알린다)`)
+        out('  옮긴 기록은 전부 큐레이션 대기열에 선다 — 큐레이터가 cdp-curate 로 관리 문서를 세운다')
       }
+      if (r.origin) out(`  origin  ${r.origin}${r.pushed ? '  (push 완료)' : r.pushError ? '  (push 실패: ' + r.pushError + ')' : '  (push 안 함 — --push)'}`)
+      out('')
+      out('다음 —')
+      out('  1. 서버의 <root> 아래에 두면 화면 · MCP 에 레포가 선다 — 사용자 · 큐레이터 권한은 콘솔 › 사용자')
+      out('  2. 작업 레포마다 설치 한 줄(화면 「에이전트 설치」) · 큐레이터는 --curator')
+      if (!r.origin) out('  3. 원격이 있으면 콘솔 「origin 연결」 또는 git remote add origin <url> && git push -u origin HEAD')
+      return r.pushError ? 1 : 0
     }
 
     if (sub === 'list') {
@@ -83,7 +63,7 @@ export async function runRepo(opt) {
         out(JSON.stringify(rows, null, 2))
         return 0
       }
-      out(`${pad('이름', 16)}${pad('레포', 6)}${pad('git', 5)}${pad('head', 9)}${pad('미러', 8)}${pad('훅', 6)}upstream`)
+      out(`${pad('이름', 16)}${pad('레포', 6)}${pad('git', 5)}${pad('head', 9)}${pad('미러', 8)}upstream`)
       for (const r of rows) {
         out(
           pad(r.name, 16) +
@@ -91,7 +71,6 @@ export async function runRepo(opt) {
             pad(r.git ? 'O' : '-', 5) +
             pad(r.head || '-', 9) +
             pad(!r.git ? '-' : !r.upstream ? 'off' : r.ahead > 0 ? `lag ${r.ahead}` : 'ok', 8) +
-            pad(r.hooksPath ? 'O' : '-', 6) +
             (r.upstream || '')
         )
       }
@@ -104,6 +83,6 @@ export async function runRepo(opt) {
     const x = toError(e)
     err(`ctx repo: ${x.message}`)
     if (x.detail?.message) err('  ' + String(x.detail.message).split(NL).join(NL + '  '))
-    return e?.code === 'E_CHECK' ? 1 : 2
+    return 2
   }
 }

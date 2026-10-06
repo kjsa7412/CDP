@@ -1,18 +1,15 @@
-// 지식 레포를 세운다 — 완성된 폴더를 복사하고 git 을 초기화한다. 검토 §3.5 · R6.
+// 지식 레포를 세운다 — 빈 틀(`core/skeleton.js`)을 쓰고 git 을 초기화한다. v1.0 개편안 §8.2 · I9.
 //
-// "복사하면 그게 지식 레포다"(install.md ③)가 사람 손이었다 — xcopy · git init ·
-// hooksPath 세 줄. 로컬에서는 그것으로 족하지만 서버에는 복사할 사람이 없다.
-// 그래서 그 세 줄을 함수로 만들고, CLI(`ctx repo new`)와 관리 서비스
-// (콘솔의 `POST /admin/repos`)가 **같은 것을** 부른다.
+// CLI(`ctx repo new`)와 관리 서비스(콘솔의 `POST /admin/repos`)가 **같은 것을** 부른다.
 //
 //   0  dest 가 없거나 빈 폴더여야 한다.  남의 폴더에 쓰지 않는다
-//   1  from 을 복사한다.  exe · _package.json 은 담지 않는다
-//   2  work/.gitkeep · git init · core.hooksPath .githooks
-//   3  첫 커밋 — **훅이 돈다.** ctx check 를 통과해야 세워진 것이다
+//   1  빈 틀 — README · _vocab.md · _managed.md · .gitattributes · .gitignore · docs/ · work/
+//   2  다시 세우기면 옛 레포의 작업 기록 · 첨부 · 그 기록이 건드리는 어휘(§9.1)
+//   3  git init · 첫 커밋 — 훅은 없다(레포에는 지식만 · save 의 검사가 보증이다)
 //   4  origin 이 있으면 remote add · push 면 push -u
 //
-// 판정을 새로 짜지 않는다 — 검사는 훅이 `bin/ctx check` 로 한다. 그것이
-// 통과하지 않으면 dest 를 지우고 E_CHECK 다. 반쪽 레포를 남기지 않는다.
+// v0.x 의 패키지 붓기(복사 · 서식 예시 · 도구 층 · hooksPath · 첫 커밋의 훅)는 v1.0 에서 끝났다 — 서식은 서식집,
+// 스킬은 서버 번들의 kit 이다.
 
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -20,16 +17,14 @@ import path from 'node:path'
 import { CtxError } from './tools.js'
 import { status as gitStatus, classifyPushError, maskUrl } from './git.js'
 import { isSsh } from './gitauth.js'
-import { purgeTree } from './examplestree.js'
 import { loadRepo } from './repo.js'
 import { pickRecords, carryVocab, mergeVocab } from './rebuild.js'
+import { skeletonFiles } from './skeleton.js'
 
 export const REPO_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 // 원격 주소의 모양 — http(s) · ssh · scp 꼴(`git@host:…`) · 파일. 세우기 · 받아 오기 · 잇기가 같은 것을 본다.
 export const ORIGIN_RE = /^(https?:\/\/|ssh:\/\/|git@|file:\/\/|\/|[A-Za-z]:[\\/])/
-
-const SKIP = new Set(['_package.json', 'convert'])
 
 function git(cwd, args, { timeout = 60000, env } = {}) {
   return new Promise((resolve) => {
@@ -43,39 +38,22 @@ async function isDir(p) {
   return fs.stat(p).then((s) => s.isDirectory()).catch(() => false)
 }
 
-async function copyTree(src, dst) {
-  await fs.mkdir(dst, { recursive: true })
-  for (const e of await fs.readdir(src, { withFileTypes: true })) {
-    if (SKIP.has(e.name)) continue
-    if (e.isFile() && /[.]exe$/i.test(e.name)) continue
-    const s = path.join(src, e.name)
-    const d = path.join(dst, e.name)
-    if (e.isDirectory()) await copyTree(s, d)
-    else await fs.copyFile(s, d)
-  }
-}
-
 /**
- * @param from     완성된 지식 레포 폴더 (서버 산출물 packages/<이름>/ 또는 assemble 결과)
- * @param dest     만들 자리
+ * @param dest     만들 자리 — 폴더 이름이 레포 이름이다
+ * @param title    README 첫 문단(레포의 한 줄 설명). 없으면 「지식 레포」 · 다시 세우기면 옮겨 온 사실
  * @param origin   git 원격 주소 (선택). **이미 있는 빈 프로젝트**여야 한다 — 서버가 만들 수는 없다
  * @param push     origin 에 첫 커밋을 보낼지
  * @param author   첫 커밋의 작성자 이름 (기본 cdp)
  * @param dry      무엇을 할지만 낸다
- * @param examples  false 면 서식 예시(`example:` 어휘 · 짝 섹션 · (예시) 섹션)를 빼고 세운다(등록부 사본 검토 X14). 기본은 지금처럼 둔다
  * @param sshCommand  origin 이 ssh 면 레포 로컬 설정으로 거는 한 줄(서버의 배포 키 · git 자격 TODO G2). 없으면 ssh 기본값
  * @param records  { root } — **다시 세우기**(v1.0 §9.1). 옛 레포의 작업 기록 · 첨부와 그 기록이 건드리는 어휘만 옮겨 첫 커밋에 넣는다.
  *                 관리 문서 · 등록부 행 · 옛 기계 기록은 옮기지 않는다 — 옮긴 기록은 전부 큐레이션 대기열에 선다
+ * @param now      README 의 날짜(시험이 고정한다)
  */
-export async function newRepo({ from, dest, origin = null, push = false, author = 'cdp', dry = false, sshCommand = null, examples = true, records = null }) {
-  const src = path.resolve(from)
+export async function newRepo({ dest, title = null, origin = null, push = false, author = 'cdp', dry = false, sshCommand = null, records = null, now = new Date() }) {
   const dst = path.resolve(dest)
   const name = path.basename(dst)
 
-  if (!(await isDir(src))) throw new CtxError('E_INPUT', `복사할 폴더가 없다 — ${src}`, { from: src })
-  if (!(await fs.access(path.join(src, '_vocab.md')).then(() => true).catch(() => false))) {
-    throw new CtxError('E_INPUT', '완성된 지식 레포 폴더가 아니다 (_vocab.md 없음)', { from: src })
-  }
   if (!REPO_NAME_RE.test(name)) throw new CtxError('E_INPUT', '레포 이름 형식이 아니다 (영문·숫자·._-)', { name })
   if (await isDir(dst)) {
     const ents = await fs.readdir(dst)
@@ -97,11 +75,10 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
   const picked = old ? pickRecords(old.works) : null
   const plan = {
     name,
-    from: src,
     dest: dst,
     origin,
     push,
-    steps: ['복사', ...(examples ? [] : ['서식 예시 빼기']), ...(picked ? [`작업 기록 ${picked.keep.length}건 · 첨부 · 어휘 옮기기 (옛 기계 기록 ${picked.skip.length}건은 옮기지 않는다)`] : []), 'work/.gitkeep', 'git init', 'core.hooksPath .githooks', '첫 커밋 (훅이 ctx check 를 돈다)'],
+    steps: ['빈 틀(README · _vocab.md · _managed.md · .gitattributes · .gitignore · docs/ · work/)', ...(picked ? [`작업 기록 ${picked.keep.length}건 · 첨부 · 어휘 옮기기 (옛 기계 기록 ${picked.skip.length}건은 옮기지 않는다)`] : []), 'git init', '첫 커밋'],
   }
   if (origin) plan.steps.push('remote add origin')
   if (origin && push) plan.steps.push('push -u origin HEAD')
@@ -109,13 +86,15 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
 
   let created = false
   try {
-    await copyTree(src, dst)
+    const p2 = (n) => String(n).padStart(2, '0')
+    const date = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`
+    const files = skeletonFiles({ name, title, rebuiltFrom: old ? path.basename(old.root) : null, date })
+    await fs.mkdir(dst, { recursive: true })
     created = true
-    // 서식 예시를 빼고 세운다 — 첫 커밋 **전에**. 훅의 검사가 뺀 뒤의 트리를 본다
-    let purged = null
-    if (!examples) purged = await purgeTree(dst)
-    await fs.mkdir(path.join(dst, 'work'), { recursive: true })
-    await fs.writeFile(path.join(dst, 'work', '.gitkeep'), '')
+    for (const [rel, text] of Object.entries(files)) {
+      await fs.mkdir(path.dirname(path.join(dst, rel)), { recursive: true })
+      await fs.writeFile(path.join(dst, rel), text, 'utf8')
+    }
     // 다시 세우기 — 기록은 글자 하나 바꾸지 않고 옮긴다(사건이다). 첨부는 그 기록의 자리(`work/assets/<id>/`) 그대로
     let moved = null
     if (picked) {
@@ -130,32 +109,24 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
       }
       const touched = new Set(picked.keep.flatMap((d) => d.touches || []))
       const v = carryVocab(old.vocabText || '', touched)
-      const base = await fs.readFile(path.join(dst, '_vocab.md'), 'utf8')
-      await fs.writeFile(path.join(dst, '_vocab.md'), mergeVocab(base, v.text))
+      await fs.writeFile(path.join(dst, '_vocab.md'), mergeVocab(files['_vocab.md'], v.text))
       moved = { from: path.basename(old.root), records: picked.keep.length, assets, skipped: picked.skip, vocab: v.carried.length, missing: v.missing }
     }
-    // sh 스크립트 실행 권한 — POSIX 에서만 뜻이 있다
-    for (const f of ['bin/ctx', '.githooks/pre-commit']) await fs.chmod(path.join(dst, f), 0o755).catch(() => {})
 
     let r = await git(dst, ['init', '-q'])
     if (!r.ok) throw new CtxError('E_GIT', 'git init 실패 — ' + r.err, {})
-    r = await git(dst, ['config', 'core.hooksPath', '.githooks'])
-    if (!r.ok) throw new CtxError('E_GIT', 'hooksPath 설정 실패 — ' + r.err, {})
-    // 훅 · bin/ctx 가 CRLF 로 체크아웃되지 않게 — .gitattributes 가 있지만 이 PC 의
-    // autocrlf 가 add 시점에 먹으므로 로컬 설정으로 한 번 더 막는다.
+    // .gitattributes 가 LF 를 정하지만 이 PC 의 autocrlf 가 add 시점에 먹으므로 로컬 설정으로 한 번 더 막는다
     await git(dst, ['config', 'core.autocrlf', 'false'])
     r = await git(dst, ['add', '-A'])
     if (!r.ok) throw new CtxError('E_GIT', 'git add 실패 — ' + r.err, {})
 
-    // **첫 커밋에서 훅이 돈다.** 여기서 막히면 패키지가 규약을 어긴 것이다.
+    // 훅은 없다 — 이 PC 에 전역 훅이 걸려 있어도 돌리지 않는다(save 커밋과 같다 · V5)
     const who = `${author} <${author}@cdp>`
-    const msg = moved ? `지식 레포 다시 세움 — ${moved.from} 의 작업 기록 ${moved.records}건을 옮겼다(관리 문서는 큐레이션으로 다시)` : `지식 레포 세움 — ${path.basename(src)}`
-    r = await git(dst, ['-c', 'user.name=' + author, '-c', 'user.email=' + author + '@cdp', 'commit', '-q', '--author=' + who, '-m', msg])
-    if (!r.ok) {
-      throw new CtxError('E_CHECK', '첫 커밋이 막혔다 — 훅의 검사가 통과하지 않았다', { message: (r.err || r.out).split('\n').slice(0, 12).join('\n') })
-    }
+    const msg = moved ? `지식 레포 다시 세움 — ${moved.from} 의 작업 기록 ${moved.records}건을 옮겼다(관리 문서는 큐레이션으로 다시)` : '지식 레포 세움 — 빈 틀'
+    r = await git(dst, ['-c', 'user.name=' + author, '-c', 'user.email=' + author + '@cdp', 'commit', '-q', '--no-verify', '--author=' + who, '-m', msg])
+    if (!r.ok) throw new CtxError('E_GIT', '첫 커밋 실패 — ' + (r.err || r.out).split('\n').slice(0, 6).join(' / '), {})
     const head = await git(dst, ['rev-parse', '--short', 'HEAD'])
-    const files = Number((await git(dst, ['ls-files'])).out.split('\n').filter(Boolean).length)
+    const count = Number((await git(dst, ['ls-files'])).out.split('\n').filter(Boolean).length)
 
     let pushed = false
     if (origin) {
@@ -167,12 +138,12 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
         if (!r.ok) {
           // push 실패는 레포를 지울 이유가 아니다 — 세워진 것은 세워진 것이고,
           // 미러가 밀린 것은 `sync.mirror = lag` 로 보인다. 다만 사실을 알린다.
-          return { ...plan, commit: head.out, files, pushed: false, pushError: (r.err || r.out).split('\n')[0], ...(purged ? { examples: purged } : {}), ...(moved ? { records: moved } : {}) }
+          return { ...plan, commit: head.out, files: count, pushed: false, pushError: (r.err || r.out).split('\n')[0], ...(moved ? { records: moved } : {}) }
         }
         pushed = true
       }
     }
-    return { ...plan, commit: head.out, files, pushed, ...(purged ? { examples: purged } : {}), ...(moved ? { records: moved } : {}) }
+    return { ...plan, commit: head.out, files: count, pushed, ...(moved ? { records: moved } : {}) }
   } catch (e) {
     // 반쪽 레포를 남기지 않는다. 우리가 만든 것만 지운다.
     if (created) await fs.rm(dst, { recursive: true, force: true }).catch(() => {})
@@ -181,8 +152,8 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
 }
 
 // origin 에서 받아 온다 — 등록의 **다른 길**(제품관리서비스 검토 D9). `git clone` 뒤 지식 레포인지
-// (`_vocab.md`) 본다. 아니면 지운다 — 남의 레포를 <root> 에 두지 않는다. 훅 경로도 건다(로컬형 clone
-// 과 같은 세 줄). 콘솔 `POST /admin/repos { clone }` 가 부른다.
+// (`_vocab.md`) 본다. 아니면 지운다 — 남의 레포를 <root> 에 두지 않는다. 훅은 걸지 않는다(v1.0 — save 커밋은
+// `--no-verify` · 옛 레포의 도구 층은 `ctx migrate` 가 걷는다). 콘솔 `POST /admin/repos { clone }` 가 부른다.
 export async function cloneRepo({ url, dest, timeout = 120000, sshCommand = null }) {
   const dst = path.resolve(dest)
   if (!url || !ORIGIN_RE.test(String(url))) {
@@ -201,7 +172,6 @@ export async function cloneRepo({ url, dest, timeout = 120000, sshCommand = null
     await fs.rm(dst, { recursive: true, force: true }).catch(() => {})
     throw new CtxError('E_CHECK', 'clone 은 됐지만 지식 레포가 아니다(_vocab.md 없음) — 지웠다', { url })
   }
-  await git(dst, ['config', 'core.hooksPath', '.githooks'])
   if (ssh.length) await git(dst, ['config', 'core.sshCommand', sshCommand])
   const head = await git(dst, ['rev-parse', '--short', 'HEAD'])
   return { dest: dst, commit: head.out || null, origin: String(url) }

@@ -109,6 +109,14 @@ export default function Server({ say, route }) {
             {sv.manual && <Mono>{sv.manual}</Mono>}
             {!sv.webOk && <span className="awarn">index.html 없음</span>}
           </Row>
+          {/* 서식집 · kit — 새 문서의 서식과 작업 레포의 스킬이 나가는 자리(v1.0 §8). 옛 서버는 값이 없어 줄째 없다 */}
+          {('forms' in sv || 'kit' in sv) && (
+            <Row label="서식집 · kit">
+              <Mono>{sv.forms || '—'}</Mono>
+              <Mono>{sv.kit || '—'}</Mono>
+              {(!sv.forms || !sv.kit) && <span className="awarn">없음 — --forms · --kit</span>}
+            </Row>
+          )}
           {/* 패키지 — 옛 서버만 낸다(v0.27 부터 서식집 · 개편안 §8.1). 없으면 줄째 없다 */}
           {Array.isArray(sv.packagesList) && (
             <Row label="패키지">

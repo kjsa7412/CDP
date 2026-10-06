@@ -273,7 +273,7 @@ test('사용 현황 — 서식 그대로 · 쓰는 중 · 필수 · 들어오는
 
 // 패키지 그대로 — 검토 Q5 의 실측(TE_202 하나 · 시험 3벌)을 못박는다
 test('public-si 패키지 — TE_202 를 가리키는 줄 · 묶음이면 서로의 참조가 빠진다', () => {
-  const root = path.resolve('agent/packages/public-si')
+  const root = path.resolve('test/fixtures/legacy-public-si')
   const files = []
   ;(function walk(d, rel = '') {
     for (const f of fs.readdirSync(d)) {

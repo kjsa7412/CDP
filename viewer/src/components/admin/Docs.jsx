@@ -1,18 +1,19 @@
 // 관리 문서 — 목록 · 사용 현황 · 안 쓰는 문서 지우기. 관리문서 정리 검토 v0.1 §4.9.
 //
-// 패키지는 40종을 붓고 한 프로젝트가 다 쓰지 않는다. 여기서 문서마다 「쓰는가」(작업 기록이 쓴 섹션 · 닿은 작업 기록 ·
-// 들어오는 참조 · 필수 제출 · 마지막 변경)를 보고, admin 은 고른 문서를 지운다.
+// 옛 레포는 패키지가 40종을 부어 한 프로젝트가 다 쓰지 않는다. 여기서 문서마다 「쓰는가」(작업 기록이 쓴 섹션 · 닿은 작업 기록 ·
+// 들어오는 참조 · 필수 제출 · 마지막 변경)를 보고, 그 레포의 큐레이터는 고른 문서를 지운다.
 //
 // **화면은 계획을 세우지 않는다.** 미리보기도 지우기도 서버의 `save`(managed drop)를 부른다 — 미리보기는 `dryRun` 이고
 // 고칠 줄(refs)과 그 초안(edit)도 서버가 준다. 화면은 줄마다 「행 지우기 · 링크만 풀기 · 알고 둔다」 를 고르게 할 뿐이다.
-// 산문을 고쳐 쓰지 않는다 — 그건 에이전트(`cdp-managed`)에게.
+// 산문을 고쳐 쓰지 않는다 — 그건 에이전트(`cdp-registry`)에게.
 //
-// 보기는 누구나 · 지우기 단추는 서버형 admin 에게만(없는 상태를 그리지 않는다). 로컬(모드 A)은 `ctx docs drop` 을 보인다.
+// 보기는 누구나 · 지우기 단추는 그 레포의 큐레이터에게만(v1.0 — 관리 문서는 큐레이터만 바꾼다 · admin 은 모든 레포의 큐레이터).
 
 import { useMemo, useState } from 'react'
 import { api, isServer, currentRepo } from '../../lib/api.js'
+import { can } from '../../lib/roles.js'
 import { useResource } from '../../lib/cache.js'
-import { Card, Note, Btn, Mono, Cmd } from './ui.jsx'
+import { Card, Note, Btn } from './ui.jsx'
 
 const FILTERS = [
   ['all', '전부'],
@@ -26,7 +27,7 @@ const groupOf = (no) => (no && /\d{2,}$/.test(no) ? no.slice(0, -1) : null)
 
 export default function Docs({ me = null, say, onChanged = null }) {
   const server = isServer()
-  const canDrop = server && !!me?.admin
+  const canDrop = server && can(me, 'curate', currentRepo())
   // 목록은 캐시(화면 · 권한 검토 v0.1 R8) — 전에는 마운트마다 처음부터 읽어 메뉴로 오갈 때마다 「읽는 중…」 이 섰다(실측 55/59 프레임).
   // 지운 뒤에는 refresh 로 새로 읽는다
   const rk = currentRepo() || 'local'
@@ -208,13 +209,7 @@ export default function Docs({ me = null, say, onChanged = null }) {
             </Btn>
           </div>
         )}
-        {!server && (
-          <Note>
-            로컬에서는 셸로 지운다 — 파일만 고치고 커밋은 사람이 한다(훅이 검사한다). 먼저 <Mono>--dry-run</Mono> 으로 본다.
-            <Cmd>ctx docs drop TE_201 TE_202 TE_203 --dry-run</Cmd>
-          </Note>
-        )}
-        {server && !canDrop && <Note>지우기는 admin 이 한다 — 지울 문서를 골라 admin 에게 요청한다.</Note>}
+        {server && !canDrop && <Note>지우기는 그 레포의 큐레이터가 한다 — 지울 문서를 골라 큐레이터에게 요청한다.</Note>}
       </Card>
 
       {preview && <Preview preview={preview} setPreview={setPreview} reason={reason} setReason={setReason} busy={busy} onDrop={runDrop} onCancel={() => setPreview(null)} />}

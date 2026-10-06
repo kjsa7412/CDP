@@ -13,14 +13,12 @@ import { save } from '../core/save.js'
 import { loadRepo } from '../core/repo.js'
 import { toolCheck, toolDocs, toolMatch } from '../core/tools.js'
 import { regenerate, proseConflicts } from '../core/regen.js'
-import { planPurge } from '../core/examples.js'
-import { purgeTree } from '../core/examplestree.js'
 
 const run = promisify(execFile)
 const hasGit = await run('git', ['--version']).then(() => true).catch(() => false)
 const g = (cwd, ...args) => run('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@x', ...args])
 const skip = !hasGit && 'git 이 없다'
-const PKG = path.resolve('agent/packages/public-si')
+const PKG = path.resolve('test/fixtures/legacy-public-si')
 const BM = 'docs/1.관리/BM_411_회의록.md'
 // 큐레이터(admin 아님) — v1.0 에서 등록부 · 섹션 · 손질은 레포별 큐레이터가 쓴다
 const writer = { user: 'hong', write: true, curate: true }
@@ -171,22 +169,5 @@ test('R5 — docs 한 번에 관리 문서 40 · 등록부 여부 / match(["회�
     assert.match(toolDocs(r, { doc: '_vocab.md' }).text, /cdp:registry/)
   } finally {
     await R.rm()
-  }
-})
-
-test('세울 때 예시 빼기 — purgeTree 가 planPurge 와 같은 것을 지운다', async () => {
-  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-purgetree-'))
-  try {
-    await copyDir(PKG, d)
-    const r0 = await loadRepo(d)
-    const plan = planPurge({ vocabText: r0.vocabText, registry: r0.registry, docs: new Map(r0.managedDocs.map((x) => [x.path, r0.bodies.get(x.path)])) })
-    const got = await purgeTree(d)
-    assert.equal(got.coords, plan.coords.length)
-    assert.equal(got.sections, plan.sections.length)
-    const r1 = await loadRepo(d)
-    assert.equal([...r1.vocab.coords.values()].filter((e) => e.example).length, 0)
-    assert.equal(toolCheck(r1).ok, true)
-  } finally {
-    await fs.rm(d, { recursive: true, force: true })
   }
 })

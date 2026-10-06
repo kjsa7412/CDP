@@ -1,6 +1,6 @@
 // ctx serve doctor · init — 서버 준비물을 명령 하나로. 검토 §3.3 · 제품화 TODO 3.3 · 3.4.
 //
-//   ctx serve doctor --root <폴더> --auth <f> --data <d> [--web <dir>] [--manual <dir>] [--bind <IP>] [--port <n>] [--packages <dir>] [--json]
+//   ctx serve doctor --root <폴더> --auth <f> --data <d> [--web <dir>] [--manual <dir>] [--bind <IP>] [--port <n>] [--forms <dir>] [--kit <dir>] [--json]
 //   ctx serve init   --auth <f> --data <d> --name <이름> [--label …] [--repos *]
 //
 // `doctor` 는 설치절차 0장(준비물)과 4장 끝(push --dry-run)과 6장 확인을 한
@@ -21,7 +21,6 @@ import * as auth from '../../core/auth.js'
 import { listRepos } from '../../core/reponew.js'
 import { classifyPushError } from '../../core/git.js'
 import { REASON_TEXT } from '../../core/mirror.js'
-import { resolvePackages } from './ctx-package.mjs'
 import { findKitDir } from '../../core/kit.js'
 import { findFormsDir } from '../../core/formslib.js'
 import { TOOL_LAYER } from '../../core/migrate.js'
@@ -135,13 +134,6 @@ export async function doctorRows(opt) {
   const forms = await findFormsDir({ explicit: opt.forms })
   if (forms) ok('forms', `${forms.dir} (${forms.how})`)
   else warn('forms', '없다 — 서식에서 새 관리 문서를 세울 수 없다(큐레이터 forms · managed.add { form }). 산출물의 forms/ 을 두거나 --forms')
-
-  // ── 패키지
-  const pk = await resolvePackages({ explicit: opt.packages })
-  if (pk) {
-    const n = (await fs.readdir(pk.dir, { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory()).length
-    ok('packages', `${pk.dir} (${pk.how}) · ${n}개`)
-  } else warn('packages', '없다 — ctx repo new 를 쓰려면 --packages')
 
   // ── 레포
   if (!opt.root) fail('--root', '없다')

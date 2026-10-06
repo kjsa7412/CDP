@@ -47,10 +47,9 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx serve git-auth --ssh --data <dir> [--rotate] | --list      SSH 배포 키(공개 키를 GitLab 에) · 지금 상태
   ctx serve doctor --root … --auth … --data …   서버 준비물 검사 (fail 이면 exit 1)
   ctx serve init --auth <f> --name <이름>       첫 관리자 + 토큰을 한 번에 (명부가 없을 때만 · 브라우저 /setup 과 같은 일)
-  ctx package list|show|check|new|rename    패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로 · 이름 바꿈
-  ctx repo new <경로> --package <이름> [--origin <url>] [--push] [--no-examples]   지식 레포를 세운다
+  ctx repo new <경로> [--title <한 줄>] [--origin <url>] [--push]   지식 레포를 빈 틀로 세운다(서식은 서식집 · 스킬은 서버 kit)
   ctx repo list --root <폴더>               서버 <root> 의 레포 목록
-  ctx repo new <경로> --package blank --records-from <옛 레포>   다시 세우기 — 작업 기록 · 첨부 · 그 기록이 쓰는 어휘만 옮긴다
+  ctx repo new <경로> --records-from <옛 레포>   다시 세우기 — 작업 기록 · 첨부 · 그 기록이 쓰는 어휘만 옮긴다
   ctx baseline extract|push …               옛 섹션을 기준선 블록으로 옮긴다(다시 세운 레포의 출발점)
   ctx migrate <레포> [--dry] [--by <이름>] [--keep-tools]   제자리 이행 — 전환 기록 하나 · 서식 예시 · 도구 층 걷기(서버를 멈추고)
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
@@ -58,9 +57,9 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
   --root <폴더>             ctx serve -- 그 폴더의 하위를 전부 레포로 본다
   --prompts auto|always|never   MCP prompt 노출 (기본 auto)
-  --bind · --port · --auth · --data · --mirror · --web · --packages   ctx serve 용
+  --bind · --port · --auth · --data · --mirror · --web · --forms · --kit   ctx serve 용
   --manual <dir> · --private-pages · --admin-from <cidr,…>            ctx serve 용 — 설명서 폴더 · 소개/설명서에 로그인 요구 · 관리 API 대역
-  --packages <dir>          패키지 폴더 (기본: CDP_PACKAGES → 번들 옆 packages/ → 소스 agent/packages)
+  --forms <dir> · --kit <dir>   서식집 · 작업 레포 kit (기본: CDP_FORMS · CDP_KIT → 번들 옆 forms/ · kit/ → 소스 agent/)
   --json                    기계 판독용 출력
 `
 
@@ -629,8 +628,8 @@ export async function main(argv = process.argv.slice(2)) {
   }
   // 패키지 · 레포 · 이관 — 지식 레포 **밖**에서 도는 명령이다. findRepo 를 타지 않는다.
   if (opt.cmd === 'package') {
-    const { runPackage } = await import('./ctx-package.mjs')
-    return runPackage(opt)
+    err('ctx package: v1.0 에서 없앴다 — 새 레포는 빈 틀(ctx repo new)이고 서식은 서식집(큐레이터의 forms · 화면 「큐레이션 › 서식집」)이다')
+    return 2
   }
   if (opt.cmd === 'repo') {
     const { runRepo } = await import('./ctx-repo.mjs')

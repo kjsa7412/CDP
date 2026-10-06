@@ -19,7 +19,6 @@ import {
   ADDED_NOTE,
 } from '../core/managed.js'
 import { planManaged, checkManagedShape, needsAdmin } from '../core/managedops.js'
-import { listPackages } from '../core/packages.js'
 
 const NL = '\n'
 const REG = ['# 등록부', '', '| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|', '| `table:*` | `docs/t.md` | `## {값}` |', '| `note:*` | `docs/n.md` | `—` |', '', '## 설명 표 — 규칙이 아니다', '', '| | 16종 | 여기 |', '|---|---|---|', '| `배치:` | 사양서 | 인터페이스 |', ''].join(NL)
@@ -112,15 +111,11 @@ test('lintRegistry — 탈출 · docs/ 밖 · 덮임 · 레벨 섞임', () => {
   assert.deepEqual(l.levelMix.map((x) => [x.doc, x.levels]), [['docs/t.md', [2, 3]]])
 })
 
-test('패키지 셋의 등록부는 lintRegistry 가 전부 0건이다', async () => {
-  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'agent', 'packages')
-  const pk = await listPackages(dir)
-  assert.ok(pk.length >= 3)
-  for (const p of pk) {
-    const reg = parseRegistry(await fs.readFile(path.join(p.path, '_managed.md'), 'utf8'))
-    const l = lintRegistry(reg.rules)
-    assert.deepEqual(l, { escape: [], outside: [], shadowed: [], levelMix: [] }, p.name)
-  }
+test('옛 레포 표본(public-si)의 등록부는 lintRegistry 가 전부 0건이다', async () => {
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'legacy-public-si')
+  const reg = parseRegistry(await fs.readFile(path.join(dir, '_managed.md'), 'utf8'))
+  const l = lintRegistry(reg.rules)
+  assert.deepEqual(l, { escape: [], outside: [], shadowed: [], levelMix: [] })
 })
 
 // ── 입력 모양 ───────────────────────────────────────────────────────────────
