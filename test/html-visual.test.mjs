@@ -178,3 +178,40 @@ test('save 경고 — HTML 만 걸고 요지가 없다 · 막히는 외부 자�
     await R.rm()
   }
 })
+
+// ── 문서별 자료 목록 (TODO ③) ───────────────────────────────────────────────
+
+import { Store } from '../core/store.js'
+
+test('Store — 문서 응답의 visuals(제목 · 없는 파일 뺌) · 목록의 hasVisual · 관리 문서는 본문 링크로', async () => {
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-visstore-'))
+  try {
+    const id = '2026-1006-scada'
+    await fs.mkdir(path.join(d, 'docs'), { recursive: true })
+    await fs.mkdir(path.join(d, 'work', 'assets', id), { recursive: true })
+    await fs.writeFile(path.join(d, '_vocab.md'), VOCAB)
+    await fs.writeFile(path.join(d, 'work', 'assets', id, 'a.html'), PAGE)
+    await fs.writeFile(path.join(d, 'work', 'assets', id, 'b.html'), '<!doctype html><p>제목 없음')
+    await fs.writeFile(
+      path.join(d, 'work', id + '.md'),
+      ['---', `id: ${id}`, 'title: SCADA', 'date: 2026-10-06', 'touches: [table:a]', `attachments: ["assets/${id}/a.html"]`, '---', '', `[b](assets/${id}/b.html) [없음](assets/${id}/없음.html)`, ''].join(NL)
+    )
+    await fs.writeFile(path.join(d, 'docs', 't.md'), T + NL + `[구성도](../work/assets/${id}/a.html)` + NL)
+    await fs.writeFile(path.join(d, 'docs', 'u.md'), '# 자료 없음\n')
+    const s = new Store({ root: d })
+    await s.load()
+    const w = s.detail(id)
+    assert.deepEqual(w.visuals, [
+      { path: `work/assets/${id}/a.html`, title: 'SCADA 연계 — 구성도' },
+      { path: `work/assets/${id}/b.html`, title: 'b' },
+    ])
+    assert.equal(w.hasVisual, true)
+    assert.deepEqual(s.detail('docs/t.md').visuals, [{ path: `work/assets/${id}/a.html`, title: 'SCADA 연계 — 구성도' }])
+    assert.deepEqual(s.detail('docs/u.md').visuals, [])
+    const rows = s.managedList()
+    assert.equal(rows.find((r) => r.path === 'docs/t.md').hasVisual, true)
+    assert.equal(rows.find((r) => r.path === 'docs/u.md').hasVisual, false)
+  } finally {
+    await fs.rm(d, { recursive: true, force: true })
+  }
+})

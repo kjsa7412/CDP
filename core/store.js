@@ -11,6 +11,7 @@ import { reconcile } from './vocab.js'
 import { buildBacklinks, cmpDateDesc } from './validity.js'
 import { buildIndex, fullText, prepQuery, matchName, bestName } from './search.js'
 import { runBuiltinCheck } from './check.js'
+import { visualRefs, visualTitle } from './visuals.js'
 
 // 검색이 한 갈래에 내는 최대 줄 수. 그 아래는 사람이 안 읽는다 — 개수는
 // 언제나 전체를 말한다(§13-②).
@@ -31,6 +32,7 @@ export class Store {
     this.cache = new Map()
     this.docs = []
     this.bodies = new Map()
+    this.visuals = new Map()
     this.vocab = { types: [], excludedTypes: [], coords: new Map(), counted: new Map(), aliasIndex: new Map(), errors: [] }
     this.stats = null
     this.watcher = null
@@ -71,6 +73,7 @@ export class Store {
     // 그동안 이벤트 루프가 멈추고 화면의 모든 요청이 기다린다 — 쓸 때 짓는다.
     this._mini = null
     this.backlinks = buildBacklinks(this.works, this.bodies)
+    this.visuals = await this.collectVisuals()
 
     // git 상태는 검사에도 쓰이므로 로드 때 한 번 읽는다. fetch 는 하지 않는다 --
     // load() 는 파일 감시로도 불리고, 그때마다 네트워크를 치면 안 된다.
@@ -78,6 +81,44 @@ export class Store {
 
     this.stats.ms = Date.now() - t0
     return this.stats
+  }
+
+  // HTML 시각 자료 — 문서마다 가리키는 `.html` 과 그 이름(`<title>`). HTML 시각 자료 검토 V1 · V2.
+  //
+  // 이름은 **서버가** 읽는다 — 화면의 틀은 불투명 출처(sandbox)라 안을 들여다볼 수 없다. 파일마다 앞 64 KB 만
+  // 읽고, 같은 파일을 여러 문서가 가리켜도 한 번만 읽는다. 없는 파일은 뺀다(본문의 깨진 링크는 링크 그대로 남는다)
+  async collectVisuals() {
+    const out = new Map()
+    const titles = new Map()
+    const head = async (rel) => {
+      if (titles.has(rel)) return titles.get(rel)
+      let t
+      try {
+        const fh = await fs.open(path.join(this.root, rel), 'r')
+        try {
+          const buf = Buffer.alloc(64 * 1024)
+          const { bytesRead } = await fh.read(buf, 0, buf.length, 0)
+          t = visualTitle(rel, buf.subarray(0, bytesRead).toString('utf8'))
+        } finally {
+          await fh.close()
+        }
+      } catch {
+        t = null
+      }
+      titles.set(rel, t)
+      return t
+    }
+    for (const d of this.docs) {
+      const body = (this.bodies.get(d.path) || '').slice(d.bodyOffset || 0)
+      if (!/\.html?/i.test(body) && !(d.attachments || []).some((a) => /\.html?$/i.test(a))) continue
+      const list = []
+      for (const rel of visualRefs(d.path, body, d.attachments || [])) {
+        const title = await head(rel)
+        if (title) list.push({ path: rel, title })
+      }
+      if (list.length) out.set(d.path, list)
+    }
+    return out
   }
 
   // 현황 — 화면과 `ctx brief` 가 같은 것을 쓴다
@@ -169,6 +210,7 @@ export class Store {
       stale: bad.length,
       unwritten: none.length,
       size: d.size,
+      hasVisual: this.visuals.has(d.path),
     }
   }
 
@@ -503,6 +545,7 @@ export class Store {
       touches: d.touches,
       tags: d.tags,
       attachments: d.attachments,
+      hasVisual: this.visuals.has(d.path),
       isUnit: d.isUnit,
       layer: d.layer,
       bodyThin: !!d.bodyThin,
@@ -585,6 +628,8 @@ export class Store {
       text: body.slice(d.bodyOffset),
       raw: body,
       headings: d.headings,
+      // HTML 시각 자료 — 화면의 「본문 | 자료」 탭 줄(V1 · V2)
+      visuals: this.visuals.get(d.path) || [],
       managedSections: d.managedSections || null,
       // 관리 문서를 읽을 때 **섹션마다 상태가 보여야 한다.**
       //
