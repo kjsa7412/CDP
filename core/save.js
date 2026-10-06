@@ -26,6 +26,7 @@ import { enqueuePush, lastPush, describe as mirrorLine } from './mirror.js'
 import { topApplied } from './frontmatter.js'
 import { take as takeAsset, checkAssetName, ASSETS_COUNT_MAX, ASSETS_TOTAL_MAX } from './assets.js'
 import { repoPath, mdRefs } from './repopath.js'
+import { htmlExternal, proseLength } from './visuals.js'
 import { regenerate, proseConflicts } from './regen.js'
 import { planPurge } from './examples.js'
 import { checkEditsShape, planEdits } from './edits.js'
@@ -697,9 +698,29 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     }
     const unlinked = assetsOut.filter((a) => !pointed.has(a.path))
     if (unlinked.length) {
+      // HTML 시각 자료는 그림이 아니라 링크로 건다 — `![…]` 로 적으면 깨진 그림이 된다
+      const bang = unlinked[0].type === 'text/html' ? '' : '!'
       warnings.push(
-        `올린 첨부 ${unlinked.length}개를 어느 본문도 가리키지 않는다 — 관리 문서에서는 ![설명](../${unlinked[0].path}), 작업 기록에서는 ![설명](${unlinked[0].path.slice('work/'.length)}): ${unlinked.map((a) => a.path).join(' · ')}`
+        `올린 첨부 ${unlinked.length}개를 어느 본문도 가리키지 않는다 — 관리 문서에서는 ${bang}[설명](../${unlinked[0].path}), 작업 기록에서는 ${bang}[설명](${unlinked[0].path.slice('work/'.length)}): ${unlinked.map((a) => a.path).join(' · ')}`
       )
+    }
+
+    // 6.8 HTML 시각 자료(W3) — **경고다.** 지식이 HTML 안에만 갇히면 검색 · load · 파생 어디에도 걸리지 않는다.
+    // 부르는 외부 자원은 CSP(`HTML_CSP`)가 막거나 폐쇄망에서 빈다 — 쓰는 순간에 안다
+    const htmls = pulled.filter((a) => a.type === 'text/html')
+    if (htmls.length) {
+      if (proseLength(w.body) < 120) {
+        warnings.push(
+          `HTML 시각 자료(${htmls.map((a) => a.name).join(' · ')})를 들였는데 작업 기록 본문이 짧다 — 검색 · load · 파생은 md 만 본다. 요지(무엇 · 결정 · 확인 목록)를 본문에 md 로 적는다`
+        )
+      }
+      for (const a of htmls) {
+        const ext = htmlExternal(a.buf.toString('utf8'))
+        if (ext.blocked.length) {
+          warnings.push(`${a.name} 이 부르는 외부 자원 ${ext.blocked.length}개는 화면이 막는다(CSP) — 보이지 않는다. 인라인으로 넣거나 cdnjs · jsdelivr · unpkg 로: ${ext.blocked.slice(0, 3).join(' · ')}${ext.blocked.length > 3 ? ' …' : ''}`)
+        }
+        if (ext.cdn.length) warnings.push(`${a.name} 이 CDN(${ext.cdn.join(' · ')})을 부른다 — 폐쇄망에서는 그 부분이 빌 수 있다`)
+      }
     }
 
     // 7 기록 — TEMPLATE 순서의 프론트매터. author 는 토큰의 user 다. 첨부는 `attachments` 로 — 화면의 첨부 목록이 이것을 읽는다

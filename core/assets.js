@@ -25,6 +25,9 @@ const KINDS = [
   { type: 'image/gif', ext: ['.gif'], magic: (b) => b.length > 6 && /^GIF8[79]a$/.test(b.toString('latin1', 0, 6)) },
   { type: 'image/webp', ext: ['.webp'], magic: (b) => b.length > 12 && b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP' },
   { type: 'application/pdf', ext: ['.pdf'], magic: (b) => b.length > 5 && b.toString('latin1', 0, 5) === '%PDF-' },
+  // HTML 시각 자료(검토 S4 · W1) — 스크립트를 담지만 받는다. 낼 때 sandbox CSP(`HTML_CSP`)로 불투명 출처가 된다.
+  // svg 를 거절한 것과 다른 까닭: svg 는 `<img>` 로 본문에 박혀 그 틀이 없고, 이것은 늘 자기 문서로 열린다
+  { type: 'text/html', ext: ['.html', '.htm'], magic: isHtml },
 ]
 export const ASSET_EXTS = KINDS.flatMap((k) => k.ext)
 
@@ -44,6 +47,26 @@ export const HTML_CSP = [
   "connect-src 'none'",
   "frame-ancestors 'self'",
 ].join('; ')
+
+// HTML 인가 — BOM · 공백 · `<!-- -->` 주석 뒤 첫 태그가 `<!doctype html` 또는 `<html`, 그리고 **전체가 UTF-8 로 풀린다.**
+// 다른 것을 `.html` 이라 부르며 올리지 못하게 바이트로 가린다
+function isHtml(b) {
+  let head = b.subarray(0, 4096).toString('utf8').replace(/^﻿/, '')
+  for (;;) {
+    head = head.replace(/^\s+/, '')
+    if (!head.startsWith('<!--')) break
+    const end = head.indexOf('-->')
+    if (end < 0) return false
+    head = head.slice(end + 3)
+  }
+  if (!/^<(!doctype\s+html|html)[\s>]/i.test(head)) return false
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(b)
+    return true
+  } catch {
+    return false
+  }
+}
 
 /** @returns {null | { type: string, ext: string[] }} */
 export function sniff(buf) {
