@@ -21,6 +21,8 @@ import { dropBlockers } from '../../../core/docusage.js'
 import { droppedDocs } from '../../../core/docrefs.js'
 import { materialsOf } from '../../../core/curation.js'
 import { cmpDateDesc } from '../../../core/validity.js'
+import { formsLib, formRow, formDetail, searchForms } from '../../../core/formslib.js'
+import { formIdOfText } from '../../../core/tools.js'
 
 // 화면 자산도 이 표를 쓴다(관리 서비스의 `serveWeb`). **`.js` 가 빠지면
 // 브라우저가 모듈 실행을 거부한다** — 화면이 통째로 안 뜬다.
@@ -68,6 +70,23 @@ export async function handleRead({ p, method, url, res, send, store }) {
     else send(res, 200, m)
     return true
   }
+  // 서식집 — 목록(이 레포가 쓰는 서식 표시) · 서식 하나(head · guide · example · 서버가 찍을 빈 문서)
+  if (p === '/forms' && method === 'GET') {
+    const lib = await formsLib(store.formsOpt || {})
+    const used = new Set((store.managedDocs || []).map((d) => formIdOfText(store.bodies.get(d.path))).filter(Boolean))
+    const list = searchForms(lib, url.searchParams.get('q')).map((f) => formRow(f, used))
+    send(res, 200, { groups: lib.groups, forms: list, total: list.length })
+    return true
+  }
+  const fm = /^\/forms\/(.+)$/.exec(p)
+  if (fm && method === 'GET') {
+    const lib = await formsLib(store.formsOpt || {})
+    const f = lib.byId.get(decodeURIComponent(fm[1]))
+    if (!f) send(res, 404, { error: { code: 'E_NOT_FOUND', message: '그 id 의 서식이 없다' } })
+    else send(res, 200, formDetail(f))
+    return true
+  }
+
   if (p === '/curations' && method === 'GET') {
     const items = (store.works || [])
       .filter((d) => d.curates)

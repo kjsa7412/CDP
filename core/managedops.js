@@ -10,6 +10,7 @@
 // 기존 행은 `add` 로 바뀌지 않는다 — 새 행은 **언제나 마지막 규칙 행 바로 뒤**(먼저 걸리는 행이 이긴다).
 
 import { CtxError } from './tools.js'
+import { stampDoc } from './forms.js'
 import { DROPPED_HEAD } from './docrefs.js'
 import { parseRegistry, globContains, globIntersects, patternProblem, docPathProblem, registryRow, outsideFences, ADDED_NOTE } from './managed.js'
 
@@ -17,7 +18,8 @@ export const MAX_OPS = 10
 export const OPS = ['add', 'rename', 'merge', 'retire', 'drop']
 // op 마다 받는 키 — 이 밖의 키는 거절한다(오타가 조용히 버려지지 않게)
 const KEYS = {
-  add: { need: ['pattern', 'doc'], may: ['level', 'title', 'reviewed'] },
+  // form — 서식집의 서식 id(`public-si/DE_431`). 새 문서를 그 서식의 빈 문서(제목 · 표지 · 첫 문단)로 찍는다(v1.0 §8.1)
+  add: { need: ['pattern', 'doc'], may: ['level', 'title', 'reviewed', 'form'] },
   rename: { need: ['doc', 'to'], may: [] },
   merge: { need: ['doc', 'into'], may: [] },
   retire: { need: ['pattern'], may: [] },
@@ -122,7 +124,7 @@ function setRowDoc(text, line, from, to) {
  *   files   쓸 것(글) · 지울 것(null). `_managed.md` 는 들어 있지 않다 — `registryText` 를 본다
  *   added   이번에 **실제로** 더한 패턴(멱등으로 넘어간 것은 빼고)
  */
-export async function planManaged({ ops, registryText, docPaths, read, workId }) {
+export async function planManaged({ ops, registryText, docPaths, read, workId, forms = null }) {
   let text = registryText ?? ''
   const files = new Map()
   const events = []
@@ -197,15 +199,20 @@ export async function planManaged({ ops, registryText, docPaths, read, workId })
         }
       }
       let doc = pathOf(op.doc)
+      const form = op.form ? forms?.get(op.form) : null
+      if (op.form && !form) throw bad(i, 'form', `서식 ${op.form} 이 서식집에 없다 — forms 로 찾아 id 를 그대로 쓴다`, { form: op.form })
       if (!doc) {
         doc = op.doc
         const stem = doc.split('/').pop().replace(/\.md$/i, '')
-        setFile(doc, `# ${op.title?.trim() || stem}${NL}`)
+        // 서식이 있으면 **깨끗한 빈 문서** — 제목 · 서식 표지 · 첫 문단뿐(예시 · 작성지침 · applied 없음 · forms.stampDoc)
+        setFile(doc, form ? stampDoc(form, { title: op.title?.trim() || undefined }) : `# ${op.title?.trim() || stem}${NL}`)
         created.add(doc)
+      } else if (form) {
+        warnings.push(`${doc} 은 이미 있는 문서다 — 서식(${op.form})은 새 문서에만 찍는다. 행만 더했다`)
       }
       text = insertRow(text, registryRow({ pattern: op.pattern, doc, level, note: ADDED_NOTE + workId }))
       added.push(op.pattern)
-      events.push({ op: 'add', pattern: op.pattern, doc, level, created: created.has(doc) })
+      events.push({ op: 'add', pattern: op.pattern, doc, level, created: created.has(doc), ...(form ? { form: form.id } : {}) })
       continue
     }
 

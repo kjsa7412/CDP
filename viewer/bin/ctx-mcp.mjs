@@ -16,6 +16,8 @@ import * as z from 'zod'
 import { loadRepo } from '../../core/repo.js'
 import * as T from '../../core/tools.js'
 import { materialsOf } from '../../core/curation.js'
+import { formsLib, formRow, formDetail, searchForms } from '../../core/formslib.js'
+import { formIdOfText } from '../../core/tools.js'
 import { CtxError, toError, guardSize } from '../../core/tools.js'
 import { lastChanges } from '../../core/git.js'
 import { stateOf, lastPush, summary as mirrorSummary, describe as mirrorLine } from '../../core/mirror.js'
@@ -54,6 +56,8 @@ const CARD = {
   repos:
     '이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다',
   version: '이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다',
+  forms:
+    '**큐레이터만.** 서식집 — 새 관리 문서를 세울 때 고르는 서식(묶음 넷 · 79종 · 팀 서식). `q` 로 찾는다(제목 · 관리번호 · 등록부 타입 — 예: `테이블` · `DE_431` · `인터페이스`). `form` 을 주면 그 서식의 `head`(새 문서로 가는 첫 문단) · `guide`(작성지침 · 여기 적지 않는 것 · 섹션 모양) · `example`(예시)와 **서버가 실제로 찍을 빈 문서**(`stamp`)를 준다. 문서를 세우는 것은 `save` 의 `managed: [{ pattern, doc, form }]` — 서버가 제목 · 서식 표지 · 첫 문단만 찍는다(예시 · 작성지침은 가지 않는다). 섹션은 `guide` 의 모양을 따라 쓴다. `kind` 는 문서 종류(대상 · 대장 · 정의 · 사건 · 서술) — 대장은 표와 결론 한 줄 · 정의는 뜻만 · 사건은 결정과 할 일만. 맞는 서식이 없으면 form 없이 세운다(`# 제목` 한 줄)',
   queue:
     '**큐레이터만.** 큐레이션 대기열 — 아직 아무도 판정하지 않은 작업 기록, 오래된 순. 기록마다 좌표를 셋으로 나눈다: `section`(섹션 있음 · 반영 후보) · `anchor`(등록부 행은 있는데 섹션 · 문서가 없음) · `unregistered`(등록부 없음 · 새 문서 후보 또는 기록으로 둠). `zero` 는 좌표 0개. `id` 를 주면 그 기록 하나의 **판정 재료** — 좌표별 문서 · 상태 · applied · 미반영 수, 등록부 없는 타입(`forms` 로 서식을 찾는다), 본문에만 있는 좌표, 같은 좌표를 건드린 다른 대기 기록(`together` — 묶어서 한 번에 다룬다). 판정 · 반영은 `cdp-curate` 절차로 `save` 의 `work.curates` 와 `sections` 를 한 번에',
   save:
@@ -153,7 +157,7 @@ export function makeRepoCache(root) {
 // curate   (name) => boolean   그 레포의 큐레이터인가(v1.0 V2). 없으면 로컬(모드 A)은 전부 · 서버는 아무도 아니다
 // curateAny  큐레이터 도구(queue)를 등록할지 — 한 레포라도 큐레이터면. 역할에 없는 도구는 보이지도 않는다(개편안 §5.3)
 
-export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT, curate = null, curateAny = null } = {}) {
+export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT, curate = null, curateAny = null, formsOpt = null } = {}) {
   if (!repos.length) throw new CtxError('E_REPO', '지식 레포가 하나도 없다', {})
 
   const caches = new Map()
@@ -246,6 +250,18 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
       }
       const q = r.curation.queue
       return { items: q, total: q.length, oldestDays: r.curation.stats.oldestDays, implicit: r.curation.implicit }
+    })
+    tool('forms', { q: z.string().max(100).optional(), form: z.string().max(120).optional() }, async (r, a, { name }) => {
+      if (!canCurate(name)) throw new CtxError('E_FORBIDDEN', '그 레포의 큐레이터가 아니다 — 서식은 문서를 세우는 큐레이터의 것이다', { repo: name, need: 'curate' })
+      const lib = await formsLib(formsOpt || {})
+      if (a.form) {
+        const f = lib.byId.get(a.form)
+        if (!f) throw new CtxError('E_NOT_FOUND', '그 id 의 서식이 없다 — q 로 찾는다', { form: a.form })
+        return formDetail(f)
+      }
+      const used = new Set(r.managedDocs.map((d) => formIdOfText(r.bodies.get(d.path))).filter(Boolean))
+      const list = searchForms(lib, a.q).map((f) => formRow(f, used))
+      return { forms: list, total: list.length, groups: lib.groups }
     })
   }
 
@@ -388,6 +404,8 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
                   reason: z.string().max(200).optional(),
                   // 어긋난다고 걸린 문구 중 맞는 줄이라고 확인한 것 — "파일:행"
                   reviewed: z.array(z.string().max(260)).max(50).optional(),
+                  // add — 서식집의 서식 id(`public-si/DE_431`). 새 문서를 그 서식의 깨끗한 빈 문서로 찍는다
+                  form: z.string().max(120).optional(),
                 })
                 .strict()
             )

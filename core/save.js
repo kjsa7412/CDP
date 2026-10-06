@@ -32,6 +32,7 @@ import { topApplied, normalizeCurates } from './frontmatter.js'
 import { recordKind, SYSTEM_TAGS } from './curation.js'
 import { cmpDateDesc } from './validity.js'
 import { splitBaseline, joinBaseline, renderBlock, hasMark } from './baseline.js'
+import { formsLib } from './formslib.js'
 import { take as takeAsset, checkAssetName, ASSETS_COUNT_MAX, ASSETS_TOTAL_MAX } from './assets.js'
 import { repoPath, mdRefs } from './repopath.js'
 import { htmlExternal, proseLength } from './visuals.js'
@@ -339,10 +340,10 @@ function replaceBaseline(text, { value, level, heading, block }) {
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
-export async function save(root, input, { user, write = false, admin = false, curate = undefined, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS, staging = null } = {}) {
+export async function save(root, input, { user, write = false, admin = false, curate = undefined, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS, staging = null, formsDir = null, formsData = null } = {}) {
   const out = await withLock(path.resolve(root), async () => {
     // 큐레이터인가 — 서버는 토큰의 레포별 권한을 넘긴다. 안 넘기면 admin 만 큐레이터다(안전한 쪽)
-    const r = await run(root, input, { user, write, admin, curate: curate ?? !!admin, now, staging })
+    const r = await run(root, input, { user, write, admin, curate: curate ?? !!admin, now, staging, formsDir, formsData })
 
     // 미리보기 — 검사까지 지난 트리를 되돌리고 커밋하지 않는다. 색인에는 아무것도 올리지 않았다
     if (r.dryRun) {
@@ -459,7 +460,7 @@ function curatorOnly(input, w) {
   return why
 }
 
-async function run(root, input, { user, write, admin, curate, mirror, now, staging }) {
+async function run(root, input, { user, write, admin, curate, mirror, now, staging, formsDir = null, formsData = null }) {
   // 1 권한
   if (!write) throw new CtxError('E_FORBIDDEN', '쓰기 권한이 없다', { user })
 
@@ -657,12 +658,15 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     let dropped = null
     if (managedOps.length) {
       const regText = await fs.readFile(path.join(root, '_managed.md'), 'utf8').catch(() => null)
+      // 서식에서 세우는 문서가 있으면 서식집을 읽는다 — 서버가 넘긴 자리(--forms · 팀 서식) 또는 기본 자리
+      const forms = managedOps.some((o) => o.form) ? (await formsLib({ explicit: formsDir, dataDir: formsData })).byId : null
       plan = await planManaged({
         ops: managedOps,
         registryText: regText,
         docPaths: r0.managedDocs.map((d) => d.path),
         read: (rel) => fs.readFile(path.join(root, rel), 'utf8').catch(() => null),
         workId: w.id,
+        forms,
       })
       warnings.push(...plan.warnings)
       // 5.4 **어긋나는 산문**(X7 · X8) — 새 행이 거짓으로 만드는 머리말 · 규칙 줄. 판정은 edits 를 적용한 **뒤**의 글로
