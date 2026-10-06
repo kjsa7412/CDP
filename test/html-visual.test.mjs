@@ -140,7 +140,7 @@ test('save — HTML 첨부가 작업 기록 · 섹션과 한 커밋 · 링크로
         sections: [{ coord: 'table:a', applied: null, body: `a.${NL}${NL}[구성도](../work/assets/${id}/SCADA_연계_구성도.html)` }],
         assets: [{ ref: up.ref, name: 'SCADA_연계_구성도.html' }],
       },
-      { user: 'hong', write: true, staging: R.staging }
+      { user: 'hong', write: true, curate: true, staging: R.staging }
     )
     assert.ok(out.commit)
     assert.deepEqual(out.assets, [{ path: `work/assets/${id}/SCADA_연계_구성도.html`, size: PAGE.length }])
@@ -165,7 +165,7 @@ test('save 경고 — HTML 만 걸고 요지가 없다 · 막히는 외부 자�
         sections: [{ coord: 'table:a', applied: null, body: 'a.' }],
         assets: [{ ref: up.ref, name: 'a.html' }, { ref: lone.ref, name: '외톨이.html' }],
       },
-      { user: 'hong', write: true, staging: R.staging }
+      { user: 'hong', write: true, curate: true, staging: R.staging }
     )
     assert.ok(out.commit)
     const all = out.warnings.join(' / ')
