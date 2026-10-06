@@ -68,9 +68,34 @@ const CARD = {
 
 const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
 
+// HEAD 가 가리키는 커밋 — 프로세스를 띄우지 않고 파일로 읽는다. `.git/HEAD` 의 mtime 은 커밋에도 ff pull 에도
+// 안 바뀐다(가지 이름만 적힌 파일이다). 그래서 하위 폴더 문서(`docs/1.관리/…`)만 바뀐 pull 뒤에 옛 섹션을 냈다
+// (v1.0 개편안 §5.1 · 코어 조사 M2). sha 가 바뀌면 무엇이 바뀌었든 다시 읽는다.
+export async function headSha(root) {
+  let gitDir = path.join(root, '.git')
+  const st = await fs.stat(gitDir).catch(() => null)
+  if (st && st.isFile()) {
+    // worktree · submodule — `gitdir: <경로>`
+    const m = /gitdir:\s*(.+)/.exec(await fs.readFile(gitDir, 'utf8').catch(() => ''))
+    if (!m) return '-'
+    gitDir = path.resolve(root, m[1].trim())
+  }
+  const head = (await fs.readFile(path.join(gitDir, 'HEAD'), 'utf8').catch(() => '')).trim()
+  const ref = /^ref:\s*(.+)$/.exec(head)
+  if (!ref) return head || '-'
+  const loose = (await fs.readFile(path.join(gitDir, ref[1]), 'utf8').catch(() => '')).trim()
+  if (loose) return loose
+  // 가지가 packed-refs 에만 있다(gc 뒤) — worktree 면 공용 디렉터리에 있다
+  const common = (await fs.readFile(path.join(gitDir, 'commondir'), 'utf8').catch(() => '')).trim()
+  const packedAt = common ? path.resolve(gitDir, common, 'packed-refs') : path.join(gitDir, 'packed-refs')
+  const packed = await fs.readFile(packedAt, 'utf8').catch(() => '')
+  const line = packed.split('\n').find((l) => l.endsWith(' ' + ref[1]))
+  return line ? line.slice(0, line.indexOf(' ')) : '-'
+}
+
 async function stamp(root) {
-  const parts = []
-  for (const rel of ['_vocab.md', '_managed.md', '.git/HEAD']) {
+  const parts = [await headSha(root)]
+  for (const rel of ['_vocab.md', '_managed.md']) {
     const st = await fs.stat(path.join(root, rel)).catch(() => null)
     parts.push(st ? String(st.mtimeMs) : '-')
   }
