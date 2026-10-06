@@ -28,6 +28,23 @@ const KINDS = [
 ]
 export const ASSET_EXTS = KINDS.flatMap((k) => k.ext)
 
+// HTML 시각 자료를 낼 때의 CSP — 파일 API(`/file`)가 붙이고, 시험이 같은 글을 본다(HTML 시각 자료 검토 S1 · S2).
+// `sandbox` 에 `allow-same-origin` 이 없으니 불투명 출처다. 밖으로 내보내는 길(`connect-src` · `img-src`)은 닫고,
+// 클로드 코드가 내놓는 자료가 쓰는 CDN · 글꼴만 연다 — 폐쇄망이면 그것도 안 닿을 뿐이다
+export const HTML_EXTS = ['.html', '.htm']
+export const HTML_CDN = ['https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com']
+export const HTML_FONT_HOSTS = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com']
+export const HTML_CSP = [
+  'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox',
+  "default-src 'none'",
+  `script-src 'unsafe-inline' ${HTML_CDN.join(' ')}`,
+  `style-src 'unsafe-inline' https://fonts.googleapis.com ${HTML_CDN.join(' ')}`,
+  `font-src data: https://fonts.gstatic.com ${HTML_CDN.join(' ')}`,
+  'img-src data: blob:',
+  "connect-src 'none'",
+  "frame-ancestors 'self'",
+].join('; ')
+
 /** @returns {null | { type: string, ext: string[] }} */
 export function sniff(buf) {
   const k = KINDS.find((x) => x.magic(buf))

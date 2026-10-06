@@ -13,6 +13,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { resolveInside } from './security.js'
+import { HTML_CSP, HTML_EXTS } from '../../../core/assets.js'
 import { zip } from '../../../core/zip.js'
 import { toolDocs } from '../../../core/tools.js'
 import { lastChanges } from '../../../core/git.js'
@@ -23,6 +24,7 @@ import { droppedDocs } from '../../../core/docrefs.js'
 // 브라우저가 모듈 실행을 거부한다** — 화면이 통째로 안 뜬다.
 const MIME = {
   '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -150,7 +152,10 @@ export async function handleRead({ p, method, url, res, send, store }) {
     const dl = url.searchParams.get('download') === '1' ? { 'content-disposition': attachment(path.basename(r.abs)) } : {}
     // SVG 는 문서다 — 「원문」 으로 새 탭에 열면 안의 스크립트가 이 출처 · 세션 쿠키로 돈다. `<img>` 로 쓸 때는 영향 없다(그림 · 첨부 검토 G5)
     const svg = ext === '.svg' ? { 'content-security-policy': "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'" } : {}
-    send(res, 200, await fs.readFile(r.abs), { 'content-type': MIME[ext] || 'application/octet-stream', ...svg, ...dl })
+    // HTML 도 문서다 — 응답 헤더의 sandbox 는 **어떻게 열든**(틀 · 새 탭 · 주소 직접) 불투명 출처로 만든다. 스크립트는 돌되
+    // 이 서버의 쿠키 · 저장소 · DOM 에 닿지 못한다. 전에는 CSP 없이 같은 출처로 나갔다(HTML 시각 자료 검토 H0 · S1 · S2)
+    const html = HTML_EXTS.includes(ext) ? { 'content-security-policy': HTML_CSP } : {}
+    send(res, 200, await fs.readFile(r.abs), { 'content-type': MIME[ext] || 'application/octet-stream', ...svg, ...html, ...dl })
     return true
   }
 
