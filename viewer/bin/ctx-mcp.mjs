@@ -342,6 +342,8 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
               )
               .max(100)
               .optional(),
+            // 기준선 기록(큐레이터 · 생성기) — 어디서 뽑았나 · 언제 기준인가. baseline[] 과 같이 보낸다
+            baseline: z.object({ source: z.string().max(400), asof: z.string().max(40).optional() }).strict().optional(),
             body: z.string(),
           })
             // **모르는 키를 거절한다.** zod 는 기본으로 조용히 버리는데,
@@ -400,6 +402,11 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
           examples: z.literal('purge').optional(),
           // 미리보기 — 계획 · 거절 · 검사까지 돌고 커밋하지 않는다(drop 의 고칠 자리 refs 를 본다)
           dryRun: z.boolean().optional(),
+          // 기준선 블록(큐레이터 · 생성기) — 섹션 안 `<!-- cdp:baseline -->` 블록을 통째로 갈아 끼운다. 블록 밖 · applied 는 그대로
+          baseline: z
+            .array(z.object({ coord: z.string().max(240), body: z.string().max(200000), src: z.string().max(400).optional(), asof: z.string().max(40).optional(), heading: z.string().max(200).optional() }).strict())
+            .max(200)
+            .optional(),
           // 첨부 — 올리기 API(`POST /api/<repo>/assets`)가 준 ref 와 파일 이름. 바이트는 여기 싣지 않는다(검토 ㉠)
           assets: z
             .array(z.object({ ref: z.string().max(80), name: z.string().max(120) }).strict())

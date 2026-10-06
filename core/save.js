@@ -31,6 +31,7 @@ import { enqueuePush, lastPush, describe as mirrorLine } from './mirror.js'
 import { topApplied, normalizeCurates } from './frontmatter.js'
 import { recordKind, SYSTEM_TAGS } from './curation.js'
 import { cmpDateDesc } from './validity.js'
+import { splitBaseline, joinBaseline, renderBlock, hasMark } from './baseline.js'
 import { take as takeAsset, checkAssetName, ASSETS_COUNT_MAX, ASSETS_TOTAL_MAX } from './assets.js'
 import { repoPath, mdRefs } from './repopath.js'
 import { htmlExternal, proseLength } from './visuals.js'
@@ -177,6 +178,15 @@ function checkSchema(input) {
       throw new CtxError('E_INPUT', `sections[].body 에 ${APPLIED_MARK} 를 쓸 수 없다 — applied 는 서버가 쓴다`, { coord: s.coord })
     }
   }
+  for (const b of input.baseline || []) {
+    checkCoord(b?.coord)
+    if (typeof b.body !== 'string' || !b.body.trim()) throw new CtxError('E_INPUT', 'baseline[].body 가 없다 — 기준선 블록에 넣을 글', { coord: b.coord })
+    if (hasMark(b.body) || b.body.includes(APPLIED_MARK)) throw new CtxError('E_INPUT', 'baseline[].body 에 블록 표지 · applied 를 쓸 수 없다 — 서버가 붙인다', { coord: b.coord })
+  }
+  for (const s of input.sections || []) {
+    // 큐레이터의 글은 기준선 블록을 건드리지 못한다 — 블록은 기준선 save 의 자리다(개편안 §3.2)
+    if (hasMark(s.body)) throw new CtxError('E_INPUT', 'sections[].body 에 기준선 블록 표지가 있다 — 블록은 서버가 지키고 다시 붙인다. section 의 content(블록을 뺀 글)를 고쳐 보낸다', { coord: s.coord })
+  }
   for (const v of input.vocab || []) {
     checkCoord(v.coord)
     if (!v.label) throw new CtxError('E_INPUT', 'vocab[].label 이 없다', { coord: v.coord })
@@ -294,6 +304,37 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
   const tail = lines.slice(end)
   const next = [head, APPLIED_MARK + ' ' + id + ' -->', '', ...body.split(NL), '']
   return { text: lines.slice(0, at).concat(next, tail).join(NL), created: false, current }
+}
+
+// 기준선 블록만 갈아 끼운다 — 섹션을 찾고, 그 안의 블록을 바꾸거나(없으면) 경과 앞 · 끝에 넣는다. 섹션이 없으면 만든다(applied: null)
+function replaceBaseline(text, { value, level, heading, block }) {
+  const lines = text.split(NL)
+  const re = new RegExp('^#{' + level + '}\\s+' + value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)')
+  const at = lines.findIndex((l) => re.test(l))
+  if (at < 0) {
+    const add = ['', '#'.repeat(level) + ' ' + (heading || value), APPLIED_MARK + ' null -->', '', ...block.split(NL)]
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
+    return lines.concat(add).join(NL) + NL
+  }
+  let end = lines.length
+  for (let i = at + 1; i < lines.length; i++) {
+    const m = /^(#{1,6})\s/.exec(lines[i])
+    if (m && m[1].length <= level) {
+      end = i
+      break
+    }
+  }
+  // 헤딩 · applied 주석(앞 3줄)은 그대로 두고 그 아래를 가른다
+  let k = at + 1
+  const keep = [lines[at]]
+  while (k < end && k < at + 4 && (/<!--\s*applied\s*:/i.test(lines[k]) || !lines[k].trim())) {
+    if (/<!--\s*applied\s*:/i.test(lines[k])) keep.push(lines[k])
+    k++
+  }
+  const inner = lines.slice(k, end).join(NL)
+  const { curated } = splitBaseline(inner)
+  const next = joinBaseline(curated, block)
+  return lines.slice(0, at).concat(keep, [''], next.split(NL), [''], lines.slice(end)).join(NL).replace(/\n{3,}/g, '\n\n')
 }
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
@@ -478,6 +519,20 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     warnings.push('date 에 시각이 없다 — 같은 날 같은 좌표의 선후를 알 수 없다')
   }
 
+  // 2.3 기준선 기록 — 블록을 갈아 끼운 save. 기록은 출처 · 시점을 남기고 좌표를 갖지 않는다(대기열 · 미반영을 만들지 않는다)
+  const baselineOps = input.baseline || []
+  if (baselineOps.length) {
+    if (curates) throw new CtxError('E_INPUT', '기준선과 큐레이션은 한 save 에 섞지 않는다 — 기계의 자리와 사람의 판단은 따로 남긴다', { field: 'baseline' })
+    if ((w.touches || []).length) throw new CtxError('E_INPUT', '기준선 기록은 touches 를 갖지 않는다 — 갈아 끼운 좌표는 baseline[].coord 에', { field: 'work.touches' })
+    const b0 = baselineOps[0]
+    w.baseline = { source: (w.baseline?.source || b0.src || '').trim() || null, asof: w.baseline?.asof || b0.asof || null }
+    if (!w.baseline.source) throw new CtxError('E_INPUT', '기준선의 출처가 없다 — work.baseline.source 또는 baseline[].src 에 어디서 뽑았나(DB · 커밋 · 파일)를 적는다', { field: 'work.baseline' })
+    if (!w.touchesEmpty) w.touchesEmpty = '기준선'
+    if (!(w.tags || []).includes('baseline')) w.tags = [...(w.tags || []), 'baseline']
+  } else if (w.baseline != null) {
+    throw new CtxError('E_INPUT', 'work.baseline 은 baseline[] 과 같이 보낸다', { field: 'work.baseline' })
+  }
+
   // 2.5 구조 정리(rename · merge · retire · drop)도 큐레이터의 일이다(v1.0 V2) — 2.1 이 이미 걸렀다
 
   // 3 존재 — 기존 기록은 고치지도 지우지도 않는다. 정정은 supersedes 를 단 새 기록이다.
@@ -591,7 +646,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       }
       editsDone = e.done
     }
-    for (const c of [...(w.touches || []), ...sections.map((s) => s.coord)]) {
+    for (const c of [...(w.touches || []), ...sections.map((s) => s.coord), ...baselineOps.map((b) => b.coord)]) {
       if (!known.has(c)) throw new CtxError('E_INPUT', '어휘에 없는 좌표다 — vocab 에 같이 보내거나 먼저 등재한다', { coord: c })
     }
 
@@ -710,10 +765,15 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
           )
         }
       }
+      // 지금 섹션의 기준선 블록은 그대로 다시 붙인다 — 큐레이터는 블록 밖만 쓴다
+      const curBlock = (() => {
+        const cut0 = sliceSection(r0, s.coord)
+        return cut0 && !cut0.missing ? splitBaseline(cut0.content).block : null
+      })()
       const res = replaceSection(byDoc.get(hit.doc), {
         value: hit.value,
         level: hit.level,
-        body: s.body,
+        body: curBlock ? joinBaseline(s.body, curBlock.text) : s.body,
         id: appliedFor(s.coord),
         heading: s.heading,
       })
@@ -743,6 +803,16 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       }
       byDoc.set(hit.doc, res.text)
       written.push({ file: hit.doc, text: s.body })
+    }
+    // 6.2 기준선 — 섹션 안 블록만 통째로 갈아 끼운다. 블록 밖(큐레이터의 글) · applied 는 그대로. 섹션이 없으면 블록만 든 섹션을 만든다
+    for (const b of baselineOps) {
+      const hit = resolveCoord(registry, b.coord)
+      if (!hit) throw new CtxError('E_INPUT', '등록부에 걸리지 않는 좌표다 — 기준선을 넣을 관리 문서가 없다. 큐레이터가 먼저 문서를 세운다', { coord: b.coord })
+      if (hit.level === 0) throw new CtxError('E_INPUT', '문서 전체(—) 규칙의 좌표에는 기준선 블록을 넣지 않는다', { coord: b.coord })
+      if (docEscapes(hit.doc)) throw new CtxError('E_INPUT', '등록부 행의 관리 문서 경로가 레포 밖을 가리킨다', { coord: b.coord, doc: hit.doc })
+      if (!byDoc.has(hit.doc)) byDoc.set(hit.doc, await fs.readFile(path.join(root, hit.doc), 'utf8').catch(() => ''))
+      const block = renderBlock({ src: b.src || w.baseline?.source, asof: b.asof || w.baseline?.asof, body: b.body })
+      byDoc.set(hit.doc, replaceBaseline(byDoc.get(hit.doc), { value: hit.value, level: hit.level, heading: b.heading, block }))
     }
     for (const [doc, text] of byDoc) await snap.write(doc, text)
 
@@ -840,6 +910,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       id: w.id,
       title: w.title,
       sections: sections.length,
+      ...(baselineOps.length ? { baseline: baselineOps.length } : {}),
       vocab: added,
       managedChanges: plan?.events || [],
       assets: assetsOut.map(({ path: p, size }) => ({ path: p, size })),
@@ -881,6 +952,7 @@ function renderWork(w, user, attachments = [], curates = null) {
   if (!touches.length && w.touchesEmpty) fm.push(`touchesEmpty: ${yamlStr(w.touchesEmpty.trim())}`)
   if (w.supersedes) fm.push(`supersedes: ${w.supersedes}`)
   if (attachments.length) fm.push(`attachments: [${attachments.map(yamlStr).join(', ')}]`)
+  if (w.baseline) fm.push(`baseline: { source: ${JSON.stringify(w.baseline.source)}${w.baseline.asof ? ', asof: ' + JSON.stringify(String(w.baseline.asof)) : ''} }`)
   // 큐레이션 판정 — 한 줄에 하나. 좌표 · 사유는 JSON 문자열로(콜론 · 대괄호가 YAML 을 깨지 않게)
   if (curates?.length) {
     fm.push('curates:')

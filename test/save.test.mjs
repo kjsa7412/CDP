@@ -588,3 +588,47 @@ test('save v1.0 — 큐레이션 기록: 판정이 프론트매터에 남고 · 
     await R.rm()
   }
 })
+
+test('save v1.0 — 기준선 블록: 기준선 save 는 블록만 갈아 끼우고 · 큐레이터의 글은 블록을 지키고 · section 은 블록을 따로 낸다', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const { splitBaseline, joinBaseline } = await import('../core/baseline.js')
+  // 순수 — 가르고 붙이기
+  const s = splitBaseline('글.\n\n<!-- cdp:baseline src="db" asof="2026-10-02" -->\n| a |\n<!-- /cdp:baseline -->\n\n**경과**\n- x')
+  assert.equal(s.block.src, 'db')
+  assert.equal(s.block.body, '| a |')
+  assert.equal(s.curated, '글.\n\n**경과**\n- x')
+  assert.equal(joinBaseline('새 글.\n\n**경과**\n- x', s.block.text), '새 글.\n\n' + s.block.text + '\n\n**경과**\n- x')
+  const R = await repo()
+  try {
+    const gen = (id, body, extra = {}) => ({ work: { id, title: id, date: '2026-09-27 10:00', touches: [], body: '기준선 — 개발 DB 에서 뽑았다.', baseline: { source: '개발 DB pg_catalog', asof: '2026-09-27' } }, baseline: [{ coord: 'table:a', body }, ...(extra.more || [])] })
+    // writer 는 못 한다
+    await assert.rejects(save(R.r, gen('2026-0927-기준선0', '| x |'), { user: 'lee', write: true }), (e) => e.code === 'E_FORBIDDEN')
+    await save(R.r, gen('2026-0927-기준선1', '| 컬럼 | 타입 |\n| id | int |', { more: [{ coord: 'table:e', body: '| e |' }] }), opt())
+    let r = await loadRepo(R.r)
+    let sec = toolSection(r, { coord: 'table:a' })
+    assert.equal(sec.baseline.src, '개발 DB pg_catalog')
+    assert.match(sec.baseline.body, /\| id \| int \|/)
+    assert.match(sec.content, /a 의 처음 본문/)
+    assert.doesNotMatch(sec.content, /cdp:baseline/)
+    assert.equal(sec.applied, null, '기준선은 applied 를 바꾸지 않는다')
+    // 기준선 기록은 대기열에 서지 않는다
+    assert.equal(r.curation.statusOf('2026-0927-기준선1').state, 'system')
+    // 큐레이터가 글을 고쳐도 블록은 그대로
+    await save(R.r, { work: work('2026-0927-글', 'table:a'), sections: [{ coord: 'table:a', applied: null, body: 'a 를 큐레이터가 다시 썼다.' }] }, opt())
+    r = await loadRepo(R.r)
+    sec = toolSection(r, { coord: 'table:a' })
+    assert.equal(sec.content, 'a 를 큐레이터가 다시 썼다.')
+    assert.match(sec.baseline.body, /\| id \| int \|/)
+    // 블록 표지를 글에 넣으면 거절
+    await assert.rejects(save(R.r, { work: work('2026-0927-표지', 'table:a'), sections: [{ coord: 'table:a', applied: sec.applied, body: '<!-- cdp:baseline -->\nx\n<!-- /cdp:baseline -->' }] }, opt()), (e) => e.code === 'E_INPUT' && /블록/.test(e.message))
+    // 다시 뽑으면 블록만 바뀐다 — 글 · applied 그대로
+    await save(R.r, gen('2026-0928-기준선2', '| 컬럼 | 타입 |\n| id | bigint |'), opt())
+    r = await loadRepo(R.r)
+    const sec2 = toolSection(r, { coord: 'table:a' })
+    assert.equal(sec2.content, 'a 를 큐레이터가 다시 썼다.')
+    assert.equal(sec2.applied, sec.applied)
+    assert.match(sec2.baseline.body, /bigint/)
+    assert.equal((await fs.readFile(path.join(R.r, 'docs', 't.md'), 'utf8')).match(/cdp:baseline/g).length, 4, '블록은 섹션마다 하나(a · e — 열고 닫는 표지 둘씩)')
+  } finally {
+    await R.rm()
+  }
+})

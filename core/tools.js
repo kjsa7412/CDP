@@ -22,6 +22,7 @@ import { cmpDateDesc } from './validity.js'
 import { docNo } from './docrefs.js'
 import { docUsage } from './docusage.js'
 import { CtxError } from './errors.js'
+import { splitBaseline } from './baseline.js'
 
 const NL = String.fromCharCode(10)
 
@@ -307,6 +308,8 @@ export function toolSection(r, { coord } = {}) {
     }
   }
   const refs = bodyRefs(r, c, cut.content)
+  // 기준선 블록은 따로 — `content` 는 큐레이터가 고칠 글(블록을 뺀 것)이고 save 가 블록을 다시 붙인다
+  const sb = splitBaseline(cut.content)
   return {
     coord: c,
     doc: cut.doc,
@@ -316,7 +319,8 @@ export function toolSection(r, { coord } = {}) {
     applied: cut.applied,
     heading: cut.heading,
     body: cut.body,
-    content: cut.content,
+    content: sb.curated,
+    ...(sb.block ? { baseline: { src: sb.block.src, asof: sb.block.asof, body: sb.block.body } } : {}),
     state: sectionState(sec, r),
     form: formIdOfText(r.bodies.get(cut.doc)),
     ...extra,
