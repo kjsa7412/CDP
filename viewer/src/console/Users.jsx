@@ -10,7 +10,7 @@ import { navigate } from '../lib/router.jsx'
 import { invalidate, useResource } from '../lib/cache.js'
 import { josa } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
-import { useSudo, CANCELLED } from './Console.jsx'
+import { useSudo, CANCELLED } from '../shell/sudo.jsx'
 import { PageHead, Toolbar, Search, Card, Note, Modal, Field, Seg, Chip, RoleChip, Confirm, when } from './ui.jsx'
 
 const ROLE_OPTS = [

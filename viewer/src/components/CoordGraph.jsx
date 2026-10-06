@@ -45,10 +45,9 @@ function rng(seed) {
 
 // **노드는 상태를 말하지 않는다.**
 //
-// 전에는 원의 농도와 테두리로 밀림·미작성을 그렸다. 그 둘은 개념이 아니다 —
-// 파생은 필수이므로 섹션은 늘 최신이고, 안 했으면 그것은 상태가 아니라
-// **오류**다(`ctx check` 가 커밋을 막는다). 상태가 없는 것을 그림으로 그리면
-// 화면이 없는 구분을 있는 것처럼 말한다.
+// 전에는 원의 농도와 테두리로 섹션 상태를 그렸다. 그림은 「무엇이 무엇과 붙어 있나」 를 답하는 자리다 — 섹션이 기록을
+// 다 실었나(미반영)는 섹션을 여는 자리(문서의 「미반영 n」 칩 · 도구의 pending)가 말한다(개편안 I7). 한 화면이 두 질문을
+// 섞으면 둘 다 흐려진다.
 //
 // 그래서 노드는 모두 같은 원이고, **크기만 다르다 — 작업 건수다.**
 // 남은 색은 고른 것·짚은 것 하나뿐이다.
@@ -65,7 +64,7 @@ const HAIRLINE = 1.5
 // 너무 넓으면 회전이 클릭으로 새어 선택이 멋대로 바뀐다. 6px 은 그 사이다.
 const SLOP = 6
 
-export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit }) {
+export default function CoordGraph({ tree, docs, onPick, onGo, picked, myCoords = [], onToggleMine }) {
   const cvRef = useRef(null)
   const paintRef = useRef(null)
   const spinRef = useRef(null)
@@ -657,11 +656,6 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
   return (
     <div className="gr">
       <div className="gr__bar">
-        {onExit && (
-          <button className="gr__btn gr__btn--exit" onClick={onExit} title="문서 화면으로 (Esc)">
-            <Icon name="chevronLeft" size={13} /> 문서
-          </button>
-        )}
         <span className="gr__stat">
           좌표 <b>{g.nodes.length}</b> · 이음 <b>{g.edges.length}</b> · 덩어리 <b>{g.comps}</b>
           {!hideIso && g.iso > 0 && <> · 고립 <b>{g.iso}</b></>}
@@ -742,9 +736,17 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, onExit })
                   key={i}
                   className="gr__i"
                   aria-pressed={S.lock === i}
-                  title={`${g.nodes[i].coord} · 작업 ${count}건 — 눌러서 그래프에서 찾기`}
+                  title={`${g.nodes[i].coord} · 작업 ${count}건 — 눌러서 그래프에서 찾기${onToggleMine ? ' · 우클릭 → 내 좌표' : ''}`}
                   onClick={() => pickNode(i)}
+                  // **내 좌표를 정하는 자리.** 전에는 찾기 목록의 「좌표」 범위였다 — 범위 칩을 지우며 좌표 목록이 이 레일로 왔다.
+                  // 상태는 본문 하이라이팅 · 작업 기록 목록의 「내」 가 읽는다
+                  onContextMenu={(e) => {
+                    if (!onToggleMine) return
+                    e.preventDefault()
+                    onToggleMine(g.nodes[i].coord)
+                  }}
                 >
+                  {myCoords.includes(g.nodes[i].coord) && <span className="fd__mine">내</span>}
                   <span className="gr__gname">{v}</span>
                   {count > 0 && <span className="gr__gn">{count}</span>}
                 </button>

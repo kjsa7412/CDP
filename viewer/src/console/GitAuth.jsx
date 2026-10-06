@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { invalidate, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
-import { useSudo, CANCELLED } from './Console.jsx'
+import { useSudo, CANCELLED } from '../shell/sudo.jsx'
 import { Card, Row, Mono, Note, Btn, Cmd, Chip, Confirm, when } from './ui.jsx'
 
 // 원격 주소 → 종류 · 호스트(서버 `core/gitauth.parseRemote` 의 줄임)

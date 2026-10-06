@@ -295,6 +295,13 @@ export const api = {
   heartbeat: () => req('/heartbeat', { method: 'POST' }).catch(() => {}),
 }
 
+// ── 레포를 이름으로 — 주소의 레포가 아니라(개편안 §7.1 「api.base() 가 주소의 레포에 묶임」) ─────────
+// 왼쪽 메뉴의 배지처럼 얼굴을 넘어 살아남는 부품이 쓴다 — 부르는 순간 주소가 바뀌는 중이어도 레포가 갈리지 않는다.
+export const repoApi = (name) => {
+  const p = (path) => req('/api/' + encodeURIComponent(name) + path, { absolute: true })
+  return { repo: () => p('/repo') }
+}
+
 // ── 사이트 (검토 §4.2) — 공개 자리. 레포 이름 · 사람 이름이 없는 값만 온다 ──────
 export const site = {
   info: () => req('/site/info', { absolute: true }),

@@ -1,4 +1,4 @@
-// 셸 — **왼쪽은 한 번에 하나, 오른쪽은 문서.**
+// 레포 얼굴 — **왼쪽은 한 번에 하나, 오른쪽은 문서.**
 //
 // 전에는 왼쪽을 위아래로 갈라 위에 시작점(탭 4개), 아래에 뻗어나가기를 두었다.
 // 둘 다 상시로 떠 있어서 **둘 다 좁았다** — 400px 안에서 탭 넷이 세로로 쪼개지고,
@@ -8,21 +8,22 @@
 //
 // 지금은 왼쪽이 한 번에 하나만 한다.
 //
-//   목록        관리문서 · 작업문서 · 좌표에서 **시작점**을 고른다
+//   목록        관리 문서(`/r/<레포>/`) · 작업 기록(`/r/<레포>/w`)에서 **시작점**을 고른다 — 무엇의 목록인지는 주소가 정한다
 //   뻗어나가기   고른 것에서 한 레벨씩 다음 노드로
 //
 // 둘이 같은 자리를 쓰므로 각각이 **세로 전체**를 받는다. 폭도 따로 기억한다 —
 // 목록은 좁아도 되고 뻗어나가기는 열이 여럿이라 넓어야 한다.
 //
-// 그래프는 왼쪽에서 나갔다. 좌표 288개짜리 그림은 패널이 아니라 **화면**이
-// 필요하다. 상단 `그래프` 로 들어가면 창 전체를 쓰고 `Esc` 로 돌아온다.
+// 화면을 고르는 것은 왼쪽 메뉴다(`shell/nav.js` — 문서 · 작업 기록 · 좌표 · 그래프 · 큐레이션 · 레포 관리). 전에는 상단 세그
+// (문서 · 그래프 · 관리)와 `Esc → 문서` 가 그 일을 했다 — 메뉴와 같은 일을 하는 단추를 두지 않는다(개편안 §7.2).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api, subscribe, startHeartbeat, ApiError, isServer, currentRepo, rememberRepo, stateNow, getTheme, setTheme, applyTheme } from './lib/api.js'
 import { useRoute, modeOf, navigate, Link } from './lib/router.jsx'
 import { useSession } from './lib/session.jsx'
-import { useSlots } from './lib/slots.js'
+import { useSlots, useScreen } from './lib/slots.js'
+import { useToast } from './shell/toast.jsx'
 import { load, peek, put } from './lib/cache.js'
 import { buildCoordIndex } from './lib/markdown.js'
 import { summaryText } from './lib/format.js'
@@ -30,7 +31,7 @@ import DocView from './components/DocView.jsx'
 import CheckView from './components/CheckView.jsx'
 import Palette from './components/Palette.jsx'
 import StatusBar from './components/StatusBar.jsx'
-import AdminView, { menuFor } from './components/admin/AdminView.jsx'
+import AdminView from './components/admin/AdminView.jsx'
 import { KEYS, kbd } from './lib/keys.js'
 import Finder from './components/Finder.jsx'
 import Explore from './components/Explore.jsx'
@@ -44,6 +45,8 @@ import { docHref, docOfRoute, canonDocId, docTitle, tabsOpen, tabsClose, tabsPin
 // 열이 둘 이상 들어가야 "가로로 뻗는다"가 성립한다.
 const W_LIST = 340
 const W_XP = 560
+// 본문이 이보다 좁으면 왼쪽이 문서 위에 뜬다 — app.css 의 `@container shell (max-width: 900px)` 과 같은 값
+const NARROW_PX = 900
 
 // 첫 화면 — 마지막에 읽던 문서를 그대로 연다. 시작점도 거기서 잡는다.
 //
@@ -90,47 +93,47 @@ export default function App() {
   // 첫 읽기(서버의 state)가 끝났나 — 그 전에 탭 · 최근을 고치면 곧이어 오는 서버 state 가 덮는다
   const [ready, setReady] = useState(false)
   // 900px 아래 — 왼쪽은 문서 **위에 뜬다**(app.css). 문서를 고르거나 문서 쪽을 누르면 덮개를 걷는다. 전에는 골라도 그대로
-  // 덮고 있어서 ◀ 를 찾아야 읽혔다(실서버 종합 시험 F11). 읽기 모드(reading.mode)와 달리 **기억하지 않는다** — 넓히면 원래대로
-  const narrowQ = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 900px)') : null
-  const [narrow, setNarrow] = useState(() => !!narrowQ?.matches)
-  const [drawerShut, setDrawerShut] = useState(false)
-  useEffect(() => {
-    if (!narrowQ) return
-    const on = () => setNarrow(narrowQ.matches)
-    narrowQ.addEventListener?.('change', on)
-    return () => narrowQ.removeEventListener?.('change', on)
+  // 덮고 있어서 ◀ 를 찾아야 읽혔다(실서버 종합 시험 F11). 읽기 모드(reading.mode)와 달리 **기억하지 않는다** — 넓히면 원래대로.
+  // 재는 것은 **창이 아니라 본문 폭**이다 — 왼쪽 메뉴(232px)가 펼쳐져 있으면 그만큼 좁다. CSS 도 같은 문턱을 셸 본문 기준으로
+  // 잰다(`@container shell` · 개편안 §7.1 「창 기준 중단점 → @container」). 둘이 다른 것을 재면 덮개와 그 동작이 어긋난다
+  const [narrow, setNarrow] = useState(false)
+  const narrowRef = useRef(false)
+  const roRef = useRef(null)
+  const appRef = useCallback((el) => {
+    roRef.current?.disconnect()
+    roRef.current = null
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width ?? el.clientWidth
+      const n = w <= NARROW_PX
+      if (n !== narrowRef.current) {
+        narrowRef.current = n
+        setNarrow(n)
+      }
+    })
+    ro.observe(el)
+    roRef.current = ro
   }, [])
+  const [drawerShut, setDrawerShut] = useState(false)
   // 문서 안에서 갈 자리 — { value, seq }. 섹션(좌표) 줄을 눌러 왔을 때만 있다.
   const [docAt, setDocAt] = useState(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  // 화면 전체 모드 · 관리 메뉴는 **주소다**(화면 · 권한 검토 v0.1 R9 · P8) — `/r/<레포>/` 문서 · `/graph` · `/manage/<탭>`
-  // (로컬은 `/` · `/graph` · `/manage/<탭>`). 뒤로 가기 · 새로고침 · 링크 · 콘솔 → 「레포」 가 그 자리로 온다.
-  // 관리 화면에서 보던 메뉴는 **화면을 나갔다 와도 그 자리다** — 동기화를 보다 문서로 갔다가 다시 들어오면 동기화여야 한다.
+  // 화면은 **주소다**(화면 · 권한 검토 v0.1 R9 · P8) — 셸이 읽은 화면(`shell/routes.js` 의 screenOf)을 그대로 받는다.
+  //   문서 · 작업 기록  `/r/<레포>/` · `/w` · `/d/<id>` — 왼쪽 목록은 finder(주소 · 고른 사람이 히스토리에 남긴 것)
+  //   그래프           `/graph`
+  //   관리             `/manage/…` — 큐레이션 · 레포 관리(item.tab). 없는 탭 · 권한 밖 탭은 셸이 이미 바꿔 썼다
+  // 뒤로 가기 · 새로고침 · 링크 · 서버 묶음 → 「레포」 가 그 자리로 온다.
   const route = useRoute()
+  const scr = useScreen()
   const here = modeOf(route.path)
   const rest = here.rest || []
-  const topMode = rest[0] === 'graph' ? 'graph' : rest[0] === 'manage' ? 'admin' : 'doc'
+  const item = scr?.item || null
+  const topMode = item?.key === 'graph' ? 'graph' : item?.tab ? 'admin' : 'doc'
+  const adminTab = item?.tab || 'overview'
+  const finder = scr?.finder || { list: 'docs', only: null }
   const baseHref = here.server ? '/r/' + encodeURIComponent(here.repo) + '/' : '/'
   // 문서도 주소다 — `/d/<id>[?at=]`(문서 이동 검토 v0.1 A). 문서 화면에서만 읽는다
   const routeDoc = topMode === 'doc' ? docOfRoute(rest, route.query) : null
-  const [lastTab, setLastTab] = useState('overview')
-  const adminTab = topMode === 'admin' && rest[1] ? rest[1] : lastTab
-  useEffect(() => {
-    if (topMode === 'admin' && rest[1]) setLastTab(rest[1])
-  }, [topMode, rest[1]])
-  // 없는 관리 탭(`/manage/없음` · 서버에서 `/manage/repo`)은 현황으로 — 주소를 고쳐 둬야 메뉴의 현재 표시가 맞는다
-  useEffect(() => {
-    if (topMode === 'admin' && rest[1] && !menuFor(here.server).some((m) => m.key === rest[1])) navigate(baseHref + 'manage/overview', { replace: true })
-  }, [topMode, rest[1], here.server, baseHref])
-  // 「문서」 로 오면 보던 문서의 주소로 — 그래프 · 관리에 갔다 와도 그 문서다
-  const setTopMode = useCallback(
-    (mode) =>
-      navigate(
-        mode === 'graph' ? baseHref + 'graph' : mode === 'admin' ? baseHref + 'manage/' + lastTab : docId ? docHref(baseHref, docId) : baseHref
-      ),
-    [baseHref, lastTab, docId]
-  )
-  const setAdminTab = useCallback((t) => navigate(baseHref + 'manage/' + t), [baseHref])
   // 동기화 진행 — **서버가 갖고 SSE 로 온다.** 이 컴포넌트가 들고 있으면
   // 탭이 둘일 때 한쪽만 알게 된다. { phase, startedAt, last, log }
   const [sync, setSync] = useState(null)
@@ -140,7 +143,8 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [changedPaths, setChangedPaths] = useState(new Set())
-  const [toast, setToast] = useState(null)
+  // 알림은 셸에 하나(`shell/toast.jsx`) — 얼굴을 넘어도 떠 있던 것이 살아남는다
+  const toast = useToast()
   const [scanning, setScanning] = useState(false)
   const [fatal, setFatal] = useState(null)
   const [needSetup, setNeedSetup] = useState(false)
@@ -158,16 +162,14 @@ export default function App() {
   const [checkOpen, setCheckOpen] = useState(false)
   // 왼쪽이 지금 하는 일 — 'list'(고른다) · 'explore'(뻗는다). **둘이 같이 있지 않다.**
   const [leftMode, setLeftMode] = useState('list')
-  // L2 대상 — 'managed' · 'work' · 'coord'.
-  //
-  // **Finder 안에 있던 것을 여기로 올렸다.** 패널 머리의 스텝 1이 "지금
-  // 무엇 중에서 찾고 있나"를 부제로 적으려면 머리와 목록이 같은 값을 봐야
-  // 한다. 아래에 있으면 머리는 그것을 모른다.
-  const [scope, setScope] = useState('managed')
+  // 무엇의 목록인가 — 관리 문서 · 작업 기록(+ 거름). **주소가 정한다**(개편안 §7.2) — 전에는 목록 머리의 범위 칩
+  // (관리문서 · 작업문서 · 좌표)이었고 왼쪽 메뉴와 같은 일을 했다. 좌표는 「좌표 · 그래프」 화면의 목록이 맡는다.
+  // 문서를 열 때 히스토리 항목에 `list` · `only` 를 싣는다 — 돌아오면 그 목록이다(`shell/routes.js` finderOf).
+  const scope = finder.list === 'records' ? 'work' : 'managed'
   const atSeqRef = useRef(0)
   // 문서 이동이 콜백 · effect 안에서 「지금」 을 읽는 자리 — 매 렌더 맞춘다
   const leftRef = useRef(null)
-  leftRef.current = { root, leftMode, scope }
+  leftRef.current = { root, leftMode, list: finder.list, only: finder.only }
   const docIdRef = useRef(docId)
   docIdRef.current = docId
   const stateRef = useRef(state)
@@ -181,6 +183,10 @@ export default function App() {
   const appliedRef = useRef(null)
   // 「← 이전」 — 지금 히스토리 항목이 실은 직전 문서
   const [nav, setNav] = useState({ prev: null, direct: false })
+  const navRef = useRef(nav)
+  navRef.current = nav
+  // 지금 목록의 주소 — 탭을 다 닫으면 문서 없는 이 주소로(관리 문서 `/` · 작업 기록 `/w[?only=]`)
+  const listHref = finder.list === 'records' ? baseHref + 'w' + (finder.only ? '?only=' + finder.only : '') : baseHref
 
   const reading = state?.reading || { mode: 'browse', fontSize: 15, measure: 760, coordLinks: true }
   const myCoords = state?.myCoords || []
@@ -258,12 +264,12 @@ export default function App() {
       reload()
       const n = ev.changed.length + ev.added.length + ev.removed.length
       if (n > 0) {
-        setToast(
+        toast(
           `문서 ${ev.changed.length}건 갱신${ev.added.length ? ` · 신규 ${ev.added.length}건` : ''}${
             ev.removed.length ? ` · 삭제 ${ev.removed.length}건` : ''
-          }`
+          }`,
+          5000
         )
-        setTimeout(() => setToast(null), 5000)
       }
     }, () => {
       // SSE 가 붙었다. 그 전에 지나간 상태 변화를 여기서 한 번 맞춘다.
@@ -293,11 +299,11 @@ export default function App() {
     document.documentElement.style.setProperty('--w-find', `${w}px`)
   }, [leftMode, state?.panes?.list, state?.panes?.explore])
 
-  // 테마 — OS 따라가기 기본(§16.4). **바꿀 때만 쓴다**(화면 · 권한 검토 v0.1 R9) — 첫 페인트 전에 `index.html` 의
-  // 인라인 스크립트가 `cdp.theme` 로 이미 붙였고, OS 변화는 `main.jsx` 가 따라간다. 여기서는 설정 세그로 고른 값
-  // (로컬은 서버 파일의 값)이 localStorage 와 다를 때 그 키에 쓰고 붙인다. 같은 값이면 DOM 을 건드리지 않는다.
+  // 테마 — **로컬만 여기서.** 서버형은 왼쪽 메뉴의 내 계정이 `cdp.theme` 에 바로 쓴다(얼굴 무관한 값 — `shell/AccountMenu.jsx`).
+  // 로컬은 값이 서버 파일(`/state`)에 있어 ⋯ 메뉴의 세그가 그것을 고치고, 여기서 localStorage 와 다를 때 그 키에 쓰고 붙인다
+  // (첫 페인트 전에는 `index.html` 의 인라인 스크립트가 같은 키로 이미 붙였다 · R9). 같은 값이면 DOM 을 건드리지 않는다.
   useEffect(() => {
-    if (!state) return
+    if (!state || isServer()) return
     const t = state.theme || 'system'
     if (t !== getTheme()) setTheme(t)
     applyTheme(t)
@@ -320,10 +326,7 @@ export default function App() {
     })
   }, [])
 
-  const say = useCallback((msg, ms = 2600) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), ms)
-  }, [])
+  const say = useCallback((msg, ms = 2600) => toast(msg, ms), [toast])
 
   // 매뉴얼이 레포에 있나. 파일명으로 찾는다 -- 시드가 그 이름으로 넣는다.
   const manualDoc = useMemo(() => {
@@ -356,8 +359,9 @@ export default function App() {
   // 지나므로 읽음 · 마지막 문서 · 바뀜 표시 · 탭 · 왼쪽이 같이 따라온다. 전에는 메모리 스택을 `Alt+←` 로만 되짚었고
   // 되돌리기가 `setDocId` 하나라 왼쪽이 다른 문서를 가리킨 채 남았으며(H4), 브라우저 뒤로 가기는 앱을 나갔다(H5).
   //
-  // 히스토리 항목마다 `cdp` 를 싣는다 — { root, leftMode, scope, prev, direct }.
-  //   root · leftMode · scope  그 문서를 볼 때의 왼쪽. 돌아오면 되살린다
+  // 히스토리 항목마다 `cdp` 를 싣는다 — { root, leftMode, list, only, prev, direct }.
+  //   root · leftMode  그 문서를 볼 때의 왼쪽. 돌아오면 되살린다
+  //   list · only      왼쪽 목록(관리 문서 · 작업 기록 + 거름) — 셸이 읽어 메뉴 · 목록이 같은 것을 가리킨다(routes.finderOf)
   //   prev     직전에 보던 문서 — 「← 이전」 의 이름
   //   direct   바로 앞 항목이 그 문서인가 — 그러면 「← 이전」 이 `history.back()` 이다(사이에 그래프 · 관리가 끼면 아니다)
   // how — 탭을 어떻게 하나('tab' 더한다 · 'replace' 지금 탭을 바꾼다 — `doclink.js`).
@@ -378,7 +382,8 @@ export default function App() {
       const snap = {
         root: r !== undefined ? r : L.root,
         leftMode: L.leftMode,
-        scope: L.scope,
+        list: L.list,
+        only: L.only,
         ...(replace || (onDoc && onDoc.id === id)
           ? { prev: was?.prev || null, direct: replace ? !!was?.direct : false }
           : { prev: cur || null, direct: !!onDoc && !!cur }),
@@ -410,8 +415,9 @@ export default function App() {
     if (!routeDoc) {
       // 문서 없는 주소를 지났다 — 뒤로 가기로 같은 문서 주소에 돌아와도 다시 연다(「모두 닫기」 뒤)
       appliedRef.current = null
-      // 주소에 문서가 없다 — 첫 화면에서 마지막 문서를 열었으면(restoreOf) 주소를 그 문서로 바꿔 쓴다. 쌓지 않는다
-      if (docId) navigate(docHref(baseHref, docId), { replace: true, state: { cdp: { ...leftRef.current, prev: null, direct: false } } })
+      // 주소에 문서가 없다(목록 주소 `/` · `/w` — 첫 화면 · 왼쪽 메뉴의 「문서」 「작업 기록」) — 보던 문서가 있으면 주소를 그 문서로
+      // 바꿔 쓰고 **목록은 이 주소의 것**을 싣는다. 오른쪽은 읽던 문서 그대로 · 왼쪽만 바뀐다(옛 범위 칩과 같다). 쌓지 않는다
+      if (docId) navigate(docHref(baseHref, docId), { replace: true, state: { cdp: { ...leftRef.current, prev: navRef.current.prev, direct: false } } })
       return
     }
     if (!ready) return
@@ -421,7 +427,6 @@ export default function App() {
     const c = history.state?.cdp
     if (c) {
       if ('root' in c) setRoot(c.root || null)
-      if (c.scope) setScope(c.scope)
       if (c.leftMode) setLeftMode(c.leftMode === 'explore' && !c.root ? 'list' : c.leftMode)
     } else {
       // 히스토리가 실은 왼쪽이 없다(받은 링크 · 주소창에 친 주소) — 첫 화면 복원과 같이 그 문서를 뿌리로
@@ -433,7 +438,7 @@ export default function App() {
     const how = tabHowRef.current || 'replace'
     tabHowRef.current = null
     // 좁은 창 — 문서 주소에 왔으면 목록 덮개를 걷는다(F11). 받은 링크 · 새로고침도 문서가 먼저 보여야 한다
-    if (narrowQ?.matches) setDrawerShut(true)
+    if (narrowRef.current) setDrawerShut(true)
     const s = stateRef.current || {}
     const before = docIdRef.current
     if (id === before && (s.tabs || []).some((t) => t.id === id)) return
@@ -455,8 +460,8 @@ export default function App() {
   }, [topMode, route.href, docId, ready])
 
   // 뿌리 · 찾기/뻗어나가기가 바뀌면 지금 히스토리 항목에 적어 둔다 — 떠났다가 돌아오면 「떠날 때의 뻗어나가기」 다.
-  // **범위(관리문서 · 작업문서 · 좌표)는 적지 않는다** — 범위를 바꾸는 것은 떠나려는 몸짓이다. 돌아왔을 때 목록은 그 문서를
-  // 고른 범위여야 그 줄이 칠해져 보인다(작업문서를 읽다 관리문서 › 용어집으로 갔다 돌아오면 작업문서 목록)
+  // **목록(list · only)은 여기서 고치지 않는다** — 목록을 바꾸는 것은 왼쪽 메뉴 · 거름 칩이고 그것은 주소 이동이다(새 항목).
+  // 돌아왔을 때 목록은 그 문서를 고른 목록이어야 그 줄이 칠해져 보인다(기록을 읽다 용어집으로 갔다 돌아오면 기록 목록)
   useEffect(() => {
     // 첫 읽기 전에는 적지 않는다 — 비어 있는 뿌리를 적으면 받은 링크로 연 문서가 「뿌리 없음」 이 된다
     if (!routeDoc || !ready) return
@@ -475,16 +480,16 @@ export default function App() {
       if (next) openDoc(next, null, { replace: true })
       else {
         setDocId(null)
-        navigate(baseHref)
+        navigate(listHref)
       }
     },
-    [patch, openDoc, baseHref]
+    [patch, openDoc, listHref]
   )
   const closeAllTabs = useCallback(() => {
     patch({ tabs: [] })
     setDocId(null)
-    navigate(baseHref)
-  }, [patch, baseHref])
+    navigate(listHref)
+  }, [patch, listHref])
   const pinTab = useCallback((id) => patch({ tabs: tabsPin(stateRef.current?.tabs || [], id) }), [patch])
   const goPrev = useCallback(() => {
     if (!nav.prev) return
@@ -516,12 +521,19 @@ export default function App() {
   }, [])
 
   // 그래프에서 나가 뻗어나가기로 — 그래프는 "무엇이 무엇과 붙어 있나"까지만
-  // 답한다. 그 다음은 뻗어나가기다.
-  const goFromGraph = useCallback((coord) => {
-    setRoot({ kind: 'coord', key: coord, label: coord })
-    setLeftMode('explore')
-    setTopMode('doc')
-  }, [setTopMode])
+  // 답한다. 그 다음은 뻗어나가기다. 뿌리 · 뻗어나가기를 **히스토리 항목에 실어** 간다 — 전에는 실지 않아 문서 주소에
+  // 닿는 순간 「주소 → 문서」 가 그 문서를 뿌리로 되살려 고른 좌표가 사라졌다
+  const goFromGraph = useCallback(
+    (coord) => {
+      const node = { kind: 'coord', key: coord, label: coord }
+      setRoot(node)
+      setLeftMode('explore')
+      const L = leftRef.current
+      const st = { cdp: { root: node, leftMode: 'explore', list: L.list, only: L.only, prev: navRef.current.prev, direct: false } }
+      navigate(docId ? docHref(baseHref, docId) : listHref, { state: st })
+    },
+    [baseHref, docId, listHref]
+  )
 
   const saveScroll = useCallback(
     (id, ratio) => patch({ scroll: { [id]: { ratio, at: Date.now() } } }),
@@ -579,12 +591,12 @@ export default function App() {
       }
 
       // **Esc 는 위에서부터 하나씩 벗긴다.** 겹쳐 뜬 것을 한 번에 다 닫으면
-      // 실수로 누른 사람이 하던 자리를 통째로 잃는다.
+      // 실수로 누른 사람이 하던 자리를 통째로 잃는다. 화면을 떠나지는 않는다 — 전에는 마지막에 `Esc → 문서` 가 있어
+      // 확인 창을 닫던 Esc 가 관리 화면까지 나갔다. 화면을 고르는 것은 왼쪽 메뉴다(개편안 §7.2)
       if (e.key === 'Escape') {
         if (checkOpen) return setCheckOpen(false)
         if (helpOpen) return setHelpOpen(false)
         if (menuOpen) return setMenuOpen(false)
-        if (topMode !== 'doc') return setTopMode('doc')
         return
       }
       // 왼쪽이 하는 일을 바꾼다 — 탭 키는 브라우저 것이므로 쓰지 않는다
@@ -620,26 +632,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  // 탭 제목 — 레포 이름을 붙인다.
-  //
-  // 지식 레포를 둘 이상 열어두는 경우가 있다(프로젝트 것 · 폐쇄망에서 가져온 것).
-  // 탭이 전부 `cdp` 면 어느 창이 어느 레포인지 알 수 없다.
-  useEffect(() => {
-    const name = repo?.root ? repo.root.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).pop() : null
-    // 규칙은 `<페이지> · CDP` — 세 얼굴이 같다(화면 UX 검토 v0.1 P3)
-    document.title = !name || name.toLowerCase() === 'cdp' ? 'CDP' : `${name} · CDP`
-  }, [repo?.root])
+  // 탭 제목은 셸이 메뉴 표에서 붙인다(`<화면> · <레포> · CDP` — `shell/routes.js` titleOf)
 
   const coordIndex = useMemo(() => buildCoordIndex(tree), [tree])
   // 문서 이름을 찾는 목록 — 탭 · 「← 이전」 · 최근
   const lists = useMemo(() => ({ docs, managed: managedList, others }), [docs, managedList, others])
 
   // 스텝 1의 부제 — 지금 무엇 중에서 찾고 있나
-  const scopeCount = useMemo(() => {
-    if (scope === 'managed') return managedList.length
-    if (scope === 'work') return docs.length
-    return (tree?.types || []).reduce((a, t) => a + t.coords.length, 0)
-  }, [scope, managedList.length, docs.length, tree])
+  const scopeCount = scope === 'managed' ? managedList.length : docs.length
 
   // ── 렌더 ──────────────────────────────────────────────────────────────
   if (fatal) {
@@ -662,7 +662,6 @@ export default function App() {
       <div className="app app--bare">
         <AdminView
           tab="repo"
-          onTab={() => {}}
           state={state || { repoPath: '' }}
           repo={repo}
           patch={() => {}}
@@ -692,12 +691,12 @@ export default function App() {
   // 남고 그 띠 전체가 펴는 버튼이므로 그 예외가 필요 없다.
   const effectiveMode = (reading.mode === 'focus' || (narrow && drawerShut && docId)) && topMode === 'doc' ? 'focus' : 'browse'
   const c = repo.checkCounts || { error: 0, warn: 0, info: 0 }
-  const repoName = repo.root.split(/[\\/]/).pop()
 
   // data-force-status: 감시가 끊기면 읽기 모드에서도 상태바를 되살린다 —
   //   화면이 낡았을 수 있는데 조용한 화면으로 읽고 있으면 안 된다(§23.3 · §27.5).
   return (
     <div
+      ref={appRef}
       className="app"
       data-mode={effectiveMode}
       data-top={topMode}
@@ -705,8 +704,8 @@ export default function App() {
       data-nodoc={docId ? '0' : '1'}
       data-force-status={repo.watchEnabled && !repo.watchAlive ? '1' : '0'}
     >
-      {/* 상단 — Shell 이 한 번 그리는 TopBar(화면 · 권한 검토 v0.1 R7) 안의 두 자리에 이 레포의 도구를 포털로 넣는다.
-          상태와 핸들러는 여기 남고, 얼굴을 넘어도 상단 바 DOM 은 그대로다. 「레포 ▾」 메뉴는 TopBar 가 든다(세션 · 라우트만 쓴다). */}
+      {/* 상단 — 셸의 위치 줄(AppBar) 안 두 자리에 이 레포의 도구를 포털로 넣는다. 상태와 핸들러는 여기 남고, 얼굴을 넘어도
+          상단 바 DOM 은 그대로다. 화면 고르기(옛 세그 문서 · 그래프 · 관리)와 레포 고르기는 왼쪽 메뉴가 든다. */}
       {slots &&
         createPortal(
           <>
@@ -714,28 +713,6 @@ export default function App() {
             {!isServer() && repo.hostWarning && (
               <span className="hostwarn"><Icon name="warn" size={13} /> loopback 아님</span>
             )}
-
-            {/* 화면 전체 모드 둘. **그래프는 패널이 아니라 화면이다** —
-                좌표 288개짜리 그림을 400px 안에서 읽을 수 있는 사람은 없다. */}
-            <div className="seg seg--mode" role="group" aria-label="화면">
-              <button aria-pressed={topMode === 'doc'} onClick={() => setTopMode('doc')}>
-                <Icon name="doc" size={14} /> 문서
-              </button>
-              <button aria-pressed={topMode === 'graph'} onClick={() => setTopMode('graph')}>
-                <Icon name="graph" size={14} /> 그래프
-              </button>
-              {/* 관리도 **화면**이다. 레포 여섯 곳의 설치 상태와 이력 스무 줄은
-                  380px 팝오버에 안 들어간다 — 그래프를 화면으로 올린 것과 같다. */}
-              <button
-                aria-pressed={topMode === 'admin'}
-                onClick={() => setTopMode('admin')}
-                // 제목이 접근 이름이 된다 — 옛 메뉴(레포 · 동기화 · 에이전트 설치)가 남아 화면 글과 달랐다(실서버 종합 시험 F21)
-                aria-label="관리"
-                title={isServer() ? '관리 — 현황 · 관리 문서 · 작업 레포 · 정보' : '관리 — 현황 · 지식 레포 · 동기화 · 작업 레포 · 진단 · 정보'}
-              >
-                <Icon name="gear" size={14} /> 관리
-              </button>
-            </div>
 
             <button className="topbar__search" onClick={() => setPaletteOpen(true)} aria-label={`검색 · 이동 (${kbd('⌘K')})`}>
               <Icon name="search" size={14} />
@@ -822,17 +799,21 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <div className="menu__cap">테마</div>
-            <div className="menu__seg">
-              <div className="seg">
-                {['system', 'light', 'dark'].map((t) => (
-                  <button key={t} aria-pressed={(state.theme || 'system') === t} onClick={() => patch({ theme: t })}>
-                    {{ system: '자동', light: '밝게', dark: '어둡게' }[t]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* 「관리 —」 줄은 뺐다 — 세그의 「관리」 와 같은 일을 하는 단추 둘이었다(화면 · 권한 검토 v0.1 R5 · 부록 C) */}
+            {/* 테마 — 서버형은 왼쪽 메뉴의 내 계정에 있다(얼굴 무관한 값). 로컬만 여기 — 값이 이 PC 의 상태 파일에 있다 */}
+            {!isServer() && (
+              <>
+                <div className="menu__cap">테마</div>
+                <div className="menu__seg">
+                  <div className="seg">
+                    {['system', 'light', 'dark'].map((t) => (
+                      <button key={t} aria-pressed={(state.theme || 'system') === t} onClick={() => patch({ theme: t })}>
+                        {{ system: '자동', light: '밝게', dark: '어둡게' }[t]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}
@@ -849,7 +830,6 @@ export default function App() {
         /* 관리 — 창 전체. **세팅과 현황이 구석의 팝오버에 있을 일이 아니다.** */
         <AdminView
           tab={adminTab}
-          onTab={setAdminTab}
           state={state}
           repo={repo}
           me={me}
@@ -858,13 +838,12 @@ export default function App() {
           onSync={syncNow}
           onCheck={() => setCheckOpen(true)}
           onChanged={() => reload().catch(() => {})}
-          repoName={isServer() ? here.repo : repoName}
-          built={session?.info?.built || null}
           say={(m) => say(m, 6000)}
         />
       ) : topMode === 'graph' ? (
-        /* 그래프 — 창 전체. 왼쪽 패널도 문서도 없다.
-           좌표를 고르면 문서 모드로 돌아가며 뻗어나가기가 열린다. */
+        /* 그래프 — 창 전체. 왼쪽 패널도 문서도 없다. 좌표 목록(묶음 → 좌표)은 그래프 왼쪽 레일이 든다 —
+           찾기 목록의 「좌표」 칩을 지운 자리다. 좌표를 고르면 문서 모드로 돌아가며 뻗어나가기가 열린다.
+           「‹ 문서」 단추는 없다 — 왼쪽 메뉴의 「문서」 가 같은 일을 한다(보던 문서로 간다) */
         <div className="pane pane--graph">
           <CoordGraph
             tree={tree}
@@ -872,7 +851,8 @@ export default function App() {
             onPick={markFromGraph}
             onGo={goFromGraph}
             picked={root?.kind === 'coord' ? root.key : null}
-            onExit={() => setTopMode('doc')}
+            myCoords={myCoords}
+            onToggleMine={(c) => patch({ myCoords: myCoords.includes(c) ? myCoords.filter((x) => x !== c) : [...myCoords, c] })}
           />
         </div>
       ) : (
@@ -918,7 +898,7 @@ export default function App() {
                 <Icon name="search" size={15} />
                 <span className="step__txt">
                   <span className="step__t">찾기</span>
-                  <span className="step__s">{SCOPE_LABEL[scope]} {scopeCount}{scope === 'coord' ? '개' : '건'}</span>
+                  <span className="step__s">{SCOPE_LABEL[scope]} {scopeCount}{scope === 'managed' ? '종' : '건'}</span>
                 </span>
               </button>
 
@@ -958,17 +938,11 @@ export default function App() {
               <Finder
                 docs={docs}
                 managed={managedList}
-                tree={tree}
                 root={root}
                 scope={scope}
-                onScope={setScope}
-                onGraph={() => setTopMode('graph')}
                 onPick={pickRoot}
                 readMap={readMap}
                 myCoords={myCoords}
-                onToggleMine={(c) =>
-                  patch({ myCoords: myCoords.includes(c) ? myCoords.filter((x) => x !== c) : [...myCoords, c] })
-                }
               />
             ) : (
               <Explore root={root} onOpen={(id, at) => openDoc(id, at, { how: 'replace' })} onBack={() => setLeftMode('list')} />
@@ -1030,9 +1004,6 @@ export default function App() {
         onCheck={() => setCheckOpen(true)}
         onSay={(m) => say(m, 6000)}
       />
-
-      {/* 알림 — 화면 아래에 잠깐 뜬다. 전에는 상단바 안이라 폭을 두고 다퉜다 */}
-      {toast && <div className="toast" role="status">{toast}</div>}
 
       {checkOpen && (
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setCheckOpen(false)}>
@@ -1107,8 +1078,8 @@ function SyncButton({ sync, onSync }) {
   )
 }
 
-// L2 대상의 이름 — 스텝 부제와 칩이 같은 말을 쓴다
-const SCOPE_LABEL = { managed: '관리문서', work: '작업문서', coord: '좌표' }
+// 목록의 이름 — 스텝 부제가 왼쪽 메뉴와 같은 말을 쓴다(용어 v1.0 — 관리 문서 · 작업 기록 · 개편안 §4.5)
+const SCOPE_LABEL = { managed: '관리 문서', work: '작업 기록' }
 
 // 레일에 뿌리를 적는다.
 //

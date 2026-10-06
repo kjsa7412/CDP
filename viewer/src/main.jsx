@@ -1,8 +1,8 @@
 // 진입 — **껍데기 하나.** `Shell` 이 매 렌더 주소로 얼굴을 고른다(화면 · 권한 검토 v0.1 R7).
 //
-//   local    로컬 뷰어(트레이 앱) · repo  /r/<레포>/   →  App
-//   site     / · /manual · /login · /setup · /r      →  Site
-//   console  /console/…                              →  Console
+//   local    로컬 뷰어(트레이 앱) · repo  /r/<레포>/   →  왼쪽 메뉴 + App
+//   site     / · /manual · /login · /setup · /r      →  상단 바 + Site
+//   console  /console/…                              →  왼쪽 메뉴 + Console(서버 묶음)
 //
 // 전에는 여기서 얼굴을 한 번 고정해(`face` 상수) 얼굴 사이가 전부 문서 교체였다. 이제 얼굴을 넘는 이동도 pushState 다.
 
@@ -12,6 +12,7 @@ import Shell from './Shell.jsx'
 import './styles/font.css'
 import './styles/tokens.css'
 import './styles/app.css'
+import './styles/shell.css'
 import './styles/admin.css'
 import './styles/doc.css'
 import './styles/site.css'

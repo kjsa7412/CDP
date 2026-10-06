@@ -10,6 +10,8 @@
 
 import { useEffect } from 'react'
 import { api, isServer, currentRepo } from '../../lib/api.js'
+import { navigate } from '../../lib/router.jsx'
+import { repoBase } from '../../shell/nav.js'
 import { useResource } from '../../lib/cache.js'
 import Icon from '../Icon.jsx'
 import { Card, Row, Mark, Mono, Note, Btn, when } from './ui.jsx'
@@ -17,7 +19,7 @@ import { Card, Row, Mark, Mono, Note, Btn, when } from './ui.jsx'
 // 서버형의 미러 상태 다섯 — 사실만(동시 기록 검토 v0.1 §5.7). 고치는 것은 콘솔.
 const MIRROR = { ok: [null, '최신 — origin 과 같다'], lag: ['warn', '밀림'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 이 앞서 있다'], off: [null, '원격 없음'] }
 
-export default function Overview({ repo, sync, diag, me = null, onGo, onCheck, onSync }) {
+export default function Overview({ repo, sync, diag, me = null, onCheck, onSync }) {
   // 전부 캐시(화면 · 권한 검토 v0.1 R8) — 탭을 오가도 「읽는 중…」 이 다시 뜨지 않는다. 키는 레포 + 경로.
   // 서버형 — 이 레포의 미러 상태는 `/repos` 의 자기 행(사유 포함 · 상태바와 **같은 키** — 요청 하나). `/api/<레포>/git` 은 로컬형 문법이다.
   // 작업 레포는 **대장**(`/workrepos`)의 이 레포 것 — 관리 › 작업 레포와 같은 키.
@@ -57,7 +59,8 @@ export default function Overview({ repo, sync, diag, me = null, onGo, onCheck, o
       <div className="agrid">
         <Card
           title="지식 레포"
-          actions={<Btn onClick={() => onGo('repo')}>자세히</Btn>}
+          // 「자세히」 는 로컬만 — 서버형에는 고를 경로가 없다(지식 레포 탭이 없어 누르면 현황으로 돌아왔다)
+          actions={!isServer() ? <Btn onClick={() => navigate(repoBase(null) + 'manage/repo')}>자세히</Btn> : null}
         >
           <Row label="보고 있는 곳">
             <Mono>{(repo?.root || '').split(/[\\/]/).filter(Boolean).pop()}</Mono>
@@ -153,7 +156,7 @@ export default function Overview({ repo, sync, diag, me = null, onGo, onCheck, o
         </Card>
       </div>
 
-      <Card title="작업 레포" actions={<Btn onClick={() => onGo('work')}>자세히</Btn>}>
+      <Card title="연결된 작업 레포" actions={<Btn onClick={() => navigate(repoBase(isServer() ? currentRepo() : null) + 'manage/work')}>자세히</Btn>}>
         {!work ? (
           <span className="amuted">읽는 중…</span>
         ) : work.failed ? (

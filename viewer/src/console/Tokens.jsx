@@ -10,7 +10,7 @@ import { invalidate, useResource } from '../lib/cache.js'
 import { navigate } from '../lib/router.jsx'
 import { josa } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
-import { useSudo, CANCELLED } from './Console.jsx'
+import { useSudo, CANCELLED } from '../shell/sudo.jsx'
 import { PageHead, Toolbar, Search, Note, Modal, Field, Seg, Chip, Confirm, Prompt, TokenReveal, when, daysText } from './ui.jsx'
 
 export default function Tokens({ me, say, route }) {
