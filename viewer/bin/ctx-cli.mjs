@@ -64,6 +64,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
                             모드 B — 지식 레포 없이 서버에서 kit 을 받아 넣는다
   ctx mcp                   MCP 서버로 선다 (stdio). 호스트가 띄운다 -- 직접 칠 일은 없다
   ctx serve --root <폴더>    MCP 서버 + 관리 서비스 (HTTP). 상주 프로세스
+  ctx serve --personal <레포>  개인 서버 — 레포 하나 · 127.0.0.1 · 명부(나 하나)를 스스로 만든다. 서버 없는 팀 · 한 사람
   ctx serve user add|set|list --auth <f> [--role viewer|writer|admin] [--curate <레포,…|*>]   명부 — 권한은 여기 붙는다(--curate 는 레포별 큐레이터 · 빈 값이면 해제)
   ctx serve token [list|reissue|set|revoke] --auth <f>   토큰 — 신원만 증명한다. 폐기는 상태로 남는다
   ctx serve git-auth --host <h[:p]> --user <계정> [--test <url>]   origin 자격 — PAT 를 숨김 입력으로(.git-credentials 600)
@@ -137,6 +138,7 @@ function parseArgs(argv) {
     else if (a === '--packages') out.packages = argv[++i]
     else if (a === '--forms') out.forms = argv[++i]
     else if (a === '--kit') out.kit = argv[++i]
+    else if (a === '--personal') out.personal = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : true
     else if (a === '--doc') out.doc = argv[++i]
     else if (a === '--src') out.src = argv[++i]
     else if (a === '--asof') out.asof = argv[++i]

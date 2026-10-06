@@ -115,7 +115,8 @@ function makeLog(dataDir) {
 // 캐시는 레포마다 하나이고 MCP 와 관리 서비스(§6.3)가 **같은 것을 쓴다.**
 // 두 벌을 들면 같은 레포를 두 번 읽고 두 답이 갈린다.
 
-export function makeStore(root, log) {
+// `only` — 개인 서버(v1.0 W3): 폴더를 훑지 않고 이 레포 하나만 든다 { name, root }
+export function makeStore(root, log, { only = null } = {}) {
   let repos = []
   let at = 0
   const caches = new Map()
@@ -128,11 +129,11 @@ export function makeStore(root, log) {
   const loading = new Map()
 
   const refresh = async () => {
-    const ents = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
+    const ents = only ? [{ name: only.name, isDirectory: () => true, fixed: only.root }] : await fs.readdir(root, { withFileTypes: true }).catch(() => [])
     const found = []
     for (const e of ents) {
       if (!e.isDirectory()) continue
-      const dir = path.join(root, e.name)
+      const dir = e.fixed || path.join(root, e.name)
       const ok = await fs
         .access(path.join(dir, '_vocab.md'))
         .then(() => true)
@@ -504,7 +505,18 @@ const json = (res, status, obj) => {
 }
 
 export async function runServe(opt = {}) {
-  const root = path.resolve(opt.root || '.')
+  // 개인 서버(v1.0 W3 · 개편안 §5.6) — 서버 없는 팀 · 한 사람. 레포 하나 · 루프백 · 명부는 나 하나(admin)를 스스로 만든다.
+  // 모드 A(PC 의 git 훅 · stdio)를 대신한다 — 같은 코드 · 같은 save · 같은 화면이다.
+  let personal = null
+  if (opt.personal) {
+    personal = await preparePersonal(opt)
+    if (personal.error) {
+      process.stderr.write('ctx serve --personal: ' + personal.error + NL)
+      return 2
+    }
+    opt = { ...opt, bind: '127.0.0.1', port: opt.port || 7400, auth: personal.auth, data: personal.data }
+  }
+  const root = path.resolve(opt.root || (personal ? path.dirname(personal.repo) : '.'))
   const bind = opt.bind || '127.0.0.1'
   const port = Number(opt.port) || 7374
   const dataDir = opt.data ? path.resolve(opt.data) : null
@@ -528,7 +540,7 @@ export async function runServe(opt = {}) {
   // 화면 파일. 없으면 안내만 낸다 — 서버는 화면 없이도 돈다(MCP 는 별개다).
   const webDir = opt.web ? path.resolve(opt.web) : path.resolve(hereDir(import.meta.url), '../../ops/out/web')
 
-  const store = makeStore(root, log)
+  const store = makeStore(root, log, personal ? { only: { name: personal.name, root: personal.repo } } : {})
   await store.refresh()
   // 패키지 — 콘솔의 `POST /admin/repos` 가 여기서 복사한다(검토 §3.5 · 화면 · 권한 검토 v0.1 R1). 없어도 서버는 돈다.
   const pk = await resolvePackages({ explicit: opt.packages, binDir: hereDir(import.meta.url) })
@@ -935,6 +947,15 @@ export async function runServe(opt = {}) {
 
       // ── 로그인 (§6.6.1) — form 과 JSON 둘. 화면(SPA)이 JSON 으로 부르고 옛 HTML 은 form 으로.
       if (url.pathname === '/login') {
+        // 개인 서버 — 첫 접속 주소의 토큰으로 바로 들어간다(루프백 · 나 하나). 다른 서버에는 이 길이 없다
+        if (req.method === 'GET' && personal && url.searchParams.get('auto')) {
+          const d = await authenticate.login(String(url.searchParams.get('auto')).trim())
+          if (d.ok) {
+            setCookie(res, auth.signSession(secret, d.user, { tid: d.tokenId }), { secure: false })
+            res.writeHead(302, { location: '/r/' + encodeURIComponent(personal.name) + '/' })
+            return res.end()
+          }
+        }
         if (req.method === 'GET') {
           if (webOk) return serveWeb({ req, res, url, webDir, log })
           res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
@@ -2144,6 +2165,18 @@ export async function runServe(opt = {}) {
   await new Promise((resolve) => server.listen(port, bind, resolve))
   const list = await store.list()
   log.line(`시작 · ${bind}:${port} · root ${root} · 레포 ${list.length}개 (${list.map((r) => r.name).join(' · ') || '없음'}) · 번들 ${BUILT}`)
+  if (personal) {
+    process.stdout.write(
+      [
+        '',
+        `개인 서버 — ${personal.name} (${personal.repo})`,
+        `  화면   http://127.0.0.1:${port}/login?auto=${personal.token}`,
+        `  MCP    http://127.0.0.1:${port}/mcp/${encodeURIComponent(personal.name)}   (토큰은 ${path.join(personal.data, 'personal.token')})`,
+        `  작업 레포에 깔기 — node -e "fetch('http://127.0.0.1:${port}/install.mjs').then(r=>r.text()).then(t=>require('fs').writeFileSync('install.mjs',t))" 뒤 node install.mjs --curator --repo ${personal.name} <폴더>`,
+        '',
+      ].join(NL)
+    )
+  }
   // 더러운 트리는 시작 뒤 한 줄 — `save` 가 거절될 레포를 관리자가 로그에서 먼저 본다(동시 기록 검토 v0.1 D5).
   // 듣기 시작한 **뒤**에 돈다 — 레포마다 git 을 띄우는 일이라 기동을 늦추지 않는다.
   for (const r of list) {
@@ -2395,6 +2428,30 @@ const INSTALLER_SRC = '__CDP_INSTALLER_SRC__'
 // 자리표시자 그대로면 번들이 아니다 -- 그때는 `install.mjs` 를 넣지 않는다.
 // 넣으면 받는 사람이 돌지 않는 파일을 손에 쥔다.
 const HAS_INSTALLER = !INSTALLER_SRC.startsWith('__CDP_INSTALLER')
+
+// 개인 서버의 준비 — 레포 확인 · 데이터 자리(<home>/.cdp/personal/<레포>) · 명부(나 하나 · admin) · 토큰(원문을 이 PC 의
+// 0600 파일에 둔다 — 개인 서버는 그 PC 의 주인 한 사람만 쓴다. 다른 서버는 원문을 어디에도 두지 않는다)
+async function preparePersonal(opt) {
+  const repo = path.resolve(String(opt.personal === true ? opt.args?.[0] || '.' : opt.personal))
+  if (!(await fs.access(path.join(repo, '_vocab.md')).then(() => true).catch(() => false))) return { error: `지식 레포가 아니다(_vocab.md 없음) — ${repo}` }
+  const name = path.basename(repo)
+  if (!REPO_NAME_RE.test(name)) return { error: `레포 폴더 이름이 형식이 아니다(영문 · 숫자 · ._-) — ${name}` }
+  const data = path.resolve(opt.data || path.join(os.homedir(), '.cdp', 'personal', name))
+  await fs.mkdir(data, { recursive: true })
+  const authFile = path.join(data, 'auth.json')
+  const tokFile = path.join(data, 'personal.token')
+  let db = await auth.load(authFile)
+  let raw = (await fs.readFile(tokFile, 'utf8').catch(() => '')).trim()
+  const me = (os.userInfo().username || 'me').replace(/[^A-Za-z0-9._-]/g, '') || 'me'
+  if (!db.users.some((u) => u.name === me)) auth.userAdd(db, { name: me, label: '개인 서버', repos: ['*'], role: 'admin' })
+  if (!raw || !auth.decide(db, raw).ok) {
+    const { raw: r2 } = auth.issue(db, { user: me, expiresDays: 'never', note: '개인 서버' })
+    raw = r2
+    await fs.writeFile(tokFile, raw + NL, { encoding: 'utf8', mode: 0o600 })
+  }
+  await auth.store(authFile, db)
+  return { repo, name, data, auth: authFile, token: raw }
+}
 
 async function collectKit(root) {
   const out = []
