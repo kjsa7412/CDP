@@ -155,11 +155,17 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
     }
   }
 
-  // 암묵 전환 — 옛 판정(applied 뒤 후속 · applied 없음)이 남긴 기록만 대기
+  // 암묵 전환 — 옛 판정(applied 뒤 후속 · applied 없음)이 남긴 기록만 대기. 그리고 **등록부는 있는데 섹션이 없는 좌표**를
+  // 건드린 기록 — 옛 규칙에서는 그것이 오류(앵커 없음)라 커밋될 수 없었으니, 있다면 v1.0 뒤에 들어온 기록이다.
+  // (등록부 없는 좌표만 건드린 기록은 옛 규칙에서도 할 일이 없었다 — 전환 기록(`ctx migrate`)을 남기면 이 어림이 끝난다)
   const legacyPending = new Set()
   if (implicit) {
     for (const s of sections) {
       if (s.state === 'stale' || s.state === 'unwritten' || s.state === 'orphan') for (const it of s.items || []) legacyPending.add(it.id)
+    }
+    for (const d of works) {
+      if (kindOf.get(d.id) !== 'work') continue
+      if ((d.touches || []).some((c) => coordClass(managedIndex, c) === 'anchor')) legacyPending.add(d.id)
     }
   }
 

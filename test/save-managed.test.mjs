@@ -224,21 +224,20 @@ test('레벨 — 이미 ## 인 문서에 ### 행은 거절 · — 문서에 섹�
   }
 })
 
-test('기존 좌표가 새 행에 걸리면 섹션을 같이 받는다(레포가 안 잠긴다) — 없으면 needSections', { skip }, async () => {
+test('기존 좌표가 새 행에 걸려도 섹션 없이 행 · 문서를 세운다 — 그 좌표는 대기열의 「등록부 있음 · 섹션 없음」 · 다음 save 도 안 막힌다(v1.0 H1)', { skip }, async () => {
   const R = await repo()
   try {
     // 행이 없던 타입의 좌표를 touches 로만 건드린 기록이 이미 있다
     await save(R.r, { work: work('2026-0929-옛', ['term:X']), vocab: [{ coord: 'term:X', label: '엑스' }] }, writer)
     const c1 = await commits(R.r)
-    await untouched(R, () => save(R.r, { work: work('2026-0930-행만', ['table:a']), managed: [{ pattern: 'term:*', doc: 'docs/g.md' }], sections: [{ coord: 'table:a', applied: null, body: 'x' }] }, writer), 'E_INPUT', /needSections/)
-    assert.equal(await commits(R.r), c1)
-    try {
-      await save(R.r, { work: work('2026-0930-행만', ['table:a']), managed: [{ pattern: 'term:*', doc: 'docs/g.md' }], sections: [{ coord: 'table:a', applied: null, body: 'x' }] }, writer)
-    } catch (e) {
-      assert.deepEqual(e.detail.needSections, ['term:X'])
-    }
-    // 섹션과 같이면 된다 · 그 뒤 다른 좌표의 save 가 막히지 않는다
-    await save(R.r, { work: work('2026-0930-부착', ['term:X']), managed: [{ pattern: 'term:*', doc: 'docs/g.md' }], sections: [{ coord: 'term:X', applied: null, body: '엑스의 지금 상태' }] }, writer)
+    await save(R.r, { work: work('2026-0930-행만', ['table:a']), managed: [{ pattern: 'term:*', doc: 'docs/g.md' }], sections: [{ coord: 'table:a', applied: null, body: 'x' }] }, writer)
+    assert.equal(await commits(R.r), c1 + 1)
+    const { loadRepo } = await import('../core/repo.js')
+    const r = await loadRepo(R.r)
+    const q = r.curation.queue.find((x) => x.id === '2026-0929-옛')
+    assert.deepEqual(q?.coords, [{ coord: 'term:X', cls: 'anchor' }])
+    // 그 뒤 섹션을 채우고 · 다른 좌표의 save 가 막히지 않는다
+    await save(R.r, { work: work('2026-0930-부착', ['term:X']), sections: [{ coord: 'term:X', applied: null, body: '엑스의 지금 상태' }] }, writer)
     await save(R.r, { work: work('2026-0930-다른', ['table:b']), sections: [{ coord: 'table:b', applied: null, body: 'b' }] }, writer)
     assert.equal(await porcelain(R.r), '')
   } finally {

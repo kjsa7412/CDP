@@ -722,21 +722,9 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
         if (body === null) await snap.remove(rel)
         else await snap.write(rel, body)
       }
-      // **새 행이 걸리는 기존 좌표는 섹션을 같이 받는다.** 안 받으면 그 행이 생긴 커밋부터 그 좌표가 앵커 없음이 되고
-      // 이 레포의 다음 save 가 전부 E_CHECK 로 막힌다(실측 P4). 빈 섹션을 서버가 채우지 않는다 — 파생은 필수라
-      // applied 가 없는 섹션은 「파생 누락」 이다.
-      if (plan.added.length) {
-        const sent = new Set(sections.map((x) => x.coord))
-        const touched = new Set([...r0.works.flatMap((d) => d.touches), ...(w.touches || []), ...sent])
-        const need = [...touched].filter((c) => !sent.has(c) && plan.added.includes(resolveCoord(registry, c)?.pattern))
-        if (need.length) {
-          throw new CtxError(
-            'E_INPUT',
-            `새 등록부 행이 걸리는 좌표 ${need.length}개의 섹션이 없다 — sections 에 같이 보낸다(처음 만드는 섹션은 applied: null). 많으면 패턴을 좁혀(예: term:P*) 나눠 붙인다`,
-            { needSections: need.slice(0, 50), total: need.length }
-          )
-        }
-      }
+      // 새 행이 걸리는 기존 좌표의 섹션을 **같이 받지 않아도 된다**(v1.0 · H1). 전에는 그 좌표가 앵커 없음(error)이 되어
+      // 레포의 다음 save 가 전부 막혔다(실측 P4). 이제 섹션이 없는 좌표는 오류가 아니라 대기열의 「등록부 있음 · 섹션 없음」
+      // 이고, `section` 은 섹션 대신 그 좌표의 미반영 기록을 낸다. 문서를 세우고 섹션은 차례로 채운다.
     }
 
     // 6 섹션
