@@ -27,6 +27,7 @@ import { useToast } from './shell/toast.jsx'
 import { load, peek, put } from './lib/cache.js'
 import { buildCoordIndex } from './lib/markdown.js'
 import { summaryText } from './lib/format.js'
+import { filterRecords } from './lib/curation.js'
 import DocView from './components/DocView.jsx'
 import CheckView from './components/CheckView.jsx'
 import Palette from './components/Palette.jsx'
@@ -608,7 +609,8 @@ export default function App() {
       if (e.key === '?') return setHelpOpen((s) => !s)
       if (e.key === 'j' || e.key === 'k') {
         e.preventDefault()
-        const list = docs
+        // 기록 목록을 보고 있으면 거른 그 목록 그대로(대기만 · 내 기록) — 보이는 줄을 훑는다
+        const list = finder.list === 'records' ? filterRecords(docs, finder.only, me) : docs
         const i = list.findIndex((d) => d.id === docId)
         const next = e.key === 'j' ? Math.min(i + 1, list.length - 1) : Math.max(i - 1, 0)
         // 훑기는 이력에 쌓지 않고 지금 탭을 바꾼다(H8)
@@ -638,8 +640,9 @@ export default function App() {
   // 문서 이름을 찾는 목록 — 탭 · 「← 이전」 · 최근
   const lists = useMemo(() => ({ docs, managed: managedList, others }), [docs, managedList, others])
 
-  // 스텝 1의 부제 — 지금 무엇 중에서 찾고 있나
-  const scopeCount = scope === 'managed' ? managedList.length : docs.length
+  // 스텝 1의 부제 — 지금 무엇 중에서 찾고 있나(거름이 있으면 그것까지 · 「작업 기록 · 대기 3건」)
+  const scopeCount = scope === 'managed' ? managedList.length : filterRecords(docs, finder.only, me).length
+  const scopeName = SCOPE_LABEL[scope] + (scope === 'work' && finder.only ? ' · ' + ONLY_LABEL[finder.only] : '')
 
   // ── 렌더 ──────────────────────────────────────────────────────────────
   if (fatal) {
@@ -898,7 +901,7 @@ export default function App() {
                 <Icon name="search" size={15} />
                 <span className="step__txt">
                   <span className="step__t">찾기</span>
-                  <span className="step__s">{SCOPE_LABEL[scope]} {scopeCount}{scope === 'managed' ? '종' : '건'}</span>
+                  <span className="step__s">{scopeName} {scopeCount}{scope === 'managed' ? '종' : '건'}</span>
                 </span>
               </button>
 
@@ -940,6 +943,9 @@ export default function App() {
                 managed={managedList}
                 root={root}
                 scope={scope}
+                only={finder.only}
+                me={me}
+                listBase={baseHref}
                 onPick={pickRoot}
                 readMap={readMap}
                 myCoords={myCoords}
@@ -1080,6 +1086,7 @@ function SyncButton({ sync, onSync }) {
 
 // 목록의 이름 — 스텝 부제가 왼쪽 메뉴와 같은 말을 쓴다(용어 v1.0 — 관리 문서 · 작업 기록 · 개편안 §4.5)
 const SCOPE_LABEL = { managed: '관리 문서', work: '작업 기록' }
+const ONLY_LABEL = { pending: '대기', mine: '내 기록' }
 
 // 레일에 뿌리를 적는다.
 //

@@ -5,9 +5,11 @@
 // 않는다 — 읽는 사람의 자리를 빼앗지 않는다(§13-⑥).
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api, currentRepo } from '../lib/api.js'
 import { load, peek } from '../lib/cache.js'
 import { renderMarkdown, enhance, sectionSlug, bindImages } from '../lib/markdown.js'
+import { PendingChip, PendingBlock } from '../features/curation/marks.jsx'
 import { kbd } from '../lib/keys.js'
 import { repoPath } from '../../../core/repopath.js'
 import { summaryText } from '../lib/format.js'
@@ -72,6 +74,65 @@ export default function DocView({
   }, [changedPaths, doc?.path])
 
   const rendered = useMemo(() => (doc ? renderMarkdown(doc.text) : null), [doc?.id, doc?.text])
+
+  // ── 미반영 — 섹션 제목에 「미반영 n」 · 제목 바로 아래 그 기록들(개편안 S1 · I7) ─────────────────────────
+  //
+  // 본문은 innerHTML 로 그리고 DOM 을 고치는 방식이라 칩을 React 트리에 둘 자리가 없다. 그래서 **섹션 제목 노드에 자리를 만들어
+  // 포털로 꽂는다.** 본문을 다시 그리면(다른 문서 · 새 본문) innerHTML 이 그 자리째 걷으므로 렌더 단위로 다시 만든다 — 같은
+  // 본문에 상태만 바뀌면 지난 자리를 걷고 새로. 자리에는 `data-ui` 를 단다 — 좌표 링크화 · 내 좌표 강조가 그 안을 건드리지
+  // 않는다(markdown.js · React 가 그리는 글을 바깥에서 바꾸면 다음 렌더가 깨진다).
+  //
+  // 전에는 「섹션 머리에 상태 배지를 붙이지 않는다 — 파생이 필수라 섹션은 늘 최신」 이었다. v1.0 은 관리 문서를 큐레이션으로만
+  // 바꾸므로(I6) 섹션 뒤에 아직 반영 안 된 기록이 있는 것이 **상태**다 — 그것을 섹션 옆에 같이 낸다.
+  const [pendHosts, setPendHosts] = useState([])
+  const [pendShut, setPendShut] = useState(() => new Set())
+  useEffect(() => setPendShut(new Set()), [docId])
+  useLayoutEffect(() => {
+    const root = bodyRef.current
+    const secs = (doc?.sectionStates || []).filter((s) => s && s.cstate === 'pending' && Array.isArray(s.pending) && s.pending.length > 0)
+    if (!root || !rendered || !secs.length) {
+      setPendHosts((h) => (h.length ? [] : h))
+      return
+    }
+    const hosts = []
+    const seen = new Set()
+    for (const s of secs) {
+      const slug = sectionSlug(rendered.toc, s.value)
+      if (!slug || seen.has(slug)) continue
+      const h = root.querySelector('#' + CSS.escape(slug))
+      if (!h) continue
+      seen.add(slug)
+      const chip = document.createElement('span')
+      chip.dataset.ui = 'pending'
+      chip.className = 'pchip-host'
+      h.appendChild(chip)
+      const block = document.createElement('div')
+      block.dataset.ui = 'pending'
+      block.className = 'pblock-host'
+      h.after(block)
+      hosts.push({ key: slug, chip, block, sec: s })
+    }
+    setPendHosts(hosts)
+    return () => {
+      for (const x of hosts) {
+        x.chip.remove()
+        x.block.remove()
+      }
+    }
+  }, [rendered, doc?.sectionStates])
+  const pendPortals = pendHosts.map((x) => {
+    const open = !pendShut.has(x.key)
+    const toggle = () =>
+      setPendShut((s) => {
+        const n = new Set(s)
+        n.has(x.key) ? n.delete(x.key) : n.add(x.key)
+        return n
+      })
+    return [
+      createPortal(<PendingChip n={x.sec.pending.length} open={open} onToggle={toggle} />, x.chip, x.key + ':c'),
+      open ? createPortal(<PendingBlock sec={x.sec} onOpen={onOpen} />, x.block, x.key + ':b') : null,
+    ]
+  })
 
   // 렌더 후처리 — 하이라이팅·4섹션 마킹·좌표 링크(§19 · §27.8)
   useEffect(() => {
@@ -282,6 +343,12 @@ export default function DocView({
               <div className="vblock__tier vblock__time">
                 <code style={{ fontSize: 11.5 }}>{doc.path}</code>
                 <span className="topbar__spacer" />
+                {/* 서식 표지(`<!-- cdp:form … -->` · 개편안 §4.3) — 어느 서식에서 세운 문서인가. 없으면(서식 없이 · 옛 서버) 그리지 않는다 */}
+                {doc.layer === 'managed' && doc.form && (
+                  <span className="badge badge--quiet" title="이 문서를 세운 서식 — 큐레이션 › 서식집에서 작성지침을 연다">
+                    서식 {doc.form}
+                  </span>
+                )}
                 {doc.layer === 'managed' && <span className="badge badge--quiet">관리 문서</span>}
               </div>
             </div>
@@ -317,6 +384,7 @@ export default function DocView({
           )}
 
           <article className="doc" ref={bodyRef} dangerouslySetInnerHTML={{ __html: rendered.html }} />
+          {pendPortals}
 
           {/* 첨부 — 프로토콜 §8.5 의 3계층 중 가장 긴 읽기가 여기서 일어난다 */}
           {doc.attachments.length > 0 && (

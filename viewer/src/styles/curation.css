@@ -1,0 +1,171 @@
+/* 큐레이션 — 미반영 · 대기 · 판정의 표시(개편안 §7.3 S1~S5).
+ *
+ * **색 예산 그대로**(tokens.css · V19) — 대기 · 미반영은 보라(--pending · 행동 대기), 반영됨 · 기록으로 둠 · 최신은 무채색,
+ * 새 문서 후보는 파랑(--accent · 새 표지), 이상(14일 넘은 대기)만 앰버. 초록 · 주황은 없다. */
+
+/* ── 기록의 상태 칩 — 목록 · 문서 머리 ── */
+.cchip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border-radius: var(--r-pill);
+}
+.cchip--queued {
+  color: var(--pending);
+  background: var(--pending-bg);
+}
+.cchip--new {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.cchip--warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+/* 목록 줄에서는 무채색 칩이 소리를 내지 않게 — 대기만 색 */
+.fd__row .cchip:not(.cchip--queued) {
+  color: var(--text-3);
+  background: none;
+  padding: 0 2px;
+  font-weight: 500;
+}
+.vblock__cur {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vblock__cur .mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+/* 거름 칩 — 링크(주소가 상태) */
+a.fd__chip:hover {
+  text-decoration: none;
+}
+.fd__chip[aria-current='true'] {
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--accent-bg);
+  border-color: var(--accent-line);
+}
+.fd__chip[aria-current='true'] .fd__chipn {
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+/* ── 섹션의 미반영 — 제목의 칩 · 제목 아래 목록(S1) ── */
+.pchip-host {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+.pchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font: 600 11px/1.6 var(--font-sans);
+  letter-spacing: 0;
+  color: var(--pending);
+  background: var(--pending-bg);
+  border: 1px solid color-mix(in srgb, var(--pending) 22%, transparent);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+.pchip:hover {
+  border-color: var(--pending);
+}
+.pchip[aria-expanded='false'] {
+  background: none;
+}
+.pblock {
+  margin: 6px 0 14px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--pending-bg) 55%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--pending) 22%, transparent);
+  border-radius: var(--r-lg);
+}
+.pblock__head {
+  font-weight: 600;
+  color: var(--pending);
+}
+.pblock__head small {
+  font-weight: 400;
+  color: var(--text-2);
+}
+.pblock__rec {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--pending) 20%, transparent);
+}
+.pblock__date {
+  flex: none;
+  width: 108px;
+  padding-top: 1px;
+  font: 11.5px var(--font-mono);
+  color: var(--text-2);
+}
+.pblock__body {
+  flex: 1;
+  min-width: 0;
+}
+.pblock__title {
+  font-weight: 600;
+  color: var(--text);
+}
+.pblock__ex {
+  font-size: 12px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.pblock__open {
+  flex: none;
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.pblock__open:hover {
+  text-decoration: underline;
+}
+@container shell (max-width: 720px) {
+  .pblock__rec {
+    flex-wrap: wrap;
+  }
+  .pblock__date {
+    width: auto;
+  }
+}
+@media print {
+  .pchip-host,
+  .pblock-host {
+    display: none;
+  }
+}
+
+/* ── 상태 표시줄의 「대기 n」 (S9) ── */
+.statusbar .is-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  font-weight: 600;
+  color: var(--pending);
+  background: var(--pending-bg);
+  border-radius: var(--r-pill);
+}
+.statusbar .is-pending.is-old {
+  color: var(--warn);
+  background: var(--warn-bg);
+}

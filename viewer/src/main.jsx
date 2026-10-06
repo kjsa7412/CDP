@@ -17,6 +17,7 @@ import './styles/admin.css'
 import './styles/doc.css'
 import './styles/site.css'
 import './styles/console.css'
+import './styles/curation.css'
 
 // 테마 — **얼굴 무관 한 곳.** 첫 페인트 전에는 `index.html` 의 인라인 스크립트가 같은 계산(`cdp.theme` + OS)으로
 // 붙였다(R9 · P10). 여기서는 OS 변화 · 다른 탭의 설정 변경을 따라간다. 레포 화면의 설정 세그는 같은 키에 쓰고

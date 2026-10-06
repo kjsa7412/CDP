@@ -188,17 +188,14 @@ export async function enhance(root, { myCoords = [], coordIndex = null, coordLin
   if (sectionStates) {
     const byValue = new Map(sectionStates.map((s) => [normValue(s.value), s]))
 
-    // 주석 줄을 지운다
+    // 주석 줄을 지운다 — `applied` 와 서식 표지(`<!-- cdp:form … -->` · 문서 머리의 칩이 대신 말한다)
     for (const el of root.querySelectorAll('p')) {
       const t = (el.textContent || '').trim()
-      if (/^<!--\s*applied\s*:.*-->$/.test(t)) el.remove()
+      if (/^<!--\s*(applied\s*:|cdp:form\s).*-->$/.test(t)) el.remove()
     }
 
-    // **섹션 머리에 상태 배지를 붙이지 않는다.**
-    //
-    // 밀림·미작성은 상태가 아니다. 파생이 필수이므로 섹션은 늘 최신이고,
-    // 안 했으면 그것은 `ctx check` 가 커밋을 막는 오류다. 본문에 배지로
-    // 그리면 없는 구분을 있는 것처럼 말하게 된다.
+    // 섹션의 미반영(「미반영 n」 칩 · 그 기록들)은 여기서 붙이지 않는다 — React 가 그리는 것이라 DocView 가 섹션 제목에
+    // 자리(`data-ui`)를 만들어 포털로 꽂는다(개편안 S1). 아래 단계들은 그 자리 안을 건드리지 않는다.
   }
 
   // 2) 내 좌표 강조 — **본문 전체**에서.
@@ -213,6 +210,7 @@ export async function enhance(root, { myCoords = [], coordIndex = null, coordLin
       myCoords.some((c) => txt.includes(c) || (coordIndex?.aliasesOf(c) || []).some((a) => a && txt.includes(a)))
     for (const el of root.querySelectorAll('p, li, td, blockquote')) {
       if (el.closest('.mine')) continue // 중첩 강조를 겹치지 않는다
+      if (el.closest('[data-ui]')) continue // 화면이 꽂은 자리(미반영 목록 — React 의 것)
       if (hit(el.textContent || '')) el.classList.add('mine')
     }
   }
@@ -272,7 +270,8 @@ function linkCoords(root, index) {
   // 문서는 글자 노드가 3만 개를 넘고, 그 확인이 문서를 여는 시간의 한 몫이었다.
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode(n) {
-      if (n.nodeType === 1) return skip.has(n.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP
+      // 화면이 꽂은 자리(`data-ui` — 미반영 목록)는 React 가 그린다 · 바깥에서 글자 노드를 바꾸면 다음 렌더가 깨진다
+      if (n.nodeType === 1) return skip.has(n.tagName) || n.hasAttribute('data-ui') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP
       return n.nodeValue && n.nodeValue.trim().length > 1 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
     },
   })
