@@ -66,8 +66,18 @@ export async function handleRead({ p, method, url, res, send, store }) {
   const qm = /^\/queue\/(.+)$/.exec(p)
   if (qm && method === 'GET') {
     const m = store.curation ? materialsOf(store, decodeURIComponent(qm[1])) : null
-    if (!m) send(res, 404, { error: { code: 'E_NOT_FOUND', message: '그 id 의 작업 기록이 없다' } })
-    else send(res, 200, m)
+    if (!m) {
+      send(res, 404, { error: { code: 'E_NOT_FOUND', message: '그 id 의 작업 기록이 없다' } })
+      return true
+    }
+    // 등록부 없는 타입마다 비슷한 서식(제목 · 번호 · 등록부 타입이 그 이름을 품는 것) — 새 문서 후보를 서식에서 세우게(계약 1.3)
+    const lib = await formsLib(store.formsOpt || {}).catch(() => null)
+    const unregisteredTypes = m.unregisteredTypes.map((u) => ({
+      ...u,
+      forms: lib ? searchForms(lib, u.type).slice(0, 5).map((f) => ({ id: f.id, group: f.group, number: f.number, title: f.title })) : [],
+    }))
+    // `canonical` 은 계약 이름 — 같은 좌표를 건드린 다른 대기 기록(`together`)을 함께 다룰 자리로 낸다
+    send(res, 200, { ...m, unregisteredTypes, canonical: m.together })
     return true
   }
   // 서식집 — 목록(이 레포가 쓰는 서식 표시) · 서식 하나(head · guide · example · 서버가 찍을 빈 문서)
@@ -94,8 +104,18 @@ export async function handleRead({ p, method, url, res, send, store }) {
       .sort(cmpDateDesc)
       .map((d) => {
         const into = new Set()
-        for (const j of d.curates) for (const c of j.into || []) into.add(c)
-        return { id: d.id, title: d.title, date: d.date, author: d.author, judgments: d.curates, sections: into.size }
+        const newDocs = new Set()
+        for (const j of d.curates) {
+          for (const c of j.into || []) {
+            into.add(c)
+            // 새 문서(new) — 그 좌표가 가는 관리 문서. 큐레이션 save 가 같은 커밋에 세웠다
+            if (j.verdict === 'new') {
+              const hit = store.managedIndex?.find(c)
+              if (hit?.doc) newDocs.add(hit.doc)
+            }
+          }
+        }
+        return { id: d.id, title: d.title, date: d.date, author: d.author, judgments: d.curates, sections: into.size, newDocs: [...newDocs] }
       })
     send(res, 200, { items, total: items.length })
     return true

@@ -114,7 +114,8 @@ function makeLog(dataDir) {
 // 두 벌을 들면 같은 레포를 두 번 읽고 두 답이 갈린다.
 
 // `only` — 개인 서버(v1.0 W3): 폴더를 훑지 않고 이 레포 하나만 든다 { name, root }
-export function makeStore(root, log, { only = null } = {}) {
+// `formsOpt` — 화면의 서식집(/forms)이 번들 서식과 팀 서식(<data>/forms)을 같이 읽는 자리(v1.0 U6)
+export function makeStore(root, log, { only = null, formsOpt = null } = {}) {
   let repos = []
   let at = 0
   const caches = new Map()
@@ -140,7 +141,9 @@ export function makeStore(root, log, { only = null } = {}) {
       found.push({ name: e.name, root: dir })
       if (!caches.has(e.name)) caches.set(e.name, makeRepoCache(dir))
       if (!views.has(e.name)) {
-        views.set(e.name, new Store({ root: dir, settings: { watch: false, server: true, settledness: { excludeTypes: ['domain'] } } }))
+        const view = new Store({ root: dir, settings: { watch: false, server: true, settledness: { excludeTypes: ['domain'] } } })
+        if (formsOpt) view.formsOpt = formsOpt
+        views.set(e.name, view)
       }
     }
     const before = repos.map((r) => r.name).join(',')
@@ -538,7 +541,7 @@ export async function runServe(opt = {}) {
   // 화면 파일. 없으면 안내만 낸다 — 서버는 화면 없이도 돈다(MCP 는 별개다).
   const webDir = opt.web ? path.resolve(opt.web) : path.resolve(hereDir(import.meta.url), '../../ops/out/web')
 
-  const store = makeStore(root, log, personal ? { only: { name: personal.name, root: personal.repo } } : {})
+  const store = makeStore(root, log, { ...(personal ? { only: { name: personal.name, root: personal.repo } } : {}), formsOpt: { explicit: opt.forms || null, dataDir } })
   await store.refresh()
   // 패키지 — 콘솔의 `POST /admin/repos` 가 여기서 복사한다(검토 §3.5 · 화면 · 권한 검토 v0.1 R1). 없어도 서버는 돈다.
   const pk = await resolvePackages({ explicit: opt.packages, binDir: hereDir(import.meta.url) })

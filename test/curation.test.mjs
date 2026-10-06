@@ -196,3 +196,30 @@ test('새 레포 · 다시 세운 레포(섹션 없음) — 큐레이션 기록�
   assert.deepEqual(r.curation.queue.map((q) => q.id), ['2026-0901-a', '2026-0902-x'])
   assert.deepEqual(r.curation.queue[0].coords, [{ coord: 'table:a', cls: 'unregistered' }])
 })
+
+test('읽기 API — 판정 재료에 등록부 없는 타입의 비슷한 서식 · canonical · 이력의 새 문서(계약 1.3)', async () => {
+  const { handleRead } = await import('../viewer/server/adapter/read-api.js')
+  const { fileURLToPath } = await import('node:url')
+  const root = await repo({
+    'docs/테이블.md': DOC([['a', '2026-0905-a5', 'A']]),
+    'work/2026-0905-a5.md': work({ id: '2026-0905-a5', date: '2026-09-05 10:00', touches: ['table:a'] }),
+    'work/2026-0907-cur.md': work({ id: '2026-0907-cur', date: '2026-09-07 10:00', extra: ['touchesEmpty: 큐레이션', 'curates:', '  - { id: 2026-0905-a5, verdict: new, into: [table:a] }'] }),
+    'work/2026-0908-m.md': work({ id: '2026-0908-m', date: '2026-09-08 10:00', touches: ['회의록:2026-09-08', 'table:a'] }),
+    'work/2026-0909-q.md': work({ id: '2026-0909-q', date: '2026-09-09 10:00', touches: ['table:a'] }),
+  })
+  const store = await loadRepo(root)
+  store.formsOpt = { explicit: fileURLToPath(new URL('../agent/forms', import.meta.url)) }
+  const get = async (p) => {
+    let got = null
+    await handleRead({ p, method: 'GET', url: new URL('http://x' + p), res: {}, send: (res, status, body) => (got = { status, body }), store })
+    return got
+  }
+  const m = await get('/queue/' + encodeURIComponent('2026-0908-m'))
+  assert.equal(m.status, 200)
+  const t = m.body.unregisteredTypes.find((u) => u.type === '회의록')
+  assert.ok(t.forms.some((f) => f.number === 'BM_411'), '회의록 → 서식 BM_411')
+  assert.deepEqual(m.body.canonical, [{ coord: 'table:a', also: ['2026-0909-q'] }])
+  const log = await get('/curations')
+  assert.deepEqual(log.body.items[0].newDocs, ['docs/테이블.md'])
+  assert.equal(log.body.items[0].sections, 1)
+})

@@ -223,6 +223,66 @@ export default function Users({ me, say, route }) {
         </Note>
       </Card>
 
+      <div id="curators" />
+      <Card title="레포 × 큐레이터" hint="체크 하나가 그 사람의 curate 한 줄이다 — 그 레포의 대기열 · 판정 · 섹션 쓰기(v1.0)">
+        {repos.length === 0 ? (
+          <Note>이 서버에 지식 레포가 없다.</Note>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="matrix">
+              <thead>
+                <tr>
+                  <th>사용자</th>
+                  {repos.map((r) => (
+                    <th key={r} className={r === pickRepo ? 'is-pick' : undefined}>
+                      {r}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {active.map((u) => {
+                  const cur = u.curate || []
+                  return (
+                    <tr key={u.name}>
+                      <td>
+                        <b>{u.name}</b> <RoleChip role={u.role} />
+                      </td>
+                      {repos.map((r) => {
+                        const pick = r === pickRepo ? ' is-pick' : ''
+                        // admin 은 모든 레포의 큐레이터 · viewer 는 큐레이터가 될 수 없다 — 역할이 이긴다(서버 curateOf 와 같다)
+                        if (u.role === 'admin') return <td key={r} className={'all' + pick} title="관리자 — 모든 레포의 큐레이터">●</td>
+                        if (u.role === 'viewer') return <td key={r} className={'amuted' + pick} title="viewer 는 큐레이터가 될 수 없다 — 역할을 writer 로">—</td>
+                        if (cur.includes('*')) return <td key={r} className={'all' + pick} title="전체(*) 큐레이터 — 셸에서 ctx serve user set --curate 로 바꾼다">●</td>
+                        const sees = u.repos.includes('*') || u.repos.includes(r)
+                        return (
+                          <td key={r} className={pick.trim() || undefined}>
+                            <input
+                              type="checkbox"
+                              aria-label={`${u.name} · ${r} 큐레이터`}
+                              title={sees ? undefined : '볼 수 없는 레포의 큐레이터는 될 수 없다 — 위 표에서 먼저 연다'}
+                              checked={cur.includes(r)}
+                              disabled={busy || (!sees && !cur.includes(r))}
+                              onChange={(e) => {
+                                const next = e.target.checked ? [...cur, r] : cur.filter((x) => x !== r)
+                                act(() => admin.userSet(u.name, { curate: next }), `${u.name} — ${r} 큐레이터 ${e.target.checked ? '맡겼다' : '뗐다'}`)
+                              }}
+                            />
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Note>
+          큐레이터는 그 레포의 작업 기록을 판정해 관리 문서에 반영한다 — 대기열 · 판정 재료 · 서식집과 섹션을 쓰는 save 가 열린다. writer 는 기록만 남긴다.
+        </Note>
+      </Card>
+
       {adding && <AddUser repos={repos} busy={busy} onClose={() => setAdding(false)} onOk={async (body) => (await act(() => admin.userAdd(body), `${josa(body.name, '을/를')} 넣었다`)) && setAdding(false)} />}
 
       {editRole && (
