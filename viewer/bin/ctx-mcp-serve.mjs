@@ -2396,8 +2396,8 @@ async function manualIndex(manualDir) {
   const items = []
   let figDir = null
   let figures = []
-  // 읽는 순서 — 사용자 · 관리자 · 개발자(설명서 표 그대로). 파일명 정렬은 '개발자' 가 먼저다.
-  const ORDER = ['사용자_설명서.md', '관리자_설명서.md', '개발자_설명서.md']
+  // 읽는 순서 — 사용자 · 큐레이터 · 서버 관리자 · 개발자(v1.0 설명서 넷 · 개편안 §6.4). 파일명 정렬은 '개발자' 가 먼저다.
+  const ORDER = ['사용자_설명서.md', '큐레이터_설명서.md', '관리자_설명서.md', '개발자_설명서.md']
   const rank = (n) => (ORDER.includes(n) ? ORDER.indexOf(n) : ORDER.length)
   if (manualDir) {
     for (const n of (await fs.readdir(manualDir).catch(() => [])).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))) {

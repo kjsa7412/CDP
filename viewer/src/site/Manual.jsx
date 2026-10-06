@@ -27,7 +27,7 @@ const GITHUB = 'https://github.com/kjsa7412/CDP/blob/main/'
 const GITHUB_RAW = 'https://github.com/kjsa7412/CDP/raw/main/'
 // 책이 소스 레포 어디에 있나 — `../` 링크를 풀 때 기준이 된다
 const BASE_OF = (id) => (id === '설치절차' ? 'ops/deploy/' : 'manual/')
-const ICON_OF = { 사용자_설명서: 'book', 관리자_설명서: 'shield', 개발자_설명서: 'gear', 설치절차: 'server' }
+const ICON_OF = { 사용자_설명서: 'book', 큐레이터_설명서: 'managed', 관리자_설명서: 'shield', 개발자_설명서: 'gear', 설치절차: 'server' }
 
 export default function Manual({ info, id: asked, hash }) {
   const books = info?.manuals || []
