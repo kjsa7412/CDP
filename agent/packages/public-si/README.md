@@ -45,7 +45,7 @@ git init && git config core.hooksPath .githooks
 | 서버형 · 세울 때 | 콘솔 › 지식 레포 › 새 레포의 「문서 고르기」 에서 체크를 푼다 |
 | 서버형 · 세운 뒤 | 레포 › 관리 › 「관리 문서」(admin) — 사용 현황을 보고 골라 미리보기 → 지우기 |
 | 셸(모드 A) | `bin/ctx docs drop TE_201 TE_202 TE_203 --dry-run` → `--apply-suggest --reason "성능시험 없음"` → `bin/ctx index` → 커밋 |
-| 에이전트 | `cdp-managed` 「문서 정리」 — 산문 언급까지 고쳐 쓴다 |
+| 에이전트(큐레이터) | `cdp-registry` 「안 쓰는 문서 지우기」 — 산문 언급까지 고쳐 쓴다 |
 
 지운 문서는 `_managed.md` 「지운 관리 문서」 표에 남는다. 산문으로 남은 언급은 `ctx check` 의
 「없는 관리 문서를 가리키는 줄」 이 계속 알려 준다.

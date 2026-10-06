@@ -48,6 +48,13 @@ function must(cond, msg) {
 }
 const eq = (a, b, msg) => must(JSON.stringify(a) === JSON.stringify(b), `${msg} — ${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`)
 
+// v1.0 스킬 다섯(개편안 §6.1)과 SKILL.md 줄 수 상한 — 75 · 111 · 117 이 보고, 설치 항목(38 · 106)은 깔린 것이 이 안에 있는지 본다.
+// writer 몫은 work · save · push — 역할별 kit(W5)이 오면 작업 레포에는 그 셋만 갈 수 있다
+const SKILL_LINES = { 'cdp-curate': 350, 'cdp-push': 180, 'cdp-registry': 200, 'cdp-save': 300, 'cdp-work': 250 }
+const SKILL_SET = Object.keys(SKILL_LINES)
+const WRITER_SKILLS = ['cdp-push', 'cdp-save', 'cdp-work']
+const kitSkillsOk = (names) => WRITER_SKILLS.every((n) => names.includes(n)) && names.every((n) => SKILL_SET.includes(n))
+
 // ── 판 ──────────────────────────────────────────────────────────────────────
 
 async function stage() {
@@ -671,7 +678,7 @@ await check(38, 'ctx setup --server 가 kit 을 받아 넣고 ${CDP_TOKEN} 을 �
   const mcp = JSON.parse(await fs.readFile(path.join(W, '.mcp.json'), 'utf8'))
   must(mcp.mcpServers.cdp.headers.Authorization.includes('${CDP_TOKEN}'), '원문 토큰이 박혔다')
   const skills = await fs.readdir(path.join(W, '.claude', 'skills'))
-  must(skills.length >= 7, `스킬 ${skills.length}`)
+  must(kitSkillsOk(skills), `스킬 ${skills.join(' · ')}`)
   return `스킬 ${skills.length}종 · \${CDP_TOKEN}`
 })
 
@@ -825,7 +832,7 @@ await check(106, '받은 설치기 한 줄로 빈 레포에 설치 → 대장 �
   must(mcp.other && mcp.cdp, '다른 MCP 서버가 사라졌거나 cdp 가 없다')
   must(mcp.cdp.headers.Authorization === 'Bearer ${CDP_TOKEN}', '원문이 박혔다')
   const skills = await fs.readdir(path.join(W3, '.claude', 'skills'))
-  must(skills.length >= 7, `스킬 ${skills.length}`)
+  must(kitSkillsOk(skills), `스킬 ${skills.join(' · ')}`)
   const rows = (await (await H.call('/workrepos', { headers: { authorization: 'Bearer ' + TK3 } })).json()).repos
   eq(rows.find((r) => r.id === WR1)?.state, '최신', '대장')
   const b = await go()
@@ -863,7 +870,7 @@ await check(107, '한 줄 설치기는 토큰이 없고 물을 수 없으면 아
 })
 
 await check(56, '서버 kit 을 바꾸면 대장이 낡음으로', async () => {
-  await fs.appendFile(path.join(F.repos, 'alpha', '.claude', 'skills', 'cdp-load', 'SKILL.md'), '\n<!-- 바꾼다 -->\n')
+  await fs.appendFile(path.join(F.repos, 'alpha', '.claude', 'skills', 'cdp-work', 'SKILL.md'), '\n<!-- 바꾼다 -->\n')
   // 커밋한다 — 실제로 kit 은 커밋으로 바뀌고, 더러운 트리는 이제 save 가 거절한다(동시 기록 검토 v0.1 D5 · 76번이 걸렸다)
   await run('git', ['-C', path.join(F.repos, 'alpha'), 'add', '-A'])
   await run('git', ['-C', path.join(F.repos, 'alpha'), '-c', 'user.name=h', '-c', 'user.email=h@x', 'commit', '-qm', 'kit 변경'])
@@ -1248,9 +1255,10 @@ await check(15, 'ctx setup 이 .mcp.json 을 쓰고 그것으로 도구 13건이
   }
 })
 
-await check(75, '스킬 본문이 부르는 이름이 전부 실제 도구다', async () => {
+await check(75, '스킬이 부르는 이름이 전부 v1.0 도구다 — derive · apply · sync · version 을 부르지 않는다 · 모드 갈래 잔재 0', async () => {
   // 스킬은 에이전트 행동을 직접 바꾼다. **없는 이름을 적어도 아무도 모른다** —
-  // 실제로 `ctx term` 이 `match` 에 흡수된 뒤에도 예시에 남아 있었다.
+  // 실제로 `ctx term` 이 `match` 에 흡수된 뒤에도 예시에 남아 있었다. v1.0 은 모드 A 를 끝냈고(개편안 §5.6 · A1)
+  // derive · apply · sync · version 이 빠진다(§5.3) — SKILL.md 와 같은 폴더의 참고 파일 어디에도 그 호출 · 모드 갈래가 없어야 한다.
   const { buildServer } = await import(pathToFileURL(path.join(ROOT, 'viewer/bin/ctx-mcp.mjs')).href)
   const srv = buildServer({
     repos: [{ name: 'alpha', root: path.join(TMP, 'repos', 'alpha') }],
@@ -1258,25 +1266,30 @@ await check(75, '스킬 본문이 부르는 이름이 전부 실제 도구다', 
     mode: 'server',
     prompts: 'never',
     saver: () => ({}),
+    curateAny: true, // 큐레이터 도구(queue · forms)까지 — cdp-curate 가 부른다
   })
-  const known = new Set(Object.keys(srv._registeredTools || {}))
-  must(known.size >= 13, `도구 목록을 못 읽었다 (${known.size})`)
+  const GONE = ['derive', 'apply', 'sync', 'version']
+  const all = Object.keys(srv._registeredTools || {})
+  must(all.length >= 13, `도구 목록을 못 읽었다 (${all.length})`)
+  const known = new Set(all.filter((t) => !GONE.includes(t)))
 
   const dir = path.join(ROOT, 'agent', 'skills')
   const bad = []
-  for (const n of await fs.readdir(dir)) {
-    if (n === 'cdp-push') continue // 코드 레포용 — 지식 도구를 부르지 않는다
-    const text = await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8')
-    const cut = text.indexOf('## 도구가 없을 때')
-    must(cut > 0, `${n}: 「도구가 없을 때」 절이 없다`)
-    const body = text.slice(0, cut)
-    for (const m of body.matchAll(/^\s*([a-z][a-z_]{2,15})\(/gm)) {
-      if (!known.has(m[1])) bad.push(`${n}:${m[1]}`)
+  let files = 0
+  for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    const n = e.name
+    for (const f of (await fs.readdir(path.join(dir, n))).filter((x) => x.endsWith('.md'))) {
+      const text = await fs.readFile(path.join(dir, n, f), 'utf8')
+      files++
+      for (const s of ['도구가 없을 때', '모드 A', '모드 B', 'bin/ctx', 'ctx apply', 'C:/cdp/bin']) if (text.includes(s)) bad.push(`${n}/${f}: 「${s}」`)
+      for (const m of text.matchAll(/(?<![\w.])(derive|apply|sync|version)\(/g)) bad.push(`${n}/${f}: ${m[1]}(`)
+      if (n === 'cdp-push') continue // 코드 레포용 — 지식 도구를 부르지 않는다
+      for (const m of text.matchAll(/^\s*([a-z][a-z_]{2,15})\(/gm)) if (!known.has(m[1])) bad.push(`${n}/${f}: ${m[1]}(`)
     }
-    for (const m of body.matchAll(/(bin\/ctx|C:\/cdp\/bin)/g)) bad.push(`${n}:${m[1]}`)
   }
   must(bad.length === 0, bad.slice(0, 6).join(' · '))
-  return `6종 · 도구 ${known.size}종과 대조 · 잔재 0`
+  return `${files}개 파일 · 도구 ${known.size}종과 대조 · 잔재 0`
 })
 
 // ══ 제품 관리 서비스 — 사이트 · 마법사 (TODO ②) ═══════════════════════════════
@@ -2067,7 +2080,7 @@ else await check(109, L109, async () => {
   const B = path.join(F.repos, 'beta')
   const k0 = (await (await import('../../core/setup.js')).kitHash(B)).hash
   // 판이 다르게 — beta 의 스킬 하나를 옛 판으로 만들고 커밋한다(서버 upgrade 전의 레포)
-  await fs.appendFile(path.join(B, '.claude', 'skills', 'cdp-import', 'SKILL.md'), '\n<!-- 옛 판 -->\n')
+  await fs.appendFile(path.join(B, '.claude', 'skills', 'cdp-work', 'SKILL.md'), '\n<!-- 옛 판 -->\n')
   await run('git', ['-C', B, 'add', '-A'])
   await run('git', ['-C', B, '-c', 'user.name=h', '-c', 'user.email=h@x', 'commit', '-qm', '옛 판'])
   const head0 = (await run('git', ['-C', B, 'rev-parse', 'HEAD'])).stdout.trim()
@@ -2079,52 +2092,57 @@ else await check(109, L109, async () => {
   const subj = (await run('git', ['-C', B, 'log', '-1', '--format=%s|%an'])).stdout.trim()
   must(subj.startsWith('에이전트 세팅 갱신') && subj.endsWith('|cdp'), subj)
   eq((await run('git', ['-C', B, 'status', '--porcelain'])).stdout.trim(), '', '트리')
-  must(!(await fs.readFile(path.join(B, '.claude', 'skills', 'cdp-import', 'SKILL.md'), 'utf8')).includes('옛 판'), '스킬이 안 갈렸다')
+  must(!(await fs.readFile(path.join(B, '.claude', 'skills', 'cdp-work', 'SKILL.md'), 'utf8')).includes('옛 판'), '스킬이 안 갈렸다')
   const again = await ctx('serve', 'kit-refresh', '--root', F.repos, '--repo', 'beta', '--no-push')
   must(/beta\s+최신/.test(again.stdout), again.stdout)
   const k1 = (await (await import('../../core/setup.js')).kitHash(B)).hash
   return `dry · 갱신 ${subj.split('|')[0]} · 두 번째 최신 · kit ${k0} → ${k1}`
 })
 
-await check(111, '스킬의 「push 는 하지 않는다」 는 모드 A 한정이다 — 모드 B 종료 보고는 save 응답(commit · mirror)이 근거고 push 안내가 없다', async () => {
-  // 모드 B 에서 「push 는 하지 않았습니다」 가 종료 보고에 옮겨졌다(2026-09-30) — 모드 B 에는 사람이 누를 push 가 없다.
+await check(111, '스킬의 끝 보고는 save 응답(commit · mirror)과 brief 가 근거다 — push 를 말하는 문구 0 · 큐레이션 대기 n번째', async () => {
+  // 서버형 끝 보고에 「push 는 하지 않았습니다」 가 옮겨졌다(2026-09-30) — 사람이 누를 push 가 없다. v1.0 은 모드가 하나라
+  // 그 문구 자체가 없어야 한다(A1). 끝 보고 표는 cdp-save 한 곳이고 큐레이터 스킬은 그것을 가리킨다(A4).
   const dir = path.join(ROOT, 'agent', 'skills')
   const bad = []
-  for (const n of ['cdp-import', 'cdp-edit', 'cdp-managed']) {
+  for (const n of SKILL_SET.filter((x) => x !== 'cdp-push')) {
     const lines = (await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8')).split('\n')
     lines.forEach((l, i) => {
-      if (!/push\s*(는|를)?\s*(하지 않|안 한|안 함)/.test(l)) return
-      // 같은 줄이거나 바로 앞 8줄 안에 어느 모드 얘기인지가 있어야 한다
-      const near = lines.slice(Math.max(0, i - 8), i + 1).join('\n')
-      if (!/모드 [AB]/.test(near)) bad.push(`${n}:${i + 1}`)
+      if (/push\s*(는|를)?\s*(하지 않|안 한|안 함)|push\s*하세요|푸시하세요|직접 push/.test(l)) bad.push(`${n}:${i + 1}`)
     })
   }
-  must(bad.length === 0, `모드 표시 없는 push 문구 — ${bad.join(' · ')}`)
+  must(bad.length === 0, `push 를 말하는 문구 — ${bad.join(' · ')}`)
 
   const save = await fs.readFile(path.join(dir, 'cdp-save', 'SKILL.md'), 'utf8')
-  const at = save.indexOf('### 모드 B 의 종료 보고')
-  must(at > 0, 'cdp-save 에 「모드 B 의 종료 보고」 가 없다')
-  const sect = save.slice(at, save.indexOf('\n## ', at))
-  for (const k of ['commit', 'mirrorReason', 'mirrorLast', '"ok"', '"lag"', '"off"']) must(sect.includes(k), `종료 보고 표에 ${k} 가 없다`)
-  must(!/push\s*하세요|푸시하세요|직접 push/.test(sect), '모드 B 종료 보고에 push 를 시키는 말이 있다')
-  for (const n of ['cdp-import', 'cdp-edit', 'cdp-managed']) {
-    must((await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8')).includes('종료 보고'), `${n}: 모드 B 종료 보고 안내가 없다`)
+  const at = save.indexOf('## ⑥ 끝 보고')
+  must(at >= 0, 'cdp-save 에 「⑥ 끝 보고」 가 없다')
+  const end = save.indexOf('\n## ', at + 1)
+  const sect = save.slice(at, end < 0 ? undefined : end)
+  for (const k of ['commit', 'mirrorReason', 'mirrorLast', '"ok"', '"lag"', '"off"', 'brief', '큐레이션 대기']) must(sect.includes(k), `끝 보고에 ${k} 가 없다`)
+  for (const n of ['cdp-curate', 'cdp-registry']) {
+    must((await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8')).includes('cdp-save 「끝 보고」'), `${n}: cdp-save 「끝 보고」 를 가리키지 않는다`)
   }
-  return 'import · edit · managed 의 push 문구 모드 표시 · save ⑤B 종료 보고 표'
+  return 'push 문구 0 · cdp-save 끝 보고 표(commit · mirror · 큐레이션 대기) · curate · registry 가 가리킨다'
 })
 
-await check(117, '스킬 머리말이 YAML 로 읽힌다 — name 이 폴더 이름 · description 이 있다', async () => {
+await check(117, 'v1.0 스킬 다섯 — 폴더가 정확히 다섯 · 머리말이 YAML 로 읽힌다(name = 폴더 · description 은 큰따옴표 · 누가 쓰는지) · 줄 수 상한', async () => {
   // description 이 `**` 로 시작하면 `*` 가 YAML 별칭이라 머리말 전체가 깨진다(2026-10-06 cdp-save · cdp-push).
-  // 그때 Claude Code 는 H1 을 설명으로 대신 쓴다 — 언제 쓰는지 · 무엇과 다른지가 **말없이** 사라진다.
+  // 그때 Claude Code 는 H1 을 설명으로 대신 쓴다 — 언제 쓰는지 · 무엇과 다른지가 **말없이** 사라진다. 그래서 큰따옴표로 싼다(A5).
+  // 큐레이터 스킬은 writer 가 대신 무엇을 하는지까지 말한다(A6). 줄 수는 개편안 §6.1 의 목표 — 예시 · 드문 길은 참고 파일로(A3)
   const yaml = (await import('js-yaml')).default
   const dir = path.join(ROOT, 'agent', 'skills')
+  const names = (await fs.readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name).sort()
+  eq(names, SKILL_SET, '스킬 폴더')
   const bad = []
-  const lens = []
-  for (const e of await fs.readdir(dir, { withFileTypes: true })) {
-    if (!e.isDirectory()) continue
-    const n = e.name
+  const sizes = []
+  for (const n of names) {
     const text = await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8').catch(() => null)
-    if (text == null) continue
+    if (text == null) {
+      bad.push(`${n}: SKILL.md 없음`)
+      continue
+    }
+    const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
+    sizes.push(`${n.slice(4)} ${lines}`)
+    if (lines > SKILL_LINES[n]) bad.push(`${n}: ${lines}줄 > ${SKILL_LINES[n]}`)
     const m = text.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)
     if (!m) {
       bad.push(`${n}: 머리말 없음`)
@@ -2138,12 +2156,18 @@ await check(117, '스킬 머리말이 YAML 로 읽힌다 — name 이 폴더 이
       continue
     }
     if (d?.name !== n) bad.push(`${n}: name ${JSON.stringify(d?.name)}`)
-    if (typeof d?.description !== 'string' || !d.description.trim()) bad.push(`${n}: description 없음`)
-    else lens.push(d.description.length)
+    if (typeof d?.description !== 'string' || !d.description.trim()) {
+      bad.push(`${n}: description 없음`)
+      continue
+    }
+    if (!/^description:\s*"/m.test(m[1])) bad.push(`${n}: description 이 큰따옴표 문자열이 아니다`)
+    if (!/모두|누구나|writer|큐레이터/.test(d.description)) bad.push(`${n}: description 에 누가 쓰는지가 없다`)
+    if (['cdp-curate', 'cdp-registry'].includes(n) && !(/큐레이터만/.test(d.description) && /기록만 남기고/.test(d.description))) {
+      bad.push(`${n}: description 에 「큐레이터만」 · writer 는 「기록만 남기고」 가 없다`)
+    }
   }
   must(bad.length === 0, bad.slice(0, 4).join(' · '))
-  must(lens.length > 0, 'agent/skills 에 SKILL.md 가 없다')
-  return `${lens.length}종 · description ${Math.min(...lens)}~${Math.max(...lens)}자`
+  return `${names.length}종 · 줄 ${sizes.join(' · ')}`
 })
 
 // ── 보고 ────────────────────────────────────────────────────────────────────
@@ -2158,6 +2182,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114 + 관리 문서 정리 115 + HTML 시각 자료 116 + 스킬 머리말 117)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 끝 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114 + 관리 문서 정리 115 + HTML 시각 자료 116 + 스킬 다섯 117)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

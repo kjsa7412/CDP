@@ -58,7 +58,7 @@ git init && git config core.hooksPath .githooks
 | 서버형 · 세울 때 | 콘솔 › 지식 레포 › 새 레포의 「문서 고르기」 에서 체크를 푼다 |
 | 서버형 · 세운 뒤 | 레포 › 관리 › 「관리 문서」(admin) — 사용 현황을 보고 골라 미리보기 → 지우기 |
 | 셸(모드 A) | `bin/ctx docs drop PD_501 --dry-run` → `--apply-suggest --reason "조사는 리서치 도구에"` → `bin/ctx index` → 커밋 |
-| 에이전트 | `cdp-managed` 「문서 정리」 — 산문 언급까지 고쳐 쓴다 |
+| 에이전트(큐레이터) | `cdp-registry` 「안 쓰는 문서 지우기」 — 산문 언급까지 고쳐 쓴다 |
 
 **3 은 처음부터 다 하지 않는다.** 지금 스프린트에서 건드리는 기능 · 화면 · API 를
 먼저 올리고, 나머지는 작업 기록이 닿을 때 한 줄씩 더한다.
