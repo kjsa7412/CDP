@@ -45,17 +45,12 @@ const CARD = {
     '작업 기록 본문. "왜 그렇게 정했나"는 관리 문서가 아니라 여기 있다. 한 기록에 좌표가 여럿이고 좌표마다 그 뒤 사정이 다르다 — 문서 단위로 "덮였다"고 판정하지 말고 좌표별로 `where` 를 본다. `curation` 은 이 기록의 큐레이션 상태 — `queued`(대기) · `reflected`(반영됨 · `into` 좌표) · `kept`(기록으로 둠 · `reason`) · `system`(큐레이션 · 기준선 기록 자신)',
   search:
     '말 → 좌표 후보. `match` 가 미등재를 냈을 때의 폴백. 본문은 싣지 않는다 — 후보를 고른 뒤 `section` 으로 읽는다. 유사도 검색이 아니다: 걸리지 않으면 없는 것이다',
-  derive: '파생이 남은 섹션과 깨진 섹션. 이것이 비어야 커밋된다. 치우는 것은 `cdp-managed` 절차',
-  apply: '파생할 섹션에 붙일 변경 줄 초안. 파일은 고치지 않는다 — 고치는 것은 `cdp-save` 안에서 사람이 승인한 뒤',
   check: '커밋 가능한가. 커밋 때 같은 검사가 돈다 — 이 도구로 미리 본다',
-  sync:
-    '원격과의 차이와 훅 설정 여부. 받지 않는다. 받을 것이 있으면 주입한 섹션이 최신이 아닐 수 있다고 알린다. 모드 B 의 `kit.hash` 는 서버가 가진 스킬의 해시다 — 이 작업 레포 `CLAUDE.md` 의 `cdp:kit` 값과 다르면 여기 깔린 스킬이 낡았다는 뜻이므로 답에 적는다 — 고치는 것은 담당자 PC 의 「일괄 갱신」 한 줄(관리 › 작업 레포 · 설치기 `--update`)이고, 팀원은 그 커밋을 pull 한다',
-  brief: '두 줄 요약 — 절차와 살아 있는 레포 상태. 서버형이면 작업 레포 `.claude/cdp.json` 의 `repo` 를 넘긴다 — 이 연결(.mcp.json)의 기본 레포와 다르면 경고 줄이 붙는다',
+  brief: '레포의 지금 — 절차 한 줄 · 레포 상태(작업 기록 · 관리 문서 · 큐레이션 대기 · 미반영 섹션) · 서버형이면 미러 · kit 해시(`sync`) · 번들 판(`built`). 서버형이면 작업 레포 `.claude/cdp.json` 의 `repo` 를 넘긴다 — 이 연결(.mcp.json)의 기본 레포와 다르면 경고 줄이 붙는다. `sync.kit.hash` 가 작업 레포 `CLAUDE.md` 의 `cdp:kit` 값과 다르면 여기 깔린 스킬이 낡았다 — 답에 적고, 고치는 것은 설치 한 줄 `--update`',
   docs:
     '관리 문서 목록과 등록부. 인자 없이 부르면 문서마다 경로 · 관리번호(`BM_411`) · 제목 · 등록부 대상인지(`registered`) · 걸린 패턴을 준다 — "어느 문서가 있나 · 이 문서가 등록부에 있나" 는 이것. `doc` 에 경로나 관리번호를 주면 그 문서 원문(`text`)과 헤딩 목록(좌표 섹션이면 `coord`)을 준다. 등록부 비대상 문서(회의록 같은 날짜축)와 머리말은 `section` 으로 못 읽는다 — 이것으로 읽고, 고칠 때는 `save` 의 `edits` 에 여기 `text` 의 글을 그대로 `old` 로 싣는다. `_vocab.md` · `_managed.md` 도 `doc` 으로 받는다. 목록의 `usage` 는 사용 현황 — `sections`(전체 · 작업 기록이 쓴 것) · `touchedBy` · `mentionedBy`(작업 기록) · `refsIn`(다른 문서에서 들어오는 참조) · `required`(필수 제출) · `lastChange` · `state`(`쓰는 중` · `서식 그대로` — 제안이지 판정이 아니다). 안 쓰는 문서를 고를 때 이것을 표로 보인다',
   repos:
     '이 서버가 든 지식 레포 목록. 레포를 모르겠으면 먼저 이것. 레포는 **고르는 것이지 합치는 것이 아니다** — 한 답에 두 레포를 섞지 않는다',
-  version: '이 번들이 언제 만들어졌나. 번들이 낡으면 옛 판정을 낸다',
   forms:
     '**큐레이터만.** 서식집 — 새 관리 문서를 세울 때 고르는 서식(묶음 넷 · 79종 · 팀 서식). `q` 로 찾는다(제목 · 관리번호 · 등록부 타입 — 예: `테이블` · `DE_431` · `인터페이스`). `form` 을 주면 그 서식의 `head`(새 문서로 가는 첫 문단) · `guide`(작성지침 · 여기 적지 않는 것 · 섹션 모양) · `example`(예시)와 **서버가 실제로 찍을 빈 문서**(`stamp`)를 준다. 문서를 세우는 것은 `save` 의 `managed: [{ pattern, doc, form }]` — 서버가 제목 · 서식 표지 · 첫 문단만 찍는다(예시 · 작성지침은 가지 않는다). 섹션은 `guide` 의 모양을 따라 쓴다. `kind` 는 문서 종류(대상 · 대장 · 정의 · 사건 · 서술) — 대장은 표와 결론 한 줄 · 정의는 뜻만 · 사건은 결정과 할 일만. 맞는 서식이 없으면 form 없이 세운다(`# 제목` 한 줄)',
   queue:
@@ -213,8 +208,6 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
   tool('section', { coord: z.string().max(240) }, (r, a) => T.toolSection(r, a), { big: true })
   tool('work', { id: z.string().max(140) }, (r, a) => T.toolWork(r, a), { big: true })
   tool('search', { words: z.array(z.string().max(100)).min(1).max(10), limit: z.number().int().min(1).max(50).optional() }, (r, a) => T.toolSearch(r, a))
-  tool('derive', {}, (r) => T.toolDerive(r))
-  tool('apply', { coord: z.string().max(240) }, (r, a) => T.toolApply(r, a))
   tool('check', {}, (r) => T.toolCheck(r))
   tool('docs', { doc: z.string().max(240).optional() }, async (r, a) => T.toolDocs(r, { ...a, lastChange: a.doc ? undefined : await lastChanges(r.root).catch(() => undefined) }), { big: true })
   tool('brief', {}, async (r, _a, { name, want }) => {
@@ -233,9 +226,9 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
       if (d) lines.push('[CDP] 미러: ' + d)
     }
     if (notice) lines.push(notice)
-    return { ...b, lines }
+    // 옛 `sync` · `version` 도구를 흡수했다(v1.0 W1) — 미러 · kit 해시 · 번들 판이 같은 응답에
+    return { ...b, lines, sync: await syncOf(r, mode), built }
   })
-  tool('sync', {}, async (r) => syncOf(r, mode))
 
   // 큐레이터 도구 — 큐레이터가 아니면 등록하지 않는다(보이지도 않는다). 레포마다는 부를 때 다시 본다
   const canCurate = curate || (() => mode === 'local')
@@ -320,9 +313,6 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
     }
   })
 
-  server.registerTool('version', { description: CARD.version, inputSchema: {} }, async () =>
-    ok({ built: BUILT, mode, repos: visible() })
-  )
 
   // save — 모드 B 만. **`repo` 는 필수다**(§2.9). 읽기 도구처럼 기본 레포로
   // 대신하지 않는다 — 쓰기에서 기본값은 사고다.
@@ -470,9 +460,9 @@ function instructions({ repos, fallback, mode, allow }) {
     '· 시스템의 지금 상태·결정 이유를 물으면 기억으로 답하지 않는다.',
     '· 좌표를 말로 받았으면 match 로 확정 → where 로 상태 → section 으로 그 섹션만.',
     '  이유는 where 가 준 작업 id 로 work 를 연다.',
-    '· 문서 전체를 읽지 않는다. "후속 있음"을 "덮임"이라 쓰지 않는다.',
-    '  파생 남음이면 그 사실을 답에 적는다.',
-    mode === 'server' ? '· 기록·갱신은 cdp-save 절차로만 한다.' : '· 쓰기 도구는 없다. 기록·갱신은 스킬과 git 이 한다.'
+    '· 문서 전체를 읽지 않는다. section 은 섹션과 그 뒤의 **미반영 기록**(pendingRecords)을 같이 준다 —',
+    '  state 가 pending 이면 둘 다 읽고 그 사실을 답에 적는다.',
+    mode === 'server' ? '· 기록은 cdp-save 절차로만 남긴다. 관리 문서는 큐레이터가 반영한다(cdp-curate).' : '· 쓰기 도구는 없다. 기록·갱신은 스킬과 git 이 한다.'
   )
   return lines.join(NL)
 }
