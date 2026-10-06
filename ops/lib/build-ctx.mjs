@@ -187,22 +187,3 @@ if (!/ctx check/.test(probe.stdout || '')) {
   process.exit(1)
 }
 console.log('[build-ctx] 실행 확인 OK')
-
-// 샘플 레포에도 넣어 둔다 -- `npm start` 로 띄운 fixture 에서 `bin/ctx` 가
-// 바로 돌아야 한다. **정본은 `out/ctx/` 이고 이것은 편의 사본이다**(추적 안 함).
-{
-  const outDir = path.dirname(outFile)
-  const dst = path.join(root, 'viewer', 'fixture', 'bin')
-  fs.mkdirSync(dst, { recursive: true })
-  for (const name of ['ctx.mjs', 'ctx', 'ctx.cmd']) {
-    const src = path.join(outDir, name)
-    if (!fs.existsSync(src)) continue
-    fs.copyFileSync(src, path.join(dst, name))
-    if (name === 'ctx') {
-      try {
-        fs.chmodSync(path.join(dst, name), 0o755)
-      } catch {}
-    }
-  }
-  console.log('[build-ctx] viewer/fixture/bin 갱신 (편의 사본)')
-}
