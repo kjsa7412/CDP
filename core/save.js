@@ -444,7 +444,7 @@ export async function save(root, input, { user, write = false, admin = false, cu
 }
 
 // 큐레이터만 쓰는 입력과 예약 태그 — writer 가 보내면 파일을 만지기 전에 거절한다(H7)
-export const RESERVED_TAGS = ['curate', 'baseline', ...SYSTEM_TAGS]
+export const RESERVED_TAGS = ['curate', 'baseline', 'transition', ...SYSTEM_TAGS]
 
 function curatorOnly(input, w) {
   const why = []
@@ -493,9 +493,11 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     if ((w.touches || []).length) throw new CtxError('E_INPUT', '큐레이션 기록은 touches 를 갖지 않는다 — 다룬 기록과 좌표는 curates 의 id · into 에 적는다', { field: 'work.touches' })
     if (!w.touchesEmpty) w.touchesEmpty = '큐레이션'
     if (!(w.tags || []).includes('curate')) w.tags = [...(w.tags || []), 'curate']
-    // 반영(reflect · new)한 좌표는 같은 save 의 섹션이어야 한다 — 「반영했다」 는 판정이 그 섹션을 쓴 커밋에 붙는다
+    // 반영(reflect · new)한 좌표는 같은 save 의 섹션이어야 한다 — 「반영했다」 는 판정이 그 섹션을 쓴 커밋에 붙는다.
+    // 예외는 **전환 기록**(태그 transition · `ctx migrate`) 하나 — 옛 파생이 이미 실은 것을 기록으로 남길 뿐 섹션을 쓰지 않는다
     const sent = new Set((input.sections || []).map((s) => s.coord))
-    for (const j of curates) {
+    const transition = (w.tags || []).includes('transition')
+    for (const j of transition ? [] : curates) {
       for (const c of j.into) {
         if (!sent.has(c)) {
           throw new CtxError('E_INPUT', `work.curates — ${j.id} 의 into ${c} 가 이 save 의 sections 에 없다. 반영한 섹션을 같이 보낸다(바뀐 것이 없으면 section 의 content 그대로) · 반영하지 않을 기록이면 verdict: keep`, {
@@ -604,7 +606,11 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     const r0 = await loadRepo(root, { settings: SETTINGS })
     // 쓰기 전 검사 — 8단계가 「이 save 가 새로 만든 오류」 만 가리는 기준(v1.0 I10 · V21). 어휘 추가는 오류를 만들지 않는다
     const before = checkOf(r0)
-    // 5.0 큐레이션 판정의 대상 — 있는 기록이고 사람의 작업 기록이어야 한다
+    // 5.0 큐레이션 판정의 대상 — 있는 기록이고 사람의 작업 기록이어야 한다.
+    // 전환 기록은 **한 번** — 옛 파생 이력이 있고 큐레이션 기록이 아직 없는 레포(암묵 전환)에서만 into 검사를 면한다
+    if (curates && (w.tags || []).includes('transition') && !r0.curation?.implicit) {
+      throw new CtxError('E_INPUT', '전환 기록(태그 transition)은 옛 레포의 첫 큐레이션 한 번이다 — 이미 큐레이션 기록이 있거나 옛 파생 이력이 없다. 보통의 큐레이션으로 보낸다', { field: 'work.tags' })
+    }
     for (const j of curates || []) {
       const d = r0.byId.get(j.id)
       if (!d) throw new CtxError('E_INPUT', `work.curates — ${j.id} 라는 작업 기록이 없다`, { field: 'work.curates', id: j.id })

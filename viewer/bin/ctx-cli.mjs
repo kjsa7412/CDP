@@ -75,6 +75,9 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx package list|show|check|new|rename    패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로 · 이름 바꿈
   ctx repo new <경로> --package <이름> [--origin <url>] [--push] [--no-examples]   지식 레포를 세운다
   ctx repo list --root <폴더>               서버 <root> 의 레포 목록
+  ctx repo new <경로> --package blank --records-from <옛 레포>   다시 세우기 — 작업 기록 · 첨부 · 그 기록이 쓰는 어휘만 옮긴다
+  ctx baseline extract|push …               옛 섹션을 기준선 블록으로 옮긴다(다시 세운 레포의 출발점)
+  ctx migrate <레포> [--dry] [--by <이름>] [--keep-tools]   제자리 이행 — 전환 기록 하나 · 서식 예시 · 도구 층 걷기(서버를 멈추고)
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
@@ -138,6 +141,8 @@ function parseArgs(argv) {
     else if (a === '--packages') out.packages = argv[++i]
     else if (a === '--forms') out.forms = argv[++i]
     else if (a === '--kit') out.kit = argv[++i]
+    else if (a === '--by') out.by = argv[++i]
+    else if (a === '--keep-tools') out.keepTools = true
     else if (a === '--personal') out.personal = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : true
     else if (a === '--doc') out.doc = argv[++i]
     else if (a === '--src') out.src = argv[++i]
@@ -1069,6 +1074,10 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'repo') {
     const { runRepo } = await import('./ctx-repo.mjs')
     return runRepo(opt)
+  }
+  if (opt.cmd === 'migrate') {
+    const { runMigrate } = await import('./ctx-migrate.mjs')
+    return runMigrate(opt)
   }
   if (opt.cmd === 'baseline') {
     const { runBaseline } = await import('./ctx-baseline.mjs')
