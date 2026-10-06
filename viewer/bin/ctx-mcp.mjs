@@ -227,7 +227,7 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
     }
     if (notice) lines.push(notice)
     // 옛 `sync` · `version` 도구를 흡수했다(v1.0 W1) — 미러 · kit 해시 · 번들 판이 같은 응답에
-    return { ...b, lines, sync: await syncOf(r, mode), built }
+    return { ...b, lines, sync: await syncOf(r, mode, (curateAny ?? mode === 'local') && canCurate(name) ? 'curator' : 'writer'), built }
   })
 
   // 큐레이터 도구 — 큐레이터가 아니면 등록하지 않는다(보이지도 않는다). 레포마다는 부를 때 다시 본다
@@ -479,15 +479,16 @@ export function mirrorOf(st, root = null) {
   return stateOf(st, root ? lastPush(root) : null)
 }
 
-async function syncOf(r, mode) {
+async function syncOf(r, mode, role = 'writer') {
   const git = await import('../../core/git.js')
   const st = await git.status(r.root).catch(() => null)
   if (mode === 'server') {
     // kit 해시를 같이 낸다(§6.7.4). **서버는 클라이언트의 `.claude/skills` 를
     // 볼 수 없으므로** 비교의 한쪽을 이렇게 건네고, 다른 쪽은 스킬이
     // `CLAUDE.md` 의 `cdp:kit` 에서 읽는다.
-    const { kitHash } = await import('../../core/setup.js')
-    const kit = await kitHash(r.root).catch(() => null)
+    // kit 은 서버 번들의 것이다(v1.0 W5) — 큐레이터면 큐레이터 kit 의 해시와 대 본다
+    const { kitFiles } = await import('../../core/kit.js')
+    const kit = await kitFiles({ role }).catch(() => null)
     const m = await mirrorSummary(r.root, st)
     return {
       mode: 'server',

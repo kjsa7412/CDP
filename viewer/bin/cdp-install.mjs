@@ -52,7 +52,7 @@ const err = (s = '') => process.stderr.write(s + NL)
 const CFG = globalThis.__CDP_KIT__ || null
 
 function parseArgs(argv) {
-  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false }
+  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false, curator: false }
   const pos = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -61,6 +61,7 @@ function parseArgs(argv) {
     else if (a === '--no-save') flags.noSave = true
     else if (a === '--update') flags.update = true
     else if (a === '--commit') flags.commit = true
+    else if (a === '--curator') flags.curator = true
     else if (a === '--repo') flags.repo = argv[++i] || null
     else if (a === '--workrepo') flags.workrepo = argv[++i] || null
     else if (!a.startsWith('--')) pos.push(a)
@@ -89,6 +90,14 @@ export async function main(argv) {
   if (flags.update) {
     if (!net) return bail('--update 는 한 줄 설치기로 돈다 — 관리 › 작업 레포 의 「일괄 갱신」 한 줄을 쓰세요.')
     return updateAll({ server, paths: pos, dry, yes, commit: flags.commit, noSave: flags.noSave })
+  }
+
+  // 큐레이터 폴더(v1.0 §6.3) — git 레포가 아니어도 되고 대장에 오르지 않는다. 큐레이터 kit(스킬 다섯 · 큐레이터 블록)을 받는다
+  if (flags.curator) {
+    if (!net) return bail('--curator 는 한 줄 설치기로 돈다 — 관리 화면의 큐레이터 한 줄을 쓰세요.')
+    const dir = pos[0] || '.'
+    if (!repo) return bail('사용법 — node cdp-install.mjs --curator --repo <레포> [<폴더>] [--dry] [--yes]')
+    return installCurator({ server, repo, dir, dry, yes, noSave: flags.noSave })
   }
 
   const work = pos[0]
@@ -218,6 +227,59 @@ async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, to
   out('  2. /mcp 에 cdp 가 connected 인지 본다')
   out('  3. git add .mcp.json .claude CLAUDE.md && git commit')
   out('     팀원은 pull 과 토큰만으로 끝난다 — 이 명령을 돌리면 토큰을 묻고 대장에 보고까지 한다')
+  return 0
+}
+
+// ── 큐레이터 폴더 — 등록 없이(v1.0 §6.3 · W5) ────────────────────────────────
+//
+// 큐레이션은 작업 레포가 아니라 큐레이터의 아무 폴더에서 한다(코드가 없다 · 커밋도 없다). 서버가 그 폴더에 놓일 모양 그대로
+// 준다 — `.mcp.json` · `.claude/cdp.json` · `.claude/skills/cdp-*` · `CLAUDE.md`(큐레이터 블록). 있는 `.mcp.json` · `CLAUDE.md`
+// 는 병합한다(덮지 않는다 — 같은 규칙의 `mergeMcpJson` · `mergeClaude` 를 서버가 이미 적용해 보냈다면 그대로 쓴다).
+async function installCurator({ server, repo, dir, dry, yes, noSave }) {
+  const root = path.resolve(dir)
+  out(`서버     ${server}`)
+  out(`레포     ${repo}`)
+  out(`큐레이터 폴더 ${root}`)
+  const tk = await resolveToken(server, { required: true, yes })
+  if (tk?.error) return bail(tk.error)
+  if (tk?.entered && !noSave && !dry) await offerSave(tk.token, { yes })
+  const r = await fetch(`${server}/kit/${encodeURIComponent(repo)}?as=json&role=curator`, { headers: { authorization: 'Bearer ' + tk.token } }).catch(() => null)
+  if (!r) return bail(`서버에 닿지 않습니다 — ${server}`)
+  const j = await r.json().catch(() => null)
+  if (!r.ok || !j || !Array.isArray(j.files)) return bail(`kit 을 받지 못했습니다 — ${j?.error?.message || 'HTTP ' + r.status}`)
+  if (j.role !== 'curator') return bail(`이 토큰은 ${repo} 의 큐레이터가 아닙니다 — 관리자에게 그 레포의 큐레이터 권한(curate)을 받습니다.`)
+  const plan = []
+  for (const f of j.files) {
+    const rel = String(f.name || '')
+    const dst = path.resolve(root, rel)
+    if (!rel || !(dst === root || dst.startsWith(root + path.sep))) continue
+    const data = Buffer.from(String(f.data || ''), 'base64')
+    const cur = await fs.readFile(dst).catch(() => null)
+    plan.push({ rel, dst, data, op: cur == null ? 'create' : Buffer.compare(cur, data) === 0 ? 'same' : 'update' })
+  }
+  for (const a of plan) out(`  ${a.op === 'same' ? ' ' : '*'} ${a.op.padEnd(7)} ${a.rel}`)
+  const changes = plan.filter((a) => a.op !== 'same')
+  if (!changes.length) {
+    out('')
+    out('이미 최신입니다.')
+    return 0
+  }
+  if (dry) {
+    out('')
+    out(`--dry 이므로 쓰지 않았습니다. 바뀔 것 ${changes.length}건.`)
+    return 0
+  }
+  if (!yes && !(await confirm(`위 ${changes.length}건을 적용할까요? [y/N] `))) {
+    out('그만둡니다. 아무것도 쓰지 않았습니다.')
+    return 1
+  }
+  for (const a of changes) {
+    await fs.mkdir(path.dirname(a.dst), { recursive: true })
+    await fs.writeFile(a.dst, a.data)
+  }
+  out('')
+  out(`${changes.length}건 적용했습니다. (kit ${j.kit})`)
+  out('다음 — 이 폴더에서 Claude Code 를 다시 켜고 「큐레이션해 줘」 · 화면의 [에이전트 지시 복사] 를 붙여 넣는다')
   return 0
 }
 

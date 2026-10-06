@@ -136,6 +136,7 @@ function parseArgs(argv) {
     else if (a === '--dry') out.dry = true
     else if (a === '--packages') out.packages = argv[++i]
     else if (a === '--forms') out.forms = argv[++i]
+    else if (a === '--kit') out.kit = argv[++i]
     else if (a === '--doc') out.doc = argv[++i]
     else if (a === '--src') out.src = argv[++i]
     else if (a === '--asof') out.asof = argv[++i]

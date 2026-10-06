@@ -21,6 +21,7 @@ import { CtxError } from '../../core/tools.js'
 import { zip } from '../../core/zip.js'
 import * as wr from '../../core/workrepos.js'
 import { kitHash, mergeClaude, mcpEntryServer, mergeMcpJson } from '../../core/setup.js'
+import { kitFiles } from '../../core/kit.js'
 import { Store } from '../../core/store.js'
 import { handleRead, MIME } from '../server/adapter/read-api.js'
 import { hereDir } from '../server/runtime.js'
@@ -535,6 +536,8 @@ export async function runServe(opt = {}) {
   // 에이전트 세팅의 원본(도구 층) — 처음 쓸 때 한 번 만든다. 완성 폴더면 그 자리이고, 소스로 돌 때만 조립한다(에이전트 세팅 갱신 TODO T3 · T8)
   const kitFrom = async () => (pk ? (await sharedKitSource(pk)).from : null)
   // 레포 하나의 에이전트 세팅 — 쓰지 않고 본다(dry). 콘솔의 한 줄 · 진단이 쓴다
+  // kit 은 서버 번들에서 낸다(v1.0 W5) — 레포마다 다르지 않다. writer kit 의 해시가 대장 「낡음」 의 기준이다
+  const bundleHash = async (role = 'writer') => (await kitFiles({ role, explicit: opt.kit || null })).hash
   const kitState = async (root) => {
     try {
       const from = await kitFrom()
@@ -1135,7 +1138,7 @@ export async function runServe(opt = {}) {
                 } else lag.push({ name: r.name, ahead: m.ahead, reason: m.reason })
               }
               if (m.dirty > 0) dirty.push({ name: r.name, dirty: m.dirty })
-              kits[r.name] = (await kitHash(r.root).catch(() => ({ hash: null }))).hash
+              kits[r.name] = await bundleHash()
             }
             const users = auth.userList(db)
             const admins = auth.admins(db)
@@ -1506,7 +1509,7 @@ export async function runServe(opt = {}) {
           if (sub === '/workrepos' && req.method === 'GET') {
             const kits = {}
             const all = await store.list()
-            for (const r of all) kits[r.name] = (await kitHash(r.root).catch(() => ({ hash: null }))).hash
+            for (const r of all) kits[r.name] = await bundleHash()
             okLog('/workrepos', '-')
             // `known` — 휴지통으로 간 레포의 등록은 `orphan` 이다. 콘솔이 「지식 레포 없음」 과 [삭제] 를 단다(F5)
             return json(res, 200, { repos: wr.list(await wr.load(dataDir), { kits, known: all.map((r) => r.name) }), known: all.map((r) => r.name) })
@@ -1608,7 +1611,7 @@ export async function runServe(opt = {}) {
         try {
           if (url.pathname === '/workrepos' && req.method === 'GET') {
             const kits = {}
-            for (const r of mine) kits[r.name] = (await kitHash(r.root)).hash
+            for (const r of mine) kits[r.name] = await bundleHash()
             const rows = wr.list(db, { kits }).filter((r) => mine.some((m) => m.name === r.knowledge))
             // `write` 를 같이 낸다 -- 화면이 등록 칸을 낼지 말지 정해야 하는데,
             // 못 할 일을 띄워 놓고 누른 뒤에 403 을 내는 것은 화면이 아니다.
@@ -1911,9 +1914,12 @@ export async function runServe(opt = {}) {
           log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name, ms: Date.now() - t0, status: 404 })
           return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 레포가 없다' } })
         }
-        const files = await collectKit(found.root)
+        // **번들에서 · 역할별로**(v1.0 W5) — 큐레이터면 다섯 스킬과 큐레이터 블록, 아니면 기록하는 스킬 셋
+        const role = (a.curate ? a.curate(name) : !!a.admin) && url.searchParams.get('role') !== 'writer' ? 'curator' : 'writer'
+        const bundle = await kitFiles({ role, explicit: opt.kit || null })
+        const files = bundle.files
         if (!files.length) {
-          return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '이 레포에 .claude/ kit 이 없다' } })
+          return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '이 서버에 kit 이 없다 — 번들의 kit/ (소스는 agent/skills)' } })
         }
 
         // `?workrepo=<id>` — 사람이 내려받아 **그대로 푸는** 설치 꾸러미(§6.7.3).
@@ -1925,6 +1931,19 @@ export async function runServe(opt = {}) {
         // 깨는 셈이 된다.
         const wid = url.searchParams.get('workrepo')
         let entries = files
+        // 큐레이터 폴더 — 등록 없이 받는다(v1.0 §6.3 · `install.mjs --curator`). git 레포가 아니어도 되고 대장에 오르지 않는다
+        if (!wid && url.searchParams.get('as') === 'json') {
+          const origin = publicOrigin(req, opt)
+          const out = [
+            ...files.map((f) => ({ name: f.name, data: Buffer.from(f.data).toString('base64') })),
+            { name: '.mcp.json', data: Buffer.from(mergeMcpJson(null, mcpEntryServer(origin, name))).toString('base64') },
+            { name: '.claude/cdp.json', data: Buffer.from(JSON.stringify({ server: origin, repo: name }, null, 2) + NL).toString('base64') },
+          ]
+          const tpl = files.find((f) => f.name === '.claude/work-repo/CLAUDE.md')
+          if (tpl) out.push({ name: 'CLAUDE.md', data: Buffer.from(mergeClaude(null, tpl.data.toString('utf8'), bundle.hash)).toString('base64') })
+          log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name + ' ' + role, ms: Date.now() - t0, status: 200 })
+          return json(res, 200, { server: origin, repo: name, workrepo: null, role, kit: bundle.hash, files: out })
+        }
         if (wid && dataDir) {
           const db = await wr.load(dataDir)
           const row = db.repos.find((r) => r.id === wid)
@@ -1944,7 +1963,7 @@ export async function runServe(opt = {}) {
           }
           const origin = publicOrigin(req, opt)
           const claudeTpl = files.find((f) => f.name === '.claude/work-repo/CLAUDE.md')
-          const kit = (await kitHash(found.root)).hash
+          const kit = bundle.hash
 
           // **kit 을 한 단 내린다.** 전에는 이 전부가 zip 루트에 있어서,
           // 작업 레포에 푸는 순간 `CLAUDE.md` 와 `.mcp.json` 이 덮였다 --
