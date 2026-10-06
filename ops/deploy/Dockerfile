@@ -1,12 +1,12 @@
 # CDP 서버 — Docker 는 **선택지**다(검토 R10). 기본 배치는 systemd(install.sh).
 #
 # 빌드 컨텍스트는 서버 산출물 폴더다 (cdp-server-v<버전>/) —
-#     docker build -f deploy/Dockerfile -t cdp-server:0.9.0 .
+#     docker build -f deploy/Dockerfile -t cdp-server:<버전> .
 #
 # 실행 —
 #     docker run -d --name cdp -p 7374:7374 \
 #       -v cdp-repos:/opt/cdp/repos -v cdp-data:/opt/cdp/data \
-#       -v $PWD/auth.json:/opt/cdp/auth.json cdp-server:0.9.0
+#       -v $PWD/auth.json:/opt/cdp/auth.json cdp-server:<버전>
 #
 # `--bind 0.0.0.0` 은 **컨테이너 안이라 맞다** — 경계는 호스트의 `-p` 매핑이다.
 # 명부·토큰은 호스트에서 만든다: docker exec cdp node bin/ctx.mjs serve init …
@@ -22,7 +22,8 @@ RUN apt-get update \
 WORKDIR /opt/cdp
 COPY bin ./bin
 COPY web ./web
-COPY packages ./packages
+COPY forms ./forms
+COPY kit ./kit
 COPY manual ./manual
 
 RUN useradd -r -d /opt/cdp -s /usr/sbin/nologin cdp \
@@ -40,7 +41,6 @@ ENTRYPOINT ["node", "/opt/cdp/bin/ctx.mjs", "serve", \
   "--auth", "/opt/cdp/auth.json", \
   "--data", "/opt/cdp/data", \
   "--web", "/opt/cdp/web", \
-  "--packages", "/opt/cdp/packages", \
   "--bind", "0.0.0.0", \
   "--port", "7374", \
   "--mirror"]

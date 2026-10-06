@@ -7,8 +7,8 @@
 #
 # 하는 것 (멱등 — 두 번 돌려도 같다. 있는 것은 건너뛰고 그 사실을 찍는다)
 #   0  node ≥ 20 · git 확인.  없으면 무엇을 깔지 말하고 멈춘다
-#   1  서비스 계정 · 폴더 (bin repos data web packages manual)
-#   2  bin/ · web/ · packages/ 배치 · chown
+#   1  서비스 계정 · 폴더 (bin repos data web forms kit manual)
+#   2  bin/ · web/ · forms/ · kit/ · manual/ 배치 · chown
 #   3  systemd 유닛 — **command -v node 를 읽어 ExecStart 에 박는다** (203/EXEC 의 원인이 여기였다)
 #   4  daemon-reload · enable --now · /healthz 확인
 #   5  방화벽 명령을 **안내만** 한다 — 배포판마다 다르고, 열지 않는 것도 선택이다
@@ -65,19 +65,23 @@ if id "$SVC_USER" >/dev/null 2>&1; then skip "계정 $SVC_USER 있음"; else
   say "계정 $SVC_USER 만든다 (useradd)"
   run useradd -r -m -d "$PREFIX" -s /usr/sbin/nologin "$SVC_USER"
 fi
-for d in bin repos data web packages manual deploy; do run mkdir -p "$PREFIX/$d"; done
+for d in bin repos data web forms kit manual deploy; do run mkdir -p "$PREFIX/$d"; done
 
-# ── 2 배치 — 화면과 패키지는 **비우고 넣는다.** 자산 이름에 해시가 붙어 덮어쓰기만 하면 옛 파일이 쌓인다
-say "bin/ · web/ · packages/ 배치 → $PREFIX"
+# ── 2 배치 — 화면 · 서식집 · kit · 설명서는 **비우고 넣는다.** 자산 이름에 해시가 붙어 덮어쓰기만 하면 옛 파일이 쌓인다
+#    서버는 bin/ 옆의 forms/ · kit/ 을 스스로 찾는다(인자 없이)
+say "bin/ · web/ · forms/ · kit/ · manual/ 배치 → $PREFIX"
 run cp "$SRC"/bin/ctx.mjs "$SRC"/bin/ctx "$SRC"/bin/ctx.cmd "$PREFIX/bin/"
-if [ "$DRY" = 0 ]; then rm -rf "$PREFIX/web" && mkdir -p "$PREFIX/web" && cp -r "$SRC"/web/. "$PREFIX/web/"; else printf '[install]   (dry) web/ 교체\n'; fi
-if [ -d "$SRC/packages" ]; then
-  if [ "$DRY" = 0 ]; then rm -rf "$PREFIX/packages" && mkdir -p "$PREFIX/packages" && cp -r "$SRC"/packages/. "$PREFIX/packages/"; else printf '[install]   (dry) packages/ 교체\n'; fi
-else skip "packages/ 가 산출물에 없다 — ctx repo new 를 못 쓴다"; fi
-# 설명서 — 서버가 /manual 로 낸다. 화면과 같이 비우고 넣는다
-if [ -d "$SRC/manual" ]; then
-  if [ "$DRY" = 0 ]; then rm -rf "$PREFIX/manual" && mkdir -p "$PREFIX/manual" && cp -r "$SRC"/manual/. "$PREFIX/manual/"; else printf '[install]   (dry) manual/ 교체\n'; fi
-else skip "manual/ 이 산출물에 없다 — 설명서 페이지가 빈다"; fi
+for d in web forms kit manual; do
+  if [ -d "$SRC/$d" ]; then
+    if [ "$DRY" = 0 ]; then rm -rf "$PREFIX/$d" && mkdir -p "$PREFIX/$d" && cp -r "$SRC/$d/." "$PREFIX/$d/"; else printf '[install]   (dry) %s/ 교체\n' "$d"; fi
+  else
+    case "$d" in
+      forms) skip "forms/ 가 산출물에 없다 — 서식에서 새 관리 문서를 세울 수 없다" ;;
+      kit) skip "kit/ 이 산출물에 없다 — 설치 한 줄이 빈 kit 을 낸다" ;;
+      manual) skip "manual/ 이 산출물에 없다 — 설명서 페이지가 빈다" ;;
+    esac
+  fi
+done
 run cp "$SRC"/deploy/*.sh "$SRC"/deploy/cdp-serve.service "$SRC"/deploy/설치절차.md "$PREFIX/deploy/" 2>/dev/null || true   # 설치절차.md 는 /manual 의 「서버 설치 절차」 책이다
 run chmod 755 "$PREFIX/bin/ctx" "$PREFIX/deploy/"*.sh 2>/dev/null || true
 run chown -R "$SVC_USER:$SVC_USER" "$PREFIX"
@@ -109,8 +113,8 @@ if [ "$HAS_SYSTEMD" = 1 ]; then
 else
   skip "systemd 가 없다 (또는 --no-systemd) — 유닛을 $PREFIX/deploy/cdp-serve.rendered.service 에 써 둔다. 직접 띄우려면:"
   if [ "$DRY" = 0 ]; then render_unit > "$PREFIX/deploy/cdp-serve.rendered.service"; fi
-  printf '[install]     sudo -u %s %s %s/bin/ctx.mjs serve --root %s/repos --auth %s/auth.json --data %s/data --bind %s --port %s --web %s/web --packages %s/packages --mirror\n' \
-    "$SVC_USER" "$NODE_BIN" "$PREFIX" "$PREFIX" "$PREFIX" "$PREFIX" "$BIND" "$PORT" "$PREFIX" "$PREFIX"
+  printf '[install]     sudo -u %s %s %s/bin/ctx.mjs serve --root %s/repos --auth %s/auth.json --data %s/data --bind %s --port %s --web %s/web --mirror\n' \
+    "$SVC_USER" "$NODE_BIN" "$PREFIX" "$PREFIX" "$PREFIX" "$PREFIX" "$BIND" "$PORT" "$PREFIX"
 fi
 
 # ── 4 띄우고 확인
@@ -152,7 +156,6 @@ cat <<EOF
 [install]   3장  git 자격      sudo -u $SVC_USER -H git config --global credential.helper 'store --file=$PREFIX/.git-credentials'   (설치절차 3장 · 비밀은 셸에서)
 [install]   브라우저           http://$BIND:$PORT/setup  → 첫 관리자(위 코드) → 콘솔 /console 에서 지식 레포 · 사용자 · 토큰
 [install]   셸로 하려면        sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs serve init --auth $PREFIX/auth.json --data $PREFIX/data --name <이름>
-[install]                      sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs repo new $PREFIX/repos/<이름> --package <패키지> --packages $PREFIX/packages [--origin <url> --push]
-[install]                      패키지 목록       sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs package list --packages $PREFIX/packages   (blank · public-si · agile-product · cloud-native · ai-service)
-[install]   확인               sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs serve doctor --root $PREFIX/repos --auth $PREFIX/auth.json --data $PREFIX/data --web $PREFIX/web --manual $PREFIX/manual --packages $PREFIX/packages --bind $BIND --port $PORT
+[install]                      sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs repo new $PREFIX/repos/<이름> [--origin <url> --push]   (빈 틀 · 서식은 큐레이터가 서식집에서)
+[install]   확인               sudo -u $SVC_USER $NODE_BIN $PREFIX/bin/ctx.mjs serve doctor --root $PREFIX/repos --auth $PREFIX/auth.json --data $PREFIX/data --web $PREFIX/web --manual $PREFIX/manual --bind $BIND --port $PORT
 EOF

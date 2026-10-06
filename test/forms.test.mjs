@@ -8,9 +8,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseForm, stampDoc, formIdOf, lintForm, FORM_KINDS } from '../core/forms.js'
-import { outsideFences, parseRegistry } from '../core/managed.js'
-import { parseVocab } from '../core/vocab.js'
-import { convertDoc } from '../ops/lib/forms-convert.mjs'
+import { outsideFences } from '../core/managed.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const FORMS = path.join(ROOT, 'agent', 'forms')
@@ -222,81 +220,6 @@ test('lintForm — head 는 새 문서로 간다: 제목 · applied · 표지 ·
   has('첫 문단 — 작성지침을 본다', /작성지침/)
   has('', /head 가 비었다/)
   assert.deepEqual(head('첫 문단\n\n```\n## 펜스 안은 제목이 아니다\n```'), [])
-})
-
-// ── 변환기의 규칙 — 작은 가짜 문서로 ──────────────────────────────────────────────────────
-
-const REG = parseRegistry('| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n| `샘플:*` | `docs/1.x/XX_101_샘플정의서.md` | `## {값}` |\n')
-const VOCAB_TEXT = '# 어휘\n\n## 샘플\n\n- `샘플:ex-1` — (예시) 첫 샘플\n  example: 서식 예시 — 지우고 시작한다\n  aliases: 첫째\n'
-const doc = (body, { reg = '`샘플:*` → `## {값}`', coord = '| 좌표 값 | 샘플 ID |\n', h1 = '# XX_101 샘플정의서', head = '샘플의 지금 상태. 섹션 하나가 샘플 하나다.' } = {}) =>
-  `${h1}\n\n${head}\n\n| | |\n|---|---|\n| 관리번호 | \`XX_101\` |\n| 제출시기 | 설계완료 |\n| 필수 제출 | **예** |\n| 등록부 | ${reg} |\n${coord}\n${body}`
-const convert = (text, rules = REG.rules, rel = '1.x/XX_101_샘플정의서.md') =>
-  convertDoc({ group: 'test-pack', rel, text, rules, vocab: parseVocab(VOCAB_TEXT), vocabLines: VOCAB_TEXT.split('\n') })
-
-const GUIDE_TAIL = '\n---\n\n## 작성지침\n\n| 항목 | 작성방법 | 필수 |\n|---|---|:--:|\n| 섹션 제목 | `<ID> — <이름>` | 필수 |\n| `applied` | 이 섹션에 반영한 작업 기록 id | 필수 |\n| 머리 표 | 관리번호 · 제출시기는 고치지 않는다 | 필수 |\n'
-
-test('변환 — 대상: 머리 표 → 머리말 · (예시) 섹션 → `### 예시 — …` · applied 와 그 안내 행을 뗀다 · 예시 어휘', () => {
-  const text = doc(
-    '**무엇** — 샘플.\n\n> 안내 인용.\n\n<!-- 분류 -->\n\n## ex-1 — (예시) 첫 샘플\n<!-- applied: null -->\n\n본문.\n\n> ⚠ **이 섹션은 예시다 — 지우고 시작한다.**\n' + GUIDE_TAIL
-  )
-  const r = convert(text)
-  assert.equal(r.id, 'test-pack/XX_101')
-  assert.equal(r.file, 'XX_101_샘플정의서.md')
-  const f = parseForm(r.text, { group: 'test-pack', file: r.file })
-  assert.deepEqual(lintForm(f), [])
-  assert.equal(f.kind, '대상')
-  assert.equal(f.required, true)
-  assert.equal(f.due, '설계완료')
-  assert.deepEqual(f.registry, [{ pattern: '샘플:*', anchor: '## {값}' }])
-  assert.equal(f.coordValue, '샘플 ID')
-  assert.equal(f.head, '샘플의 지금 상태. 섹션 하나가 샘플 하나다.')
-  assert.equal(f.guide, '**무엇** — 샘플.\n\n> 안내 인용.\n\n### 작성지침\n\n| 항목 | 작성방법 | 필수 |\n|---|---|:--:|\n| 섹션 제목 | `<ID> — <이름>` | 필수 |')
-  assert.ok(f.example.startsWith('<!-- 분류 -->\n\n### 예시 — ex-1 — 첫 샘플\n\n본문.'), f.example)
-  assert.ok(!r.text.includes('<!-- applied'))
-  assert.ok(f.example.includes('### 예시 — 어휘\n\n```\n## 샘플\n\n- `샘플:ex-1` — (예시) 첫 샘플\n  example: 서식 예시 — 지우고 시작한다\n  aliases: 첫째\n```'))
-  assert.deepEqual(r.counts, { appliedComment: 1, appliedRow: 1, headTableRow: 1, keepGuide: 0 })
-  assert.equal(r.text, convert(text).text, '같은 입력 · 같은 바이트')
-  assert.equal(convert(text.replace(/\n/g, '\r\n')).text, r.text, 'CRLF 원문도 같은 서식')
-  assert.ok(!r.text.includes('\r') && r.text.endsWith('\n') && !r.text.endsWith('\n\n'), 'LF · 끝 개행 하나')
-})
-
-test('변환 — 대장: 예시 행 표의 머리는 head 의 빈 표로 · 행과 ⚠ 표지는 example 로', () => {
-  const text = doc('**무엇** — 대장.\n\n| 번호 | 작업 |\n|---|---|\n| 1 | (예시) 첫 작업 |\n\n> ⚠ **예시 행이다 — 지우고 시작한다.**\n' + GUIDE_TAIL, {
-    reg: '**비대상** — 집계 · 추적이다',
-    coord: '',
-  })
-  const r = convert(text, [])
-  const f = parseForm(r.text)
-  assert.equal(f.kind, '대장')
-  assert.equal(f.head, '샘플의 지금 상태. 섹션 하나가 샘플 하나다.\n\n| 번호 | 작업 |\n|---|---|')
-  assert.equal(f.example, '### 예시 — 행\n\n| 번호 | 작업 |\n|---|---|\n| 1 | (예시) 첫 작업 |\n\n> ⚠ **예시 행이다 — 지우고 시작한다.**')
-  assert.ok(!stampDoc(f).includes('(예시)'))
-})
-
-test('변환 — 서술: 제목 뼈대는 guide 로(꼬리 줄을 뗀다) · 절만 있으면 절 제목이 guide 의 골격', () => {
-  const tail = GUIDE_TAIL
-  const a = convert(
-    doc('**무엇** — 계획.\n\n## 제목 뼈대\n\n| # | 절 |\n|--:|---|\n| 1 | 개요 |\n\n> 제목은 자유롭게 쓴다.\n> 다만 `## 작성지침` 은 남겨 둔다.\n' + tail, { reg: '**비대상** — 문서 전체가 내용이다', coord: '' }),
-    []
-  )
-  const fa = parseForm(a.text)
-  assert.equal(fa.kind, '서술')
-  assert.ok(fa.guide.includes('### 제목 뼈대\n\n| # | 절 |') && fa.guide.includes('> 제목은 자유롭게 쓴다.\n\n### 작성지침'), fa.guide)
-  assert.equal(fa.example, '')
-  assert.equal(a.counts.keepGuide, 1)
-
-  const b = convert(doc('**무엇** — 개요.\n\n## 비전\n\n(예시) 한 문장.\n\n## 하지 않는 것\n\n- (예시) 하나\n' + tail, { reg: '**비대상** — 문서 전체가 내용이다', coord: '' }), [])
-  const fb = parseForm(b.text)
-  assert.ok(fb.guide.includes('### 골격\n\n| # | 절 |\n|--:|---|\n| 1 | 비전 |\n| 2 | 하지 않는 것 |'), fb.guide)
-  assert.ok(fb.example.startsWith('### 예시 — 비전\n\n(예시) 한 문장.\n\n### 예시 — 하지 않는 것'), fb.example)
-})
-
-test('변환 — 모양이 다르면 조용히 넘기지 않고 멈춘다', () => {
-  assert.throws(() => convert(doc('**무엇** — 샘플.\n\n## ex-1 — (예시) 첫\n\n본문.\n')), /작성지침/)
-  assert.throws(() => convert(doc('## ex-1 — (예시) 첫\n' + GUIDE_TAIL, { h1: '# XX_101 다른이름' })), /파일 이름/)
-  assert.throws(() => convert(doc('## ex-1 — (예시) 첫\n' + GUIDE_TAIL, { reg: '`샘플:*` → `### {값}`' })), /등록부 칸/)
-  // 예시인지 가릴 수 없는 섹션 — (예시) 도 어휘도 ⚠ 표지도 없다
-  assert.throws(() => convert(doc('## ex-9 — 진짜 내용\n\n본문.\n' + GUIDE_TAIL)), /가릴 수 없는/)
 })
 
 // ── agent/forms 전부 ─────────────────────────────────────────────────────────────────────
