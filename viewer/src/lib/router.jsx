@@ -11,6 +11,7 @@
 // 라우트 전환은 `startTransition` — 새 화면의 첫 렌더가 끝날 때까지 이전 화면이 남는다(React 18 · R8).
 
 import { startTransition, useEffect, useState } from 'react'
+import { faceOf } from '../shell/routes.js'
 
 const listeners = new Set()
 
@@ -67,21 +68,9 @@ export function useRoute() {
 //   콘솔   /console/…                              face: console ┘ window.__CDP_SERVER__ 로 안다
 //
 // `/r/` 밖에서는 경로만으로 로컬과 서버를 가를 수 없다(둘 다 `/`). 그래서 서버가 `index.html` 을 낼 때
-// 한 줄을 심는다 — 왕복 없이 갈린다.
+// 한 줄을 심는다 — 왕복 없이 갈린다. 판정은 `shell/routes.js` 의 `faceOf` 하나(시험이 부른다).
 export function modeOf(path = location.pathname) {
-  const seg = path.split('/').filter(Boolean)
-  const dec = (s) => {
-    try {
-      return decodeURIComponent(s)
-    } catch {
-      return s
-    }
-  }
-  if (seg[0] === 'r' && seg[1]) return { server: true, repo: dec(seg[1]), face: 'repo', rest: seg.slice(2).map(dec) }
-  if (typeof window !== 'undefined' && window.__CDP_SERVER__) {
-    return { server: true, repo: null, face: seg[0] === 'console' ? 'console' : 'site', rest: seg.map(dec) }
-  }
-  return { server: false, repo: null, face: 'local', rest: seg.map(dec) }
+  return faceOf(path, typeof window !== 'undefined' && !!window.__CDP_SERVER__)
 }
 
 // 같은 번들 안의 링크 — 얼굴 안이든 밖이든. 새 탭(⌘/Ctrl 클릭)은 브라우저에 맡긴다.
