@@ -209,6 +209,25 @@ test('save — 검사 실패면 Snap 이 되돌리고 커밋 0 (파생 누락)',
   }
 })
 
+test('save — 레포에 원래 있던 오류(중복 섹션)는 막지 않고 경고 · 이 save 가 만든 오류만 막는다(v1.0 I10)', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    // 남이 남긴 중복 섹션 — 이것 때문에 모든 save 가 막히던 것이 실서버 F8 이다
+    const t0 = await fs.readFile(path.join(R.r, 'docs', 't.md'), 'utf8')
+    await fs.writeFile(path.join(R.r, 'docs', 't.md'), t0 + ['## e — E 둘째', '<!-- applied: null -->', '', '같은 이름의 둘째.', ''].join(NL))
+    await g(R.r, 'commit', '-qam', 'dup')
+    const n0 = await commits(R.r)
+    const out = await save(R.r, { work: work('2026-0925-무관한기록', 'table:b'), sections: [{ coord: 'table:b', applied: null, body: 'b 를 고쳤다.' }] }, opt())
+    assert.equal(await commits(R.r), n0 + 1)
+    assert.ok(out.warnings.some((w) => /원래 있던 오류 1건/.test(w) && /같은 좌표의 섹션/.test(w)), out.warnings.join(' / '))
+    // 이 save 가 새로 만든 오류(파생 누락)는 여전히 막는다
+    await assert.rejects(save(R.r, { work: work('2026-0925-새오류', 'table:c') }, opt()), (e) => e.code === 'E_CHECK' && e.detail.findings.every((f) => f.kind !== 'dup-anchor'))
+    assert.equal(await commits(R.r), n0 + 1)
+  } finally {
+    await R.rm()
+  }
+})
+
 test('save — `—`(문서 전체) 규칙: 머리 주석 · 전체 치환 · 둘째 save 의 current · 헤딩이 있어도 된다', { skip: !hasGit && 'git 이 없다' }, async () => {
   const R = await repo()
   try {

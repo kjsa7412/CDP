@@ -14,7 +14,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { loadRepo } from './repo.js'
-import { runBuiltinCheck } from './check.js'
+import { runBuiltinCheck, newErrors } from './check.js'
 import { resolveCoord, parseRegistry, docEscapes, normValue } from './managed.js'
 import { planManaged, checkManagedShape, needsAdmin } from './managedops.js'
 import { readText } from './scan.js'
@@ -482,6 +482,8 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
 
     // 5 좌표 — 어휘 등재 **뒤에** 본다. 새 좌표를 같은 save 에서 등재하고 쓰는 것이 정상이다.
     const r0 = await loadRepo(root, { settings: SETTINGS })
+    // 쓰기 전 검사 — 8단계가 「이 save 가 새로 만든 오류」 만 가리는 기준(v1.0 I10 · V21). 어휘 추가는 오류를 만들지 않는다
+    const before = checkOf(r0)
     const known = new Set(r0.vocab.coords.keys())
     for (const v of vocabAdds) known.add(v.coord)
     const readRaw = (rel) => fs.readFile(path.join(root, rel), 'utf8').catch(() => null)
@@ -743,27 +745,20 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     await snap.write('INDEX.md', renderIndex(r0b))
     await snap.write('INDEX-by-coord.md', renderByCoord(r0b))
 
-    // 8 검사 — 갱신된 트리로 다시 본다. 오류면 **되돌리고** 커밋하지 않는다.
+    // 8 검사 — 갱신된 트리로 다시 본다. **이 save 가 새로 만든 오류**면 되돌리고 커밋하지 않는다(v1.0 I10 · V21).
+    // 레포에 원래 있던 오류는 막지 않고 경고로 싣는다 — 그 오류를 만든 것도 고칠 권한도 이 save 가 아니다.
     const r1 = await loadRepo(root, { settings: SETTINGS })
-    const res = runBuiltinCheck({
-      docs: r1.docs,
-      vocabText: r1.vocabText,
-      managedText: r1.managedText,
-      vocab: r1.vocab,
-      validity: r1.validity,
-      indexInfo: r1.indexInfo,
-      managedIndex: r1.managedIndex,
-      sections: r1.sections,
-      bodies: r1.bodies,
-    })
-    const errors = res.findings.filter((f) => f.sev === 'error')
+    const res = checkOf(r1)
+    const errors = newErrors(before, res)
     if (errors.length) {
       await snap.restore()
-      throw new CtxError('E_CHECK', '검사에서 오류가 났다 — 아무것도 커밋하지 않았다', {
+      throw new CtxError('E_CHECK', '검사에서 이 save 가 만든 오류가 났다 — 아무것도 커밋하지 않았다', {
         findings: errors,
         ...(plan?.added.length ? { hint: '새 등록부 행이 걸리는 좌표는 sections 를 같이 보낸다 · 문서 안에 같은 이름의 섹션이 둘이면 이름을 고친다' } : {}),
       })
     }
+    const old = res.findings.filter((f) => f.sev === 'error')
+    if (old.length) warnings.push(`레포에 원래 있던 오류 ${old.reduce((a, f) => a + f.items.length, 0)}건 — 이 save 와 무관해 막지 않았다(${old.map((f) => f.label).join(' · ')}). check 로 보고 고칠 사람이 고친다`)
     for (const f of res.findings.filter((x) => x.sev === 'warn')) warnings.push(`${f.label} ${f.items.length}건`)
 
     return {
@@ -784,6 +779,21 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     await snap.restore()
     throw e
   }
+}
+
+// 검사 한 번 — save 의 쓰기 전 · 쓴 뒤가 같은 인자로 같은 함수를 부른다
+function checkOf(r) {
+  return runBuiltinCheck({
+    docs: r.docs,
+    vocabText: r.vocabText,
+    managedText: r.managedText,
+    vocab: r.vocab,
+    validity: r.validity,
+    indexInfo: r.indexInfo,
+    managedIndex: r.managedIndex,
+    sections: r.sections,
+    bodies: r.bodies,
+  })
 }
 
 function renderWork(w, user, attachments = []) {

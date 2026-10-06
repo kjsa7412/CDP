@@ -427,6 +427,32 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
   return { source: 'builtin', ranAt: new Date().toISOString(), findings }
 }
 
+// ── 오류의 정체 — save 가 「자기가 만든 오류」 를 가린다(v1.0 개편안 I10 · V21) ──────────────────────────
+//
+// save 는 쓰기 전 레포와 쓴 뒤 레포를 같은 검사로 본다. 쓴 뒤에만 있는 error 가 **이 save 가 만든 것**이고, 그것만
+// 막는다. 원래 있던 오류(남이 남긴 중복 섹션 · 손으로 고친 등록부)로 모든 save 가 막히면 고칠 권한이 없는 사람은
+// 풀 길이 없다(gdi 의 `## rp_plnd_mst` 중복 동안 save 전부 E_CHECK — 실서버 종합시험 F8).
+//
+// 열쇠는 종류 · 기록 id · 좌표 · 경로 · 설명이다. 설명 속 **숫자는 지운다** — 줄 번호와 건수는 다른 기록이 더해지거나
+// 섹션이 늘면 바뀌는데, 그것 때문에 원래 있던 오류가 「새 오류」 가 되면 안 된다.
+export function findingKey(f, item) {
+  const detail = String(item?.detail ?? '').replace(/\d+/g, '#')
+  return [f.kind, item?.id ?? '', item?.coord ?? '', item?.path ?? '', detail].join('\u0000')
+}
+
+// 쓴 뒤 검사(after)에서 쓰기 전(before)에 없던 error 항목만 — 종류별로 묶어 같은 모양(findings)으로 낸다
+export function newErrors(before, after) {
+  const seen = new Set()
+  for (const f of before?.findings || []) if (f.sev === 'error') for (const it of f.items) seen.add(findingKey(f, it))
+  const out = []
+  for (const f of after?.findings || []) {
+    if (f.sev !== 'error') continue
+    const items = f.items.filter((it) => !seen.has(findingKey(f, it)))
+    if (items.length) out.push({ ...f, items })
+  }
+  return out
+}
+
 // 미등재 좌표에 후보를 제시한다 — 설계서 §24.1 의 실질적 가치.
 // 훅이 안 걸린 PC 에서 이 화면이 프로토콜 §9.6 의 "1초"를 대신한다.
 function suggestCoord(vocab, coord) {
