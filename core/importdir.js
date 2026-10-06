@@ -9,9 +9,9 @@
 //   date               프론트매터 → 파일명의 날짜 → git 최초 커밋 → mtime.  **근거를 남긴다**
 //   author             프론트매터 → --author → git 작성자 → 'import'
 //   touches            **비운다.** 프론트매터에 있던 좌표는 tags 의 `touches/<좌표>` 로 보존한다 —
-//                      등록부에 걸리는 좌표를 touches 에 두면 파생 누락으로 검사가 막히는데, 정본
-//                      섹션을 기계가 채울 수는 없다(R8). `keepTouches` 를 주면 그대로 두고, 그때
-//                      검사가 막히면 E_CHECK 로 되돌린다.  **좌표를 추측하지 않는다** (P2 는 사람 · LLM)
+//                      원본의 좌표가 이 레포의 어휘와 맞는다는 보장이 없다(R8). `keepTouches` 를 주면
+//                      그대로 둔다(v1.0 — 들인 기록은 대기열에 서고 반영은 큐레이터가 한다).
+//                      **좌표를 추측하지 않는다** (P2 는 사람 · LLM · 큐레이터)
 //   status             전건 소거.  모르는 필드는 tags 로 접는다 (key/value)
 //   md 가 아닌 파일     work/assets/<출처조각>/ 로.  본문의 상대 링크를 다시 쓴다
 //   결정론             같은 원본이면 같은 결과.  시각 · 난수 의존 없음 (mtime 폴백은 근거에 적힌다)
@@ -356,8 +356,8 @@ export async function planImport(src, repo, { author = null, keepTouches = false
   if (summary.withTouches === 0 && works.length) {
     warnings.push(
       summary.touchCandidates
-        ? `좌표가 하나도 없다 — 의도다. 원본의 touches ${summary.touchCandidates}건은 tags(touches/…) 에 보존됐다. P2(사람 · LLM · cdp-import)가 올린다`
-        : '좌표가 하나도 없다 — 의도다. P2(사람 · LLM · cdp-import)가 채운다'
+        ? `좌표가 하나도 없다 — 의도다. 원본의 touches ${summary.touchCandidates}건은 tags(touches/…) 에 보존됐다. 큐레이터가 판정하며 올린다(cdp-curate)`
+        : '좌표가 하나도 없다 — 의도다. 큐레이터가 판정하며 채운다(cdp-curate)'
     )
   }
   return { src: S, repo: R, gitRoot, files, warnings, summary }
