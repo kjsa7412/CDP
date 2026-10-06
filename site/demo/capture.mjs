@@ -103,22 +103,23 @@ export async function capture({ base, st, out }) {
         await wait(2600) // .doc__at 강조가 2초 남는다
       }, { state: DOC })
 
+      // 좌표 목록은 「좌표 · 그래프」 화면의 레일이 든다(찾기 목록의 범위 칩을 지웠다 · 개편안 §7.2) — 거기서 골라 뻗어나가기로 나온다
       await shoot('02-repo-explore', 'dev.a', async (p) => {
-        await open(p, '/r/library/')
-        await repoReady(p)
-        await p.locator('.fd__chip', { hasText: '좌표' }).first().click()
-        await p.fill('.fd__q input', 'bk_loan_mst')
-        await p.click('.fd__row[title^="테이블정의서:bk_loan_mst"]')
+        await open(p, '/r/library/graph')
+        await p.waitForSelector('.gr__stat')
+        await p.locator('.gr__g', { has: p.locator('.gr__gname', { hasText: '테이블정의서' }) }).first().click()
+        await p.click('.gr__i[title^="테이블정의서:bk_loan_mst "]')
+        await p.click('.gr__btn--go')
         await p.waitForSelector('.xp__head[title="테이블정의서:bk_loan_mst"]')
         await p.waitForFunction(() => !document.querySelector('.xp__busy'))
         await wait(2600)
       }, { state: DOC })
 
+      // 작업 기록 목록은 주소다(`/r/<레포>/w`) — 왼쪽 메뉴의 「작업 기록」 과 같은 곳
       await shoot('03-repo-work', 'dev.a', async (p) => {
-        await open(p, '/r/library/')
+        await open(p, '/r/library/w')
         await repoReady(p)
         await p.waitForSelector('article.doc')
-        await p.locator('.fd__chip', { hasText: '작업문서' }).first().click()
         await wait(600)
       }, { state: { lastDoc: '2026-0925-우수회원-한도-정정' } })
 
@@ -153,7 +154,8 @@ export async function capture({ base, st, out }) {
         await open(p, '/r/library/')
         await repoReady(p)
         await p.waitForSelector('article.doc')
-        await p.click('nav.faces button[aria-haspopup="menu"]')
+        // 레포 메뉴는 왼쪽 메뉴의 레포 고르기 아래로 갔다(옛 상단 「레포 ▾」)
+        await p.click('.snav__repobtn[aria-haspopup="menu"]')
         await p.waitForSelector('.repomenu')
         await wait(300)
       }, { state: { lastDoc: 'docs/2.개발/DE_331_화면설계서.md' } })
