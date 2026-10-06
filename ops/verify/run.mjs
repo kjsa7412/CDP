@@ -2113,6 +2113,39 @@ await check(111, '스킬의 「push 는 하지 않는다」 는 모드 A 한정�
   return 'import · edit · managed 의 push 문구 모드 표시 · save ⑤B 종료 보고 표'
 })
 
+await check(117, '스킬 머리말이 YAML 로 읽힌다 — name 이 폴더 이름 · description 이 있다', async () => {
+  // description 이 `**` 로 시작하면 `*` 가 YAML 별칭이라 머리말 전체가 깨진다(2026-10-06 cdp-save · cdp-push).
+  // 그때 Claude Code 는 H1 을 설명으로 대신 쓴다 — 언제 쓰는지 · 무엇과 다른지가 **말없이** 사라진다.
+  const yaml = (await import('js-yaml')).default
+  const dir = path.join(ROOT, 'agent', 'skills')
+  const bad = []
+  const lens = []
+  for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    const n = e.name
+    const text = await fs.readFile(path.join(dir, n, 'SKILL.md'), 'utf8').catch(() => null)
+    if (text == null) continue
+    const m = text.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)
+    if (!m) {
+      bad.push(`${n}: 머리말 없음`)
+      continue
+    }
+    let d
+    try {
+      d = yaml.load(m[1])
+    } catch (err) {
+      bad.push(`${n}: ${String(err.message).split(NL)[0]}`)
+      continue
+    }
+    if (d?.name !== n) bad.push(`${n}: name ${JSON.stringify(d?.name)}`)
+    if (typeof d?.description !== 'string' || !d.description.trim()) bad.push(`${n}: description 없음`)
+    else lens.push(d.description.length)
+  }
+  must(bad.length === 0, bad.slice(0, 4).join(' · '))
+  must(lens.length > 0, 'agent/skills 에 SKILL.md 가 없다')
+  return `${lens.length}종 · description ${Math.min(...lens)}~${Math.max(...lens)}자`
+})
+
 // ── 보고 ────────────────────────────────────────────────────────────────────
 
 results.sort((a, b) => a.n - b.n)
@@ -2125,6 +2158,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114 + 관리 문서 정리 115 + HTML 시각 자료 116)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114 + 관리 문서 정리 115 + HTML 시각 자료 116 + 스킬 머리말 117)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)
