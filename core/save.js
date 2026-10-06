@@ -876,7 +876,8 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     }
     const old = res.findings.filter((f) => f.sev === 'error')
     if (old.length) warnings.push(`레포에 원래 있던 오류 ${old.reduce((a, f) => a + f.items.length, 0)}건 — 이 save 와 무관해 막지 않았다(${old.map((f) => f.label).join(' · ')}). check 로 보고 고칠 사람이 고친다`)
-    for (const f of res.findings.filter((x) => x.sev === 'warn')) warnings.push(`${f.label} ${f.items.length}건`)
+    // 큐레이션 대기가 오래됐다는 경고는 큐레이터의 일이다 — writer 의 응답에 실으면 할 수 없는 일을 말하는 소음이다
+    for (const f of res.findings.filter((x) => x.sev === 'warn' && (curate || x.kind !== 'curation-stale'))) warnings.push(`${f.label} ${f.items.length}건`)
 
     return {
       snap,

@@ -9,7 +9,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseForm, stampDoc } from './forms.js'
+import { parseForm, stampDoc, lintForm } from './forms.js'
 import { readText } from './scan.js'
 
 const isDir = (p) => fs.stat(p).then((s) => s.isDirectory()).catch(() => false)
@@ -42,7 +42,8 @@ async function loadDir(dir, origin) {
     for (const f of (await fs.readdir(gdir)).filter((n) => /\.md$/i.test(n)).sort()) {
       const text = readText(await fs.readFile(path.join(gdir, f), 'utf8'))
       const form = parseForm(text, { group: g.name, file: f })
-      if (form.id) forms.push({ ...form, origin })
+      // 문제는 읽을 때 단다 — 번들 서식은 시험이 지키지만 팀 서식(`<data>/forms`)은 아무도 안 본다. 문제 있는 서식으로는 문서를 세우지 않는다(save)
+      if (form.id) forms.push({ ...form, origin, problems: lintForm(form) })
     }
   }
   return { groups, forms }
@@ -75,12 +76,12 @@ export const resetFormsCache = () => {
 
 // 화면 · 도구가 내는 한 줄 — 목록 행
 export function formRow(f, usedIds = new Set()) {
-  return { id: f.id, group: f.group, number: f.number ?? null, title: f.title, kind: f.kind ?? null, registry: f.registry || [], due: f.due ?? null, origin: f.origin, used: usedIds.has(f.id) }
+  return { id: f.id, group: f.group, number: f.number ?? null, title: f.title, kind: f.kind ?? null, registry: f.registry || [], due: f.due ?? null, origin: f.origin, used: usedIds.has(f.id), problems: (f.problems || []).length }
 }
 
 // 서식 하나 — head · guide · example 과 **서버가 실제로 찍을 빈 문서**(찍는 함수와 같은 함수)
 export function formDetail(f) {
-  return { ...formRow(f), coordValue: f.coordValue ?? null, fixed: f.fixed || [], head: f.head, guide: f.guide, example: f.example, stamp: stampDoc(f) }
+  return { ...formRow(f), problemList: f.problems || [], coordValue: f.coordValue ?? null, fixed: f.fixed || [], head: f.head, guide: f.guide, example: f.example, stamp: stampDoc(f) }
 }
 
 // 말 → 서식 — 제목 · 번호 · 묶음 · 등록부 타입에 걸리면

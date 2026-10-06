@@ -21,6 +21,7 @@ import { docNo } from './docrefs.js'
 import { docUsage } from './docusage.js'
 import { CtxError } from './errors.js'
 import { splitBaseline } from './baseline.js'
+import { formIdOf } from './forms.js'
 
 const NL = String.fromCharCode(10)
 
@@ -173,16 +174,7 @@ function bodyRefs(r, coord, content) {
 }
 
 // 관리 문서의 서식 표지 — H1 바로 아래 `<!-- cdp:form <묶음>/<번호> -->`(개편안 §4.3 · V6)
-export function formIdOfText(text) {
-  const lines = String(text || '').split(NL)
-  const h = lines.findIndex((l) => /^#\s/.test(l))
-  if (h < 0) return null
-  for (let i = h + 1; i < Math.min(h + 4, lines.length); i++) {
-    const m = /^\s*<!--\s*cdp:form\s+(\S+?)\s*-->\s*$/.exec(lines[i])
-    if (m) return m[1]
-  }
-  return null
-}
+export const formIdOfText = (text) => formIdOf(text)
 
 // ── match ───────────────────────────────────────────────────────────────────
 //
