@@ -340,7 +340,7 @@ function replaceBaseline(text, { value, level, heading, block }) {
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
-export async function save(root, input, { user, write = false, admin = false, curate = undefined, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS, staging = null, formsDir = null, formsData = null } = {}) {
+export async function save(root, input, { user, write = false, admin = false, curate = undefined, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS, staging = null, formsDir = null, formsData = null, commitHooks = false } = {}) {
   const out = await withLock(path.resolve(root), async () => {
     // 큐레이터인가 — 서버는 토큰의 레포별 권한을 넘긴다. 안 넘기면 admin 만 큐레이터다(안전한 쪽)
     const r = await run(root, input, { user, write, admin, curate: curate ?? !!admin, now, staging, formsDir, formsData })
@@ -371,7 +371,8 @@ export async function save(root, input, { user, write = false, admin = false, cu
     // 직전에 커밋을 마쳤을 수 있고 누가 `index.lock` 을 쥐었을 수 있으니, 잠금이 풀린 뒤 HEAD 로 판정한다.
     const paths = r.snap.paths()
     const head0 = await git.headSha(root)
-    const commit = () => git.commitPaths(root, paths, { message: r.title, author: user, timeout: commitTimeout })
+    // 커밋 훅은 돌리지 않는다(v1.0 V5) — 8단계가 커밋할 트리를 이미 검사했다. `commitHooks` 는 실패 경로를 시험하는 자리만 쓴다
+    const commit = () => git.commitPaths(root, paths, { message: r.title, author: user, timeout: commitTimeout, hooks: commitHooks })
     let c = await commit()
     for (let retry = 0; !c.ok; retry++) {
       if (!(await git.waitIndexUnlocked(root))) {
@@ -402,6 +403,7 @@ export async function save(root, input, { user, write = false, admin = false, cu
       commit: c.commit,
       id: r.id,
       sections: r.sections,
+      ...(r.baseline ? { baseline: r.baseline } : {}),
       vocab: r.vocab,
       managed: r.managedChanges.length,
       ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
@@ -570,7 +572,8 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
         { field: 'work.touches' }
       )
     }
-    warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
+    // 큐레이션 · 기준선 기록은 좌표가 없는 것이 그 기록의 모양이다 — 매번 나오는 경고는 아무것도 알리지 않는다
+    if (w.curates == null && !(input.baseline || []).length) warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
   }
 
   // 3.8 첨부 꺼내기 — **파일을 만지기 전에.** 없는 ref · 종류 어긋남 · 상한은 여기서 걸린다. 쓰는 것은 6.5

@@ -136,6 +136,12 @@ function parseArgs(argv) {
     else if (a === '--dry') out.dry = true
     else if (a === '--packages') out.packages = argv[++i]
     else if (a === '--forms') out.forms = argv[++i]
+    else if (a === '--doc') out.doc = argv[++i]
+    else if (a === '--src') out.src = argv[++i]
+    else if (a === '--asof') out.asof = argv[++i]
+    else if (a === '--form') out.form = argv[++i]
+    else if (a === '--to') out.to = argv[++i]
+    else if (a === '--server') out.server = argv[++i]
     else if (a === '--package') out.package = argv[++i]
     else if (a === '--origin') out.origin = argv[++i]
     else if (a === '--push') out.push = true
@@ -1060,6 +1066,10 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'repo') {
     const { runRepo } = await import('./ctx-repo.mjs')
     return runRepo(opt)
+  }
+  if (opt.cmd === 'baseline') {
+    const { runBaseline } = await import('./ctx-baseline.mjs')
+    return runBaseline(opt)
   }
   if (opt.cmd === 'import-dir') {
     const { runImportDir } = await import('./ctx-import.mjs')

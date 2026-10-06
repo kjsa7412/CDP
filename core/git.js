@@ -359,13 +359,15 @@ export async function restoreTree(root) {
 // 다른 것이 있으면 그것까지 딸려 들어가고, 그러면 커밋이 작업 단위가 아니게 된다.
 // `timeout` — 커밋은 훅(`bin/ctx check` · `ctx index`)을 돈다. 도구 층을 가는 커밋은 새 번들로 훅이 돌아 20초를 넘길 수 있다
 // (에이전트 세팅 갱신 — 2026-09-29 실측: 시간이 다 돼 호출이 실패로 끝났는데 git 은 살아서 커밋했다). 부르는 쪽이 늘린다.
-export async function commitPaths(root, paths, { message, author, email, timeout = 20000 }) {
+// `hooks: false` — 커밋 훅을 돌리지 않는다(`--no-verify`). 서버 save 는 커밋할 트리를 **같은 검사 함수로 이미 봤다**(v1.0 V5) —
+// 훅은 레포 안의 옛 번들(`bin/ctx`)로 같은 검사를 한 번 더 돌았고, 판이 어긋나면 옛 규칙으로 막았다(개편안 H9 · 40초 사례)
+export async function commitPaths(root, paths, { message, author, email, timeout = 20000, hooks = true }) {
   if (!paths.length) return { ok: false, reason: 'nothing' }
   const add = await run(root, ['add', '--', ...paths])
   if (!add.ok) return { ok: false, reason: 'add', message: firstLine(add.err) }
 
   const who = `${author} <${email || author + '@cdp'}>`
-  const c = await runCommit(root, ['-c', 'user.name=' + author, '-c', 'user.email=' + (email || author + '@cdp'), 'commit', '--author=' + who, '-m', message], { timeout })
+  const c = await runCommit(root, ['-c', 'user.name=' + author, '-c', 'user.email=' + (email || author + '@cdp'), 'commit', ...(hooks ? [] : ['--no-verify']), '--author=' + who, '-m', message], { timeout })
   if (c.timedOut) return { ok: false, reason: 'timeout', message: `커밋이 ${Math.round(timeout / 1000)}초를 넘겨 git 을 멈췄다 — 커밋 훅(check · index)이 느리다` }
   if (!c.ok) return { ok: false, reason: 'commit', message: firstLine(c.err) || firstLine(c.out) }
 

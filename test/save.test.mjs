@@ -298,7 +298,8 @@ test('save — 훅이 막으면 E_GIT · 되돌리고 색인도 비운다 · 트
   try {
     await hook(R.r, '.hooks-test', '#!/bin/sh\necho 막는다 >&2\nexit 1\n')
     const h0 = await head(R.r)
-    await assert.rejects(save(R.r, { work: work('2026-0929-훅막힘', null, { touchesEmpty: '시험' }) }, opt()), (e) => e.code === 'E_GIT' && e.detail.reason === 'commit')
+    // 서버 save 는 훅을 안 돌린다(v1.0 V5) — 커밋 실패 경로를 시험하려고 여기서만 켠다
+    await assert.rejects(save(R.r, { work: work('2026-0929-훅막힘', null, { touchesEmpty: '시험' }) }, opt('hong', { commitHooks: true })), (e) => e.code === 'E_GIT' && e.detail.reason === 'commit')
     assert.equal(await head(R.r), h0)
     assert.equal(await fs.stat(path.join(R.r, 'work', '2026-0929-훅막힘.md')).catch(() => null), null)
     assert.equal(await porcelain(R.r), '', '색인에 남으면 다음 save 가 더러운 트리로 막힌다')
@@ -315,7 +316,7 @@ test('save — 훅이 시간을 넘겨도 「빈 커밋 + 옛 파일」 은 남�
     await hook(R.r, '.hooks-slow', '#!/bin/sh\nsleep 3\nexit 0\n')
     const h0 = await head(R.r)
     const id = '2026-0929-느린훅'
-    const res = await save(R.r, { work: work(id, null, { touchesEmpty: '시험' }) }, opt('hong', { commitTimeout: 800 })).then(
+    const res = await save(R.r, { work: work(id, null, { touchesEmpty: '시험' }) }, opt('hong', { commitTimeout: 800, commitHooks: true })).then(
       (v) => ({ ok: true, v }),
       (e) => ({ ok: false, e })
     )

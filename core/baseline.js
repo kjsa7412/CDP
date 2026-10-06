@@ -73,3 +73,55 @@ export function joinBaseline(curated, blockText) {
 
 // 본문에 블록 표지가 있나 — 큐레이션 save 가 블록을 건드리려는 것을 거른다
 export const hasMark = (s) => /<!--\s*\/?cdp:baseline\b/.test(String(s ?? ''))
+
+// ── 옛 문서에서 뽑기 — 다시 세운 레포로 대상형 섹션을 옮겨 온다(v1.0 §9.1) ─────────────────────────────────────
+//
+// 옛 레포의 테이블 · 코드 · 화면 섹션은 대개 **기록이 아니라 섹션에만** 있었다(dpms_wiki 의 GDI-CLEAN 기록: 「컬럼 정의는 각
+// 테이블정의서 섹션」). 기록만 옮겨 다시 세우면 그 내용이 사라진다. 그것은 추출물이었으니 기준선 블록이 제자리다 — 옛 섹션의
+// 글을 그대로 블록에 싣는다. 옛 반영 이력(`**변경**` · `**경과**` 와 그 목록)은 옛 기록 층의 것이라 뺀다.
+//
+//   r      옛 레포(loadRepo)
+//   doc    옛 관리 문서 경로
+//   sliceSection  core/tools.js 의 것(순환 import 를 피해 받는다)
+// 돌려준다 — { items: [{ coord, heading, body }], rules: [{ pattern, anchor }], vocab: [{ coord, label, aliases }] }
+export function extractFromDoc(r, doc, { sliceSection }) {
+  const d = r.managedDocs.find((x) => x.path === doc)
+  if (!d) return null
+  const rules = (r.registry?.rules || []).filter((x) => x.doc.toLowerCase() === doc.toLowerCase() && !x.whole)
+  const types = [...new Set(rules.map((x) => x.pattern.slice(0, x.pattern.indexOf(':'))))]
+  const levels = new Set(rules.map((x) => x.level))
+  const items = []
+  const vocab = []
+  for (const s of d.managedSections || []) {
+    if (!levels.has(s.level)) continue
+    const coord = types.map((t) => t + ':' + s.value).find((c) => r.vocab.coords.has(c) && !r.vocab.coords.get(c).example)
+    if (!coord) continue
+    const cut = sliceSection(r, coord)
+    if (!cut || cut.missing) continue
+    const body = stripHistory(splitBaseline(cut.content).curated)
+    if (!body.trim()) continue
+    items.push({ coord, heading: s.title, body })
+    const e = r.vocab.coords.get(coord)
+    vocab.push({ coord, label: e.label || s.title, ...(e.aliases?.length ? { aliases: e.aliases } : {}) })
+  }
+  return { items, rules: rules.map((x) => ({ pattern: x.pattern, anchor: '#'.repeat(x.level) + ' {값}' })), vocab }
+}
+
+// 옛 반영 이력 — `**변경**` · `**경과**` 머리와 그 아래 날짜 목록
+export function stripHistory(text) {
+  const lines = String(text || '').split(NL)
+  const out = []
+  let inHist = false
+  for (const l of lines) {
+    if (/^\s*\*\*(변경|경과)\*\*/.test(l)) {
+      inHist = true
+      continue
+    }
+    if (inHist) {
+      if (!l.trim() || /^\s*[-·*]\s/.test(l) || /^\s*·/.test(l)) continue
+      inHist = false
+    }
+    out.push(l)
+  }
+  return out.join(NL).replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')
+}

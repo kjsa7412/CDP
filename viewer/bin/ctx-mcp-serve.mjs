@@ -1832,6 +1832,52 @@ export async function runServe(opt = {}) {
           }
         }
 
+        // POST /api/<repo>/baseline — 기준선 올리기(큐레이터 · `ctx baseline push` · 프로젝트 생성기). 서버가 기준선 기록을 지어
+        // 같은 `save` 를 탄다 — 블록만 갈아 끼우고(멱등) 필요하면 등록부 행 · 서식 문서 · 어휘를 같은 커밋에. v1.0 §3.2
+        if (sub === '/baseline') {
+          if (req.method !== 'POST') return json(res, 405, { error: { code: 'E_INPUT', message: 'POST 다' } })
+          if (!canCurate) {
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/baseline', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '기준선은 그 레포의 큐레이터만 올린다', detail: { need: 'curate' } } })
+          }
+          const got = await readBody(req, 16 * 1024 * 1024)
+          let body = null
+          try {
+            body = got?.tooLarge ? null : JSON.parse(got.toString('utf8') || '{}')
+          } catch {}
+          try {
+            if (!body || !Array.isArray(body.items) || !body.items.length) throw new CtxError('E_INPUT', 'items 가 없다 — [{ coord, body }]', { field: 'items' })
+            const source = String(body.source || '').trim()
+            if (!source) throw new CtxError('E_INPUT', 'source 가 없다 — 어디서 뽑았나(DB · 커밋 · 파일)', { field: 'source' })
+            const d = new Date()
+            const p2 = (n) => String(n).padStart(2, '0')
+            const id = `${d.getFullYear()}-${p2(d.getMonth() + 1)}${p2(d.getDate())}-기준선-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`
+            const input = {
+              work: {
+                id,
+                title: `기준선 — ${source}`.slice(0, 200),
+                date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`,
+                touches: [],
+                baseline: { source, ...(body.asof ? { asof: String(body.asof) } : {}) },
+                body: [`기계로 뽑은 기준선 블록 ${body.items.length}개를 갈아 끼웠다 — 출처 ${source}${body.asof ? ' · 기준 ' + body.asof : ''}.`, '', ...body.items.slice(0, 200).map((x) => `- \`${x.coord}\``), ''].join('\n'),
+              },
+              baseline: body.items.map((x) => ({ coord: String(x.coord), body: String(x.body ?? ''), ...(x.heading ? { heading: String(x.heading) } : {}) })),
+              ...(Array.isArray(body.vocab) && body.vocab.length ? { vocab: body.vocab } : {}),
+              ...(Array.isArray(body.managed) && body.managed.length ? { managed: body.managed } : {}),
+              ...(body.dryRun ? { dryRun: true } : {}),
+            }
+            const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: !!a.admin, curate: true, formsDir: opt.forms || null, formsData: dataDir, mirror: !!opt.mirror, log: (m) => log.line(m) })
+            if (!out.dryRun) await store.reload(name)
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/baseline', key: body.items.length + '블록', ms: Date.now() - t0, status: 200 })
+            return json(res, 200, out)
+          } catch (e) {
+            const code = e?.code || 'E_REPO'
+            const status = code === 'E_FORBIDDEN' ? 403 : code === 'E_CONFLICT' ? 409 : code === 'E_NOT_FOUND' ? 404 : 400
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/baseline', ms: Date.now() - t0, status, code })
+            return json(res, status, { error: { code, message: e?.message || String(e), detail: e?.detail } })
+          }
+        }
+
         const view = await store.view(name)
         const sendV = (r, status, body, headers = {}) => {
           const buf = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body)
