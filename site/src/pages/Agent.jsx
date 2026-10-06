@@ -1,4 +1,4 @@
-// 에이전트 — Claude Code 가 MCP 로 붙는 법 · 도구 14 · 스킬 7 · 「MCP 가 도는 길」.
+// 에이전트 — Claude Code 가 MCP 로 붙는 법 · 도구 14 · 스킬 5 · 「MCP 가 도는 길」.
 // 「MCP 가 도는 길」 은 서버 소개 얼굴의 것을 그대로 쓴다 — 예의 값은 둘 다 데모 레포의 것이고, host 만 `<서버>` 로 넘긴다.
 
 import McpFlow from '../../../viewer/src/site/McpFlow.jsx'
@@ -23,7 +23,7 @@ export default function Agent() {
       <header className="st-head">
         <h1 tabIndex={-1}>에이전트</h1>
         <p className="st-lead">
-          CDP 는 <b>Claude Code</b> 에 MCP 서버로 붙는다. 에이전트는 좌표로 대상을 확정하고, 그 섹션만 읽고, 일을 마치면 <code>save</code> 한 번으로 기록과 정본을 같이 남긴다. 절차는 스킬 일곱이 든다 — 에이전트가 기억에 기대지 않는다.
+          CDP 는 <b>Claude Code</b> 에 MCP 서버로 붙는다. 에이전트는 좌표로 대상을 확정하고, 그 섹션만 읽고, 일을 마치면 <code>save</code> 한 번으로 기록과 정본을 같이 남긴다. 절차는 스킬 다섯이 든다 — 에이전트가 기억에 기대지 않는다.
         </p>
       </header>
 
@@ -32,7 +32,7 @@ export default function Agent() {
         <div className="st-two">
           <div>
             <p>
-              <b>서버형</b> — 작업 레포에 <code>.mcp.json</code> 을 커밋한다. 주소는 서버의 <code>/mcp/&lt;레포&gt;</code>, 토큰은 사람마다 환경변수로 둔다. 설치기 한 줄이 이것과 스킬 일곱 · 규약을 넣고, 토큰은 숨김 입력으로 받아 서버에 확인한 뒤 둔다.
+              <b>서버형</b> — 작업 레포에 <code>.mcp.json</code> 을 커밋한다. 주소는 서버의 <code>/mcp/&lt;레포&gt;</code>, 토큰은 사람마다 환경변수로 둔다. 설치기 한 줄이 이것과 스킬 다섯 · 규약을 넣고, 토큰은 숨김 입력으로 받아 서버에 확인한 뒤 둔다.
             </p>
             <p>
               <b>로컬형</b> — 같은 도구가 stdio 로 돈다(<code>ctx mcp</code>). 작업 PC 한 대 안에서 끝나고, 쓰기는 <code>save</code> 대신 파일 편집 + git 훅의 검사다.
@@ -72,7 +72,7 @@ export default function Agent() {
       </section>
 
       <section className="st-sec">
-        <h2>스킬 7</h2>
+        <h2>스킬 5</h2>
         <p className="st-p">작업 레포의 <code>.claude/skills/</code> 에 들어간다. 판이 오르면 서버의 갱신이 지식 레포의 스킬을 갈고, 작업 레포는 한 줄로 일괄 갱신한다.</p>
         <div className="st-table-wrap">
           <table className="st-table">

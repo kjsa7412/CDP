@@ -8,9 +8,10 @@
 것은 `docs/` 에 있다.
 
 ```
-skills/                 절차 — work · load · save · import · edit · managed · push
+skills/                 절차 — work · save · push(writer) · curate · registry(큐레이터)
 CLAUDE-지식레포.md       지식 레포의 CLAUDE.md 로
-CLAUDE-프로젝트레포.md    작업 레포의 CLAUDE.md **블록**으로
+CLAUDE-프로젝트레포.md    작업 레포의 CLAUDE.md **블록**으로 — writer
+CLAUDE-큐레이터.md       큐레이터 폴더의 CLAUDE.md **블록**으로
 TEMPLATE-work.md        작업 기록 서식
 hooks/pre-commit        유일한 결정론적 보증 층
 manual/
@@ -36,6 +37,7 @@ manual/admin.md    →  MANUAL-관리자.md
 skills/            →  .claude/skills
 CLAUDE-지식레포.md            →  CLAUDE.md
 CLAUDE-프로젝트레포.md        →  .claude/work-repo/CLAUDE.md   (서식)
+CLAUDE-큐레이터.md            →  (아직 안 간다 — 큐레이터 설치 한 줄 · 역할별 kit 과 함께)
 hooks/pre-commit   →  .githooks/pre-commit
 gitattributes      →  .gitattributes   **없으면 훅이 조용히 죽는다**
 gitignore          →  .gitignore
@@ -50,11 +52,11 @@ install.md         →  **배포본 루트** 설치.md
 > 가지 않으므로 `docs/attic/<이름>-패키지/` 에 있다. 이 폴더의 판정 기준이
 > 그것이다 — 받는 사람에게 가는가.
 
-## `CLAUDE.md` 가 왜 둘인가
+## `CLAUDE.md` 가 왜 여럿인가
 
-레포가 둘이기 때문이다. **지식 레포**는 자기 자신이 무엇인지 말해야 하고,
-**작업 레포**는 옆에 지식 레포가 있다는 것을 말해야 한다. 내용이 겹치지
-않는다.
+자리가 다르기 때문이다. **지식 레포**는 자기 자신이 무엇인지(그리고 여기서 에이전트를
+열지 않는다는 것) 말해야 하고, **작업 레포**는 옆에 지식 레포가 있고 기록만 남긴다는 것을,
+**큐레이터 폴더**는 대기열을 반영하는 자리라는 것을 말해야 한다. 내용이 겹치지 않는다.
 
 전에는 이 구분이 없어 하나뿐이었고, 그 하나가 작업 레포판이었다. 그래서
 `seed` 와 `release` 가 **지식 레포 자리에 작업 레포판을 넣고 있었다.**

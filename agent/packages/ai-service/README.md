@@ -62,7 +62,7 @@ git init && git config core.hooksPath .githooks
 | 서버형 · 세울 때 | 콘솔 › 지식 레포 › 새 레포의 「문서 고르기」 에서 체크를 푼다 |
 | 서버형 · 세운 뒤 | 레포 › 관리 › 「관리 문서」(admin) — 사용 현황을 보고 골라 미리보기 → 지우기 |
 | 셸(모드 A) | `bin/ctx docs drop DS_501 --dry-run` → `--apply-suggest --reason "도구 호출 없음"` → `bin/ctx index` → 커밋 |
-| 에이전트 | `cdp-managed` 「문서 정리」 — 산문 언급까지 고쳐 쓴다 |
+| 에이전트(큐레이터) | `cdp-registry` 「안 쓰는 문서 지우기」 — 산문 언급까지 고쳐 쓴다 |
 
 **3 은 셋부터.** 기능 하나가 돌려면 이 셋이 먼저 서야 한다.
 
