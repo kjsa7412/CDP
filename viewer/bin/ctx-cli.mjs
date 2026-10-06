@@ -1,36 +1,23 @@
-// ctx — 지식 레포 명령줄 도구.
+// ctx — 지식 레포 명령줄 도구. **읽기와 서버 관리만 한다**(v1.0 개편안 §5.6) — 쓰기 길은 서버 `save` 하나다(I2).
 //
-// **git 훅이 부르는 유일한 보증 층이다** (작업환경 v1.1 §8.3). 그래서 두 가지가
-// 중요하다.
-//
-//   1) 계산을 여기서 다시 하지 않는다. `core/repo.js` 를 쓴다 — 앱과 `ctx` 가
-//      다른 답을 내면 사용자는 어느 쪽을 믿을지 알 수 없다.
-//   2) 의존성이 없다. 번들되어 지식 레포 안에 단일 파일로 들어가고, Node 가
-//      없는 PC 에서는 exe 가 같은 코드를 실행한다 (§3.1).
+//   1) 계산을 여기서 다시 하지 않는다. `core/` 를 쓴다 — 서버 · 화면과 `ctx` 가 다른 답을 내면
+//      사람은 어느 쪽을 믿을지 알 수 없다.
+//   2) 서버 번들의 `bin/ctx.mjs` 하나로 돈다 — 지식 레포 안에는 더 들어가지 않는다(I9).
 //
 // 출력은 CP949 콘솔에서도 깨지지 않게 **ASCII 구두점만** 쓴다. em-dash(U+2014)와
 // 박스 문자는 Windows 기본 콘솔에서 인코딩 오류를 낸다.
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { planSetup, applySetup } from '../../core/setup.js'
-import { loadRepo, repoStatus, unregisteredCoords } from '../../core/repo.js'
+import { loadRepo } from '../../core/repo.js'
 import { runBuiltinCheck } from '../../core/check.js'
 import { buildIndex, fullText, tokenize } from '../../core/search.js'
-import { outline } from '../../core/frontmatter.js'
 import { reconcile, normKey } from '../../core/vocab.js'
 import { resolveCoord } from '../../core/managed.js'
-import { cmpDateDesc } from '../../core/validity.js'
 import * as git from '../../core/git.js'
-import { runSync } from '../../core/sync.js'
 // 도구 12종의 형태는 **여기서 만들지 않는다.** `core/tools.js` 가 만든 것을
 // 그대로 낸다 -- MCP 의 tools/call 과 바이트까지 같아야 하기 때문이다(MCP 설계서 §10).
 import * as T from '../../core/tools.js'
-import { regenerate } from '../../core/regen.js'
-import { planPurge } from '../../core/examples.js'
-import { planManaged } from '../../core/managedops.js'
-import { checkDrop, dropVocab, dropRefs } from '../../core/docdrop.js'
-import { suggestEdit } from '../../core/docrefs.js'
 
 // 번들 시각. `tools/build-ctx.mjs` 가 치환한다.
 //
@@ -44,25 +31,14 @@ const SEP = path.sep
 
 const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
 
-  ctx check [--json]        커밋 가능한가. 오류가 있으면 exit 1
-  ctx index                 INDEX.md / INDEX-by-coord.md 재생성 · 머리 표 등록부 칸 · _vocab.md 생성 블록을 등록부에서 다시 찍는다
+  ctx check [--json]        레포 검사. 오류가 있으면 exit 1
   ctx docs [<문서|관리번호>] 관리 문서 목록 · 사용 현황 / 그 문서 원문 (MCP docs 와 같다)
-  ctx docs drop <문서...> [--dry-run] [--apply-suggest] [--reason 사유]
-                            안 쓰는 관리 문서를 지운다 — 파일 · 등록부 행 · 예시 좌표 · 지운 기록(파일만 · 커밋은 사람이)
-  ctx examples [--purge]    서식 예시 좌표 · 짝 섹션 목록 / --purge 는 파일만 지운다(커밋은 사람이)
   ctx match <이름...>       이름 -> 정본 좌표 (대조)
   ctx where <좌표...>       그 좌표의 상태가 어느 문서 어느 섹션에 · 얼마나 되나
   ctx search <말...>        말 -> 좌표 후보 (match 가 미등재를 낼 때의 폴백)
-  ctx derive [--json]       파생이 안 된 섹션 목록
   ctx term <이름>           어휘 조회 (정본 / alias / deprecated)
-  ctx apply <좌표> [--json] 파생할 섹션에 붙일 변경 줄 초안
-  ctx brief                 두 줄 요약 (절차 + 살아 있는 레포 상태)
-  ctx sync [--pull]         원격과의 차이. --pull 은 ff 만 한다 (실패면 exit 1)
+  ctx brief                 두 줄 요약 (절차 + 살아 있는 레포 상태 · 대기열)
   ctx version               이 번들이 언제 만들어졌나
-  ctx setup <작업 레포>      그 레포에 규약과 skill 을 넣는다 (--dry 로 미리보기)
-  ctx setup --server <url> --repo <이름> <작업 레포>
-                            모드 B — 지식 레포 없이 서버에서 kit 을 받아 넣는다
-  ctx mcp                   MCP 서버로 선다 (stdio). 호스트가 띄운다 -- 직접 칠 일은 없다
   ctx serve --root <폴더>    MCP 서버 + 관리 서비스 (HTTP). 상주 프로세스
   ctx serve --personal <레포>  개인 서버 — 레포 하나 · 127.0.0.1 · 명부(나 하나)를 스스로 만든다. 서버 없는 팀 · 한 사람
   ctx serve user add|set|list --auth <f> [--role viewer|writer|admin] [--curate <레포,…|*>]   명부 — 권한은 여기 붙는다(--curate 는 레포별 큐레이터 · 빈 값이면 해제)
@@ -70,7 +46,6 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx serve git-auth --host <h[:p]> --user <계정> [--test <url>]   origin 자격 — PAT 를 숨김 입력으로(.git-credentials 600)
   ctx serve git-auth --ssh --data <dir> [--rotate] | --list      SSH 배포 키(공개 키를 GitLab 에) · 지금 상태
   ctx serve doctor --root … --auth … --data …   서버 준비물 검사 (fail 이면 exit 1)
-  ctx serve kit-refresh --root <폴더> [--repo <이름>] [--dry] [--no-push]   레포들의 에이전트 세팅(스킬 · 도구 · 훅)을 이 번들의 판으로 — upgrade.sh 가 부른다
   ctx serve init --auth <f> --name <이름>       첫 관리자 + 토큰을 한 번에 (명부가 없을 때만 · 브라우저 /setup 과 같은 일)
   ctx package list|show|check|new|rename    패키지 — 목록 · 내용 · 부어서 검사 · 복사해 새로 · 이름 바꿈
   ctx repo new <경로> --package <이름> [--origin <url>] [--push] [--no-examples]   지식 레포를 세운다
@@ -81,8 +56,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
-                            ctx mcp 에서는 여러 번 줄 수 있다 (첫 번째가 기본 레포)
-  --root <폴더>             ctx mcp -- 그 폴더의 하위를 전부 레포로 본다
+  --root <폴더>             ctx serve -- 그 폴더의 하위를 전부 레포로 본다
   --prompts auto|always|never   MCP prompt 노출 (기본 auto)
   --bind · --port · --auth · --data · --mirror · --web · --packages   ctx serve 용
   --manual <dir> · --private-pages · --admin-from <cidr,…>            ctx serve 용 — 설명서 폴더 · 소개/설명서에 로그인 요구 · 관리 API 대역
@@ -302,56 +276,8 @@ async function cmdCheck(r, opt) {
   return 0
 }
 
-// INDEX 는 사람이 손으로 맞추면 반드시 어긋난다. 커밋 훅이 이것을 부른다.
-async function cmdIndex(r) {
-  const rows = ['| id | date | status | touches |', '|---|---|---|---|']
-  for (const d of r.works) {
-    rows.push(`| ${d.id} | ${d.date || ''} | ${d.status || ''} | ${d.touches.join(', ') || '-'} |`)
-  }
-  const head = ['# INDEX', '', `자동 생성 - \`ctx index\`. 작업 기록 ${r.works.length}건.`, '', '']
-  await fs.writeFile(path.join(r.root, 'INDEX.md'), head.concat(rows).join('\n') + '\n', 'utf8')
-
-  // 좌표별 색인 — 좌표로 찾는 사람에게는 이쪽이 1차 입구다
-  const lines = ['# INDEX (좌표별)', '', '자동 생성 - `ctx index`.', '']
-  const byType = new Map()
-  for (const c of r.allCoords) {
-    const t = c.slice(0, c.indexOf(':')) || '기타'
-    if (!byType.has(t)) byType.set(t, [])
-    byType.get(t).push(c)
-  }
-  for (const [type, cs] of [...byType.entries()].sort()) {
-    lines.push(`## ${type}`, '')
-    for (const c of cs) {
-      const list = r.coords.byCoord.get(c) || []
-      const sec = r.sections.find((x) => x.coord === c)
-      // 상태를 적지 않는다. 파생 누락은 `ctx check` 가 오류로 잡으므로
-      // 인덱스에 남을 상태가 없다 — 어디에 있는지만 적는다.
-      const mark = ''
-      const where = sec && sec.doc ? ` \`${short(sec.doc)}\`` : ''
-      lines.push(`- \`${c}\` 작업 ${list.length}건${where}${mark}`)
-      for (const d of list.slice(0, 3)) lines.push(`  - ${d.date || ''} [${d.title}](work/${d.id}.md)`)
-      if (list.length > 3) lines.push(`  - ... ${list.length - 3}건 더`)
-    }
-    lines.push('')
-  }
-  await fs.writeFile(path.join(r.root, 'INDEX-by-coord.md'), lines.join('\n') + '\n', 'utf8')
-
-  // 등록부 사본(등록부 사본 검토 X5) — 머리 표 칸 · _vocab.md 생성 블록을 등록부에서 다시 찍는다. 서버형은 save 가 한다
-  const docs = new Map()
-  for (const d of r.managedDocs) docs.set(d.path, await fs.readFile(path.join(r.root, d.path), 'utf8').catch(() => ''))
-  const vocabText = await fs.readFile(path.join(r.root, '_vocab.md'), 'utf8').catch(() => null)
-  const gen = regenerate({ registry: r.registry, vocab: r.vocab, docs, vocabText })
-  for (const [rel, text] of gen.files) await fs.writeFile(path.join(r.root, rel), text, 'utf8')
-
-  out(`ctx index: INDEX.md ${r.works.length}행 / INDEX-by-coord.md 좌표 ${r.allCoords.length}개`)
-  for (const h of gen.heads) out(`ctx index: 머리 표를 등록부에 맞췄다 — ${h.path}:${h.line}  ${h.from} → ${h.to}`)
-  if (gen.block) out('ctx index: _vocab.md 생성 블록(cdp:registry)을 등록부에 맞췄다')
-  return 0
-}
-
 // 관리 문서 목록 · 한 문서 — MCP `docs` 와 같은 함수(등록부 사본 검토 X20)
 async function cmdDocs(r, opt) {
-  if (opt.args[0] === 'drop') return cmdDocsDrop(r, opt)
   const res = T.toolDocs(r, { doc: opt.args[0], lastChange: opt.args[0] ? undefined : await git.lastChanges(r.root) })
   if (opt.json) {
     out(JSON.stringify(res, null, 2))
@@ -365,110 +291,10 @@ async function cmdDocs(r, opt) {
     }
     const idle = res.docs.filter((d) => d.usage?.state === '서식 그대로').length
     out(`\n관리 문서 ${res.total} · 등록부 대상 ${res.registered} (● 대상 · ○ 비대상) · 서식 그대로 ${idle}`)
-    if (idle) out('안 쓰는 문서를 지우려면 ctx docs drop <문서...> --dry-run 으로 먼저 본다')
+    if (idle) out('안 쓰는 문서는 큐레이터가 화면 「관리 문서」 탭(또는 save managed drop)으로 지운다')
     return 0
   }
   out(res.text ?? '')
-  return 0
-}
-
-// 안 쓰는 관리 문서 지우기 — 관리문서 정리 검토 §4.9 의 모드 A. 서버형 save 의 managed drop 과 **같은 계획 함수**다.
-// 파일만 고친다 — 커밋은 사람이 하고 훅이 검사한다. 참조 줄은 보이기만 하고 --apply-suggest 일 때 drop-row · unlink 만 고친다
-async function cmdDocsDrop(r, opt) {
-  const want = opt.args.slice(1)
-  if (!want.length) {
-    err('ctx docs drop <문서|관리번호...> — 지울 문서를 적는다')
-    return 2
-  }
-  try {
-    const docs = want.map((w) => T.toolDocs(r, { doc: w }).path)
-    const paths = r.managedDocs.map((d) => d.path)
-    const warnings = checkDrop(r, docs)
-    // 원문 그대로 읽는다(r.* 는 LF 로 고친 글) — 고쳐 쓸 때 파일의 줄 끝을 바꾸지 않게
-    const raw = (rel) => fs.readFile(path.join(r.root, rel), 'utf8').catch(() => null)
-    const plan = await planManaged({
-      ops: docs.map((doc) => ({ op: 'drop', doc, ...(opt.reason ? { reason: opt.reason } : {}) })),
-      registryText: await raw('_managed.md'),
-      docPaths: paths,
-      read: raw,
-      workId: opt.work || '(손으로)',
-    })
-    const refs = dropRefs({ before: r.bodies, after: r.bodies, targets: docs, paths })
-    const v = dropVocab(await raw('_vocab.md'), r.registry, docs)
-    const edits = []
-    if (opt.applySuggest) for (const x of refs.refs) {
-      const e = suggestEdit((await raw(x.file)) || '', x, docs)
-      if (e) edits.push({ ref: x, e })
-    }
-    const fixed = edits.map((x) => x.ref.file + ':' + x.ref.line)
-    const rules = plan.events.flatMap((e) => e.rules || [])
-    const allWarnings = [...warnings, ...plan.warnings]
-    if (!opt.dryRun) {
-      await fs.writeFile(path.join(r.root, '_managed.md'), plan.registryText, 'utf8')
-      for (const [rel, body] of plan.files) {
-        if (body === null) await fs.rm(path.join(r.root, rel), { force: true })
-        else await fs.writeFile(path.join(r.root, rel), body, 'utf8')
-      }
-      if (v.vocabText != null) await fs.writeFile(path.join(r.root, '_vocab.md'), v.vocabText, 'utf8')
-      const byFile = new Map()
-      for (const { e } of edits) byFile.set(e.file, [...(byFile.get(e.file) || []), e])
-      for (const [file, list] of byFile) {
-        let text = await fs.readFile(path.join(r.root, file), 'utf8')
-        for (const e of list) if (text.split(e.old).length === 2) text = text.replace(e.old, () => e.new)
-        await fs.writeFile(path.join(r.root, file), text, 'utf8')
-      }
-    }
-    if (opt.json) {
-      out(JSON.stringify({ docs, rules, vocabRemoved: v.removed, vocabKept: v.kept, refs: refs.refs, fixed, warnings: allWarnings, written: !opt.dryRun }, null, 2))
-      return 0
-    }
-    out(opt.dryRun ? '지울 것 (미리보기 — 아무것도 안 고쳤다)' : '지웠다')
-    for (const d of docs) out('  - ' + d)
-    if (rules.length) out(`등록부 행 ${rules.length}: ${rules.join(' · ')}`)
-    if (v.removed.length) out(`예시 좌표 ${v.removed.length}: ${v.removed.join(' · ')}`)
-    for (const w of allWarnings) out('[경고] ' + w)
-    if (refs.refs.length) {
-      out(`\n지울 문서를 가리키는 줄 ${refs.refs.length}${fixed.length ? ` (제안대로 고침 ${fixed.length})` : ''}`)
-      for (const x of refs.refs) out(`  ${fixed.includes(x.file + ':' + x.line) ? '✓' : ' '} ${x.file}:${x.line}  [${x.suggest}]  ${x.text.slice(0, 90)}`)
-    }
-    const left = refs.refs.length - fixed.length
-    if (opt.dryRun) out('\n지우려면 --dry-run 을 빼고 · drop-row · unlink 제안을 같이 고치려면 --apply-suggest')
-    else out(`\n파일만 고쳤다 — ctx index 로 사본을 다시 찍고 git diff 로 본 뒤 커밋한다.${left ? ` 남은 줄 ${left}개는 손으로 고치거나 둔다(ctx check 가 끊긴 링크를 경고한다)` : ''}`)
-    return 0
-  } catch (e) {
-    err('ctx docs drop: ' + (e.message || e))
-    if (e.detail) err(JSON.stringify(e.detail, null, 2).slice(0, 2000))
-    return 1
-  }
-}
-
-// 서식 예시 — 목록 · --purge 는 파일만 고친다(커밋은 사람이). 서버형은 save 의 examples: "purge"(X13)
-async function cmdExamples(r, opt) {
-  const touched = new Map()
-  for (const d of r.works) for (const c of d.touches) touched.set(c, [...(touched.get(c) || []), d.id])
-  const docs = new Map()
-  for (const d of r.managedDocs) docs.set(d.path, await fs.readFile(path.join(r.root, d.path), 'utf8').catch(() => ''))
-  const vocabText = await fs.readFile(path.join(r.root, '_vocab.md'), 'utf8').catch(() => '')
-  const p = planPurge({ vocabText, registry: r.registry, docs, touched })
-  const res = { coords: p.coords, sections: p.sections, kept: p.kept, left: p.left, written: false }
-  if (opt.purge) {
-    if (p.vocabText != null) await fs.writeFile(path.join(r.root, '_vocab.md'), p.vocabText, 'utf8')
-    for (const [rel, text] of p.files) await fs.writeFile(path.join(r.root, rel), text, 'utf8')
-    res.written = true
-  }
-  if (opt.json) {
-    out(JSON.stringify(res, null, 2))
-    return 0
-  }
-  out(`예시 좌표 ${p.coords.length} · 짝 섹션 · (예시) 섹션 ${p.sections.length}${p.kept.length ? ` · 작업 기록이 써서 남김 ${p.kept.length}` : ''}`)
-  for (const c of p.coords) out('  - ' + c)
-  for (const s of p.sections) out(`  § ${s.path}  ${s.heading}`)
-  for (const k of p.kept) out(`  = ${k.coord} (작업 기록 ${k.works.join(' · ')} — example 표시만 뗀다)`)
-  if (p.left.length) {
-    out(`\n예시 표시가 남은 줄 ${p.left.length} — 표의 행이라 사람이 고른다`)
-    for (const l of p.left.slice(0, 20)) out(`  ${l.file}:${l.line}  ${l.text}`)
-  }
-  out(opt.purge ? '\n지웠다 — git diff 로 보고 커밋한다.' : '\n지우려면 ctx examples --purge (파일만 고친다 · 커밋은 사람이)')
   return 0
 }
 
@@ -722,39 +548,6 @@ async function cmdSearch(r, opt) {
   return 0
 }
 
-// 파생이 남은 섹션 — **`ctx stale` 이었다.**
-//
-// "밀림"은 상태가 아니다. 지식공유문서를 남기면 관리 문서 파생은 필수이므로,
-// 안 된 섹션은 상태가 아니라 **해야 할 일**이다. 그래서 이름이 할 일을 말한다.
-async function cmdDerive(r, opt) {
-  const st = repoStatus(r)
-  const todo = [...st.pendingDerive]
-  const broken = st.brokenSections
-  if (opt.json) {
-    out(JSON.stringify(T.toolDerive(r), null, 2))
-    return 0
-  }
-  if (!todo.length && !broken.length) {
-    out('ctx derive: 파생 남은 섹션 없음')
-    return 0
-  }
-  if (todo.length) {
-    out(`파생 남은 섹션 ${todo.length}곳`)
-    out('')
-    for (const x of todo) {
-      out(`  ${pad(x.coord, 32)} ${pad(`작업 ${x.total}건`, 12)} ${short(x.doc)}`)
-      if (x.applied) out(`  ${' '.repeat(32)} 실린 것 ${x.applied}`)
-      for (const i of x.items) out(`  ${' '.repeat(32)}   + ${i.date || ''}  ${i.id}`)
-    }
-  }
-  if (broken.length) {
-    if (todo.length) out('')
-    out(`깨진 섹션 ${broken.length}곳 — 등록부가 없는 자리를 가리킨다`)
-    for (const x of broken) out(`  ${pad(x.coord, 32)} ${pad(x.state, 14)} ${short(x.doc)}`)
-  }
-  return 0
-}
-
 async function cmdTerm(r, opt) {
   const q = opt.args.join(' ').trim()
   if (!q) {
@@ -787,103 +580,12 @@ async function cmdTerm(r, opt) {
   return 0
 }
 
-// 밀린 섹션에 붙일 변경 줄 초안. **파일을 고치지 않는다** -- 출력만 한다.
-// 관리 문서의 입도와 표현은 팀이 정하는 것이고, 기계가 본문을 쓰면 아무도
-// 그 문서를 자기 것으로 여기지 않는다 (수행 v1.0 §3.2).
-async function cmdApply(r, opt) {
-  const coord = opt.args[0]
-  if (!coord) {
-    err('ctx apply: 좌표를 주세요.  예) ctx apply table:hr_ext_emp_mst')
-    return 2
-  }
-  const sec = r.sections.find((x) => x.coord === coord)
-  if (!sec || sec.state === 'ok' || !(sec.items.length || (r.coords.byCoord.get(coord) || []).length)) {
-    if (opt.json) {
-      out(JSON.stringify(T.toolApply(r, { coord }), null, 2))
-      return 0
-    }
-  }
-  if (!sec) {
-    out(`${coord}: 등록부에 없어 붙일 섹션이 없습니다.`)
-    return 0
-  }
-  if (sec.state === 'ok') {
-    out(`${coord}: 이미 반영돼 있습니다 (applied ${sec.applied}).`)
-    return 0
-  }
-  const items = sec.items.length ? sec.items : (r.coords.byCoord.get(coord) || []).slice().sort(cmpDateDesc)
-  if (!items.length) {
-    out(`${coord}: 반영할 작업 기록이 없습니다.`)
-    return 0
-  }
-  const newest = items[0]
-
-  if (opt.json) {
-    out(JSON.stringify(T.toolApply(r, { coord }), null, 2))
-    return 0
-  }
-
-  out(`# ${sec.doc}  ${sec.anchor || ''}`)
-  out('')
-  out(`<!-- applied: ${sec.applied || 'null'} -> ${newest.id} -->`)
-  out('')
-  // **초안이 규칙보다 강하다.** 전에는 이 출력이 변경 줄부터 냈고 "본문은
-  // 직접 고치세요" 가 뒤에 한 줄 붙어 있었다. 그러면 붙여 넣기 좋은 것이
-  // 변경 줄뿐이라 **요약 한 줄 + 링크**로 끝내게 된다 -- 실측에서 applied 가
-  // 붙은 섹션 66개 중 38개가 그 형태였다. 사람이 아니라 초안이 그렇게 유도한다.
-  //
-  // 그래서 순서를 뒤집는다. 자립 요구를 먼저 말하고, **작업 기록의 목차를
-  // 보여주고**, 변경 줄은 맨 끝에 낸다. 목차가 있으면 "무엇을 옮겨야 하는지"가
-  // 보인다 -- 옮길 것의 목록 없이 "직접 고치세요" 는 지시가 아니라 소원이다.
-  out('**섹션은 홀로 서야 한다.** 이 섹션만 읽고 그 대상의 현재 상태를 알 수')
-  out('있어야 한다. 작업 기록 링크를 타고 가야 알 수 있으면 파생이 안 된 것이다')
-  out('-- 주입은 섹션만 싣는다 (cdp-load).')
-  out('')
-  out('아래 목차가 이 좌표에 대해 작업 기록이 말한 것이다. **판단·표·규칙·값을')
-  out('섹션 본문으로 옮겨라.** 요약하지 말고, 그 대상의 상태로 다시 써라.')
-  out('')
-  for (const i of items) {
-    out(`  ${i.date || ''}  ${i.id}   work/${i.id}.md`)
-    // **`sec.items` 는 경량 객체다** ({id, date}). `path`·`bodyOffset` 이
-    // 없으므로 본문을 못 찾고 목차가 통째로 "(제목 없음)" 이 됐다. id 로 문서를
-    // 되찾는다.
-    const doc = r.byId.get(i.id) || i
-    const body = r.bodies.get(doc.path) || ''
-    const heads = outline(body.slice(doc.bodyOffset || 0))
-    // `outline` 은 h2·h3 만 본다. 소제목 없이 h1 하나로 쓴 기록이 실제로 많아
-    // 그때 목록이 통째로 비면 이 안내가 헛돈다. 제목으로 폴백한다.
-    if (!heads.length) out(`      · ${doc.title || '(제목 없음)'}   -- 소제목이 없다. 본문을 직접 읽어라`)
-    for (const h of heads.slice(0, 12)) out('      ' + '  '.repeat(h.level - 2) + '· ' + h.title)
-    if (heads.length > 12) out(`      ... ${heads.length - 12}개 더`)
-  }
-  out('')
-  out('옮긴 뒤 그 섹션의 "변경" 목록에 아래를 붙인다. **이 줄은 출처 표시이지')
-  out('내용이 아니다** -- 이 줄만 붙이고 끝내면 섹션은 여전히 빈 것이다.')
-  out('')
-  for (const i of items.slice().reverse()) {
-    out(`**변경** · ${i.date || ''} [\`${String(i.id).replace(/^\d{4}-\d{4}-/, '')}\`](../work/${i.id}.md)`)
-  }
-  return 0
-}
-
 // 두 줄. 사람이 터미널에서 상태를 볼 때 쓴다.
 //
 // v1.1 초안은 이것을 하네스 훅으로 매 요청에 주입하려 했다. 뺐다 -- skill
 // description 이 발동 규칙이고 그 뒤에 git 훅이 있으므로, 비결정을 비결정으로
 // 덮는 층을 하나 더 두지 않는다 (작업환경 §8.2).
 async function cmdBrief(r, opt) {
-  const st = repoStatus(r)
-  const parts = [`작업 기록 ${st.works}`, `관리 문서 ${st.managedDocs}`]
-  if (st.pendingDerive.length) parts.push(`파생 남음 ${st.pendingDerive.length}`)
-  if (st.unregistered.length) parts.push(`미등재 좌표 ${st.unregistered.length}`)
-  // 14단계에서 `pending` → `legacyPending` 으로 바꿨는데 여기가 안 따라와
-  // **`ctx brief` 가 통째로 죽어 있었다.** 미결은 상태가 아니라 이관 대상이다.
-  if (st.legacyPending.length) {
-    const oldest = st.legacyPending[0]
-    parts.push(`미결 ${st.legacyPending.length} — 이슈 대장으로 이관 (최장 ${oldest.days}일)`)
-  }
-  if (st.indexStale) parts.push('INDEX 불일치')
-
   // 번들 나이 — 하네스가 `--built-at` 으로 시각을 주입한다(20번). 실제로는 BUILT 다.
   const built = opt.builtAt || BUILT
   if (opt.json) {
@@ -891,147 +593,6 @@ async function cmdBrief(r, opt) {
     return 0
   }
   for (const l of T.toolBrief(r, { built }).lines) out(l)
-  return 0
-}
-
-// 원격과의 차이. `--pull` 없이는 **작업 트리를 건드리지 않는다.**
-//
-// fetch 는 안전하므로 항상 하고, pull 은 ff 만 한다. ff 가 안 되는 것은
-// "원격이 앞서 있고 로컬에도 커밋이 있다"는 뜻이고 그건 사람이 정리할 일이다 --
-// merge 를 대신 하면 관리 문서 섹션에서 두 갱신을 기계가 섞은 결과가 정본
-// 자리에 앉는다 (작업환경 §10).
-//
-// **순서는 `core/sync.js` 가 갖는다.** 화면도 같은 것을 부른다 -- 전에는 둘이
-// 각자 fetch/pull/재스캔을 엮고 있었고, 그러면 "앱에서는 됐는데 CLI 에서는
-// 안 된다" 가 생겼을 때 어느 쪽이 맞는지 알 수 없다.
-async function cmdSync(r, opt) {
-  const pull = opt.args.includes('--pull') || opt.pull
-
-  if (!(await git.isRepo(r.root))) {
-    if (opt.json) out(JSON.stringify({ repo: false }))
-    else out('ctx sync: git 레포가 아닙니다. 동기화할 것이 없습니다.')
-    return 0
-  }
-
-  // 진행을 찍는다 -- 사내망 fetch 실측이 19.5초다. 조용하면 멎은 줄로 읽는다.
-  const PHASE = { fetching: '원격 확인 중...', pulling: '받는 중...', rescanning: '다시 읽는 중...' }
-  const res = await runSync(r.root, {
-    pull,
-    onPhase: ({ phase }) => {
-      if (!opt.json && PHASE[phase]) err(PHASE[phase])
-    },
-  })
-  const st = res.status || (await git.status(r.root))
-
-  if (opt.json) {
-    out(JSON.stringify(res, null, 2))
-    return res.ok ? 0 : 1
-  }
-
-  out(`브랜치  ${st.branch || '(없음)'}${st.upstream ? '  ->  ' + st.upstream : '  (upstream 없음)'}`)
-  out(`차이    받을 것 ${st.behind}건 · 보낼 것 ${st.ahead}건` + (st.dirty ? ` · 커밋 안 된 변경 ${st.dirty}건` : ''))
-
-  // 훅 미설정은 **조용한 실패**다. 커밋은 통과하고 검사는 안 돈다.
-  if (!st.hooksPath) {
-    out('')
-    out('[주의] core.hooksPath 가 설정되지 않았습니다. 커밋 검사가 돌지 않습니다.')
-    out('       git config core.hooksPath .githooks')
-  }
-
-  const w = git.unpushedWarning(st)
-  if (w) {
-    out('')
-    out('[주의] ' + w.message.split('\n').join('\n       '))
-  }
-
-  out('')
-  if (!res.ok) {
-    err('sync    실패 -- ' + res.reason)
-    err(String(res.message || '').split('\n').join('\n        '))
-    return 1
-  }
-  if (pull) out('pull    ' + (res.pulled > 0 ? `완료 (ff) -- ${res.pulled}건` : '이미 최신입니다.'))
-  else if (st.behind > 0) out(`받을 것이 ${st.behind}건 있습니다.  ctx sync --pull`)
-  else out('이미 최신입니다.')
-  return 0
-}
-
-// **작업 레포에 에이전트 세팅을 넣는다.**
-//
-// 코드가 있는 레포에서 클로드를 열면 지식 레포의 skill 이 보이지 않는다 --
-// 하네스는 **프로젝트 루트의 `.claude/skills/` 만** 읽는다. 설계서 §8.1 은
-// "절차는 지식 레포의 skill 에 있다" 고만 적어 두었는데, 그것은 사람에게
-// 하는 안내지 기계적 연결이 아니다. 실측에서 작업 레포에는 skill 이 하나도
-// 잡히지 않았다.
-//
-// 손으로 복사하게 두지 않는 이유 -- 두 가지(규약 + skill 전부)를 옮겨야 하고,
-// 규약 안의 경로를 실제 경로로 바꿔야 한다. 셋 중 하나만 빠져도 조용히
-// 작동하지 않는다.
-async function cmdSetup(r, opt) {
-  const target = opt.args[0]
-  // `--desktop` — Claude Desktop 설정에 이 지식 레포를 병합한다(§3.2). 작업 레포
-  // 없이도 된다 — Desktop 은 프로젝트 루트가 없다.
-  if (opt.desktop) {
-    const { desktopConfigPath, mergeDesktopConfig, mcpEntryLocal } = await import('../../core/setup.js')
-    const file = desktopConfigPath()
-    const had = await fs.readFile(file, 'utf8').catch(() => null)
-    const key = 'cdp-' + path.basename(r.root)
-    let next
-    try {
-      next = mergeDesktopConfig(had, key, mcpEntryLocal(r.root, process.platform, opt.also || []))
-    } catch (e) {
-      err('ctx setup --desktop: ' + e.message)
-      return 2
-    }
-    if (opt.dry) {
-      out(`ctx setup --desktop --dry: ${file}`)
-      out(`  mcpServers.${key} ${had == null ? '새로' : had === next ? '같음' : '갱신'}`)
-    } else if (had === next) {
-      out(`ctx setup --desktop: 이미 최신 — ${file}`)
-    } else {
-      await fs.mkdir(path.dirname(file), { recursive: true })
-      await fs.writeFile(file, next, 'utf8')
-      out(`ctx setup --desktop: ${file}`)
-      out(`  mcpServers.${key} ${had == null ? '새로' : '갱신'}  ← 다른 키는 그대로. Claude Desktop 을 다시 켠다`)
-    }
-    if (!target) return 0
-  }
-  if (!target) {
-    err('ctx setup <작업 레포 경로> [--also <지식 레포>]… [--desktop] [--dry]')
-    err('  예:  ctx setup C:' + BS + 'work' + BS + 'alpha')
-    return 2
-  }
-  const plan = await planSetup(r.root, target, { also: opt.also || [] })
-  if (!plan.ok) {
-    err('ctx: ' + plan.reason)
-    return 2
-  }
-
-  const label = { create: '새로', update: '갱신', append: '블록 추가', remove: '제거', same: '같음' }
-  // **종류마다 한 줄씩 쓴다.** 전에는 skill·claude 가 아니면 전부 포인터로
-  // 찍어서, `.mcp.json` 이 `.claude/cdp.json` 인 척 두 번 나왔다.
-  const show = (a) => {
-    const op = label[a.op].padEnd(9)
-    if (a.kind === 'skill') return `  ${op} .claude${SEP}skills${SEP}${a.name}`
-    if (a.kind === 'claude') return `  ${op} CLAUDE.md`
-    if (a.kind === 'mcp') return `  ${op} .mcp.json          호스트가 ctx mcp 를 띄운다`
-    return `  ${op} .claude${SEP}cdp.json   지식 레포 = ${plan.knowledge}`
-  }
-
-  if (opt.dry) {
-    out(`ctx setup --dry: ${plan.work}`)
-    for (const a of plan.actions) out(show(a))
-  } else {
-    const done = await applySetup(plan)
-    out(`ctx setup: ${plan.work}`)
-    for (const a of plan.actions) if (a.op !== 'same') out(show(a))
-    if (!done.length) out('  (바뀐 것 없음)')
-  }
-
-  for (const w of plan.warnings) {
-    out('')
-    out('[주의] ' + String(w).split(String.fromCharCode(10)).join(String.fromCharCode(10) + '       '))
-  }
   return 0
 }
 
@@ -1044,7 +605,7 @@ export async function main(argv = process.argv.slice(2)) {
     // **무엇을 할 수 있는 번들인가**를 같이 낸다. 낡은 번들은 `ctx mcp` 를
     // "모르는 명령" 으로 답하는데, 그것만으로는 번들이 낡은 것인지 설정이
     // 잘못된 것인지 알 수 없다(MCP 설계서 §9).
-    out('mcp: stdio · http')
+    out('mcp: http')
     return 0
   }
   if (!opt.cmd || opt.cmd === 'help') {
@@ -1052,19 +613,19 @@ export async function main(argv = process.argv.slice(2)) {
     return opt.cmd ? 0 : 2
   }
 
-  // `mcp` 는 **여기서 갈라진다.** 레포를 여럿 들 수 있고(§3.1) 스탬프 재스캔을
-  // 자기가 하므로(§2.6), 아래의 단일 findRepo + loadRepo 를 타면 안 된다.
-  // 그리고 이 아래로 내려가면 stdout 에 글이 나갈 수 있다 -- 규약이 깨진다.
-  if (opt.cmd === 'mcp') {
-    const { runStdio } = await import('./ctx-mcp.mjs')
-    return runStdio({ root: opt.root, repos: opt.repos, repo: opt.repo, prompts: opt.prompts, findRepo, builtAt: opt.builtAt })
+  // 모드 A 의 명령은 v1.0 에서 끝났다(개편안 §5.6) — 무엇으로 바뀌었는지 한 줄로 답한다
+  const gone = {
+    mcp: 'stdio MCP 는 없다 — 작업 레포는 서버의 HTTP MCP 를 쓴다. 서버 없이 혼자면 ctx serve --personal <레포>',
+    setup: '작업 레포 세팅은 서버의 설치 한 줄이다 — 화면 「에이전트 설치」 의 install.mjs (--update · --curator)',
+    index: 'INDEX 와 등록부 사본은 더 만들지 않는다 — 레포에는 지식만 둔다(v1.0)',
+    derive: '파생은 큐레이션이다 — 서버 화면 「큐레이션 › 대기열」 · MCP queue',
+    apply: '파생은 큐레이션이다 — 서버 화면 「큐레이션 › 대기열」 · MCP section(미반영 기록이 같이 온다)',
+    sync: '원격과의 차이는 brief 가 낸다(미러) — ctx brief · MCP brief',
+    examples: '서식 예시는 레포에 두지 않는다 — 옛 레포는 ctx migrate <레포> 가 지운다',
   }
-  // `setup --server` 는 지식 레포 없이 돈다(§4.7). 서버에서 kit 을 받아
-  // 임시 폴더에 풀고 그것을 지식 레포처럼 써서 기존 `planSetup` 을 그대로
-  // 태운다 — 설치 로직을 두 벌 만들지 않는다.
-  if (opt.cmd === 'setup' && opt.server) {
-    const { runSetupServer } = await import('./ctx-setup-server.mjs')
-    return runSetupServer(opt)
+  if (gone[opt.cmd] || (opt.cmd === 'docs' && opt.args[0] === 'drop')) {
+    err(`ctx ${opt.cmd}${opt.cmd === 'docs' ? ' drop' : ''}: v1.0 에서 없앴다 — ${gone[opt.cmd] || '관리 문서 지우기는 큐레이터의 save managed drop(화면 「관리 문서」 탭)이다'}`)
+    return 2
   }
   // 패키지 · 레포 · 이관 — 지식 레포 **밖**에서 도는 명령이다. findRepo 를 타지 않는다.
   if (opt.cmd === 'package') {
@@ -1100,11 +661,6 @@ export async function main(argv = process.argv.slice(2)) {
       const { runGitAuth } = await import('./ctx-gitauth.mjs')
       return runGitAuth(opt)
     }
-    // `serve kit-refresh` — 레포들의 도구 층(에이전트 세팅)을 이 번들의 판으로. upgrade.sh 가 서버를 멈춘 사이에 부른다
-    if (opt.args[0] === 'kit-refresh') {
-      const { runKitRefresh } = await import('./ctx-serve-kit.mjs')
-      return runKitRefresh({ ...opt, builtAt: opt.builtAt || (BUILT.startsWith('__') ? null : BUILT) })
-    }
     if (opt.args[0] === 'user' || opt.args[0] === 'token') {
       const { runAuthCmd } = await import('./ctx-mcp-serve.mjs')
       return runAuthCmd({ ...opt, repos: opt.repos2 })
@@ -1126,17 +682,11 @@ export async function main(argv = process.argv.slice(2)) {
   const table = {
     check: cmdCheck,
     search: cmdSearch,
-    index: cmdIndex,
     docs: cmdDocs,
-    examples: cmdExamples,
     match: cmdMatch,
     where: cmdWhere,
-    derive: cmdDerive,
     term: cmdTerm,
-    apply: cmdApply,
     brief: cmdBrief,
-    sync: cmdSync,
-    setup: cmdSetup,
   }
   const fn = table[opt.cmd]
   if (!fn) {
@@ -1147,7 +697,7 @@ export async function main(argv = process.argv.slice(2)) {
   return (await fn(r, opt)) || 0
 }
 
-// exe 서브커맨드로 불릴 때는 main() 을 직접 부른다 (server/index.js 참고)
+// 직접 불렸을 때만 돈다 — 시험 · 다른 모듈이 import 하면 main() 을 부르지 않는다
 const invokedDirect = process.argv[1] && /ctx(-cli)?(\.mjs|\.js)?$/i.test(process.argv[1])
 if (invokedDirect) {
   main().then(
