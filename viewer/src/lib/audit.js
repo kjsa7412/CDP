@@ -13,7 +13,7 @@ export function parseAudit(line) {
     if (m[1] === 'setup') actor = '(마법사) ' + actor
     return { time, actor, text }
   }
-  // 작업 레포 대장은 **화면(레포의 관리 › 작업 레포)에서만** 바뀐다 — 셸 명령이 없다. 줄은 `workrepo add · <사람> · …` 라
+  // 작업 레포 대장은 **화면(레포 관리 › 연결된 작업 레포)에서만** 바뀐다 — 셸 명령이 없다. 줄은 `workrepo add · <사람> · …` 라
   // 접두가 없어 「(셸)」 로 읽혔다(실서버 종합 시험 F6). 둘째 칸이 행위자다 — 옛 줄도 이것으로 바로 보인다
   const w = /^(workrepo (?:add|del)) · ([^·]+?) · (.*)$/.exec(rest)
   if (w) return { time, actor: w[2].trim(), text: `${w[1]} · ${w[3]}` }

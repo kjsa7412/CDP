@@ -14,6 +14,11 @@ import { PageHead, Card, Row, Note, Btn, when, parseAudit, shortTime } from './u
 export default function Overview({ say }) {
   const [busy, setBusy] = useState(false)
   const { data: d, error, refresh: load } = useResource('/admin/overview', admin.overview)
+  // 큐레이션 대기 — 레포마다의 값은 `/admin/repos` 행에 있다(서버 › 지식 레포 · 레포 메뉴와 같은 키 — 요청 하나). 없으면 칸이 없다
+  const { data: rs } = useResource('/admin/repos', admin.repos, { ttl: 60_000 })
+  const curRows = (rs?.repos || []).filter((r) => r.curation && typeof r.curation === 'object')
+  const queued = curRows.reduce((a, r) => a + (r.curation.queue || 0), 0)
+  const oldest = curRows.reduce((m, r) => (r.curation.queue > 0 && r.curation.oldestDays > m ? r.curation.oldestDays : m), 0)
   useEffect(() => {
     if (error) say(error.message, 6000)
   }, [error, say])
@@ -55,7 +60,7 @@ export default function Overview({ say }) {
               <Icon name={a.level === 'bad' ? 'block' : 'warn'} size={14} />
               <span>{a.text}</span>
               <span className="sp" />
-              {a.to && <Link to={'/console/' + a.to}>{({ users: '사용자', tokens: '토큰', repos: '지식 레포', workrepos: '작업 레포', server: '서버' })[a.to] || a.to} →</Link>}
+              {a.to && <Link to={'/console/' + a.to}>{({ users: '사용자', tokens: '토큰', repos: '지식 레포', workrepos: '작업 레포 대장', server: '서버 설정' })[a.to] || a.to} →</Link>}
             </div>
           ))}
         </div>
@@ -66,7 +71,8 @@ export default function Overview({ say }) {
           <div className="stats">
             <Stat n={d.repos.count} l="지식 레포" />
             <Stat n={m.lag} l={m.diverged ? `미러 밀림 · 갈림 ${m.diverged}` : '미러 밀림'} warn={m.lag > 0 && !m.diverged} bad={m.diverged > 0} />
-            <Stat n={d.packages} l="패키지" />
+            {/* 패키지 칸은 지웠다 — 레포는 늘 빈 틀로 선다(개편안 S7 · §8.2). 대신 큐레이션 대기(서버가 낼 때만) */}
+            {curRows.length > 0 && <Stat n={queued} l={oldest ? `큐레이션 대기 · 가장 오래된 ${oldest}일` : '큐레이션 대기'} warn={oldest > 14} />}
           </div>
           {/* 판과 빌드를 두 줄로 — 한 줄에 두면 좁을 때 둘째 줄이 「·」 로 시작했다(실서버 종합 시험 L6) */}
           <Row label="판">
@@ -91,14 +97,14 @@ export default function Overview({ say }) {
           </Row>
         </Card>
 
-        <Card title="작업 레포" actions={<Btn onClick={() => navigate('/console/workrepos')}>자세히</Btn>}>
+        <Card title="작업 레포 대장" actions={<Btn onClick={() => navigate('/console/workrepos')}>자세히</Btn>}>
           <div className="stats">
             <Stat n={wr.count} l="등록" />
             <Stat n={wr['최신'] || 0} l="최신" />
             <Stat n={(wr['낡음'] || 0) + (wr['미설치'] || 0)} l="낡음 · 미설치" warn={(wr['낡음'] || 0) + (wr['미설치'] || 0) > 0} />
           </div>
           <Note>
-            등록 · 꾸러미는 그 지식 레포의 <b>관리 &gt; 작업 레포</b>에서 한다. 여기서는 서버 전체를 한눈에.
+            등록 · 꾸러미는 그 지식 레포의 <b>레포 관리 › 연결된 작업 레포</b>에서 한다. 여기서는 서버 전체를 한눈에.
           </Note>
         </Card>
 

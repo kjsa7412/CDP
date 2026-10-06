@@ -1,4 +1,4 @@
-// git 자격 — 서버가 origin 에 닿는 두 길. 콘솔 › 서버 의 카드 셋. git 자격 TODO G1~G8.
+// git 자격 — 서버가 origin 에 닿는 두 길. 서버 › 서버 설정 의 카드 셋. git 자격 TODO G1~G8.
 //
 //   SSH 배포 키   서버가 만들고 공개 키만 보인다 → 사람이 GitLab 의 Deploy keys 에 붙인다(쓰기 권한)
 //   호스트 키     사람이 지문을 보고 믿는다 — 모르는 호스트에 서버는 묻지도 붙지도 않는다(StrictHostKeyChecking)
@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { invalidate, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
-import { useSudo, CANCELLED } from './Console.jsx'
+import { useSudo, CANCELLED } from '../shell/sudo.jsx'
 import { Card, Row, Mono, Note, Btn, Cmd, Chip, Confirm, when } from './ui.jsx'
 
 // 원격 주소 → 종류 · 호스트(서버 `core/gitauth.parseRemote` 의 줄임)
@@ -30,11 +30,11 @@ export function missingFor(url, g) {
   if (!g) return null
   const r = remoteOf(url)
   if (r.kind === 'ssh') {
-    if (!g.ssh?.exists) return '서버에 SSH 배포 키가 없다 — 콘솔 › 서버 › git 자격에서 만들어 GitLab 에 붙인다'
-    if (!(g.knownHosts || []).some((h) => h.host === r.hostKey)) return `호스트 ${r.hostKey} 를 아직 믿지 않았다 — 콘솔 › 서버 › git 자격 › 「호스트 키 받기」`
+    if (!g.ssh?.exists) return '서버에 SSH 배포 키가 없다 — 서버 › 서버 설정 › git 자격에서 만들어 GitLab 에 붙인다'
+    if (!(g.knownHosts || []).some((h) => h.host === r.hostKey)) return `호스트 ${r.hostKey} 를 아직 믿지 않았다 — 서버 › 서버 설정 › git 자격 › 「호스트 키 받기」`
   }
   if (r.kind === 'http' || r.kind === 'https') {
-    if (!(g.https?.entries || []).some((e) => e.scheme === r.kind && e.host === r.host)) return `${r.kind}://${r.host} 의 PAT 가 서버에 없다 — 셸에서 ctx serve git-auth (콘솔 › 서버 › git 자격)`
+    if (!(g.https?.entries || []).some((e) => e.scheme === r.kind && e.host === r.host)) return `${r.kind}://${r.host} 의 PAT 가 서버에 없다 — 셸에서 ctx serve git-auth (서버 › 서버 설정 › git 자격)`
   }
   return null
 }

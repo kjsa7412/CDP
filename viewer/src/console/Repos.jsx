@@ -1,10 +1,11 @@
-// 지식 레포 — 서버의 레포 **전부**(관리자에게만 · 검토 v0.1 D6). 제품관리서비스 검토 §4.7.
+// 서버 › 지식 레포 — 서버의 레포 **전부**(관리자에게만 · 검토 v0.1 D6). 제품관리서비스 검토 §4.7.
 //
-// 등록 = 폴더를 두는 것(§4.2). 두는 길이 둘 — 패키지에서 세우기 · origin 에서 clone(D9).
+// 등록 = 폴더를 두는 것(§4.2). 두는 길이 둘 — **빈 레포로 세우기**(+ 옛 레포의 기록만 옮겨 오기) · origin 에서 clone(D9).
+// 패키지 · 문서 고르기 · 서식 예시는 지웠다(개편안 S8 · §8.2) — 관리 문서는 큐레이터가 기록을 보고 서식집에서 골라 세운다.
 // 세우면서 접근을 준다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다. 같은 함수(`buildRepo`)를 CLI `ctx repo new` 도 쓴다.
 // **세우는 자리는 여기 하나다** — 레포 화면의 관리 › 지식 레포(`POST /repos` · writer)는 없앴다(화면 · 권한 검토 v0.1 R1).
 // 세운 뒤의 둘도 여기다 — 「origin 연결」(세울 때 빠뜨린 원격 · 강제 push 없음) · 「삭제」(휴지통으로 옮김 · 이름을 쳐야 열림).
-// 연결 · 삭제 · 내려받기 TODO K1~K7.
+// 표에는 레포마다 큐레이션 대기 · 가장 오래된(개편안 S7) — 서버가 값을 낼 때만 열이 선다. 연결 · 삭제 · 내려받기 TODO K1~K7.
 
 import { useCallback, useEffect, useState } from 'react'
 import { admin } from '../lib/api.js'
@@ -12,7 +13,7 @@ import { Link, navigate } from '../lib/router.jsx'
 import { invalidate, put, useResource } from '../lib/cache.js'
 import { josa } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
-import { useSudo, CANCELLED } from './Console.jsx'
+import { useSudo, CANCELLED } from '../shell/sudo.jsx'
 import { useSession } from '../lib/session.jsx'
 import { missingFor } from './GitAuth.jsx'
 import { PageHead, Note, Modal, Field, Chip, Mono, Confirm } from './ui.jsx'
@@ -22,6 +23,11 @@ const ORIGIN_EX = ['http://<gitlab>/<그룹>/<프로젝트>.git', 'ssh://git@<gi
 // 서버 `core/reponew.ORIGIN_RE` 와 같은 모양
 const ORIGIN_RE = /^(https?:\/\/|ssh:\/\/|git@|file:\/\/|\/|[A-Za-z]:[\\/])/
 const originOk = (u) => ORIGIN_RE.test(u) && !/\s/.test(u)
+
+// 큐레이션이 이만큼 밀리면 경고(개편안 §5.2 curation-stale)
+const STALE_DAYS = 14
+// 기록만 옮겨 오기 — 서버가 말한 옮긴 수(판에 따라 이름이 다를 수 있어 둘 다 본다). 없으면 null(그 입력을 모르는 서버)
+const movedOf = (r) => (typeof r?.records === 'number' ? r.records : Array.isArray(r?.records) ? r.records.length : typeof r?.moved === 'number' ? r.moved : null)
 
 // 상태 다섯 — 사실만(동시 기록 검토 v0.1 D4 · §5.7). 갈라짐은 기계가 못 푸는 것이라 bad.
 const MIRROR = { ok: [null, '최신'], lag: ['warn', '밀림'], diverged: ['bad', '갈림'], behind: ['warn', 'origin 앞섬'], off: ['off', '원격 없음'] }
@@ -74,8 +80,13 @@ export default function Repos({ say }) {
     setDone(null)
     try {
       const r = await withSudo(() => admin.repoNew(body))
-      setDone(r)
-      say(`${josa(r.name, '을/를')} ${r.cloned ? '받아 왔다' : '세웠다'}`)
+      // 기록만 옮겨 오기 — 서버가 옮긴 수를 말하지 않으면 그 판은 이 입력을 모르는 것이다(v0.27 미만 · 조용히 무시된다).
+      // 조용한 실패를 문장으로 바꾼다 — 빈 레포만 섰고 기록은 옮겨지지 않았다
+      const moved = body.recordsFrom ? movedOf(r) : null
+      setDone({ ...r, recordsFrom: body.recordsFrom || null, moved })
+      if (body.recordsFrom && moved == null)
+        say(`${josa(r.name, '을/를')} 세웠지만 이 서버는 「기록만 옮겨 오기」 를 모른다(v0.27 미만) — ${body.recordsFrom} 의 기록은 옮기지 않았다`, 12000)
+      else say(`${josa(r.name, '을/를')} ${r.cloned ? '받아 왔다' : '세웠다'}${moved != null ? ` · ${body.recordsFrom} 의 기록 ${moved}건을 옮겼다` : ''}`)
       setAdding(false)
       invalidate('/admin/')
       await load()
@@ -155,6 +166,8 @@ export default function Repos({ say }) {
   }
 
   if (!data) return <span className="amuted">읽는 중…</span>
+  // 큐레이션 열 — 서버가 행마다 curation 을 낼 때만(옛 서버는 열째 없다)
+  const cur = data.repos.some((r) => r.curation && typeof r.curation === 'object')
   return (
     <>
       <PageHead title="지식 레포" sub="이 서버가 든 레포 전부 — 등록은 폴더를 두는 것이고, 두는 길이 둘이다">
@@ -171,8 +184,10 @@ export default function Repos({ say }) {
                 <th>이름</th>
                 <th>head</th>
                 <th>미러</th>
-                <th className="ar">문서</th>
+                <th className="ar">작업 기록</th>
                 <th className="ar">좌표</th>
+                {cur && <th className="ar" title="큐레이션 대기 — 섹션에 아직 반영 안 된 작업 기록">큐레이션 대기</th>}
+                {cur && <th title={`가장 오래 기다린 기록 — ${STALE_DAYS}일을 넘으면 경고`}>가장 오래된</th>}
                 <th>볼 수 있는 사람</th>
                 <th></th>
               </tr>
@@ -180,7 +195,7 @@ export default function Repos({ say }) {
             <tbody>
               {data.repos.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="dim">{loading ? '읽는 중…' : '레포가 없다 — [새 레포] 로 패키지에서 세우거나 origin 에서 받아 온다'}</td>
+                  <td colSpan={cur ? 9 : 7} className="dim">{loading ? '읽는 중…' : '레포가 없다 — [새 레포] 로 빈 레포를 세우거나 origin 에서 받아 온다'}</td>
                 </tr>
               )}
               {data.repos.map((r) => {
@@ -253,6 +268,28 @@ export default function Repos({ say }) {
                     </td>
                     <td className="ar num">{r.docs ?? '—'}</td>
                     <td className="ar num">{r.coords ?? '—'}</td>
+                    {cur && (
+                      <td className="ar">
+                        {!r.curation ? (
+                          <span className="dim">—</span>
+                        ) : r.curation.queue > 0 ? (
+                          <Link className="cchip cchip--queued" to={'/r/' + encodeURIComponent(r.name) + '/manage/curation'} title={`${r.name} › 큐레이션 › 대기열`}>
+                            {r.curation.queue}
+                          </Link>
+                        ) : (
+                          <span className="dim num">0</span>
+                        )}
+                      </td>
+                    )}
+                    {cur && (
+                      <td>
+                        {r.curation?.queue > 0 && typeof r.curation.oldestDays === 'number' ? (
+                          <span className={r.curation.oldestDays > STALE_DAYS ? 'cchip cchip--warn' : 'num'}>{r.curation.oldestDays}일</span>
+                        ) : (
+                          <span className="dim">—</span>
+                        )}
+                      </td>
+                    )}
                     <td>
                       {r.users.length ? (
                         r.users.map((u) => (
@@ -291,16 +328,21 @@ export default function Repos({ say }) {
           {done.files ? ` · 파일 ${done.files}` : ''}
           {done.origin ? (done.cloned ? '' : done.pushed ? ' · origin 에 보냈다' : ` · origin push 실패: ${done.pushError || ''}`) : ''}
           {done.granted?.length ? ` · 접근 ${done.granted.join(', ')}` : ''}
-          {done.dropped?.docs?.length ? ` · 뺀 문서 ${done.dropped.docs.length}종${done.dropped.reviewed ? ` (남은 언급 ${done.dropped.reviewed}줄 — 검사가 알려 준다)` : ''}` : ''}
-          {done.dropped?.error ? ` · 문서 빼기 실패: ${done.dropped.error.message} — 레포의 관리 › 관리 문서에서 다시` : ''}{' '}
+          {done.recordsFrom ? (done.moved != null ? ` · ${done.recordsFrom} 의 기록 ${done.moved}건을 옮겼다 — 전부 큐레이션 대기열에 선다` : ` · 기록 옮기기는 이 서버가 모른다(v0.27 미만)`) : ''}{' '}
           <Link className="abtn" to={'/r/' + encodeURIComponent(done.name) + '/'}>열기</Link>
+          {done.moved ? (
+            <>
+              {' '}
+              <Link className="abtn" to={'/r/' + encodeURIComponent(done.name) + '/manage/curation'}>대기열</Link>
+            </>
+          ) : null}
         </Note>
       )}
       {gone && (
         <Note tone="accent">
           <b>{gone.name}</b> — 휴지통으로 옮겼다 · <Mono>{gone.trash}</Mono>
           {gone.revoked?.length ? ` · 접근을 뺀 사람 ${gone.revoked.join(', ')}` : ''}
-          {gone.workrepos ? ` · 작업 레포 등록 ${gone.workrepos}건은 「지식 레포 없음」 으로 남는다 — 콘솔 › 작업 레포에서 지운다` : ''}. 되살리려면 셸에서 그 폴더를 서버 root 로 되돌려 놓는다.
+          {gone.workrepos ? ` · 작업 레포 등록 ${gone.workrepos}건은 「지식 레포 없음」 으로 남는다 — 서버 › 작업 레포 대장에서 지운다` : ''}. 되살리려면 셸에서 그 폴더를 서버 root 로 되돌려 놓는다.
         </Note>
       )}
       {/* 상태 다섯과 그 단추 — 한 문단에 다섯을 몰아 쓰면 읽히지 않았다(실서버 종합 시험 W1). 표 하나로 */}
@@ -340,53 +382,28 @@ export default function Repos({ say }) {
   )
 }
 
-// 패키지 문서 목록 — 체크가 「남긴다」. 폴더별로 묶고 폴더 단위로 켜고 끈다. 관리번호의 끝자리만 다른 것(TE_201~203)이 한 묶음이다
-function DocPick({ list, drop, onChange }) {
-  const off = new Set(drop)
-  const folders = [...new Set(list.map((d) => d.path.split('/').slice(0, -1).join('/')))]
-  const set = (paths, keep) => {
-    const n = new Set(off)
-    for (const p of paths) keep ? n.delete(p) : n.add(p)
-    onChange([...n])
-  }
-  return (
-    <div className="docpick">
-      {folders.map((fo) => {
-        const items = list.filter((d) => d.path.split('/').slice(0, -1).join('/') === fo)
-        const kept = items.filter((d) => !off.has(d.path)).length
-        return (
-          <details key={fo} className="docpick__group">
-            <summary>
-              <span className="mono">{fo.replace(/^docs\/?/, '') || 'docs'}</span> <span className="amuted">{kept}/{items.length}</span>
-              <button type="button" className="docpick__all" onClick={(e) => { e.preventDefault(); set(items.map((d) => d.path), kept < items.length) }}>
-                {kept < items.length ? '전부 남기기' : '전부 빼기'}
-              </button>
-            </summary>
-            <div className="docpick__list">
-              {items.map((d) => (
-                <label key={d.path} className={off.has(d.path) ? 'is-off' : ''}>
-                  <input type="checkbox" aria-label={d.title} checked={!off.has(d.path)} onChange={(e) => set([d.path], e.target.checked)} />
-                  <span className="mono">{d.no || ''}</span> {d.title.replace(d.no || '\u0000', '').trim()}
-                  {d.registered && <span className="docpick__tag">좌표</span>}
-                  {d.required && <span className="docpick__tag docpick__tag--req">필수</span>}
-                </label>
-              ))}
-            </div>
-          </details>
-        )
-      })}
-    </div>
-  )
-}
-
+// 새 지식 레포 — 길이 둘: **빈 레포로 세운다**(+ 옛 레포의 기록만 옮겨 오기) · origin 에서 받아 온다(개편안 S8 · §9.1).
+// 패키지 · 문서 고르기 · 서식 예시는 지웠다 — 세운 레포에는 빈 등록부 · 어휘뿐이고, 관리 문서는 큐레이터가 서식집에서 골라 세운다.
 function NewRepo({ data, busy, onClose, onOk }) {
-  const pkgs = data.packages || []
-  const [tab, setTab] = useState('package')
-  const [f, setF] = useState({ name: '', pkg: pkgs.length === 1 ? pkgs[0].name : '', origin: '', clone: '', grant: [], examples: true, drop: [] })
+  const [tab, setTab] = useState('empty')
+  const [f, setF] = useState({ name: '', origin: '', clone: '', grant: [], from: false, fromRepo: '' })
   const okName = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(f.name.trim())
-  const ok = okName && (tab === 'package' ? !!f.pkg && (!f.origin.trim() || originOk(f.origin.trim())) : originOk(f.clone.trim()))
+  const repos = data.repos || []
+  const ok = okName && (tab === 'empty' ? (!f.origin.trim() || originOk(f.origin.trim())) && (!f.from || !!f.fromRepo) : originOk(f.clone.trim()))
   const grantable = (data.users || []).filter((u) => !u.all)
-  const pkg = pkgs.find((p) => p.name === f.pkg)
+  // 옛 서버(v0.27 미만)는 패키지가 있어야 세운다 — 응답에 패키지 목록이 남아 있고 그중 빈 틀(blank)이 있으면 그것으로 세운다.
+  // 새 서버는 목록을 내지 않는다(계약 1.3) — 그때는 보내지 않는다
+  const legacyBlank = Array.isArray(data.packages) && data.packages.some((p) => p.name === 'blank')
+  const body = () =>
+    tab === 'empty'
+      ? {
+          name: f.name.trim(),
+          grant: f.grant,
+          ...(f.origin.trim() ? { origin: f.origin.trim() } : {}),
+          ...(f.from && f.fromRepo ? { recordsFrom: f.fromRepo } : {}),
+          ...(legacyBlank ? { package: 'blank' } : {}),
+        }
+      : { name: f.name.trim(), clone: f.clone.trim(), grant: f.grant }
   return (
     <Modal
       title="새 지식 레포"
@@ -395,29 +412,25 @@ function NewRepo({ data, busy, onClose, onOk }) {
       foot={
         <>
           <span className="amuted" style={{ fontSize: 11.5 }}>
-            {tab === 'package' ? '첫 커밋에서 훅(ctx check)이 돈다' : 'clone 뒤 _vocab.md 가 없으면 지운다'} · auth.log · 재인증
+            {tab === 'empty' ? '빈 틀 하나 · 첫 커밋' : 'clone 뒤 _vocab.md 가 없으면 지운다'} · auth.log · 재인증
           </span>
           <span className="sp" />
-          <button className="abtn" onClick={onClose}>취소</button>
-          <button
-            className="abtn abtn--accent"
-            disabled={busy || !ok}
-            onClick={() =>
-              onOk(
-                tab === 'package'
-                  ? { name: f.name.trim(), package: f.pkg, origin: f.origin.trim() || undefined, grant: f.grant, ...(f.examples ? {} : { examples: false }), ...(f.drop.length ? { drop: f.drop } : {}) }
-                  : { name: f.name.trim(), clone: f.clone.trim(), grant: f.grant }
-              )
-            }
-          >
-            {busy ? (tab === 'package' ? '세우는 중…' : '받는 중…') : tab === 'package' ? '세우기' : '받아 오기'}
+          <button className="abtn" onClick={onClose}>
+            취소
+          </button>
+          <button className="abtn abtn--accent" disabled={busy || !ok} onClick={() => onOk(body())}>
+            {busy ? (tab === 'empty' ? '세우는 중…' : '받는 중…') : tab === 'empty' ? '세우기' : '받아 오기'}
           </button>
         </>
       }
     >
       <div className="mtabs" style={{ padding: 0, marginBottom: -14 }}>
-        <button aria-selected={tab === 'package'} onClick={() => setTab('package')}>패키지에서 세운다</button>
-        <button aria-selected={tab === 'clone'} onClick={() => setTab('clone')}>origin 에서 받아 온다 (clone)</button>
+        <button aria-selected={tab === 'empty'} onClick={() => setTab('empty')}>
+          빈 레포로 세운다
+        </button>
+        <button aria-selected={tab === 'clone'} onClick={() => setTab('clone')}>
+          origin 에서 받아 온다 (clone)
+        </button>
       </div>
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="레포 이름" hint="폴더명 = 레포 이름 = 주소 조각. 영문 · 숫자 · . _ -">
@@ -425,49 +438,36 @@ function NewRepo({ data, busy, onClose, onOk }) {
           {/* 왜 단추가 꺼졌는지 칸 아래에서 말한다 — 전에는 말없이 꺼져 있었다(실서버 종합 시험 F10) */}
           {f.name.trim() && !okName && <span className="field__h field__h--bad">영문 · 숫자 · . _ - 만 — 첫 글자는 영문이나 숫자, 64자 안. 한글 · 빈칸은 주소 조각이 될 수 없다</span>}
         </Field>
-        {tab === 'package' ? (
+        {tab === 'empty' ? (
           <>
-            <Field label="패키지 — 서식이지 내용이 아니다" hint="문서 골격 · 등록부 · 어휘가 들어오고 그 프로젝트의 값은 없다. 세운 뒤 첫날 할 일 다섯 줄은 그 레포의 README 에.">
-              {pkgs.length === 0 ? (
-                <div className="anote anote--warn">
-                  서버에 패키지 폴더가 없다. <code>ctx serve --packages &lt;dir&gt;</code> 로 가리키거나 산출물의 <code>packages/</code> 를 둔다. 그 전에는 clone 으로만 둘 수 있다.
-                </div>
-              ) : (
-                <select value={f.pkg} onChange={(e) => setF({ ...f, pkg: e.target.value, drop: [] })}>
-                  {pkgs.length > 1 && <option value="">— 패키지를 고른다 —</option>}
-                  {pkgs.map((p) => (
-                    <option key={p.name} value={p.name}>
-                      {p.name}
-                      {p.version ? ` v${p.version}` : ''} — {p.title || ''} · 문서 {p.docs}
+            <Field
+              label="기록만 옮겨 오기 (옛 레포)"
+              hint="옛 레포의 작업 기록 전부(첨부 포함)와 그 기록이 건드린 좌표만 옮긴다 — 관리 문서 · 등록부 행 · 옛 문서 층의 정리 기록(등록부 · 문서 정리)은 옮기지 않는다. 옮긴 기록은 전부 큐레이션 대기열에 선다. 옛 레포는 그대로 남는다(개편안 §9.1)."
+            >
+              <div className="checks">
+                <label>
+                  <input type="checkbox" checked={f.from} onChange={(e) => setF({ ...f, from: e.target.checked, fromRepo: e.target.checked ? f.fromRepo || repos[0]?.name || '' : '' })} disabled={!repos.length} /> 옛 레포에서 기록을 옮겨 와 다시 세운다
+                </label>
+              </div>
+              {f.from && (
+                <select value={f.fromRepo} onChange={(e) => setF({ ...f, fromRepo: e.target.value })} aria-label="옮겨 올 레포">
+                  {repos.map((r) => (
+                    <option key={r.name} value={r.name}>
+                      {r.name}
+                      {r.docs != null ? ` — 작업 기록 ${r.docs}건` : ''}
                     </option>
                   ))}
                 </select>
               )}
-              {pkg?.description && (
-                <span className="field__h">
-                  <b>{pkg.name}</b> — {pkg.description}
-                </span>
-              )}
             </Field>
-            <Field label="서식 예시" hint="패키지는 문서마다 예시 섹션과 그 좌표(example:)를 달고 온다 — 세운 직후 파생을 한 바퀴 돌려 보라는 것이다. 빼고 세워도 나중에 save 의 examples: &quot;purge&quot; 로 지울 수 있다.">
-              <div className="checks">
-                <label>
-                  <input type="checkbox" checked={!f.examples} onChange={(e) => setF({ ...f, examples: !e.target.checked })} /> 빼고 세운다 — 예시 좌표 · 짝 섹션 · (예시) 섹션. 표에 남은 예시 행은 그대로 둔다
-                </label>
-              </div>
-            </Field>
-            {pkg?.docList?.length > 0 && (
-              <Field
-                label={`문서 고르기 — ${pkg.docList.length - f.drop.length} / ${pkg.docList.length}종`}
-                hint="이 프로젝트에 안 쓸 문서의 체크를 푼다. 세운 커밋 다음에 「세울 때 뺀 관리 문서」 커밋 하나로 지우고, 그 문서를 가리키는 목록 행 · 링크는 같이 고친다(산문 언급은 남고 검사가 알려 준다). 나중에 레포의 관리 › 관리 문서에서도 뺄 수 있다."
-              >
-                <DocPick list={pkg.docList} drop={f.drop} onChange={(drop) => setF({ ...f, drop })} />
-              </Field>
-            )}
             <Field label="origin (선택)" hint="있으면 첫 커밋을 바로 보낸다. 서버는 GitLab 프로젝트를 만들 수 없다 — 웹에서 빈 프로젝트를 먼저 만든다.">
               <input className="mono" value={f.origin} onChange={(e) => setF({ ...f, origin: e.target.value })} spellCheck={false} placeholder="http://<gitlab>/<그룹>/<프로젝트>.git" />
               {f.origin.trim() && !originOk(f.origin.trim()) && <span className="field__h field__h--bad">http(s)://… 또는 ssh://git@… 모양이어야 한다 — 비우면 origin 없이 세운다</span>}
             </Field>
+            <div className="anote">
+              <b>빈 레포로 시작한다</b> — 사용자는 작업 기록만 쌓고, 관리 문서는 큐레이터가 기록을 보고 <b>큐레이션 › 서식집</b>에서 골라 세운다. 서식에서
+              가져온 문서는 제목과 머리말뿐이다(예시 · 작성지침은 서식집에 남는다).
+            </div>
           </>
         ) : (
           <Field label="origin 주소" hint="이미 있는 지식 레포를 받아 온다. 서버의 git 자격(PAT · 셸)으로 clone 한다 — _vocab.md 가 없으면 지식 레포가 아니라서 지운다.">
@@ -477,11 +477,13 @@ function NewRepo({ data, busy, onClose, onOk }) {
         )}
         <Field label="볼 수 있는 사람" hint="세우면서 repos 에 넣는다 — 전체(*) 인 사람은 이미 본다.">
           <div className="checks">
-            {(data.users || []).filter((u) => u.all).map((u) => (
-              <label key={u.name}>
-                <input type="checkbox" checked disabled /> {u.name} <span className="amuted">(전체 *)</span>
-              </label>
-            ))}
+            {(data.users || [])
+              .filter((u) => u.all)
+              .map((u) => (
+                <label key={u.name}>
+                  <input type="checkbox" checked disabled /> {u.name} <span className="amuted">(전체 *)</span>
+                </label>
+              ))}
             {grantable.map((u) => (
               <label key={u.name}>
                 <input type="checkbox" checked={f.grant.includes(u.name)} onChange={(e) => setF({ ...f, grant: e.target.checked ? [...f.grant, u.name] : f.grant.filter((x) => x !== u.name) })} /> {u.name}
@@ -529,7 +531,7 @@ function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
       </Field>
       <div className="anote" style={{ fontSize: 12, lineHeight: 1.7 }}>
         두 모양 다 받는다 — <Mono>{ORIGIN_EX[0]}</Mono> 은 서버에 넣은 <b>PAT</b>(셸의 <code>ctx serve git-auth</code>) 로,{' '}
-        <Mono>{ORIGIN_EX[1]}</Mono> 은 서버의 <b>SSH 배포 키</b>(콘솔 › 서버 › git 자격)로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
+        <Mono>{ORIGIN_EX[1]}</Mono> 은 서버의 <b>SSH 배포 키</b>(서버 › 서버 설정 › git 자격)로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
       </div>
       {miss && (
         <div className="anote anote--warn" style={{ fontSize: 12 }}>

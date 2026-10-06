@@ -13,7 +13,7 @@ import McpFlow from './McpFlow.jsx'
 
 const BOOKS = {
   사용자_설명서: { icon: 'book', desc: '작업 레포에서 에이전트로 일하고 기록한다.', items: ['처음 한 번 — 연결', '하루 흐름 · 작업 요청 · 기록', '막혔을 때'] },
-  관리자_설명서: { icon: 'shield', desc: '서버 · 지식 레포 · 명부를 세우고, 어휘와 등록부를 지킨다.', items: ['서버형 · 로컬형 설치', '사람 관리 — 콘솔', '운영 · 갱신 · 장애'] },
+  관리자_설명서: { icon: 'shield', desc: '서버 · 지식 레포 · 명부를 세우고, 어휘와 등록부를 지킨다.', items: ['서버형 · 로컬형 설치', '사람 관리 — 서버 메뉴', '운영 · 갱신 · 장애'] },
   개발자_설명서: { icon: 'gear', desc: 'CDP 자체를 고치고 릴리스한다.', items: ['구조 · 불변조건', '검증 · 릴리스', '서버 · MCP · 패키지'] },
   설치절차: { icon: 'server', desc: '서버를 세우는 절차를 한 줄씩.', items: ['install.sh', 'git 자격 · 레포', '첫 관리자 · 확인'] },
 }
@@ -35,8 +35,8 @@ export default function Landing({ info }) {
               사람이 본문을 읽는다
             </h1>
             <p className="hero__lead">
-              프로젝트 지식을 <b>작업 기록(사건)</b>과 <b>관리 문서(상태)</b> 두 층으로 두고, <b>좌표</b>로 잇고, 커밋할 때 <b>검사</b>한다.
-              갱신 누락은 상태가 아니라 오류다 — 그래서 "밀림" 이 없다.
+              프로젝트 지식을 <b>작업 기록(사건)</b>과 <b>관리 문서(상태)</b> 두 층으로 두고, <b>좌표</b>로 잇는다. 관리 문서는
+              큐레이터가 기록을 보고 반영한다 — 아직 반영 안 된 기록은 섹션 옆에 <b>「미반영」</b> 으로 같이 보인다.
             </p>
             <div className="hero__cta">
               <Link className="btn btn--accent" to={enter}>
@@ -80,7 +80,7 @@ export default function Landing({ info }) {
                   <span className="arow__label">얼굴</span>
                   <span className="arow__value">
                     <span className="amuted">
-                      <b style={{ color: 'var(--text)' }}>소개</b>(이 화면) · <b style={{ color: 'var(--text)' }}>설명서</b>(토큰 없이) · <b style={{ color: 'var(--text)' }}>레포</b>(로그인 뒤 문서 · 그래프) · <b style={{ color: 'var(--text)' }}>콘솔</b>(관리자 — 사람 · 토큰 · 레포 · 서버)
+                      <b style={{ color: 'var(--text)' }}>소개</b>(이 화면) · <b style={{ color: 'var(--text)' }}>설명서</b>(토큰 없이) · <b style={{ color: 'var(--text)' }}>레포</b>(로그인 뒤 문서 · 그래프) · <b style={{ color: 'var(--text)' }}>서버</b>(관리자 — 사람 · 토큰 · 레포 · 서버 설정)
                     </span>
                   </span>
                 </div>
@@ -144,7 +144,7 @@ export default function Landing({ info }) {
             <div className="fcard">
               <h3>화면</h3>
               <p>
-                찾기 → 뻗어나가기 → 읽기. 좌표 그래프. 갱신이 남은 곳은 <b>현황</b>에 있다. 편집은 없다 — 쓰기는 <code>save</code> 하나다.
+                찾기 → 뻗어나가기 → 읽기. 좌표 그래프. 아직 반영 안 된 기록은 섹션 옆 <b>「미반영」</b> · 큐레이터는 <b>큐레이션 › 대기열</b>. 편집은 없다 — 쓰기는 <code>save</code> 하나다.
               </p>
             </div>
             <div className="fcard">

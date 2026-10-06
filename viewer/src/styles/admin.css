@@ -1,4 +1,4 @@
-/* 관리 화면 — 메뉴(왼쪽) + 카드(가운데).
+/* 관리 화면 — 카드(가운데). 메뉴는 셸의 왼쪽 메뉴다(shell.css · 안쪽 메뉴 `.admin__menu` · `.astep` 은 지웠다).
  *
  * **새 디자인 언어를 만들지 않는다.** 색은 tokens.css 의 예산 넷 그대로이고
  * (정상은 무채색, 파랑은 상호작용, 노랑·빨강은 이상), 간격·모서리·글꼴도
@@ -12,51 +12,6 @@
   min-height: 0;
   background: var(--bg);
 }
-
-/* ── 왼쪽 메뉴 ───────────────────────────────────────────────────────── */
-.admin__menu {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 212px;
-  padding: var(--sp-3) var(--sp-2);
-  border-right: 1px solid var(--border);
-  background: var(--surface-2);
-  overflow-y: auto;
-}
-
-/* 왼쪽 패널의 `.step` 과 같은 모양이다 — 같은 일(고르기)을 하는 것은 같게 보인다 */
-.astep {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: 7px 9px;
-  color: var(--text-2);
-  background: none;
-  border: 0;
-  border-radius: var(--r-sm);
-  text-align: left;
-  cursor: pointer;
-}
-.astep:hover { background: var(--surface-3); color: var(--text); }
-.astep[aria-current='true'] {
-  background: var(--raised);
-  color: var(--text);
-  box-shadow: var(--shadow-thumb);
-}
-.astep[aria-current='true'] .astep__t { font-weight: 600; }
-.astep[aria-current='true'] .astep__s { color: var(--accent); }
-.astep__txt { display: flex; flex-direction: column; min-width: 0; }
-.astep__t { font-size: 13px; }
-.astep__s {
-  font-size: 10.5px;
-  color: var(--text-2); /* 10.5px 글자에 --text-3 는 3.0:1 — 화면 UX 검토 v0.1 P20 */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.astep--back { color: var(--text-3); }
 
 /* ── 본문 ────────────────────────────────────────────────────────────── */
 .admin__body {
@@ -464,6 +419,6 @@
 .adocs__reftext { color: var(--text-2); word-break: break-word; }
 .adocs__refpick { display: flex; gap: 10px; white-space: nowrap; }
 .adocs__refpick label { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
-@media (max-width: 720px) {
+@container shell (max-width: 720px) {
   .adocs__ref { grid-template-columns: 1fr; }
 }

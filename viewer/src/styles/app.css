@@ -3,7 +3,8 @@
  * **왼쪽 | 문서** 2분할. 왼쪽은 한 번에 하나만 한다(목록 · 뻗어나가기).
  * 읽을 때는 ⌘. 로 왼쪽을 통째로 접는다(§27.5). */
 
-/* 껍데기 — 상단 바 하나 + 얼굴 하나(화면 · 권한 검토 v0.1 R7). 상단 바는 얼굴 밖에 서서 얼굴을 넘어도 살아남는다.
+/* 껍데기 — 사이트는 상단 바 하나 + 얼굴, 레포 · 콘솔 · 로컬은 왼쪽 메뉴 + 본문(위치 줄 + 얼굴 · shell.css). 메뉴와 위치 줄은
+ * 얼굴 밖에 서서 얼굴을 넘어도 살아남는다(화면 · 권한 검토 v0.1 R7 · 좌측 메뉴 셸 설계 v0.1).
  * 레포 · 콘솔은 창 높이에 맞추고 안에서 스크롤, 사이트는 문서가 스크롤된다(site.css). */
 .shell {
   display: flex;
@@ -950,8 +951,9 @@
  * 폭이야말로 탭이 세로로 쪼개지던 원인이라 **좁힐수록 더 깨졌다.**
  * 지금은 왼쪽이 한 번에 하나만 하므로 좁혀도 내용이 버틴다. */
 
-@media (max-width: 1080px) {
-  .app:not([data-mode='focus']) .pane--find { width: min(var(--w-find, 340px), 42vw); }
+/* 본문 폭 기준(@container shell — shell.css) — 왼쪽 메뉴가 펼쳐진 만큼 본문이 좁다. 창 기준이면 232px 어긋난다(개편안 §7.1) */
+@container shell (max-width: 1080px) {
+  .app:not([data-mode='focus']) .pane--find { width: min(var(--w-find, 340px), 42cqw); }
 }
 
 /* <900px — 왼쪽이 문서 **위에 뜬다.**
@@ -959,7 +961,7 @@
  * 전에는 문서가 열려 있으면 왼쪽을 통째로 감췄는데, 문서를 닫는 길이 없어서
  * 거기서 **갇혔다** — 목록으로 돌아갈 수가 없었다. 겹쳐 띄우면 ◀ 로 접고
  * 상단 ▶ 로 다시 편다. */
-@media (max-width: 900px) {
+@container shell (max-width: 900px) {
   .app .gutter { display: none; }
   .panes { position: relative; }
   .app:not([data-mode='focus']) .pane--find {
@@ -968,7 +970,7 @@
     bottom: 0;
     left: 0;
     z-index: 20;
-    width: min(86vw, 400px);
+    width: min(86cqw, 400px);
     box-shadow: var(--shadow-3);
   }
   /* 접혀 있으면 띠 그대로다 — 문서가 없다고 띠가 화면을 덮으면 안 된다 */
@@ -1458,10 +1460,7 @@
    로컬 뷰어에는 이 클래스가 붙지 않는다. 같은 번들이 두 모드에서 도므로
    (§6.8) 스타일도 한 파일에 두고, 쓰는 쪽이 갈린다. */
 
-/* 레포 메뉴가 열리는 자리 — 「레포」 탭 아래(TopBar.jsx). */
-.topbar__repo {
-  position: relative;
-}
+/* 레포 메뉴 — 왼쪽 메뉴의 레포 고르기 아래(shell/SideNav.jsx · 자리는 shell.css). */
 .repomenu {
   position: absolute;
   top: calc(100% + 6px);
@@ -1557,7 +1556,7 @@ a.repomenu__row, a.repomenu__row:hover { text-decoration: none; color: inherit; 
 .topbar__brand, .topbar__brand:hover { color: inherit; text-decoration: none; }
 .topbar__brand .caret { display: none; color: var(--text-3); }
 .faces { display: flex; gap: 2px; flex: none; }
-.faces a, .faces button, .faces__static {
+.faces a, .faces button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1575,12 +1574,9 @@ a.repomenu__row, a.repomenu__row:hover { text-decoration: none; color: inherit; 
 }
 .faces a:hover, .faces button:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }
 .faces [aria-current='page'] { color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); border-radius: var(--r-sm) var(--r-sm) 0 0; }
-.faces__static { cursor: default; }
 .faces__sub { font-weight: 500; color: var(--text-3); }
 .faces [aria-current='page'] .faces__sub { color: var(--text-2); }
 .faces .ico { color: var(--text-3); }
-.faces .topbar__repo { display: inline-flex; }
-.faces .repomenu { top: calc(100% + 8px); left: 0; }
 .topbar__center { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; justify-content: center; }
 /* 포털 자리 — Shell 이 만든 노드(.topbar__center · .topbar__right)를 담는 host. 상자를 만들지 않아 flex 줄에 그대로 선다 */
 .topbar__centerhost, .topbar__righthost, .topbar__right { display: contents; }
@@ -1605,6 +1601,8 @@ a.repomenu__row, a.repomenu__row:hover { text-decoration: none; color: inherit; 
 }
 @media (max-width: 900px) {
   .who__name { display: none; }
+}
+@container shell (max-width: 900px) {
   .topbar__center .topbar__search { min-width: 120px; }
 }
 
@@ -1746,8 +1744,8 @@ a.repomenu__row, a.repomenu__row:hover { text-decoration: none; color: inherit; 
 .dtab[data-pin='1'] .dtab__x { display: none; }
 .dtab[data-pin='1']:hover .dtab__x { display: inline-grid; }
 
-/* 좁은 창 — 탭을 숨기고 「← 이전」 · 최근만(검토 §6 ③) */
-@media (max-width: 900px) {
+/* 좁은 본문 — 탭을 숨기고 「← 이전」 · 최근만(검토 §6 ③) */
+@container shell (max-width: 900px) {
   .docnav__tabs,
   .docnav__all { display: none; }
 }

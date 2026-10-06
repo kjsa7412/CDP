@@ -1,4 +1,4 @@
-// 작업 레포 — 서버판. MCP 설계서 §6.7.3.
+// 레포 관리 › 연결된 작업 레포 — 서버판. MCP 설계서 §6.7.3. 서버 전부의 설치 대장(서버 › 작업 레포 대장)과 다른 것이다.
 //
 // **로컬의 같은 이름 화면과 다른 것이다.** 로컬은 이 PC 에 규약과 skill 을
 // 깔고, 여기는 **등록하고 꾸러미를 내주고 결과를 추적한다**(§6.7.1).
@@ -45,7 +45,7 @@ export default function WorkReposServer({ say }) {
   if (!data) return <Note>{error ? '대장을 읽지 못했습니다 — ' + error.message : '대장을 읽는 중입니다…'}</Note>
 
   // **이 레포의 등록만.** 대장(`/workrepos`)은 볼 수 있는 레포 전부를 낸다 — 전에는 그것을 다 그려서 gdi 화면에
-  // dpms_wiki 소속 작업 레포가 나오고, 그 행의 설치 명령이 gdi 로 나갔다(실서버 종합 시험 F1). 관리 › 현황 카드와 같은 거름
+  // dpms_wiki 소속 작업 레포가 나오고, 그 행의 설치 명령이 gdi 로 나갔다(실서버 종합 시험 F1). 레포 관리 › 현황 카드와 같은 거름
   const repos = data.repos.filter((r) => r.knowledge === currentRepo())
   const stale = repos.filter((r) => r.state === '낡음')
 
@@ -68,7 +68,7 @@ export default function WorkReposServer({ say }) {
   return (
     <>
       {stale.length > 0 && <UpdateAll rows={stale} />}
-      <Card title="작업 레포" hint="어디에 무엇이 깔려 있나">
+      <Card title="연결된 작업 레포" hint="이 지식 레포를 쓰는 코드 레포 — 어디에 무엇이 깔려 있나">
         {repos.length === 0 && <Note>등록된 작업 레포가 없습니다. 아래에서 등록하세요.</Note>}
         {repos.map((r) => (
           <Row key={r.id} label={r.name} mark={MARK[r.state] || 'none'} stack>

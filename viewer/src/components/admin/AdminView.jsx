@@ -1,62 +1,31 @@
-// 관리 — **창 전체를 쓰는 세 번째 화면.**
+// 레포 관리 — 이 레포 하나의 것. **창 전체를 쓰는 화면이다**(그래프를 패널에서 화면으로 올린 것과 같은 이유).
 //
-// 그래프를 패널에서 화면으로 올린 것과 같은 이유다. 좌표 288개짜리 그림이
-// 400px 패널에 안 들어가듯, 작업 레포 여섯 곳의 설치 상태와 동기화 이력
-// 스무 줄은 380px 팝오버에 안 들어간다.
+// **메뉴는 왼쪽 메뉴다**(좌측 메뉴 셸 설계 v0.1 · 개편안 §7.2) — 안쪽 메뉴(`admin__menu`)를 지웠고 탭은 주소로만 고른다
+// (`shell/nav.js` 의 tab). 묶음은 작업의 성격으로 갈린다 —
 //
-// **메뉴는 작업의 성격으로 가른다.** "설정" 이라는 한 덩어리가 아니다 —
-// 매일 보는 것(현황·동기화)과 바꿀 때만 보는 것(레포)과 프로젝트 시작할 때
-// 하는 것(작업 레포)과 문제 났을 때 보는 것(진단)은 서로 다른 일이다.
+//   큐레이션     대기열 · 이력 · 서식집 — 매일 바꾼다(큐레이터)
+//   레포 관리    현황 · 관리 문서 · 연결된 작업 레포 — 보고 · 가끔 바꾼다(읽기면 보인다 · 쓰는 단추만 write)
+//   로컬만       지식 레포 · 동기화 · 진단 — 이 PC 를 만지는 것(서버에는 고를 경로도 사람이 누를 pull/push 도 없다 · §6.6.3)
 //
-// **읽기 설정(글자 크기·본문 폭·테마)은 여기 없다.** `⋯` 메뉴에 있다 —
-// 매일 만지는 것과 평생 한 번 하는 것을 같은 스크롤에 두지 않는다. 그리고
-// 여기에 복제하지도 않는다: 같은 값을 고치는 자리가 둘이면 어느 쪽이 정본인지
-// 사람이 모른다.
-//
-// **서버 모드는 「이 레포 · 내 것」 셋 — 현황 · 작업 레포 · 정보**(화면 · 권한 검토 v0.1 R2 · R6). 지식 레포 목록은
-// 상단 「레포 ▾」 메뉴가, 세우기 · 복구는 콘솔(admin · 재인증)이 든다 — 같은 일을 하는 자리가 둘이면 어느 쪽이
-// 정본인지 사람이 모른다(P3). 「콘솔」 줄 · 「문서로 돌아가기」 줄도 뺐다 — 상단 스위처의 「콘솔」 · 세그의 「문서」 ·
-// Esc · 뒤로 가기(주소가 상태다 · R9)가 같은 일을 한다.
+// 옛 「정보」(판 · 내 계정 · 단축키)는 왼쪽 메뉴 맨 아래 내 계정으로 갔다 — 매일 가는 곳이 아니다(L6).
+// **읽기 설정(글자 크기 · 본문 폭)은 여기 없다** — 레포 얼굴의 ⋯ 메뉴에 있다. 같은 값을 고치는 자리를 둘 두지 않는다.
 
 import { useEffect, useState } from 'react'
 import { api, isServer } from '../../lib/api.js'
-import Icon from '../Icon.jsx'
+import { useScreen } from '../../lib/slots.js'
+import Queue from '../../features/curation/Queue.jsx'
+import Log from '../../features/curation/Log.jsx'
+import FormLibrary from '../../features/forms/FormLibrary.jsx'
 import Overview from './Overview.jsx'
 import Repo from './Repo.jsx'
 import Sync from './Sync.jsx'
 import WorkRepos from './WorkRepos.jsx'
 import WorkReposServer from './WorkReposServer.jsx'
 import Diag from './Diag.jsx'
-import Info from './Info.jsx'
 import Docs from './Docs.jsx'
-
-// 서버 모드에서는 **이 PC 를 만지는 화면이 없다**(MCP 설계서 §6.6.3).
-// 지우는 것이 아니라 내지 않는 것이다 — 라우트도 404 이므로 화면만 숨겨서
-// API 가 살아 있는 구멍이 생기지 않는다(§6.2). `local: true` 는 로컬에만, `server: true` 는 서버에만.
-export const MENU = [
-  { key: 'overview', icon: 'check', label: '현황', sub: '지금 쓸 수 있는 상태인가' },
-  // 관리 문서 — 목록 · 사용 현황 · 안 쓰는 문서 지우기(관리문서 정리 검토 §4.9). 로컬 · 서버 둘 다(지우기는 서버형 admin)
-  { key: 'docs', icon: 'doc', label: '관리 문서', sub: '쓰는가 · 안 쓰는 문서 지우기' },
-  // 로컬 — 이 PC 의 경로를 고른다. 서버에는 고를 경로가 없고, 목록은 「레포 ▾」 · 세우기는 콘솔이다(R2).
-  { key: 'repo', icon: 'managed', label: '지식 레포', sub: '어디를 보고 있나', local: true },
-  // **서버 모드에는 없다.** 모드 B 에서 git 을 도는 것은 서버 자신이다 —
-  // `save` 가 커밋하고 `--mirror` 가 push 한다(§4.5). 사람이 브라우저에서
-  // pull/push 를 누를 자리가 아니고, 실제로 `POST /git/pull` · `/git/push` ·
-  // `/sync` 는 모드 B 에 없다. 화면만 남으면 눌러서 404 를 보게 된다.
-  { key: 'sync', icon: 'sync', label: '동기화', sub: '원격 · git 설정', local: true },
-  // **서버에도 있다 — 다른 화면이다**(§6.7.3). 로컬은 이 PC 에 깔고,
-  // 서버는 등록하고 꾸러미를 내주고 결과를 추적한다.
-  { key: 'work', icon: 'plug', label: '작업 레포', sub: '에이전트 설치' },
-  { key: 'diag', icon: 'info', label: '진단 · 정보', sub: '버전 · 경로 · 로그', local: true },
-  // 서버 — 값만. `/api/<레포>/diag` 는 서버에 없다(P2) — 있는 것(세션)만 그린다.
-  { key: 'info', icon: 'info', label: '정보', sub: '판 · 내 계정 · 단축키', server: true },
-]
-
-export const menuFor = (server) => MENU.filter((m) => (server ? !m.local : !m.server))
 
 export default function AdminView({
   tab,
-  onTab,
   state,
   repo,
   patch,
@@ -67,12 +36,11 @@ export default function AdminView({
   onOpened,
   say,
   me = null,
-  built = null,
-  repoName = null,
   // 관리에서 레포를 바꾼 뒤(관리 문서 지우기) — 상단 「검증 N」 · 문서 목록이 옛 값으로 남지 않게 레포를 다시 읽는다(F9)
   onChanged = null,
 }) {
   const server = isServer()
+  const scr = useScreen()
   const [diag, setDiag] = useState(null)
 
   // 진단 값은 여러 화면이 같이 쓴다(스캔 시각 · 번들 · 데이터 폴더).
@@ -82,54 +50,22 @@ export default function AdminView({
     api.diag().then(setDiag).catch(() => setDiag(null))
   }, [server, repo?.root, sync?.phase])
 
-  // 서버 모드에는 첫 실행 분기가 없다 — 고를 레포 경로가 없다(§6.6.3).
-  const menu = menuFor(server)
-  const cur = !server && firstRun ? 'repo' : menu.some((m) => m.key === tab) ? tab : 'overview'
+  // 서버 모드에는 첫 실행 분기가 없다 — 고를 레포 경로가 없다(§6.6.3). 없는 탭은 셸이 현황으로 바꿔 썼다
+  const cur = !server && firstRun ? 'repo' : tab || 'overview'
 
   return (
     <div className="admin">
-      {!firstRun && (
-        <nav className="admin__menu" aria-label="관리">
-          {menu.map((m) => (
-            <button
-              key={m.key}
-              className="astep"
-              aria-current={cur === m.key}
-              onClick={() => onTab(m.key)}
-              title={m.label}
-              aria-label={m.label}
-            >
-              <Icon name={m.icon} size={15} />
-              <span className="astep__txt">
-                <span className="astep__t">{m.label}</span>
-                <span className="astep__s">{m.sub}</span>
-              </span>
-            </button>
-          ))}
-        </nav>
-      )}
-
       <div className="admin__body">
-        <div className="admin__wrap">
-          {cur === 'overview' && (
-            <Overview
-              repo={repo}
-              sync={sync}
-              diag={diag}
-              me={me}
-              onGo={onTab}
-              onCheck={onCheck}
-              onSync={onSync}
-            />
-          )}
-          {cur === 'repo' && !server && (
-            <Repo state={state} repo={repo} diag={diag} firstRun={firstRun} onOpened={onOpened} say={say} />
-          )}
+        <div className={cur === 'curation' || cur === 'forms' ? 'admin__wrap admin__wrap--wide' : 'admin__wrap'}>
+          {cur === 'curation' && server && <Queue repo={repo} say={say} onChanged={onChanged} />}
+          {cur === 'curation-log' && server && <Log logId={scr?.logId || null} />}
+          {cur === 'forms' && server && <FormLibrary form={scr?.form || null} tab={scr?.formTab || 'stamp'} />}
+          {cur === 'overview' && <Overview repo={repo} sync={sync} diag={diag} me={me} onCheck={onCheck} onSync={onSync} />}
+          {cur === 'repo' && !server && <Repo state={state} repo={repo} diag={diag} firstRun={firstRun} onOpened={onOpened} say={say} />}
           {cur === 'docs' && <Docs me={me} say={say} onChanged={onChanged} />}
-          {cur === 'sync' && <Sync sync={sync} onSync={onSync} say={say} />}
+          {cur === 'sync' && !server && <Sync sync={sync} onSync={onSync} say={say} />}
           {cur === 'work' && (server ? <WorkReposServer say={say} /> : <WorkRepos state={state} patch={patch} say={say} />)}
-          {cur === 'diag' && <Diag diag={diag} repo={repo} say={say} />}
-          {cur === 'info' && <Info me={me} built={built} repoName={repoName} />}
+          {cur === 'diag' && !server && <Diag diag={diag} repo={repo} say={say} />}
         </div>
       </div>
     </div>

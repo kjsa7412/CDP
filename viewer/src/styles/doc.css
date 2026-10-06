@@ -180,7 +180,7 @@
   border: 0;
   background: var(--surface);
 }
-@media (max-width: 600px) {
+@container shell (max-width: 600px) {
   .visframe__path,
   .visframe__note { display: none; }
 }
@@ -282,8 +282,8 @@
   background: var(--accent-bg);
 }
 
-/* 좁아지면 목차가 먼저 양보한다. **본문이 주인이다** */
-@media (max-width: 1280px) {
+/* 좁아지면 목차가 먼저 양보한다. **본문이 주인이다** — 본문 폭 기준(@container shell · 왼쪽 메뉴만큼 좁다) */
+@container shell (max-width: 1280px) {
   .toc[data-open='1'] { width: 184px; }
 }
 

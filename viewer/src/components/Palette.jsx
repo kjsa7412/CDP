@@ -114,7 +114,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
               setForce(false)
             }}
             onKeyDown={onKey}
-            placeholder="관리문서 · 작업문서 · 좌표 이름으로 찾습니다 — 테이블정의서 · 계획서마스터"
+            placeholder="관리 문서 · 작업 기록 · 좌표 이름으로 찾습니다 — 테이블정의서 · 계획서마스터"
             aria-label="검색어"
           />
         </div>
@@ -124,7 +124,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
             <div className="palette__group">
               <div className="palette__label">쓰는 법</div>
               <div style={{ padding: '4px 12px', color: 'var(--text-2)', lineHeight: 1.8 }}>
-                <b>관리문서명 · 작업문서명 · 좌표명 · alias</b> 에 겁니다.
+                <b>관리 문서명 · 작업 기록 제목 · 좌표명 · alias</b> 에 겁니다.
                 <br />
                 자유로운 표현은 <b>정본 좌표</b>로 대조한다 — 정본을 외울 필요가 없다.
                 <br />
@@ -186,7 +186,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
 
           {/* 갈래 셋 — **왼쪽 목록과 같은 순서, 같은 이름.** */}
           {res && counts.managed > 0 && (
-            <Group icon="managed" label="관리문서" shown={res.managed.length} total={counts.managed}>
+            <Group icon="managed" label="관리 문서" shown={res.managed.length} total={counts.managed}>
               {res.managed.map((m, i) => (
                 <ManagedHit
                   key={m.path}
@@ -199,7 +199,7 @@ export default function Palette({ onClose, onOpen, onCoord, onAliasMiss }) {
           )}
 
           {res && counts.work > 0 && (
-            <Group icon="work" label="작업문서" shown={res.works.length} total={counts.work}>
+            <Group icon="work" label="작업 기록" shown={res.works.length} total={counts.work}>
               {res.works.map((d, i) => (
                 <WorkHit key={d.id} d={d} active={at0.work + i === active} onClick={() => openAndClose(d.id)} />
               ))}
@@ -339,7 +339,7 @@ function CoordHit({ c, active, onClick }) {
       {c.deprecated && <span className="badge badge--warn">deprecated</span>}
       <Why why={c.why} matched={c.why === 'alias' ? c.matched : null} />
       <span className="topbar__spacer" />
-      <span className="hit__n num" data-zero={c.count ? '0' : '1'} title={`작업문서 ${c.count}건`}>
+      <span className="hit__n num" data-zero={c.count ? '0' : '1'} title={`작업 기록 ${c.count}건`}>
         {c.count || '·'}
       </span>
     </button>

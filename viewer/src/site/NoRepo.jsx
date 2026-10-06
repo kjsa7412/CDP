@@ -60,7 +60,7 @@ export default function NoRepo({ from = null }) {
                 </Link>
               ))}
               {me.admin && (
-                <Link className="btn btn--sm" to="/console/repos">콘솔 › 지식 레포</Link>
+                <Link className="btn btn--sm" to="/console/repos">서버 › 지식 레포</Link>
               )}
             </div>
           </div>
@@ -85,10 +85,10 @@ export default function NoRepo({ from = null }) {
           {me.admin ? (
             <>
               <div className="anote">
-                이 서버에 아직 지식 레포가 없거나 이 계정에 할당되지 않았습니다. <b>콘솔 &gt; 지식 레포</b>에서 패키지로 세우거나 origin 에서 받아 옵니다.
+                이 서버에 아직 지식 레포가 없거나 이 계정에 할당되지 않았습니다. <b>서버 › 지식 레포</b>에서 빈 레포로 세우거나 origin 에서 받아 옵니다.
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <Link className="btn btn--accent btn--sm" to="/console/repos">콘솔 › 지식 레포 →</Link>
+                <Link className="btn btn--accent btn--sm" to="/console/repos">서버 › 지식 레포 →</Link>
                 <Link className="btn btn--sm" to="/manual/관리자_설명서">설명서 › 관리자 3.4</Link>
               </div>
             </>

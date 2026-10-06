@@ -9,7 +9,7 @@
 // (tokens.css) 상태바만 그 밖에 있었다. 지금 남는 것은 —
 //
 //   늘      문서·좌표 수(무채색) · 감시 · 마지막 스캔
-//   있을 때  미등재 · 받을 것 · 보낼 것 · 훅 없음
+//   있을 때  큐레이션 대기 · 미등재 · 받을 것 · 보낼 것 · 훅 없음
 //
 // **검증 건수는 상단바로 올라갔다.** 아침에 제일 먼저 보는 값을 11.5px 글씨로
 // 화면 맨 아래 두면 매일 찾아 읽어야 한다. 여기서 한 번 더 세지 않는다.
@@ -21,7 +21,14 @@ import { useEffect, useState } from 'react'
 import { api, isServer, currentRepo } from '../lib/api.js'
 import { useResource } from '../lib/cache.js'
 import { clockTime } from '../lib/format.js'
+import { navigate } from '../lib/router.jsx'
+import { useSession } from '../lib/session.jsx'
+import { can } from '../lib/roles.js'
+import { repoBase } from '../shell/nav.js'
 import Icon from './Icon.jsx'
+
+// 큐레이션이 이만큼 밀리면 경고(개편안 §5.2 curation-stale · 14일)
+const STALE_DAYS = 14
 
 // 서버형 한 줄 — 이상이 있을 때만(동시 기록 검토 v0.1 D12). 정상은 조용하다. 사유 말은 `core/mirror.REASON_TEXT` 와 같다.
 const REASON = { 'non-ff': 'non-ff', auth: '인증 실패', net: '원격 불통', protected: '보호 브랜치', locked: 'ref 잠김', 'no-upstream': 'upstream 없음', unknown: '원인 미상' }
@@ -36,6 +43,7 @@ function serverLine(m) {
 }
 
 export default function StatusBar({ repo, scanning, onRescanned, onCheck = () => {}, onSay }) {
+  const me = useSession()?.me || null
   const [busy, setBusy] = useState(false)
   const [git, setGit] = useState(null)
   const [gitBusy, setGitBusy] = useState(null)
@@ -121,11 +129,27 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
   return (
     <div className="statusbar">
       <span className="statusbar__quiet">
-        {/* 「문서」 는 작업문서 수였다 — 관리문서와 헷갈렸다(실서버 종합 시험 F18) */}
+        {/* 「문서」 는 작업 기록 수였다 — 관리 문서와 헷갈렸다(실서버 종합 시험 F18) */}
         작업 <b className="num">{repo.docs}</b>
         <span className="statusbar__sep">·</span>
         좌표 <b className="num">{repo.coords}</b>
       </span>
+
+      {/* 큐레이션 대기 — 섹션 뒤에 아직 반영 안 된 기록이 있다(개편안 S9). 값이 없으면(옛 서버 · 로컬) 그리지 않는다. 큐레이터는
+          대기열로, 나머지는 작업 기록의 「대기」 거름으로 — 갈 수 있는 곳으로만 보낸다(못 할 일을 띄우지 않는다) */}
+      {typeof repo.curation?.queue === 'number' && repo.curation.queue > 0 && (
+        <button
+          className={'is-pending' + (repo.curation.oldestDays > STALE_DAYS ? ' is-old' : '')}
+          onClick={() => {
+            const r = currentRepo()
+            navigate(repoBase(r) + (can(me, 'curate', r) ? 'manage/curation' : 'w?only=pending'))
+          }}
+          title={`큐레이션 대기 ${repo.curation.queue}건${repo.curation.pendingSections != null ? ` · 미반영 섹션 ${repo.curation.pendingSections}곳` : ''}`}
+        >
+          대기 <b className="num">{repo.curation.queue}</b>
+          {typeof repo.curation.oldestDays === 'number' && <span>· 가장 오래된 {repo.curation.oldestDays}일</span>}
+        </button>
+      )}
 
       {/* 미등재 — 어휘에 없는 좌표를 쓴 작업이 있다. 커밋에서 막힌다 */}
       {repo.unregistered > 0 && (
@@ -134,7 +158,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
         </button>
       )}
 
-      {/* 서버형 — 미러 · 갈림 · 더러움 한 줄. 이상이 있을 때만. 단추는 콘솔(관리자)에 있다 */}
+      {/* 서버형 — 미러 · 갈림 · 더러움 한 줄. 이상이 있을 때만. 단추는 서버 › 지식 레포(관리자)에 있다 */}
       {server && serverLine(mine) && (
         <span className="is-warn" title={mine.note || undefined}>
           <Icon name="warn" size={12} /> {serverLine(mine)}

@@ -1,63 +1,52 @@
 // 찾기 — 왼쪽이 하는 두 일 중 하나. **시작점을 고른다.**
 //
-// 대상은 **객체 이름 그대로** 셋이다 — 관리문서 · 작업문서 · 좌표.
-// 층이 다른 것을 한 대상에 섞지 않는다: 관리문서는 지금 상태, 작업문서는 사건이다.
+// 무엇의 목록인지는 **주소가 정한다**(개편안 §7.2) — `/r/<레포>/` 관리 문서 · `/r/<레포>/w` 작업 기록. 층이 다른 것을
+// 한 목록에 섞지 않는다: 관리 문서는 지금 상태, 작업 기록은 사건이다.
 //
-// ── 밑줄 탭을 버렸다 ──────────────────────────────────────────────────
+// 전에는 목록 머리에 범위 칩 셋(관리문서 · 작업문서 · 좌표)이 있었다. 왼쪽 메뉴가 생기며 같은 일을 하는 단추가 두 곳이
+// 됐고, 칩을 지웠다. 좌표 목록은 「좌표 · 그래프」 화면의 왼쪽 레일(묶음 → 좌표)이 맡는다 — 「내 좌표」(우클릭)도 거기로 갔다.
 //
-// 전에는 이 셋이 밑줄 탭이었다. 바로 위 `찾기 | 뻗어나가기` 도 밑줄 탭이라,
-// **다섯 개가 한 줄짜리 사다리로 읽혔다** — 부모와 자식이 형제로 보였다.
-// 지금은 층마다 모양이 하나씩이다: L0 세그먼트 · L1 스텝 · L2 칩.
-//
-// ── 갈래(L3)가 칩 구름에서 내려왔다 ──────────────────────────────────
-//
-// `code:` 하나가 실제 레포에서 291개 중 159개다. 그 분포를 보여주려고 칩
-// 구름을 뒀는데, 구름은 좌표에서만 두세 줄로 자란다. 그래서 **대상을 바꿀
-// 때마다 목록 첫 행이 76.5px 씩 움직였다**(실측 110.7 ↔ 187.2). 지금은
-// 찾기 줄 왼쪽의 고른목록이고, 분포는 옵션 레이블이 그대로 들고 간다.
+// 작업 기록 목록은 거름이 있다 — 전체 · 대기(큐레이션이 아직 안 본 것) · 내 기록. 거름도 주소다(`/w?only=pending|mine`).
+// 줄마다 큐레이션 상태 칩 — 대기(보라) · 반영됨 · 기록으로 둠(무채색). 서버가 상태를 안 내면(옛 서버) 칩도 「대기」 거름도 없다.
 //
 // 이 영역은 시작점만 만든다 — 관계·이력·현황은 전부 뻗어나가기가 답한다.
 
 import { useMemo, useState } from 'react'
 import { dayPart, timePart } from '../lib/format.js'
+import { Link } from '../lib/router.jsx'
+import { filterRecords, hasCuration } from '../lib/curation.js'
+import { RecordState } from '../features/curation/marks.jsx'
 import Icon from './Icon.jsx'
-
-const SCOPES = [
-  ['managed', '관리문서', 'managed'],
-  ['work', '작업문서', 'work'],
-  ['coord', '좌표', 'coord'],
-]
 
 export default function Finder({
   docs,
   managed,
-  tree,
   root,
   scope = 'managed',
-  onScope,
-  onGraph,
   onPick,
   readMap = {},
   myCoords = [],
-  onToggleMine,
+  only = null,
+  me = null,
+  listBase = '/',
 }) {
   const [q, setQ] = useState('')
-  // 좌표 갈래 — `null` 이면 전부.
-  const [cat, setCat] = useState(null)
+  const cur = scope === 'work' && hasCuration(docs)
+  const records = useMemo(() => (scope === 'work' ? filterRecords(docs, only, me) : docs), [scope, docs, only, me])
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
-    if (!s) return { works: docs, man: managed }
+    if (!s) return { works: records, man: managed }
     return {
       // 작성자로도 찾는다 — 화면에 보이는 값은 찾기에도 걸려야 한다
-      works: docs.filter((d) =>
+      works: records.filter((d) =>
         (d.title + ' ' + d.id + ' ' + (d.author || '') + ' ' + d.touches.join(' '))
           .toLowerCase()
           .includes(s)
       ),
       man: managed.filter((m) => m.name.toLowerCase().includes(s)),
     }
-  }, [q, docs, managed])
+  }, [q, records, managed])
 
   // 시각은 **같은 날 두 건 이상일 때만** 붙인다.
   //
@@ -72,55 +61,37 @@ export default function Finder({
     return new Set([...n].filter(([, v]) => v > 1).map(([k]) => k))
   }, [docs])
 
-  const cats = useMemo(() => (tree?.types || []).map((t) => [t.type, t.coords.length]), [tree])
-  const coordTotal = cats.reduce((a, [, n]) => a + n, 0)
-  const count = { managed: managed.length, work: docs.length, coord: coordTotal }
-
   const isRoot = (kind, key) => root && root.kind === kind && root.key === key
 
-  const placeholder = { managed: '관리문서 찾기', work: '제목 · 작성자 · 좌표로 찾기', coord: '좌표 찾기' }[scope]
+  const placeholder = scope === 'work' ? '제목 · 작성자 · 좌표로 찾기' : '관리 문서 찾기'
 
-  const pickScope = (k) => {
-    onScope?.(k)
-    setCat(null)
-  }
+  // 거름 칩 — 링크다(주소가 상태 · 새 탭에서도 같은 목록). 대기는 서버가 상태를 낼 때만 · 내 기록은 로그인했을 때만
+  const pending = cur ? docs.filter((d) => d.curation?.state === 'queued').length : 0
+  const mine = me?.user ? docs.filter((d) => d.author === me.user).length : 0
+  const chips =
+    scope === 'work' && (cur || me?.user)
+      ? [
+          { k: null, label: '전체', n: docs.length, to: listBase + 'w' },
+          ...(cur ? [{ k: 'pending', label: '대기', n: pending, to: listBase + 'w?only=pending' }] : []),
+          ...(me?.user ? [{ k: 'mine', label: '내 기록', n: mine, to: listBase + 'w?only=mine' }] : []),
+        ]
+      : null
 
   return (
     <div className="fd">
-      {/* L2 대상 — 칩 한 줄 */}
-      <div className="fd__scope" role="tablist" aria-label="찾을 대상">
-        {SCOPES.map(([k, label, ico]) => (
-          <button
-            key={k}
-            className="fd__chip"
-            role="tab"
-            aria-pressed={scope === k}
-            aria-selected={scope === k}
-            onClick={() => pickScope(k)}
-          >
-            <Icon name={ico} size={13} />
-            {label}
-            <span className="fd__chipn">{count[k]}</span>
-          </button>
-        ))}
-      </div>
+      {chips && (
+        <div className="fd__scope" role="group" aria-label="거름">
+          {chips.map((c) => (
+            <Link key={c.k || 'all'} to={c.to} className="fd__chip" aria-current={(only || null) === c.k ? 'true' : undefined}>
+              {c.label}
+              <span className="fd__chipn">{c.n}</span>
+            </Link>
+          ))}
+        </div>
+      )}
 
-      {/* 찾기 줄 — 갈래(L3) · 검색 · 그래프로 */}
+      {/* 찾기 줄 */}
       <div className="fd__srow">
-        {scope === 'coord' && cats.length > 1 && (
-          <span className="fd__sel" data-on={cat ? '1' : '0'}>
-            <select value={cat || ''} onChange={(e) => setCat(e.target.value || null)} aria-label="좌표 갈래">
-              <option value="">전체 {coordTotal}</option>
-              {cats.map(([t, n]) => (
-                <option key={t} value={t}>
-                  {t} {n}
-                </option>
-              ))}
-            </select>
-            <Icon name="chevronDown" size={12} />
-          </span>
-        )}
-
         <span className="fd__q">
           <Icon name="search" size={13} />
           <input
@@ -136,14 +107,6 @@ export default function Finder({
           )}
         </span>
 
-        {/* 좌표를 보고 있을 때만 난다 — L0 의 그래프와 L2 의 좌표가 같은 것을
-            본다는 사실을, 둘을 한 줄에서 만나게 해서 말한다 */}
-        {scope === 'coord' && onGraph && (
-          <button className="fd__go" onClick={onGraph} title="좌표를 그림으로 본다">
-            그래프
-            <Icon name="external" size={12} />
-          </button>
-        )}
       </div>
 
       <div className="fd__body">
@@ -187,6 +150,7 @@ export default function Finder({
                 <span className="fd__name">{d.title}</span>
                 {d.hasVisual && <span className="fd__vis" title="HTML 시각 자료가 있다"><Icon name="eye" size={12} /></span>}
                 {d.status && <span className="fd__m fd__m--q">{d.status}</span>}
+                <RecordState c={d.curation} />
                 {/* 작성자 — 누가 썼나가 이 목록에서 자주 묻는 것이다. 다만
                     좁으면 제목이 먼저다(@container) */}
                 {d.author && <span className="fd__by">{d.author}</span>}
@@ -198,82 +162,19 @@ export default function Finder({
                 </span>
               </button>
             ))}
-            {filtered.works.length === 0 && <Empty q={q} />}
+            {filtered.works.length === 0 && <Empty q={q} only={only} />}
           </>
         )}
 
-        {scope === 'coord' && (
-          <CoordList
-            tree={tree}
-            cat={cat}
-            q={q}
-            myCoords={myCoords}
-            isRoot={isRoot}
-            onPick={onPick}
-            onToggleMine={onToggleMine}
-          />
-        )}
       </div>
     </div>
   )
 }
 
-function CoordList({ tree, cat, q, myCoords, isRoot, onPick, onToggleMine }) {
-  const s = q.trim().toLowerCase()
-  const types = (tree?.types || []).filter((t) => !cat || t.type === cat)
-  let shown = 0
-
-  const body = types.map((t) => {
-    const cs = t.coords.filter((c) => !s || c.coord.toLowerCase().includes(s))
-    if (!cs.length) return null
-    shown += cs.length
-    return (
-      <div key={t.type}>
-        {/* 갈래를 하나만 보고 있으면 머리가 같은 말을 반복한다 */}
-        {!cat && <Head label={t.type} n={cs.length} />}
-        {cs.map((c) => (
-          <button
-            key={c.coord}
-            className="fd__row"
-            aria-current={isRoot('coord', c.coord)}
-            onClick={() => onPick({ kind: 'coord', key: c.coord, label: c.coord })}
-            /* **내 좌표를 정하는 유일한 길.** 상태는 본문 하이라이팅이 읽는다 */
-            onContextMenu={(e) => { e.preventDefault(); onToggleMine?.(c.coord) }}
-            title={`${c.coord}${c.label ? ' — ' + c.label : ''}\n우클릭 → 내 좌표`}
-          >
-            <Icon name="coord" size={14} className="fd__ico" />
-            {myCoords.includes(c.coord) && <span className="fd__mine">내</span>}
-            <span className="fd__name mono">{c.coord.slice(c.coord.indexOf(':') + 1)}</span>
-            {/* 작업 0건 — 어휘에는 있으나 아무 작업도 건드리지 않은 좌표다.
-                291개 중 대부분이 여기 해당한다. 조용히 구분만 해 둔다 */}
-            <span className="fd__n" data-zero={c.count ? '0' : '1'}>{c.count || '·'}</span>
-          </button>
-        ))}
-      </div>
-    )
-  })
-
-  return (
-    <>
-      {body}
-      {shown === 0 && <Empty q={q} />}
-    </>
-  )
-}
-
-function Head({ label, n }) {
-  return (
-    <div className="fd__head">
-      {label}
-      <span className="fd__hn">{n}</span>
-    </div>
-  )
-}
-
-function Empty({ q }) {
+function Empty({ q, only = null }) {
   return (
     <div className="fd__empty">
-      {q ? <>“{q}” 에 걸리는 것이 없습니다</> : '없습니다'}
+      {q ? <>“{q}” 에 걸리는 것이 없습니다</> : only === 'pending' ? '대기 중인 기록이 없습니다 — 큐레이션이 다 봤다' : only === 'mine' ? '내가 쓴 기록이 없습니다' : '없습니다'}
     </div>
   )
 }

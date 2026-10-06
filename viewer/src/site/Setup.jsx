@@ -2,7 +2,7 @@
 //
 // 명부가 비어 있을 때만 통한다. `install.sh` 가 끝에 찍은 일회용 코드(또는 서버의
 // `<data>/bootstrap.code`)를 넣으면 첫 관리자(admin · 레포 전부)와 토큰이 만들어진다.
-// 원문은 이 화면에 **한 번** 보인다. 브라우저는 그 자리에서 로그인된다 — 다음은 콘솔이다.
+// 원문은 이 화면에 **한 번** 보인다. 브라우저는 그 자리에서 로그인된다 — 다음은 서버 › 지식 레포다.
 
 import { useState } from 'react'
 import { site } from '../lib/api.js'
@@ -69,7 +69,7 @@ export default function Setup({ info, onDone }) {
           <span className="topbar__mark" aria-hidden="true">C</span>
           <h1>이 서버를 처음 설정합니다</h1>
         </div>
-        <p className="auth__sub">명부가 비어 있습니다. 첫 관리자를 만들면 나머지는 콘솔에서 합니다.</p>
+        <p className="auth__sub">명부가 비어 있습니다. 첫 관리자를 만들면 나머지는 왼쪽 메뉴의 <b>서버</b> 묶음에서 합니다.</p>
         <div className="steps">
           <div className="step2" aria-current={step === 1 ? 'step' : undefined} data-done={step > 1 ? '1' : undefined}><b>1</b> 부트스트랩 코드</div>
           <div className="step2" aria-current={step === 2 ? 'step' : undefined} data-done={step > 2 ? '1' : undefined}><b>2</b> 첫 관리자</div>
@@ -124,7 +124,7 @@ export default function Setup({ info, onDone }) {
                   </div>
                   {msg && <div className="anote anote--bad">{msg}</div>}
                   <div className="anote">
-                    이 사람은 <b>admin</b> 이고 모든 레포(<code>*</code>)를 본다. 다음 사람부터는 콘솔 &gt; 사용자에서 역할과 레포를 고른다.
+                    이 사람은 <b>admin</b> 이고 모든 레포(<code>*</code>)를 본다. 다음 사람부터는 서버 › 사용자에서 역할과 레포를 고른다.
                   </div>
                 </div>
               </div>
@@ -164,14 +164,14 @@ export default function Setup({ info, onDone }) {
                 </span>
               </div>
               <div className="anote anote--warn">
-                <b>닫으면 다시 볼 수 없습니다.</b> <code>CDP_TOKEN</code> 환경변수에 넣습니다 — 파일 · 메신저 · 이슈에 남기지 않습니다. 잃으면 콘솔에서 재발급합니다.
+                <b>닫으면 다시 볼 수 없습니다.</b> <code>CDP_TOKEN</code> 환경변수에 넣습니다 — 파일 · 메신저 · 이슈에 남기지 않습니다. 잃으면 서버 › 토큰에서 재발급합니다.
               </div>
               <div className="anote">
-                브라우저는 이미 로그인되어 있습니다. 다음은 콘솔 &gt; <b>지식 레포</b>에서 첫 레포를 세우는 것입니다(설치절차 4장).
+                브라우저는 이미 로그인되어 있습니다. 다음은 서버 › <b>지식 레포</b>에서 첫 레포를 세우는 것입니다(설치절차 4장).
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Link className="btn btn--accent" to="/console">
-                  콘솔로 <Icon name="arrowRight" size={14} />
+                <Link className="btn btn--accent" to="/console/repos">
+                  서버 › 지식 레포로 <Icon name="arrowRight" size={14} />
                 </Link>
               </div>
             </div>

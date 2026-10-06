@@ -9,7 +9,6 @@
   --bg:#f6f7f9;--surface:#fff;--surface-2:#f1f3f7;--surface-3:#e6eaf0;--border:#e2e6ed;--border-strong:#c9d1dd;
   --text:#11151c;--text-2:#515a68;--text-3:#858e9d;--accent:#3358e6;--accent-bg:#e9eeff;--accent-line:#c3d0fb;
   --danger:#cb3a2c;--danger-bg:#fdeceb;--warn:#8c5c00;--warn-bg:#fcf3e0;--pending:#6247c4;--pending-bg:#efedfd;
-  --ok:#1f7a4d;--ok-bg:#e6f4ec;--new:#c2410c;--new-bg:#fff1e7;
   --r-sm:6px;--r-md:8px;--r-lg:12px;
   --shadow-1:0 1px 2px rgba(15,23,42,.05),0 1px 3px rgba(15,23,42,.07);
   --font:Pretendard,-apple-system,"Segoe UI",system-ui,"Malgun Gothic",sans-serif;
@@ -47,8 +46,6 @@ html,body{margin:0;background:#dfe3ea;color:var(--text);font:13px/1.55 var(--fon
 .chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap}
 .c-warn{background:var(--warn-bg);color:var(--warn)}
 .c-pend{background:var(--pending-bg);color:var(--pending)}
-.c-ok{background:var(--ok-bg);color:var(--ok)}
-.c-new{background:var(--new-bg);color:var(--new)}
 .c-mute{background:var(--surface-3);color:var(--text-2)}
 .c-acc{background:var(--accent-bg);color:var(--accent)}
 .c-danger{background:var(--danger-bg);color:var(--danger)}
@@ -73,7 +70,7 @@ table.t{border-collapse:collapse;width:100%;font-size:12.5px;margin:8px 0}
 table.t th,table.t td{border-bottom:1px solid var(--border);padding:7px 9px;text-align:left;vertical-align:top}
 table.t th{background:var(--surface-2);color:var(--text-2);font-weight:600;font-size:12px}
 table.t tr.sel td{background:var(--accent-bg)}
-code{font:12px var(--mono);background:var(--surface-2);padding:1px 5px;border-radius:4px;color:#3a2f8f}
+code{font:12px var(--mono);background:var(--surface-2);padding:1px 5px;border-radius:4px;color:var(--text)}
 /* 미반영 블록 */
 .pend{border:1px solid #d9d2fb;background:#faf9ff;border-radius:10px;padding:10px 12px;margin:8px 0 12px}
 .pend .hd{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--pending);font-weight:600}
@@ -89,7 +86,7 @@ code{font:12px var(--mono);background:var(--surface-2);padding:1px 5px;border-ra
 .amenu div small{display:block;color:var(--text-3);font-size:11px}
 .amenu div.on{background:var(--accent-bg);color:var(--accent);font-weight:600}
 .amenu div.on small{color:#6c84e8}
-.amenu .nw{font-size:10px;background:var(--new);color:#fff;border-radius:4px;padding:0 4px;margin-left:4px;font-weight:700}
+.amenu .nw{font-size:10px;background:var(--accent);color:#fff;border-radius:4px;padding:0 4px;margin-left:4px;font-weight:700}
 .main{flex:1;padding:18px 22px;overflow:auto}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-1);margin-bottom:14px}
 .card .ch{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700}
@@ -125,7 +122,7 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
 .ba{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .ba h4{margin:0 0 8px;font-size:12px;color:var(--text-3);font-weight:600}
 .callout{background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:8px;padding:9px 12px;font-size:12.5px;color:#22389c}
-.diff-add{background:#e8f6ee}
+.diff-add{background:var(--accent-bg)}
 .coordset span{margin:0 4px 4px 0;display:inline-block}
 
 /* ── 좌측 메뉴 셸 ── */
@@ -149,10 +146,10 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
 .sb-i svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--text-2)}
 .sb-i.on svg{color:var(--accent)}
 .sb-i .bd{margin-left:auto;background:var(--pending-bg);color:var(--pending);font-size:11px;font-weight:700;border-radius:999px;padding:0 7px}
-.sb-i .nw{font-size:9.5px;background:var(--new);color:#fff;border-radius:4px;padding:0 4px;font-weight:700}
+.sb-i .nw{font-size:9.5px;background:var(--accent);color:#fff;border-radius:4px;padding:0 4px;font-weight:700}
 .sb-foot{margin-top:auto;border-top:1px solid var(--border);padding-top:8px}
 .sb-me{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px}
-.sb-me .av{width:24px;height:24px;border-radius:50%;background:var(--pending-bg);color:var(--pending);display:grid;place-items:center;font-weight:700;font-size:11px;flex:none}
+.sb-me .av{width:24px;height:24px;border-radius:50%;background:var(--surface-3);color:var(--text-2);display:grid;place-items:center;font-weight:700;font-size:11px;flex:none}
 .sb-me small{color:var(--text-3)}
 .side.rail{width:56px;padding:12px 6px}
 .side.rail .brand,.side.rail .t,.side.rail .rn,.side.rail .rc,.side.rail .sb-g,.side.rail .meta,.side.rail .nw{display:none}
@@ -180,13 +177,13 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
 <div class="wrap">
   <nav class="mnav" aria-label="목업 화면">
     <h1>큐레이터 모델 목업</h1>
-    <p>큐레이터 모델 설계 §9 · 좌측 메뉴 셸 설계 · dpms_wiki 실물 데이터로 그렸다. 회색 줄은 지워지는 것, 주황 「새」 는 새로 생기는 것.</p>
+    <p>큐레이터 모델 설계 §9 · 좌측 메뉴 셸 설계 · dpms_wiki 실물 데이터로 그렸다. 회색 줄은 지워지는 것, 파랑 「새」 는 새로 생기는 것. 색은 화면의 예산 그대로 — 대기 · 미반영은 보라, 반영됨 · 최신은 무채색, 초록 · 주황 없음(개편안 V19).</p>
     <div class="grp">셸 — 좌측 메뉴</div>
     <button data-s="s0" class="on"><b>S0</b>왼쪽 메뉴 · 역할 · 접기</button>
     <div class="grp">지식 — 모두</div>
     <button data-s="s1"><b>S1</b>문서 섹션 · 미반영</button>
     <button data-s="s2"><b>S2</b>작업 문서 · 상태</button>
-    <div class="grp">큐레이션 · 레포 관리 — admin</div>
+    <div class="grp">큐레이션 — 큐레이터 · 레포 관리 — 읽기</div>
     <button data-s="s3"><b>S3</b>큐레이션 대기열</button>
     <button data-s="s4"><b>S4</b>큐레이션 이력</button>
     <button data-s="s5"><b>S5</b>서식집</button>
@@ -200,7 +197,7 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
 
 <!-- ═════════ S0 ═════════ -->
 <section class="screen on" id="s0">
-  <div class="note"><b>S0 · 좌측 메뉴 셸.</b> 상단 바의 얼굴 스위처(설명서 · 레포 ▾ · 콘솔) · 레포 세그(문서 · 그래프 · 관리) · 관리와 콘솔 안쪽의 왼쪽 메뉴 둘 — <b>메뉴 세 겹</b>을 왼쪽 메뉴 하나로 편다. 위에 레포 고르기, 묶음 넷(<b>지식 · 큐레이션 · 레포 관리 · 서버</b>)을 역할대로, 맨 아래 설명서와 내 계정. <b>«</b> · 상단 ☰ · <b>Ctrl B</b> 로 아이콘 줄(56px)로 접힌다. 아래 셋 — ① admin 펼침 ② writer 펼침(지식만 — 권한 밖 묶음은 제목째 없다) ③ 접힘(문서를 읽을 때). 주소는 그대로다(좌측 메뉴 셸 설계 §4). 위 카드의 숫자는 모양을 보이려는 예시값이다.</div>
+  <div class="note"><b>S0 · 좌측 메뉴 셸.</b> 상단 바의 얼굴 스위처(설명서 · 레포 ▾ · 콘솔) · 레포 세그(문서 · 그래프 · 관리) · 관리와 콘솔 안쪽의 왼쪽 메뉴 둘 — <b>메뉴 세 겹</b>을 왼쪽 메뉴 하나로 편다. 위에 레포 고르기, 묶음 넷(<b>지식 · 큐레이션 · 레포 관리 · 서버</b>)을 역할대로, 맨 아래 설명서와 내 계정. <b>«</b> · 상단 ☰ · <b>Ctrl B</b> 로 아이콘 줄(56px)로 접힌다. 아래 셋 — ① admin 펼침 ② writer 펼침(지식 + 레포 관리 — 권한 밖 묶음은 제목째 없다 · 권한은 묶음이 아니라 항목마다 · V18) ③ 접힘(문서를 읽을 때). 주소는 그대로다(좌측 메뉴 셸 설계 §4). 위 카드의 숫자는 모양을 보이려는 예시값이다.</div>
   <div class="app" data-active="so" data-role="admin" data-crumb="서버 › 현황" data-rail="0" style="min-height:560px">
     <div class="body"><div class="main">
       <div class="kpi" style="margin-bottom:14px">
@@ -228,11 +225,11 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
   </div>
   <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;max-width:1180px;margin:16px auto 0">
     <div>
-      <div class="lbl" style="margin-left:4px">② writer — 지식 묶음 셋 + 설명서</div>
+      <div class="lbl" style="margin-left:4px">② writer — 지식 · 레포 관리 + 설명서</div>
       <div class="app" data-active="doc" data-role="writer" data-crumb="문서 › 테이블정의서" data-rail="0" style="min-height:430px">
         <div class="body"><div class="doc" style="padding:18px 22px">
           <h1 style="font-size:20px;margin-top:0">테이블정의서</h1>
-          <h2 style="font-size:15px">sy_user_info — 사용자정보 <span class="chip c-ok">최신</span></h2>
+          <h2 style="font-size:15px">sy_user_info — 사용자정보</h2>
           <table class="t"><tr><th>컬럼</th><th>타입</th><th>설명</th></tr><tr><td><code>user_id</code></td><td>varchar(20)</td><td>사용자 ID</td></tr><tr><td><code>emp_no</code></td><td>varchar(10)</td><td>사원번호</td></tr></table>
         </div></div>
         <div class="status"><span>작업 14</span><span class="ml">writer · lee</span></div>
@@ -262,7 +259,7 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
         <div class="litem">사업분석<span class="n">12</span></div>
         <div class="litem">시스템아키텍처정의서<span class="n">4</span></div>
         <div class="litem on">위험및이슈관리대장<span class="n">14</span></div>
-        <div class="litem">인터페이스정의서<span class="chip c-new" style="margin-left:6px">새</span><span class="n">2</span></div>
+        <div class="litem">인터페이스정의서<span class="chip c-acc" style="margin-left:6px">새</span><span class="n">2</span></div>
         <div class="litem">테이블정의서<span class="n">29</span></div>
         <div class="litem">코드정의서<span class="n">6</span></div>
         <div class="litem">화면설계서<span class="n">20</span></div>
@@ -285,8 +282,8 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
         <table class="t"><tr><th style="width:140px">유형</th><td>기술</td></tr><tr><th>진행상태</th><td><span class="chip c-acc">검토</span></td></tr><tr><th>결론</th><td>망연계 단일 포트 · 행정망 선요청. 목적지 확정 대기</td></tr></table>
         <p><b>정본</b> — 연계 구성은 <code>시스템아키텍처:link</code>, 프레임은 <code>인터페이스:SCADA-조회</code></p>
 
-        <h2>DPMS-ISS-10 — GDI 프레임워크 CLEAN 베이스 정리 <span class="chip c-ok">최신</span></h2>
-        <table class="t"><tr><th style="width:140px">진행상태</th><td><span class="chip c-ok">해결</span> 2026-10-06</td></tr><tr><th>결론</th><td>베이스 완성. 후속은 <code>이슈:DPMS-ISS-12</code> · <code>13</code> · <code>14</code></td></tr></table>
+        <h2>DPMS-ISS-10 — GDI 프레임워크 CLEAN 베이스 정리</h2>
+        <table class="t"><tr><th style="width:140px">진행상태</th><td><span class="chip c-mute">해결</span> 2026-10-06</td></tr><tr><th>결론</th><td>베이스 완성. 후속은 <code>이슈:DPMS-ISS-12</code> · <code>13</code> · <code>14</code></td></tr></table>
         <p class="muted" style="font-size:12px"><b>경과</b> · 2026-09-30 제기 · 2026-10-06 해결 (GDI-CLEAN-베이스)</p>
       </div>
     </div>
@@ -308,9 +305,9 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
         <div class="litem">10-06 시스템관리 화면설계서<span class="n"><span class="chip c-pend">대기</span></span></div>
         <div class="litem">10-06 SCADA 게이트웨이 결정<span class="n"><span class="chip c-pend">대기</span></span></div>
         <div class="litem">10-06 GDI CLEAN 베이스<span class="n"><span class="chip c-pend">대기</span></span></div>
-        <div class="litem">10-06 PSMW 과거사업자료<span class="n"><span class="chip c-ok">반영됨</span></span></div>
-        <div class="litem">10-02 SCADA 데이터종류<span class="n"><span class="chip c-ok">반영됨</span></span></div>
-        <div class="litem">10-01 SCADA 프레임 초안<span class="n"><span class="chip c-ok">반영됨</span></span></div>
+        <div class="litem">10-06 PSMW 과거사업자료<span class="n"><span class="chip c-mute">반영됨</span></span></div>
+        <div class="litem">10-02 SCADA 데이터종류<span class="n"><span class="chip c-mute">반영됨</span></span></div>
+        <div class="litem">10-01 SCADA 프레임 초안<span class="n"><span class="chip c-mute">반영됨</span></span></div>
         <div class="litem">09-17 PLC·CIMON 구조<span class="n"><span class="chip c-mute">기록으로 둠</span></span></div>
       </div>
       <div class="doc">
@@ -322,7 +319,7 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
         <p>메뉴모듈분류 삭제가 FK 로 실패했다 — 하위 메뉴가 있는 분류는 삭제 전에 막고 안내한다 …</p>
         <div class="card" style="margin-top:18px"><div class="ch">다른 상태의 머리 <small>· 같은 자리에 이렇게 바뀐다</small></div>
           <div class="cb">
-            <div class="row" style="margin-bottom:8px"><span class="chip c-ok">반영됨</span><span>2026-10-07 큐레이션 — <code>시스템아키텍처:link</code> · <code>이슈:DPMS-ISS-01</code> · <code>인터페이스:SCADA-조회</code>(새 문서)</span></div>
+            <div class="row" style="margin-bottom:8px"><span class="chip c-mute">반영됨</span><span>2026-10-07 큐레이션 — <code>시스템아키텍처:link</code> · <code>이슈:DPMS-ISS-01</code> · <code>인터페이스:SCADA-조회</code>(새 문서)</span></div>
             <div class="row"><span class="chip c-mute">기록으로 둠</span><span>2026-10-07 큐레이션 — 「사전지식. 용어는 용어집에 이미 있고 나머지는 이 기록이 원천」</span></div>
           </div>
         </div>
@@ -334,7 +331,7 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
 
 <!-- ═════════ S3 ═════════ -->
 <section class="screen" id="s3">
-  <div class="note"><b>S3 · 왼쪽 메뉴 › 큐레이션 › 대기열 (admin).</b> 대기열을 오래된 순으로. 기록마다 걸린 좌표를 셋으로 나눠 보인다 — <span class="chip c-ok">섹션 있음</span> 반영 후보 · <span class="chip c-warn">등록부 있음 · 섹션 없음</span> · <span class="chip c-new">등록부 없음</span> 새 문서 후보. 반영 · 새 문서는 글을 쓰는 일이라 <b>[에이전트 지시 복사]</b> 로 세션에 넘기고, 화면이 직접 하는 것은 <b>[기록으로 둠]</b> 하나다. 처음 한 번은 [기준선 잡기].</div>
+  <div class="note"><b>S3 · 왼쪽 메뉴 › 큐레이션 › 대기열 (큐레이터 — 레포별 curate · admin 은 늘).</b> 대기열을 오래된 순으로. 기록마다 걸린 좌표를 셋으로 나눠 보인다 — <span class="chip c-mute">섹션 있음</span> 반영 후보 · <span class="chip c-mute">등록부 있음 · 섹션 없음</span> · <span class="chip c-acc">등록부 없음</span> 새 문서 후보. 반영 · 새 문서는 글을 쓰는 일이라 <b>[에이전트 지시 복사]</b> 로 세션에 넘기고, 화면이 직접 하는 것은 <b>[기록으로 둠]</b> 하나다. 처음 한 번은 [기준선 잡기].</div>
   <div class="app" data-active="cq" data-role="admin" data-crumb="큐레이션 › 대기열" data-rail="0">
     
     <div class="body">
@@ -351,11 +348,11 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
             <div class="ch">대기열 <small>· 오래된 순</small><span class="ml row"><span class="btn ghost">같은 좌표끼리 묶기</span></span></div>
             <table class="t" style="margin:0">
               <tr><th></th><th>기록</th><th>걸린 좌표</th><th>작성</th></tr>
-              <tr class="sel"><td>☑</td><td><b>SCADA 게이트웨이 방식 결정</b><br><span class="muted">10-06 12:16 · 6일</span></td><td><span class="chip c-ok">섹션 6</span> <span class="chip c-new">등록부 없음 1</span></td><td>kjsa</td></tr>
-              <tr><td>☑</td><td><b>GDI CLEAN 베이스</b><br><span class="muted">10-06 11:50</span></td><td><span class="chip c-ok">섹션 38</span></td><td>kjsa</td></tr>
-              <tr><td>☐</td><td><b>시스템관리 화면설계서</b><br><span class="muted">10-06 12:50</span></td><td><span class="chip c-ok">섹션 18</span></td><td>kjsa</td></tr>
-              <tr><td>☐</td><td><b>SYA030 사원번호 직접입력</b><br><span class="muted">10-06 13:30</span></td><td><span class="chip c-ok">섹션 3</span></td><td>kjsa</td></tr>
-              <tr><td>☐</td><td><b>SYC050 · SYD010 삭제결함</b><br><span class="muted">10-06 13:50</span></td><td><span class="chip c-ok">섹션 5</span></td><td>kjsa</td></tr>
+              <tr class="sel"><td>☑</td><td><b>SCADA 게이트웨이 방식 결정</b><br><span class="muted">10-06 12:16 · 6일</span></td><td><span class="chip c-mute">섹션 6</span> <span class="chip c-acc">등록부 없음 1</span></td><td>kjsa</td></tr>
+              <tr><td>☑</td><td><b>GDI CLEAN 베이스</b><br><span class="muted">10-06 11:50</span></td><td><span class="chip c-mute">섹션 38</span></td><td>kjsa</td></tr>
+              <tr><td>☐</td><td><b>시스템관리 화면설계서</b><br><span class="muted">10-06 12:50</span></td><td><span class="chip c-mute">섹션 18</span></td><td>kjsa</td></tr>
+              <tr><td>☐</td><td><b>SYA030 사원번호 직접입력</b><br><span class="muted">10-06 13:30</span></td><td><span class="chip c-mute">섹션 3</span></td><td>kjsa</td></tr>
+              <tr><td>☐</td><td><b>SYC050 · SYD010 삭제결함</b><br><span class="muted">10-06 13:50</span></td><td><span class="chip c-mute">섹션 5</span></td><td>kjsa</td></tr>
             </table>
             <div class="cb row" style="border-top:1px solid var(--border)"><span class="muted">2건 고름</span><span class="ml btn">기록으로 둠…</span><span class="btn pri">에이전트 지시 복사</span></div>
           </div>
@@ -363,9 +360,9 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
             <div class="ch">SCADA 게이트웨이 방식 결정 <small>· 판정 재료</small></div>
             <div class="cb">
               <div class="lbl">반영 후보 — 섹션 있음</div>
-              <div class="coordset"><span class="chip c-ok">시스템아키텍처:link</span><span class="chip c-ok">이슈:DPMS-ISS-01</span><span class="chip c-ok">이슈:DPMS-ISS-02</span><span class="chip c-ok">이슈:DPMS-ISS-03</span><span class="chip c-ok">이슈:DPMS-ISS-04</span><span class="chip c-ok">이슈:DPMS-ISS-08</span></div>
+              <div class="coordset"><span class="chip c-mute">시스템아키텍처:link</span><span class="chip c-mute">이슈:DPMS-ISS-01</span><span class="chip c-mute">이슈:DPMS-ISS-02</span><span class="chip c-mute">이슈:DPMS-ISS-03</span><span class="chip c-mute">이슈:DPMS-ISS-04</span><span class="chip c-mute">이슈:DPMS-ISS-08</span></div>
               <div class="lbl" style="margin-top:10px">등록부 없음 — 새 문서 · 또는 기록으로 둠</div>
-              <div class="coordset"><span class="chip c-new">term:연계게이트웨이</span> <span class="muted">→ 용어집에 이미 <code>term:*</code> 행</span></div>
+              <div class="coordset"><span class="chip c-acc">term:연계게이트웨이</span> <span class="muted">→ 용어집에 이미 <code>term:*</code> 행</span></div>
               <div class="lbl" style="margin-top:10px">같은 사실이 걸릴 정본 후보</div>
               <p style="margin:0 0 8px">이슈 5곳이 같은 결정을 받는다 — 정본을 <code>시스템아키텍처:link</code> 하나로 두고 이슈는 결론 한 줄 + 좌표를 권한다.</p>
               <div class="lbl">본문에만 있는 좌표</div>
@@ -395,14 +392,14 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
         <div class="card">
           <table class="t" style="margin:0">
             <tr><th>언제</th><th>누가</th><th>다룬 기록</th><th>반영 섹션</th><th>새 문서</th><th>기록으로 둠</th><th></th></tr>
-            <tr class="sel"><td>10-07 10:20</td><td>kjsa</td><td>4</td><td>7</td><td><span class="chip c-new">인터페이스정의서</span></td><td>0</td><td>▾</td></tr>
+            <tr class="sel"><td>10-07 10:20</td><td>kjsa</td><td>4</td><td>7</td><td><span class="chip c-acc">인터페이스정의서</span></td><td>0</td><td>▾</td></tr>
             <tr><td colspan="7" style="background:#fbfcfe">
               <table class="t" style="margin:0">
                 <tr><th>기록</th><th>판정</th><th>어디로</th></tr>
-                <tr><td>10-01 SCADA 외부인터페이스 사전조사</td><td><span class="chip c-ok">반영</span></td><td><code>이슈:DPMS-ISS-01</code></td></tr>
-                <tr><td>10-01 SCADA 프레임규격 초안</td><td><span class="chip c-new">새 문서</span></td><td><code>인터페이스:SCADA-조회</code> · <code>인터페이스:SCADA-제어</code> → 인터페이스정의서 (서식 public-si/DE_501)</td></tr>
-                <tr><td>10-02 데이터종류 · 수집경로</td><td><span class="chip c-ok">반영</span></td><td><code>시스템아키텍처:link</code></td></tr>
-                <tr><td>10-06 PSMW 과거사업자료</td><td><span class="chip c-ok">반영</span></td><td><code>시스템아키텍처:link</code> · <code>term:PSMW</code></td></tr>
+                <tr><td>10-01 SCADA 외부인터페이스 사전조사</td><td><span class="chip c-mute">반영</span></td><td><code>이슈:DPMS-ISS-01</code></td></tr>
+                <tr><td>10-01 SCADA 프레임규격 초안</td><td><span class="chip c-acc">새 문서</span></td><td><code>인터페이스:SCADA-조회</code> · <code>인터페이스:SCADA-제어</code> → 인터페이스정의서 (서식 public-si/DE_501)</td></tr>
+                <tr><td>10-02 데이터종류 · 수집경로</td><td><span class="chip c-mute">반영</span></td><td><code>시스템아키텍처:link</code></td></tr>
+                <tr><td>10-06 PSMW 과거사업자료</td><td><span class="chip c-mute">반영</span></td><td><code>시스템아키텍처:link</code> · <code>term:PSMW</code></td></tr>
               </table>
               <p style="margin:8px 0 0"><b>정본</b> — 연계 구성은 <code>시스템아키텍처:link</code> 한 곳. 이슈 01 · 02 는 결론 한 줄 + 좌표로 줄였다.</p>
             </td></tr>
@@ -432,7 +429,7 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
         <p class="muted" style="font-size:11.5px;margin:12px 8px">이 레포가 쓰는 서식: BM_501 · DE_101 · DE_331 · DE_431 · DE_441 · EC_201 · BM_411 · AN_201 · 용어집</p>
       </div>
       <div class="main">
-        <div class="row" style="margin-bottom:10px"><b style="font-size:16px">테이블정의서</b><span class="chip c-mute">public-si/DE_431</span><span class="chip c-acc">제안 좌표 테이블정의서:* → ## {값}</span><span class="ml chip c-ok">이 레포에서 씀</span></div>
+        <div class="row" style="margin-bottom:10px"><b style="font-size:16px">테이블정의서</b><span class="chip c-mute">public-si/DE_431</span><span class="chip c-acc">제안 좌표 테이블정의서:* → ## {값}</span><span class="ml chip c-mute">이 레포에서 씀</span></div>
         <div class="tabs" data-tabs="s5"><span class="on" data-t="a">만들어지는 문서</span><span data-t="b">작성지침</span><span data-t="c">예시</span></div>
         <div data-pane="s5a">
           <div class="ba">
@@ -507,7 +504,7 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
           </div>
           <div>
             <h4>바뀐 뒤</h4>
-            <div class="card"><div class="ch">큐레이션 <span class="chip c-new">새</span><span class="ml btn">대기열 열기</span></div><div class="cb kv">
+            <div class="card"><div class="ch">큐레이션 <span class="chip c-acc">새</span><span class="ml btn">대기열 열기</span></div><div class="cb kv">
               <span>대기</span><span><b>5</b> 기록 · 가장 오래된 6일</span>
               <span>미반영 섹션</span><span>31 곳 — 어디서 보든 미반영 기록이 같이 보인다</span>
               <span>마지막</span><span>10-02 · kjsa</span></div></div>
@@ -529,10 +526,10 @@ pre.box{font:12px/1.6 var(--mono);background:var(--surface-2);border:1px solid v
     <div class="body"><div class="main">
       <div class="row" style="margin-bottom:12px"><b style="font-size:16px">지식 레포 3</b><span class="ml btn pri">새 레포</span></div>
       <div class="card"><table class="t" style="margin:0">
-        <tr><th>레포</th><th><span class="gone">패키지</span></th><th>작업 · 좌표</th><th>큐레이션 대기 <span class="chip c-new">새</span></th><th>가장 오래된</th><th>미러</th><th>쓰기</th></tr>
-        <tr><td><b>dpms_wiki</b></td><td class="muted"><span class="gone">dpms</span></td><td>14 · 104</td><td><span class="chip c-pend">5</span></td><td>6일</td><td><span class="chip c-ok">최신</span></td><td>kjsa</td></tr>
-        <tr><td><b>gdi_wiki</b></td><td class="muted"><span class="gone">dpms</span></td><td>212 · 1,089</td><td><span class="chip c-warn">23</span></td><td><span class="chip c-warn">19일</span></td><td><span class="chip c-ok">최신</span></td><td>3명</td></tr>
-        <tr><td><b>cdp_self</b></td><td class="muted"><span class="gone">blank</span></td><td>48 · 61</td><td><span class="chip c-mute">0</span></td><td>—</td><td><span class="chip c-ok">최신</span></td><td>kjsa</td></tr>
+        <tr><th>레포</th><th><span class="gone">패키지</span></th><th>작업 · 좌표</th><th>큐레이션 대기 <span class="chip c-acc">새</span></th><th>가장 오래된</th><th>미러</th><th>쓰기</th></tr>
+        <tr><td><b>dpms_wiki</b></td><td class="muted"><span class="gone">dpms</span></td><td>14 · 104</td><td><span class="chip c-pend">5</span></td><td>6일</td><td><span class="chip c-mute">최신</span></td><td>kjsa</td></tr>
+        <tr><td><b>gdi_wiki</b></td><td class="muted"><span class="gone">dpms</span></td><td>212 · 1,089</td><td><span class="chip c-pend">23</span></td><td><span class="chip c-warn">19일</span></td><td><span class="chip c-mute">최신</span></td><td>3명</td></tr>
+        <tr><td><b>cdp_self</b></td><td class="muted"><span class="gone">blank</span></td><td>48 · 61</td><td><span class="chip c-mute">0</span></td><td>—</td><td><span class="chip c-mute">최신</span></td><td>kjsa</td></tr>
       </table></div>
       <p class="muted">현황 탭의 레포 카드에도 같은 두 값이 한 줄로 나온다.</p>
     </div></div>
@@ -589,17 +586,18 @@ book:'M4 5c3-1 5-1 8 1 3-2 5-2 8-1v14c-3-1-5-1-8 1-3-2-5-2-8-1z M12 6v14',menu:'
 const svg=k=>`<svg viewBox="0 0 24 24"><path d="${IC[k]}"/></svg>`;
 const NAV=[
  {g:'지식',items:[['doc','문서','doc'],['work','작업 기록','pen','5'],['graph','좌표 · 그래프','graph']]},
- {g:'큐레이션',admin:1,items:[['cq','대기열','hour','5',1],['ch','이력','hist',0,1],['forms','서식집','grid',0,1]]},
- {g:'레포 관리',admin:1,items:[['mo','현황','check'],['md','관리 문서','file'],['mw','연결된 작업 레포','plug']]},
- {g:'서버',admin:1,items:[['so','현황','check'],['sr','지식 레포','db'],['sw','작업 레포 대장','plug'],['su','사용자','users'],['st','토큰','key'],['sa','감사','list'],['ss','서버 설정','gear']]}];
+ {g:'큐레이션',need:'curate',mark:'큐레이터',items:[['cq','대기열','hour','5',1],['ch','이력','hist',0,1],['forms','서식집','grid',0,1]]},
+ {g:'레포 관리',items:[['mo','현황','check'],['md','관리 문서','file'],['mw','연결된 작업 레포','plug']]},
+ {g:'서버',need:'admin',mark:'admin',items:[['so','현황','check'],['sr','지식 레포','db'],['sw','작업 레포 대장','plug'],['su','사용자','users'],['st','토큰','key'],['sa','감사','list'],['ss','서버 설정','gear']]}];
 document.querySelectorAll('.app[data-active]').forEach(app=>{
   const a=app.dataset.active, admin=app.dataset.role==='admin', rail=app.dataset.rail==='1';
   const server=['so','sr','sw','su','st','sa','ss'].includes(a);
   let h=`<div class="sb-top"><div class="logo">C</div><span class="brand">CDP</span><button class="sb-fold" title="접기 · Ctrl B">${svg('fold')}</button></div>
   <div class="sb-repo" title="레포 고르기 — dpms_wiki"><span class="rk">DP</span><span class="rn">dpms_wiki</span><span class="rc">▾</span></div>`;
-  NAV.forEach((g,i)=>{ if(g.admin&&!admin)return;
+  // 항목마다 need(V18) — 목업의 writer 는 큐레이터가 아니다. 묶음은 보이는 항목이 있을 때만
+  NAV.forEach((g,i)=>{ if(g.need&&!admin)return;
     if(i)h+='<div class="sb-sep"></div>';
-    h+=`<div class="sb-g">${g.g}${g.admin?'<em>admin</em>':''}</div>`;
+    h+=`<div class="sb-g">${g.g}${g.mark?'<em>'+g.mark+'</em>':''}</div>`;
     g.items.forEach(([k,l,ic,b,nw])=>{h+=`<div class="sb-i${k===a?' on':''}" title="${l}">${svg(ic)}<span class="t">${l}</span>${nw?'<span class="nw">새</span>':''}${b?`<span class="bd">${b}</span>`:''}</div>`});
   });
   h+=`<div class="sb-foot"><div class="sb-i" title="설명서">${svg('book')}<span class="t">설명서</span></div>

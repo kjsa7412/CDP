@@ -1,0 +1,442 @@
+/* 큐레이션 — 미반영 · 대기 · 판정의 표시(개편안 §7.3 S1~S5).
+ *
+ * **색 예산 그대로**(tokens.css · V19) — 대기 · 미반영은 보라(--pending · 행동 대기), 반영됨 · 기록으로 둠 · 최신은 무채색,
+ * 새 문서 후보는 파랑(--accent · 새 표지), 이상(14일 넘은 대기)만 앰버. 초록 · 주황은 없다. */
+
+/* ── 기록의 상태 칩 — 목록 · 문서 머리 ── */
+.cchip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border-radius: var(--r-pill);
+}
+.cchip--queued {
+  color: var(--pending);
+  background: var(--pending-bg);
+}
+.cchip--new {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.cchip--warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+/* 목록 줄에서는 무채색 칩이 소리를 내지 않게 — 대기만 색 */
+.fd__row .cchip:not(.cchip--queued) {
+  color: var(--text-3);
+  background: none;
+  padding: 0 2px;
+  font-weight: 500;
+}
+.vblock__cur {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vblock__cur .mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+/* 거름 칩 — 링크(주소가 상태) */
+a.fd__chip:hover {
+  text-decoration: none;
+}
+.fd__chip[aria-current='true'] {
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--accent-bg);
+  border-color: var(--accent-line);
+}
+.fd__chip[aria-current='true'] .fd__chipn {
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+/* ── 섹션의 미반영 — 제목의 칩 · 제목 아래 목록(S1) ── */
+.pchip-host {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+.pchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font: 600 11px/1.6 var(--font-sans);
+  letter-spacing: 0;
+  color: var(--pending);
+  background: var(--pending-bg);
+  border: 1px solid color-mix(in srgb, var(--pending) 22%, transparent);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+.pchip:hover {
+  border-color: var(--pending);
+}
+.pchip[aria-expanded='false'] {
+  background: none;
+}
+.pblock {
+  margin: 6px 0 14px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--pending-bg) 55%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--pending) 22%, transparent);
+  border-radius: var(--r-lg);
+}
+.pblock__head {
+  font-weight: 600;
+  color: var(--pending);
+}
+.pblock__head small {
+  font-weight: 400;
+  color: var(--text-2);
+}
+.pblock__rec {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--pending) 20%, transparent);
+}
+.pblock__date {
+  flex: none;
+  width: 108px;
+  padding-top: 1px;
+  font: 11.5px var(--font-mono);
+  color: var(--text-2);
+}
+.pblock__body {
+  flex: 1;
+  min-width: 0;
+}
+.pblock__title {
+  font-weight: 600;
+  color: var(--text);
+}
+.pblock__ex {
+  font-size: 12px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.pblock__open {
+  flex: none;
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.pblock__open:hover {
+  text-decoration: underline;
+}
+@container shell (max-width: 720px) {
+  .pblock__rec {
+    flex-wrap: wrap;
+  }
+  .pblock__date {
+    width: auto;
+  }
+}
+@media print {
+  .pchip-host,
+  .pblock-host {
+    display: none;
+  }
+}
+
+/* ── 상태 표시줄의 「대기 n」 (S9) ── */
+.statusbar .is-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  font-weight: 600;
+  color: var(--pending);
+  background: var(--pending-bg);
+  border-radius: var(--r-pill);
+}
+.statusbar .is-pending.is-old {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+
+/* ── 큐레이션 › 대기열 · 이력 · 서식집 — 넓은 화면(관리 화면의 860px 를 넘는다) ── */
+.admin__wrap--wide {
+  width: min(1180px, 100%);
+}
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--sp-3);
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+.kpi__l {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.kpi__n {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.kpi__s {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.kpi--warn .kpi__n {
+  color: var(--warn);
+}
+
+.qsplit,
+.fsplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: start;
+}
+.fsplit {
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
+}
+@container shell (max-width: 1000px) {
+  .qsplit,
+  .fsplit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.atable.qtable tbody tr,
+.atable.ltable tbody tr {
+  cursor: pointer;
+}
+.atable tr.is-picked td {
+  background: var(--accent-bg);
+}
+.qtable td:first-child,
+.qtable th:first-child {
+  width: 26px;
+}
+.qtable__title {
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+.qtable__title:hover {
+  color: var(--accent);
+}
+.qtable__sub {
+  font-size: 11.5px;
+}
+.qtable__coords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.qfoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.qmat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.qmat__l {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.qmat__v {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.qmat__v a.cchip:hover {
+  text-decoration: none;
+  filter: brightness(0.97);
+}
+.qmat__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  font-size: 12px;
+}
+.qmat__row code,
+.ljud code {
+  font: 11.5px var(--font-mono);
+}
+.qcmd {
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  font: 12px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.qkeep {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.ltable__open > td {
+  background: var(--surface-2);
+}
+.ljud {
+  padding: 4px 2px;
+}
+.ljud__foot {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+/* 서식집 */
+.fl__q {
+  width: 100%;
+}
+.fl__q input {
+  flex: 1;
+  min-width: 0;
+}
+.fl__groups {
+  flex-wrap: wrap;
+  padding: 8px 0 4px;
+}
+.fl__list {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  margin: 0 -6px;
+}
+.fl__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  color: var(--text);
+  border-radius: var(--r-md);
+}
+.fl__row:hover {
+  background: var(--surface-2);
+  text-decoration: none;
+}
+.fl__row[aria-current='page'] {
+  background: var(--accent-bg);
+}
+.fl__t {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fl__m {
+  grid-column: 1 / -1;
+  font: 10.5px var(--font-mono);
+  color: var(--text-2);
+}
+.fl__used {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.fv__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.fv__tabs {
+  padding: 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.fv__tabs a {
+  display: inline-block;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  border-bottom: 2px solid transparent;
+}
+.fv__tabs a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.fv__tabs a[aria-selected='true'] {
+  color: var(--accent);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.fv__paper {
+  padding: 14px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.fv__paper .doc {
+  font-size: 13.5px;
+}
+.fv__lbl {
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.fv__mark {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.fv__mark code {
+  padding: 1px 5px;
+  font: 11px var(--font-mono);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: var(--r-xs);
+}
+
+/* 문서 화면의 빈 상태 — 묶어서 내려받기(옛 관리 › 현황에서 왔다) */
+.landing__dl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.landing__dl a.abtn:hover {
+  text-decoration: none;
+}
+.landing__dlcap {
+  font-size: 12px;
+  color: var(--text-2);
+}

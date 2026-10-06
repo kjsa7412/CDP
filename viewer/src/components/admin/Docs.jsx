@@ -9,8 +9,9 @@
 //
 // 보기는 누구나 · 지우기 단추는 서버형 admin 에게만(없는 상태를 그리지 않는다). 로컬(모드 A)은 `ctx docs drop` 을 보인다.
 
-import { useEffect, useMemo, useState } from 'react'
-import { api, isServer } from '../../lib/api.js'
+import { useMemo, useState } from 'react'
+import { api, isServer, currentRepo } from '../../lib/api.js'
+import { useResource } from '../../lib/cache.js'
 import { Card, Note, Btn, Mono, Cmd } from './ui.jsx'
 
 const FILTERS = [
@@ -26,8 +27,12 @@ const groupOf = (no) => (no && /\d{2,}$/.test(no) ? no.slice(0, -1) : null)
 export default function Docs({ me = null, say, onChanged = null }) {
   const server = isServer()
   const canDrop = server && !!me?.admin
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
+  // 목록은 캐시(화면 · 권한 검토 v0.1 R8) — 전에는 마운트마다 처음부터 읽어 메뉴로 오갈 때마다 「읽는 중…」 이 섰다(실측 55/59 프레임).
+  // 지운 뒤에는 refresh 로 새로 읽는다
+  const rk = currentRepo() || 'local'
+  const list = useResource('api:' + rk + '/managed-docs', api.managedDocs, { ttl: 30_000 })
+  const data = list.data || null
+  const error = list.error ? list.error.message || String(list.error) : null
   const [filter, setFilter] = useState('all')
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState(() => new Set())
@@ -36,17 +41,7 @@ export default function Docs({ me = null, say, onChanged = null }) {
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(null)
 
-  const load = () =>
-    api
-      .managedDocs()
-      .then((d) => {
-        setData(d)
-        setError(null)
-      })
-      .catch((e) => setError(e.message || String(e)))
-  useEffect(() => {
-    load()
-  }, [])
+  const load = () => list.refresh().catch(() => {})
 
   const docs = data?.docs || []
   const shown = useMemo(() => {

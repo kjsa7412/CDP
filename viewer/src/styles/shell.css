@@ -1,0 +1,476 @@
+/* 셸 — 왼쪽 메뉴(SideNav) + 본문(AppBar + 얼굴). 좌측 메뉴 셸 설계 v0.1 · 개편안 §7.2.
+ *
+ * **새 디자인 언어를 만들지 않는다.** 메뉴는 크롬(--surface-2) · 고른 항목은 떠 있는 칸(찾기의 `.step` · 옛 관리 메뉴
+ * `.astep` 과 같은 문법 — 같은 일(고르기)을 하는 것은 같게 보인다) · 배지는 대기(보라 — 색 예산의 「행동 대기」).
+ * 초록 · 주황은 없다(V19). 접힘은 `<html data-nav>` 하나 — index.html 의 인라인 스크립트가 첫 페인트 전에 붙인다. */
+
+.shell--nav {
+  flex-direction: row;
+}
+.shell__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  /* 중단점은 **본문 폭**이다 — 창이 아니라. 메뉴(232px)가 펼쳐져 있으면 그만큼 좁다(개편안 §7.1 「창 기준 중단점 → @container」).
+   * container-type 은 fixed 자식(겹창 · 알림 · 덮개)의 기준 상자를 바꾸지 않는다 — Chrome 154 실측(fixed · absolute 모두 x=0) */
+  container: shell / inline-size;
+}
+
+/* ── 왼쪽 메뉴 ─────────────────────────────────────────────────────── */
+.snav {
+  position: relative;
+  z-index: 35;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  width: 232px;
+  min-height: 0;
+  padding: 10px 8px 8px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+}
+.snav__top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 0 0 8px;
+  padding-left: 4px;
+}
+.snav__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.snav__brand:hover {
+  text-decoration: none;
+}
+.snav__fold {
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+/* 레포 고르기 — 옛 상단 「레포 ▾」(행 · 칩 · 관리자 절은 `.repomenu` 그대로) */
+.snav__repo {
+  position: relative;
+  margin: 0 0 6px;
+}
+.snav__repobtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--t-fast);
+}
+button.snav__repobtn:hover,
+button.snav__repobtn[aria-expanded='true'] {
+  border-color: var(--border-strong);
+}
+.snav__repobtn--static {
+  cursor: default;
+}
+.snav__repobtn .ico {
+  color: var(--text-3);
+}
+.snav__rk {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 4px;
+  font: 700 10px/1 var(--font-mono);
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: var(--r-xs);
+}
+.snav__rn {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.snav .repomenu {
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 280px;
+}
+
+/* 묶음 · 항목 */
+.snav__nav {
+  flex: 1;
+  min-height: 0;
+  margin: 0 -4px;
+  padding: 0 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.snav__g {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.snav__grp:first-child .snav__g {
+  margin-top: 6px;
+}
+/* 「이 묶음은 아무나 보는 것이 아니다」 — admin · 큐레이터. 무채색(셸 설계 §2.1) */
+.snav__g em {
+  margin-left: auto;
+  padding: 0 5px;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xs);
+}
+.snav__i {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  white-space: nowrap;
+  border-radius: var(--r-md);
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.snav__i .ico {
+  color: var(--text-3);
+}
+.snav__i:hover {
+  color: var(--text);
+  background: var(--surface-3);
+  text-decoration: none;
+}
+.snav__i[aria-current='page'] {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--raised);
+  box-shadow: var(--shadow-thumb);
+}
+.snav__i[aria-current='page'] .ico {
+  color: var(--accent);
+}
+.snav__t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 배지 — 큐레이션 대기. 보라 = 행동 대기(tokens.css 색 예산) */
+.snav__b {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--pending);
+  background: var(--pending-bg);
+  border-radius: var(--r-pill);
+}
+
+/* 아래 — 설명서 · 내 계정 */
+.snav__foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.snav__acct {
+  position: relative;
+}
+.snav__me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 40px;
+  padding: 0 8px;
+  text-align: left;
+  color: var(--text);
+  border-radius: var(--r-md);
+  transition: background var(--t-fast);
+}
+.snav__me:hover,
+.snav__me[aria-expanded='true'] {
+  background: var(--surface-3);
+}
+/* 이름 첫 글자 — 무채색. 보라는 「대기」 의 색이라 사람에게 쓰지 않는다(V19) */
+.snav__av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+}
+.snav__who {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 1.25;
+}
+.snav__who b {
+  font-weight: 700;
+}
+.snav__who span {
+  font-size: 10.5px;
+  color: var(--text-2);
+}
+.snav__more {
+  margin-left: auto;
+  color: var(--text-3);
+}
+.snav__warn {
+  display: grid;
+  color: var(--warn);
+}
+
+/* 내 계정 — 위로 뜬다 */
+.acct {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 41;
+  width: 300px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+}
+.acct__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.acct__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct__rows {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+.acct__rows > div {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px;
+  padding: 4px 6px;
+}
+.acct__rows dt {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct__rows dd {
+  margin: 0;
+  color: var(--text);
+}
+.acct__keys {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.acct__keys summary {
+  padding: 6px 9px;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: var(--r-md);
+}
+.acct__keys summary:hover {
+  background: var(--surface-2);
+}
+.acct__keys .help__keys {
+  max-height: 220px;
+  margin: 4px 6px 6px;
+  overflow: auto;
+}
+.acct__note {
+  margin: 6px 9px 2px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+/* ── 위치 줄(AppBar) — ☰ · 빵부스러기 · 포털(검색 · 동기화 · 검증 · ⋯) ─────── */
+.appbar__menu {
+  display: none;
+}
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.crumb > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crumb__sep {
+  flex: none;
+  color: var(--text-3);
+}
+.crumb__link {
+  color: var(--text-2);
+}
+.crumb__link:hover {
+  color: var(--text);
+}
+.crumb__here {
+  font-weight: 600;
+  color: var(--text);
+}
+.appbar .topbar__center {
+  justify-content: flex-end;
+}
+
+/* ── 접힘 56px — 아이콘 줄. 이름은 툴팁 · aria-label · 배지는 점 · 묶음 사이 구분선(셸 설계 §2.4) ── */
+@media (min-width: 761px) {
+  html[data-nav='rail'] .snav {
+    width: 56px;
+    padding: 10px 6px 8px;
+  }
+  html[data-nav='rail'] .snav .snav__t,
+  html[data-nav='rail'] .snav__g,
+  html[data-nav='rail'] .snav__rn {
+    display: none;
+  }
+  html[data-nav='rail'] .snav__top {
+    flex-direction: column;
+    height: auto;
+    gap: 6px;
+    padding: 0;
+  }
+  html[data-nav='rail'] .snav__fold {
+    margin: 0;
+  }
+  html[data-nav='rail'] .snav__repobtn {
+    justify-content: center;
+    padding: 0;
+  }
+  html[data-nav='rail'] .snav__i,
+  html[data-nav='rail'] .snav__me {
+    justify-content: center;
+    padding: 0;
+  }
+  html[data-nav='rail'] .snav__grp + .snav__grp {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  html[data-nav='rail'] .snav__b {
+    position: absolute;
+    top: 5px;
+    right: 9px;
+    min-width: 0;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    font-size: 0;
+    line-height: 0;
+    background: var(--pending);
+  }
+  html[data-nav='rail'] .snav__warn {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+  }
+  html[data-nav='rail'] .snav .repomenu {
+    top: 0;
+    left: calc(100% + 8px);
+  }
+  html[data-nav='rail'] .acct {
+    left: calc(100% + 8px);
+    bottom: 0;
+  }
+  .snav__scrim {
+    display: none;
+  }
+}
+
+/* ── 760px 아래 — 메뉴는 숨고 상단 ☰ 가 덮개로 연다. 덮개는 늘 펼친 모양(접힘을 따르지 않는다) ── */
+@media (max-width: 760px) {
+  .snav {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 46;
+    width: min(280px, 86vw);
+    box-shadow: var(--shadow-3);
+    transform: translateX(-102%);
+    visibility: hidden;
+    transition: transform var(--t-base), visibility var(--t-base);
+  }
+  .shell[data-navopen='1'] .snav {
+    transform: none;
+    visibility: visible;
+  }
+  .snav__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    background: var(--scrim);
+  }
+  .appbar__menu {
+    display: grid;
+  }
+  .snav__fold {
+    display: none;
+  }
+}

@@ -1,8 +1,9 @@
-// 문서 머리 — 본문을 읽기 전에 필요한 것 두 줄(정정 관계가 있으면 세 줄).
+// 문서 머리 — 본문을 읽기 전에 필요한 것 두 줄(정정 관계 · 큐레이션 상태가 있으면 더).
 //
 //   1단  최신성 — 확인이 필요한 좌표가 몇 곳인가 · 깨진 참조   (색 있음)
 //   2단  시간   — 작성일 · 작성자 · 좌표 수                    (무채색)
-//   3단  정정   — 이 기록을 정정한 새 기록 · 이 기록이 정정한 옛 기록  (무채색 · 있을 때만)
+//   3단  큐레이션 — 대기(보라) · 반영됨 → 좌표들 · 기록으로 둠(사유)  (서버가 낼 때만 · 개편안 S2)
+//   4단  정정   — 이 기록을 정정한 새 기록 · 이 기록이 정정한 옛 기록  (무채색 · 있을 때만)
 //
 // **유효성 축이 없어졌다** (정정_판정모델_v2 §3). `supersedes` 는 판정이 아니라
 // 참조이고, 작업 기록은 사건이라 무효가 되지 않는다.
@@ -16,14 +17,14 @@
 
 import { relLabel, isBadDate } from '../lib/format.js'
 import Icon from './Icon.jsx'
+import { CurationLine } from '../features/curation/marks.jsx'
 
 export default function ValidityBlock({ doc, onOpen, onRelation }) {
   const v = doc.validity
   const all = doc.coords || doc.settled || []
   const settled = all.filter((s) => !s.excluded)
-  // **섹션 상태를 보지 않는다.** 파생 누락은 상태가 아니라 오류이므로
-  // (`ctx check` 가 커밋을 막는다) 여기 올 것이 없다. 남는 것은 **후속** —
-  // 이 작업 뒤에 같은 좌표를 건드린 작업이 있다는 사실이다.
+  // **섹션 상태를 보지 않는다.** 이 기록이 섹션에 실렸나는 3단(큐레이션)이 서버의 판정 그대로 말한다. 여기 남는 것은
+  // **후속** — 이 작업 뒤에 같은 좌표를 건드린 작업이 있다는 사실이다.
   const hot = settled.filter((s) => s.laterCount > 0)
   const excluded = all.filter((s) => s.excluded)
 
@@ -42,6 +43,7 @@ export default function ValidityBlock({ doc, onOpen, onRelation }) {
           )}
         </div>
         <TimeTier doc={doc} />
+        <CurationLine c={doc.curation} onCoord={onRelation} onOpen={onOpen} />
         <RelTier doc={doc} onOpen={onOpen} />
       </div>
     )
@@ -74,6 +76,7 @@ export default function ValidityBlock({ doc, onOpen, onRelation }) {
       </div>
 
       <TimeTier doc={doc} />
+      <CurationLine c={doc.curation} onCoord={onRelation} onOpen={onOpen} />
       <RelTier doc={doc} onOpen={onOpen} />
     </div>
   )
