@@ -163,3 +163,24 @@ test('section — 미반영 기록의 본문을 같이 싣는다 · 섹션 없�
   assert.equal(toolWork(r, { id: '2026-0905-a5' }).curation.state, 'reflected')
   assert.equal(toolWork(r, { id: '2026-0908-a8' }).curation.state, 'queued')
 })
+
+test('materialsOf — 좌표별 자리 · 등록부 없는 타입 · 본문에만 있는 좌표 · 같은 좌표의 다른 대기 기록', async () => {
+  const { materialsOf } = await import('../core/curation.js')
+  const root = await repo({
+    'docs/테이블.md': DOC([['a', '2026-0905-a5', 'A']]),
+    'work/2026-0905-a5.md': work({ id: '2026-0905-a5', date: '2026-09-05 10:00', touches: ['table:a'] }),
+    'work/2026-0907-cur.md': work({ id: '2026-0907-cur', date: '2026-09-07 10:00', extra: ['touchesEmpty: 큐레이션', 'curates:', '  - { id: 2026-0905-a5, verdict: reflect, into: [table:a] }'] }),
+    'work/2026-0908-q1.md': work({ id: '2026-0908-q1', date: '2026-09-08 10:00', touches: ['table:a', 'table:c', 'term:x'], body: '`table:b` 도 같이 봤다.' }),
+    'work/2026-0909-q2.md': work({ id: '2026-0909-q2', date: '2026-09-09 10:00', touches: ['table:a'] }),
+  })
+  const r = await loadRepo(root)
+  const m = materialsOf(r, '2026-0908-q1')
+  assert.equal(m.status.state, 'queued')
+  assert.deepEqual(m.coords.map((c) => [c.coord, c.cls]), [['table:a', 'section'], ['table:c', 'anchor'], ['term:x', 'unregistered']])
+  assert.equal(m.coords[0].state, 'pending')
+  assert.equal(m.coords[0].pending, 2)
+  assert.deepEqual(m.unregisteredTypes, [{ type: 'term' }])
+  assert.deepEqual(m.bodyOnly, ['table:b'])
+  assert.deepEqual(m.together, [{ coord: 'table:a', also: ['2026-0909-q2'] }])
+  assert.equal(materialsOf(r, '2026-0101-없음'), null)
+})

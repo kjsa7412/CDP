@@ -705,6 +705,9 @@ export async function runServe(opt = {}) {
         prompts: opt.prompts || 'auto',
         allow: a.allow,
         notice,
+        // 큐레이터 도구(queue) · 큐레이터의 save 명함 — 레포별 권한(v1.0 V2). 역할에 없는 도구는 보이지도 않는다
+        curate: (name) => (a.curate ? a.curate(name) : !!a.admin),
+        curateAny: !!a.admin || (a.curateRepos || []).length > 0,
         // `save` 는 토큰의 사용자로 author 를 채운다. 클라이언트가 보내면
         // 거절한다 — 보낼 수 있으면 남의 이름으로 기록이 남는다(§4.5).
         saver: async (name, input) => {

@@ -78,6 +78,55 @@ export function coordClass(managedIndex, coord) {
   return 'section'
 }
 
+// ── 판정 재료 — 대기 기록 하나(v1.0 TODO §1.3 `/queue/<id>` · MCP `queue({ id })`) ─────────────────────────
+//
+// 큐레이터가 「반영 · 새 문서 · 기록으로 둠」 을 정하는 데 필요한 것을 한 번에 — 기록의 좌표마다 등록부 자리와 섹션 상태,
+// 등록부가 없는 타입(새 문서 후보 · 서식 제안은 부르는 쪽이 `forms` 로 채운다), 본문에만 있는 좌표, 그리고 **정본 후보**
+// (같은 대기열 안에서 같은 좌표를 건드린 다른 기록 — 묶어서 한 번에 다루라는 신호).
+const RE_BODY_COORD = /`([a-z가-힣][a-z0-9가-힣_-]*:[^`\s]+)`/gi
+
+export function materialsOf(r, id) {
+  const d = r.byId.get(id)
+  if (!d) return null
+  const st = r.curation.statusOf(id)
+  const coords = (d.touches || []).map((c) => {
+    const cls = coordClass(r.managedIndex, c)
+    const hit = r.managedIndex?.find(c) || null
+    const row = r.sections.find((x) => x.coord === c) || null
+    return {
+      coord: c,
+      cls,
+      doc: hit?.doc ?? null,
+      state: r.curation.stateOf(c, row),
+      applied: row?.applied ?? null,
+      pending: r.curation.pendingOf(c).length,
+    }
+  })
+  const types = [...new Set(coords.filter((x) => x.cls === 'unregistered').map((x) => x.coord.slice(0, x.coord.indexOf(':'))))]
+  const body = (r.bodies.get(d.path) || '').slice(d.bodyOffset || 0)
+  const inTouches = new Set(d.touches || [])
+  const bodyOnly = []
+  for (const m of body.matchAll(RE_BODY_COORD)) {
+    const c = m[1]
+    if (inTouches.has(c) || bodyOnly.includes(c) || !r.vocab.coords.has(c)) continue
+    bodyOnly.push(c)
+  }
+  const queued = new Set(r.curation.queue.map((q) => q.id))
+  const together = []
+  for (const c of d.touches || []) {
+    const also = (r.coords.byCoord.get(c) || []).filter((o) => o.id !== id && queued.has(o.id)).map((o) => o.id)
+    if (also.length) together.push({ coord: c, also })
+  }
+  return {
+    record: { id: d.id, title: d.title ?? null, date: d.date ?? null, author: d.author ?? null, touches: d.touches || [], excerpt: excerptOf(body) || null },
+    status: st,
+    coords,
+    unregisteredTypes: types.map((type) => ({ type })),
+    bodyOnly,
+    together,
+  }
+}
+
 // r 의 일부만 받는다 — loadRepo 와 화면 store 가 같은 함수를 부른다(불변조건 I1)
 //   works          작업 기록(layer work · 프론트매터 있음)
 //   sections       buildSectionStatus 의 행(옛 판정 — applied 뒤 후속 items)
