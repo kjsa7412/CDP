@@ -12,6 +12,7 @@ import { buildBacklinks, cmpDateDesc } from './validity.js'
 import { buildIndex, fullText, prepQuery, matchName, bestName } from './search.js'
 import { runBuiltinCheck } from './check.js'
 import { visualRefs, visualTitle } from './visuals.js'
+import { formIdOfText } from './tools.js'
 
 // 검색이 한 갈래에 내는 최대 줄 수. 그 아래는 사람이 안 읽는다 — 개수는
 // 언제나 전체를 말한다(§13-②).
@@ -563,6 +564,8 @@ export class Store {
         .filter(({ x, sec }) => x.count > 0 || (sec && sec.state !== 'ok'))
         .map(({ x, sec }) => ({ coord: x.coord, later: x.count, sec: sec ? sec.state : null, secCount: sec ? sec.count : 0 })),
       unregistered: d.touches.filter((c) => this.vocab.coords.size && !this.vocab.coords.has(c)),
+      // 큐레이션 상태 — 목록의 칩(대기 · 반영됨 · 기록으로 둠)이 이것 하나로 그린다(v1.0 TODO §1.3)
+      curation: d.layer === 'work' && this.curation ? (({ state }) => ({ state }))(this.curation.statusOf(d.id) || { state: null }) : null,
     }
   }
 
@@ -653,8 +656,15 @@ export class Store {
                 appliedTitle: r.applied ? this.byId.get(r.applied)?.title || null : null,
                 appliedDate: r.applied ? this.byId.get(r.applied)?.date || null : null,
                 missing: (r.items || []).map((x) => ({ id: x.id, title: x.title, date: x.date })),
+                // v1.0 — 섹션 상태 셋(ok · pending · missing)과 미반영 기록(발췌 포함). 화면의 「미반영 n」 칩이 이것을 그린다
+                cstate: this.curation ? this.curation.stateOf(r.coord, r) : null,
+                pending: this.curation ? this.curation.pendingOf(r.coord) : [],
               }))
           : null,
+      // 관리 문서의 서식 표지(`<!-- cdp:form … -->`) — 화면이 칩으로 그린다
+      form: d.layer === 'managed' ? formIdOfText(body) : null,
+      // 작업 기록의 큐레이션 상태 — 대기 · 반영됨(into) · 기록으로 둠(reason)
+      curation: d.layer === 'work' && this.curation ? this.curation.statusOf(d.id) : null,
       // **역참조 — 이 작업이 어느 관리 문서 섹션에 근거로 실렸나.**
       //
       // 사용자가 물은 "어떤 문서로 바뀌었고"가 정확히 이것이다. 계산은 이미
@@ -945,6 +955,8 @@ export class Store {
       legacyPending: this.units.filter((d) => d.status === '미결' || d.status === '제안').length,
       unregistered: this.tree().unregistered.length,
       pendingDerive: this.status().pendingDerive.length,
+      // 큐레이션 — 메뉴 배지 · 현황 카드의 재료(v1.0 TODO §1.3). `/me` 에 싣지 않는다(레포마다 스캔을 깨운다)
+      curation: this.curation ? this.curation.stats : null,
       parseErrors: errors,
       checkCounts: counts,
       watchAlive: this.watchAlive,
