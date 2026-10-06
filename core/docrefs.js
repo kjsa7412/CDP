@@ -15,7 +15,7 @@
 import { outsideFences } from './managed.js'
 import { repoPath } from './repopath.js'
 import { blockRange, headRow, registryRowLines } from './regen.js'
-import { TOOL_FILES } from './toollayer.js'
+import { TOOL_LAYER } from './migrate.js'
 
 const NL = '\n'
 const lc = (s) => String(s).toLowerCase()
@@ -38,7 +38,8 @@ export function docKeys(p) {
 }
 
 // 참조를 찾는 파일 — 관리 문서 · 어휘 · 등록부 · 뿌리의 md(도구 층 · 생성물 제외). `work/` 는 넣지 않는다
-const ROOT_SKIP = new Set([...TOOL_FILES.filter((f) => !f.includes('/')), 'INDEX.md', 'INDEX-by-coord.md'].map(lc))
+// 옛 레포의 도구 층(v1.0 이전 · `ctx migrate` 가 걷는다)과 .gitattributes — 문서가 아니다
+const ROOT_SKIP = new Set([...TOOL_LAYER, '.gitattributes'].map(lc))
 export function isRefFile(rel) {
   const v = String(rel)
   if (!/\.md$/i.test(v)) return false

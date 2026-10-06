@@ -20,7 +20,7 @@ import { save as doSave } from '../../core/save.js'
 import { CtxError } from '../../core/tools.js'
 import { zip } from '../../core/zip.js'
 import * as wr from '../../core/workrepos.js'
-import { kitHash, mergeClaude, mcpEntryServer, mergeMcpJson } from '../../core/setup.js'
+import { mergeClaude, mcpEntryServer, mergeMcpJson } from '../../core/setup.js'
 import { kitFiles } from '../../core/kit.js'
 import { Store } from '../../core/store.js'
 import { handleRead, MIME } from '../server/adapter/read-api.js'
@@ -36,8 +36,6 @@ import { resolvePackages, materializePackage } from './ctx-package.mjs'
 import { parseCidrs, ipInCidrs, makeLimiter } from '../../core/net.js'
 import { appVersion } from '../../core/appinfo.js'
 import { doctorRows, resolveManualDir } from './ctx-serve-doctor.mjs'
-import { refreshToolLayer, describe as kitLine, REASON_TEXT as KIT_REASON } from '../../core/toollayer.js'
-import { sharedKitSource, kitMessage } from './ctx-serve-kit.mjs'
 
 const NL = String.fromCharCode(10)
 
@@ -545,21 +543,9 @@ export async function runServe(opt = {}) {
   // 패키지 — 콘솔의 `POST /admin/repos` 가 여기서 복사한다(검토 §3.5 · 화면 · 권한 검토 v0.1 R1). 없어도 서버는 돈다.
   const pk = await resolvePackages({ explicit: opt.packages, binDir: hereDir(import.meta.url) })
   log.line(pk ? `패키지: ${pk.dir} (${pk.how})` : '패키지: 없음 — 화면에서 레포를 세우려면 --packages')
-  // 에이전트 세팅의 원본(도구 층) — 처음 쓸 때 한 번 만든다. 완성 폴더면 그 자리이고, 소스로 돌 때만 조립한다(에이전트 세팅 갱신 TODO T3 · T8)
-  const kitFrom = async () => (pk ? (await sharedKitSource(pk)).from : null)
-  // 레포 하나의 에이전트 세팅 — 쓰지 않고 본다(dry). 콘솔의 한 줄 · 진단이 쓴다
-  // kit 은 서버 번들에서 낸다(v1.0 W5) — 레포마다 다르지 않다. writer kit 의 해시가 대장 「낡음」 의 기준이다
+  // kit 은 서버 번들에서 낸다(v1.0 W5) — 레포마다 다르지 않다. writer kit 의 해시가 대장 「낡음」 의 기준이다.
+  // 레포 안의 도구 층은 없다(I9) — 옛 「에이전트 세팅 갱신」(레포마다 도구 층 커밋)은 v1.0 에서 끝났다
   const bundleHash = async (role = 'writer') => (await kitFiles({ role, explicit: opt.kit || null })).hash
-  const kitState = async (root) => {
-    try {
-      const from = await kitFrom()
-      if (!from) return { state: 'unknown', reason: 'no-packages', changes: [], line: '패키지 폴더가 없어 견줄 수 없다' }
-      const r = await refreshToolLayer(root, from, { dry: true })
-      return { state: r.state, reason: r.reason, changes: r.changes.map((c) => ({ path: c.path, op: c.op })), line: kitLine(r) }
-    } catch (e) {
-      return { state: 'unknown', reason: 'error', changes: [], line: e.message }
-    }
-  }
   const authenticate = makeAuth({ authFile: opt.auth, log })
   // 서명 비밀. 갈면 전원 재로그인이다(§6.4).
   const secret = dataDir ? await auth.loadSecret(dataDir) : Buffer.from('dev-only-secret-not-persisted!!')
@@ -1177,13 +1163,6 @@ export async function runServe(opt = {}) {
             if (diverged.length) alerts.push({ level: 'bad', text: `origin 과 갈라진 레포 ${diverged.length} — ${diverged.map((d) => `${d.name}(서버 ${d.ahead} · origin ${d.behind ?? '?'})`).join(' · ')} · 기계는 합치지 않는다 → 셸에서 rebase 뒤 「다시 보내기」`, to: 'repos' })
             if (lag.length) alerts.push({ level: 'warn', text: `미러가 밀린 레포 ${lag.length} — ${lag.map((l) => `${l.name} ${l.ahead ?? '?'}건${l.reason ? ' · ' + (mirror.REASON_TEXT[l.reason] || l.reason) : ''}`).join(' · ')}`, to: 'repos' })
             if (behind.length) alerts.push({ level: 'warn', text: `origin 이 앞선 레포 ${behind.length} — ${behind.map((b) => `${b.name} ${b.behind}건`).join(' · ')} · 누군가 서버 밖에서 썼다 → 「origin 과 맞추기」`, to: 'repos' })
-            // 에이전트 세팅 — 레포의 도구 층이 서버 판과 다르면 작업 레포가 옛 스킬을 받는다(upgrade 때 건너뛴 레포 · Docker)
-            const kitStale = []
-            for (const r of list) {
-              const k = await kitState(r.root)
-              if (k.state === 'dry' || k.state === 'skipped') kitStale.push({ name: r.name, n: k.changes.length, reason: k.reason })
-            }
-            if (kitStale.length) alerts.push({ level: 'warn', text: `에이전트 세팅이 서버 판과 다른 레포 ${kitStale.length} — ${kitStale.map((k) => `${k.name} ${k.n}건${k.reason ? ' · ' + (KIT_REASON[k.reason] || k.reason) : ''}`).join(' · ')} → 지식 레포 › 「에이전트 세팅 갱신」`, to: 'repos' })
             if (byState.낡음) alerts.push({ level: 'warn', text: `에이전트 세팅이 낡은 작업 레포 ${byState.낡음} — 담당자가 자기 PC 에서 「일괄 갱신」 한 줄(관리 › 작업 레포)`, to: 'repos' })
             if (doctorCache.res?.fails) alerts.push({ level: 'bad', text: `진단 fail ${doctorCache.res.fails} — ${doctorCache.res.rows.filter((r) => r.state === 'fail').map((r) => r.what).join(' · ')}`, to: 'server' })
             if (!list.length) alerts.push({ level: 'warn', text: '지식 레포가 없다 — 지식 레포에서 세우거나 origin 에서 받아 온다', to: 'repos' })
@@ -1318,8 +1297,6 @@ export async function runServe(opt = {}) {
                 // 큐레이션 대기 · 가장 오래된 나이 — 서버 › 지식 레포 표의 열(v1.0 S7)
                 curation: info.curation ? { queue: info.curation.queue, oldestDays: info.curation.oldestDays, stale: !!info.curation.stale } : null,
                 users: visibleTo(r.name),
-                // 에이전트 세팅(도구 층)이 이 서버 판과 같은가 — 다르면 작업 레포가 옛 스킬을 받는다
-                kit: await kitState(r.root),
               })
             }
             okLog('/repos', '-')
@@ -1461,42 +1438,6 @@ export async function runServe(opt = {}) {
             log.line(`레포 치움 ${name} → ${r.to}`)
             okLog('/repos/delete', name)
             return json(res, 200, { ok: true, name, trash: r.to, revoked, workrepos: left, mirror: m0.state, ahead: m0.ahead })
-          }
-          // ── 레포 하나의 에이전트 세팅 갱신 — 도구 층(스킬 · 도구 · 훅)을 이 서버 판으로 한 커밋(에이전트 세팅 갱신 TODO T8).
-          // upgrade.sh 가 멈춘 사이에 하는 일을 도는 서버에서 — save 와 같은 뮤텍스 · 재인증 뒤 · `auth.log` · --mirror 면 보낸다.
-          const km = /^\/repos\/([^/]+)\/kit$/.exec(sub)
-          if (km && req.method === 'POST') {
-            const name = decodeURIComponent(km[1])
-            await store.ensure(name)
-            const found = (await store.list()).find((x) => x.name === name)
-            if (!found) return fail(new auth.AuthError('E_NOT_FOUND', '그런 레포가 없다', { name }))
-            let r
-            try {
-              const from = await kitFrom()
-              if (!from) throw Object.assign(new Error('서버에 패키지 폴더가 없다 — --packages'), { code: 'E_INPUT' })
-              r = await withLock(path.resolve(found.root), () => refreshToolLayer(found.root, from, { message: (c) => kitMessage(BUILT, c.length) }))
-            } catch (e) {
-              okLog('/repos/kit', name, 400)
-              return json(res, 400, { error: { code: e?.code || 'E_INPUT', message: e.message } })
-            }
-            let pushed = null
-            if (r.state === 'updated' && opt.mirror) pushed = await mirror.enqueuePush(found.root, { log: (m) => log.line(m) }).catch(() => null)
-            await auth.audit(dataDir, `admin repo kit · ${a.user} · ${name} · ${r.state}${r.reason ? '=' + r.reason : ''} · ${r.changes.length}건${r.commit ? ' · ' + r.commit : ''}`)
-            if (r.state === 'updated') log.line(`에이전트 세팅 갱신 ${name}: ${r.changes.length}건 → ${r.commit}`)
-            const ok = r.state === 'updated' || r.state === 'same'
-            okLog('/repos/kit', name, ok ? 200 : 409)
-            return json(res, ok ? 200 : 409, {
-              ok,
-              state: r.state,
-              reason: r.reason,
-              reasonText: r.reason ? KIT_REASON[r.reason] || r.reason : null,
-              message: r.message ?? null,
-              commit: r.commit,
-              changes: r.changes.map((c) => ({ path: c.path, op: c.op })),
-              line: kitLine(r),
-              mirror: await mirror.summary(found.root),
-              pushed: pushed ? { ok: !!pushed.ok, state: pushed.state, reason: pushed.reason ?? null } : null,
-            })
           }
           // ── 레포 하나의 복구 셋 — 「origin 과 맞추기」 · 「다시 보내기」 · 「트리 되돌리기」(동시 기록 검토 v0.1 D4 · D5).
           // 전부 재인증 뒤(위의 GET 아님 → cdp_su) · `save` 와 같은 뮤텍스 · `auth.log`. 판정은 `core/mirror.js` 하나다.

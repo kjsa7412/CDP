@@ -22,7 +22,9 @@ import { listRepos } from '../../core/reponew.js'
 import { classifyPushError } from '../../core/git.js'
 import { REASON_TEXT } from '../../core/mirror.js'
 import { resolvePackages } from './ctx-package.mjs'
-import { planToolLayer } from '../../core/toollayer.js'
+import { findKitDir } from '../../core/kit.js'
+import { findFormsDir } from '../../core/formslib.js'
+import { TOOL_LAYER } from '../../core/migrate.js'
 import { hereDir } from '../server/runtime.js'
 
 const NL = String.fromCharCode(10)
@@ -126,6 +128,14 @@ export async function doctorRows(opt) {
   if (man) ok('manual', `${man.dir} · 설명서 ${man.books.length}권`)
   else warn('manual', '없다 — 설명서 페이지가 빈다. 산출물의 manual/ 을 두거나 --manual')
 
+  // ── kit · 서식집 — 작업 레포의 스킬 · CLAUDE 블록과 새 문서의 서식은 서버 번들에서 나간다(v1.0 W5 · U6)
+  const kit = await findKitDir({ explicit: opt.kit })
+  if (kit) ok('kit', `${kit.dir} (${kit.how})`)
+  else fail('kit', '없다 — 설치 한 줄 · 큐레이터 kit 이 빈 채로 나간다. 산출물의 kit/ 을 두거나 --kit')
+  const forms = await findFormsDir({ explicit: opt.forms })
+  if (forms) ok('forms', `${forms.dir} (${forms.how})`)
+  else warn('forms', '없다 — 서식에서 새 관리 문서를 세울 수 없다(큐레이터 forms · managed.add { form }). 산출물의 forms/ 을 두거나 --forms')
+
   // ── 패키지
   const pk = await resolvePackages({ explicit: opt.packages })
   if (pk) {
@@ -139,10 +149,6 @@ export async function doctorRows(opt) {
     const repos = await listRepos(path.resolve(opt.root)).catch(() => null)
     if (!repos) fail('--root', `${opt.root} 를 읽을 수 없다`)
     else {
-      // 에이전트 세팅의 원본 — 패키지가 있을 때만 견준다(에이전트 세팅 갱신 TODO T8)
-      // 서버 안(콘솔 · 현황)에서는 프로세스에 한 번 만든 것을 같이 쓴다 — 셸의 doctor 는 한 번 돌고 끝난다
-      let kitSrc = null
-      if (pk) kitSrc = await import('./ctx-serve-kit.mjs').then((m) => (opt.inProcess ? m.sharedKitSource(pk) : m.kitSource(pk, { verify: false }))).catch(() => null)
       const real = repos.filter((r) => r.vocab)
       if (!real.length) warn('레포', `${opt.root} 에 지식 레포가 없다 (_vocab.md 있는 폴더) — 콘솔 > 지식 레포 · ctx repo new · git clone`)
       for (const r of repos) {
@@ -183,13 +189,11 @@ export async function doctorRows(opt) {
           }
         }
         if (r.ahead > 0) warn(`레포 ${r.name} 미러`, `${r.ahead}건이 origin 에 안 갔다 — 콘솔 > 지식 레포 > 「다시 보내기」`)
-        // 도구 층이 이 번들 판과 다르면 작업 레포가 옛 스킬을 받는다 — upgrade 때 건너뛴 레포(더러움 · origin 앞섬) · Docker
-        if (kitSrc) {
-          const k = await planToolLayer(r.path, kitSrc.from).catch(() => null)
-          if (k?.changes.length) warn(`레포 ${r.name} 에이전트 세팅`, `이 서버 판과 ${k.changes.length}건 다르다 — 콘솔 > 지식 레포 > 「에이전트 세팅 갱신」 (셸: sudo -u cdp -H node <prefix>/bin/ctx.mjs serve kit-refresh --root ${path.dirname(r.path)} --repo ${r.name})`)
-        }
+        // 옛 레포 — 도구 층(bin · 훅 · 스킬 사본 · INDEX)이 남아 있으면 아직 v1.0 으로 옮기지 않았다(I9 · 개편안 §9.2)
+        const left = []
+        for (const rel of TOOL_LAYER) if (await fs.stat(path.join(r.path, rel)).catch(() => null)) left.push(rel)
+        if (left.length) warn(`레포 ${r.name} 도구 층`, `옛 도구 층이 남았다(${left.slice(0, 4).join(' · ')}${left.length > 4 ? ' …' : ''}) — 서버를 멈추고 sudo -u cdp -H node <prefix>/bin/ctx.mjs migrate ${r.path}`)
       }
-      if (!opt.inProcess) await kitSrc?.cleanup()
     }
   }
 

@@ -1,8 +1,7 @@
 // ctx-mcp — MCP 서버. 설계서 §2.
 //
-// **전송을 모른다.** stdio(모드 A · §3)도 Streamable HTTP(모드 B · §4)도 이
-// `buildServer()` 가 만든 같은 서버를 쓴다. 전송을 갈아끼우는 것은 부르는
-// 쪽이고, 그래서 도구·리소스·명함·판정이 두 모드에서 같다.
+// **전송을 모른다.** `buildServer()` 가 만든 서버를 Streamable HTTP(`ctx-mcp-serve.mjs` · 개인 서버 포함)가
+// 요청마다 잇는다. stdio(모드 A)는 v1.0 에서 끝났다(개편안 §5.6) — 작업 레포는 늘 HTTP MCP 다.
 //
 // **계산을 여기서 하지 않는다.** 형태는 전부 `core/tools.js` 가 만든다 --
 // `ctx <명령> --json` 과 바이트까지 같아야 하기 때문이다(§10). 이 파일이 하는
@@ -45,7 +44,7 @@ const CARD = {
     '작업 기록 본문. "왜 그렇게 정했나"는 관리 문서가 아니라 여기 있다. 한 기록에 좌표가 여럿이고 좌표마다 그 뒤 사정이 다르다 — 문서 단위로 "덮였다"고 판정하지 말고 좌표별로 `where` 를 본다. `curation` 은 이 기록의 큐레이션 상태 — `queued`(대기) · `reflected`(반영됨 · `into` 좌표) · `kept`(기록으로 둠 · `reason`) · `system`(큐레이션 · 기준선 기록 자신)',
   search:
     '말 → 좌표 후보. `match` 가 미등재를 냈을 때의 폴백. 본문은 싣지 않는다 — 후보를 고른 뒤 `section` 으로 읽는다. 유사도 검색이 아니다: 걸리지 않으면 없는 것이다',
-  check: '커밋 가능한가. 커밋 때 같은 검사가 돈다 — 이 도구로 미리 본다',
+  check: '레포 검사. save 가 같은 검사를 돌려 **그 save 가 새로 만든 오류**로만 막는다(원래 있던 오류는 경고) — 이 도구로 미리 본다',
   brief: '레포의 지금 — 절차 한 줄 · 레포 상태(작업 기록 · 관리 문서 · 큐레이션 대기 · 미반영 섹션) · 서버형이면 미러 · kit 해시(`sync`) · 번들 판(`built`). 서버형이면 작업 레포 `.claude/cdp.json` 의 `repo` 를 넘긴다 — 이 연결(.mcp.json)의 기본 레포와 다르면 경고 줄이 붙는다. `sync.kit.hash` 가 작업 레포 `CLAUDE.md` 의 `cdp:kit` 값과 다르면 여기 깔린 스킬이 낡았다 — 답에 적고, 고치는 것은 설치 한 줄 `--update`',
   docs:
     '관리 문서 목록과 등록부. 인자 없이 부르면 문서마다 경로 · 관리번호(`BM_411`) · 제목 · 등록부 대상인지(`registered`) · 걸린 패턴을 준다 — "어느 문서가 있나 · 이 문서가 등록부에 있나" 는 이것. `doc` 에 경로나 관리번호를 주면 그 문서 원문(`text`)과 헤딩 목록(좌표 섹션이면 `coord`)을 준다. 등록부 비대상 문서(회의록 같은 날짜축)와 머리말은 `section` 으로 못 읽는다 — 이것으로 읽고, 고칠 때는 `save` 의 `edits` 에 여기 `text` 의 글을 그대로 `old` 로 싣는다. `_vocab.md` · `_managed.md` 도 `doc` 으로 받는다. 목록의 `usage` 는 사용 현황 — `sections`(전체 · 작업 기록이 쓴 것) · `touchedBy` · `mentionedBy`(작업 기록) · `refsIn`(다른 문서에서 들어오는 참조) · `required`(필수 제출) · `lastChange` · `state`(`쓰는 중` · `서식 그대로` — 제안이지 판정이 아니다). 안 쓰는 문서를 고를 때 이것을 표로 보인다',
@@ -145,14 +144,14 @@ export function makeRepoCache(root) {
 //
 // repos    [{ name, root, title? }]
 // fallback 기본 레포 이름 또는 null (§2.9)
-// mode     'local' | 'server'
+// mode     'server' 하나다(v1.0 — stdio 모드 A 는 끝났다). 시험이 넘기는 값과의 호환으로 인자만 남긴다
 // allow    (name) => boolean   모드 B 의 토큰 권한. 없으면 전부 허용
 // saver    (repoName, input) => 결과   모드 B 만. 없으면 `save` 를 등록하지 않는다
 // notice   brief 에 한 줄 더 — 토큰 만료 임박 등(§4.4.2). 레포와 무관한 알림 자리
-// curate   (name) => boolean   그 레포의 큐레이터인가(v1.0 V2). 없으면 로컬(모드 A)은 전부 · 서버는 아무도 아니다
+// curate   (name) => boolean   그 레포의 큐레이터인가(v1.0 V2). 없으면 아무도 아니다
 // curateAny  큐레이터 도구(queue)를 등록할지 — 한 레포라도 큐레이터면. 역할에 없는 도구는 보이지도 않는다(개편안 §5.3)
 
-export function buildServer({ repos = [], fallback = null, mode = 'local', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT, curate = null, curateAny = null, formsOpt = null } = {}) {
+export function buildServer({ repos = [], fallback = null, mode = 'server', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT, curate = null, curateAny = null, formsOpt = null } = {}) {
   if (!repos.length) throw new CtxError('E_REPO', '지식 레포가 하나도 없다', {})
 
   const caches = new Map()
@@ -220,19 +219,19 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
       lines.push(`[CDP] 이 연결(.mcp.json)의 기본 레포는 ${fallback} 인데 ${name} 를 물었다 — .mcp.json 과 .claude/cdp.json 의 레포가 다르다. repo 를 빠뜨린 읽기는 ${fallback} 로 간다 · 설치 한 줄을 다시 돌려 맞춘다`)
     }
     // 서버형 — 미러 · 트리 이상이 있을 때만 한 줄(동시 기록 검토 v0.1 D3). 정상은 조용하다
-    if (mode === 'server') {
+    {
       const m = await mirrorSummary(r.root).catch(() => null)
       const d = mirrorLine(m)
       if (d) lines.push('[CDP] 미러: ' + d)
     }
     if (notice) lines.push(notice)
     // 옛 `sync` · `version` 도구를 흡수했다(v1.0 W1) — 미러 · kit 해시 · 번들 판이 같은 응답에
-    return { ...b, lines, sync: await syncOf(r, mode, (curateAny ?? mode === 'local') && canCurate(name) ? 'curator' : 'writer'), built }
+    return { ...b, lines, sync: await syncOf(r, canCurate(name) ? 'curator' : 'writer'), built }
   })
 
   // 큐레이터 도구 — 큐레이터가 아니면 등록하지 않는다(보이지도 않는다). 레포마다는 부를 때 다시 본다
-  const canCurate = curate || (() => mode === 'local')
-  if (curateAny ?? mode === 'local') {
+  const canCurate = curate || (() => false)
+  if (curateAny) {
     tool('queue', { id: z.string().max(140).optional() }, (r, a, { name }) => {
       if (!canCurate(name)) throw new CtxError('E_FORBIDDEN', '그 레포의 큐레이터가 아니다 — 대기열은 큐레이터의 일이다', { repo: name, need: 'curate' })
       if (a.id) {
@@ -320,7 +319,7 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
     server.registerTool(
       'save',
       {
-        description: (curateAny ?? mode === 'local') ? CARD.saveCurator : CARD.save,
+        description: curateAny ? CARD.saveCurator : CARD.save,
         inputSchema: {
           repo: z.string().max(64),
           work: z.object({
@@ -462,7 +461,7 @@ function instructions({ repos, fallback, mode, allow }) {
     '  이유는 where 가 준 작업 id 로 work 를 연다.',
     '· 문서 전체를 읽지 않는다. section 은 섹션과 그 뒤의 **미반영 기록**(pendingRecords)을 같이 준다 —',
     '  state 가 pending 이면 둘 다 읽고 그 사실을 답에 적는다.',
-    mode === 'server' ? '· 기록은 cdp-save 절차로만 남긴다. 관리 문서는 큐레이터가 반영한다(cdp-curate).' : '· 쓰기 도구는 없다. 기록·갱신은 스킬과 git 이 한다.'
+    '· 기록은 cdp-save 절차로만 남긴다. 관리 문서는 큐레이터가 반영한다(cdp-curate).'
   )
   return lines.join(NL)
 }
@@ -479,10 +478,10 @@ export function mirrorOf(st, root = null) {
   return stateOf(st, root ? lastPush(root) : null)
 }
 
-async function syncOf(r, mode, role = 'writer') {
+async function syncOf(r, role = 'writer') {
   const git = await import('../../core/git.js')
   const st = await git.status(r.root).catch(() => null)
-  if (mode === 'server') {
+  {
     // kit 해시를 같이 낸다(§6.7.4). **서버는 클라이언트의 `.claude/skills` 를
     // 볼 수 없으므로** 비교의 한쪽을 이렇게 건네고, 다른 쪽은 스킬이
     // `CLAUDE.md` 의 `cdp:kit` 에서 읽는다.
@@ -501,13 +500,6 @@ async function syncOf(r, mode, role = 'writer') {
       note: mirrorLine(m),
       kit: kit ? { hash: kit.hash, skills: kit.skills } : null,
     }
-  }
-  return {
-    mode: 'local',
-    remote: st?.upstream ?? null,
-    behind: st?.behind ?? 0,
-    ahead: st?.ahead ?? 0,
-    hooksPath: st?.hooksPath ?? null,
   }
 }
 
@@ -543,7 +535,7 @@ function registerResources(server, { caches, meta, pick, visible }) {
   )
 
   for (const name of visible()) {
-    for (const [slug, file] of [['index', 'INDEX.md'], ['vocab', '_vocab.md'], ['managed', '_managed.md']]) {
+    for (const [slug, file] of [['vocab', '_vocab.md'], ['managed', '_managed.md']]) {
       server.registerResource(
         `${name}-${slug}`,
         `cdp://${name}/${slug}`,
@@ -573,7 +565,7 @@ function registerPrompts(server, { caches, pick, fallback, prompts }) {
     async ({ coord, repo }) => {
       const n = pick(repo)
       const r = await caches.get(n)()
-      const rules = await readSkill(r.root, 'cdp-load')
+      const rules = await readSkill('cdp-work')
       const parts = [rules, '', `## ${n} · ${coord}`, '', '### where', '```json', JSON.stringify(T.toolWhere(r, { coord }), null, 1), '```']
       const sec = T.toolSection(r, { coord })
       parts.push('', '### section', sec.body ?? '(섹션 없음)')
@@ -587,126 +579,10 @@ function registerPrompts(server, { caches, pick, fallback, prompts }) {
   })
 }
 
-async function readSkill(root, name) {
-  const p = path.join(root, '.claude', 'skills', name, 'SKILL.md')
-  const body = await fs.readFile(p, 'utf8').catch(() => null)
-  if (!body) return '(스킬 파일을 찾지 못했다 — 절차는 레포의 MANUAL 을 본다)'
+async function readSkill(name) {
+  const { findKitDir } = await import('../../core/kit.js')
+  const found = await findKitDir().catch(() => null)
+  const body = found ? await fs.readFile(path.join(found.dir, 'skills', name, 'SKILL.md'), 'utf8').catch(() => null) : null
+  if (!body) return '(스킬 파일을 찾지 못했다 — 서버 번들의 kit/ 이 없다)'
   return body.replace(/^---[\s\S]*?^---\s*/m, '').trim()
-}
-
-// ── 모드 A — stdio (§3) ─────────────────────────────────────────────────────
-//
-// **stdout 은 규약 전용이다.** MCP 는 stdout(1) 으로만 JSON-RPC 를 주고받으므로
-// 여기서 `console.log` 한 줄이 섞이면 연결이 통째로 깨진다 — 그리고 그것은
-// "서버가 응답하지 않습니다" 로만 나타나서 원인을 짚기 어렵다. 로그는 전부
-// stderr(2) 로 간다(§2.8).
-
-const log = (s) => process.stderr.write('[cdp-mcp] ' + s + String.fromCharCode(10))
-
-// 레포의 한 줄 설명. `instructions` 와 `repos` 도구가 쓴다(§2.1).
-// README 의 첫 문단이다 — 따로 적는 파일을 만들지 않는다. 두 곳에 적으면
-// 반드시 어긋나고, 어긋난 설명은 모델이 레포를 잘못 고르게 한다.
-async function titleOf(root) {
-  const body = await fs.readFile(path.join(root, 'README.md'), 'utf8').catch(() => '')
-  const lines = body.split(NL)
-  const h = lines.findIndex((l) => l.startsWith('# '))
-  if (h < 0) return null
-  for (const l of lines.slice(h + 1)) {
-    const t = l.trim()
-    if (t && !t.startsWith('#')) return t.replace(/[*`]/g, '').slice(0, 80)
-  }
-  return lines[h].slice(2).trim() || null
-}
-
-async function isRepo(dir) {
-  return fs.access(path.join(dir, '_vocab.md')).then(() => true).catch(() => false)
-}
-
-// §3.1 의 해결 순서.
-//
-//   --repo <경로>   여러 번 줄 수 있다. 첫 번째가 기본 레포
-//   --root <폴더>   하위 디렉터리를 전부 레포로 본다 (모드 B 의 <root> 와 같은 모양)
-//   둘 다 없음      지금까지와 같다 — findRepo 가 하나를 찾는다
-//
-// 이름은 폴더명이다. **겹치면 stderr 경고 후 뒤엣것을 무시한다** — 조용히
-// 덮으면 어느 레포를 보고 있는지 아무도 모른다.
-export async function resolveRepos({ root = null, repos = [], repo = null, findRepo } = {}) {
-  const picked = []
-  const seen = new Map()
-  const add = async (dir) => {
-    const abs = path.resolve(dir)
-    const name = path.basename(abs)
-    if (seen.has(name)) {
-      log(`레포 이름이 겹친다: ${name} — ${abs} 를 무시한다 (먼저 잡힌 것: ${seen.get(name)})`)
-      return
-    }
-    if (!(await isRepo(abs))) {
-      log(`지식 레포가 아니다 (_vocab.md 없음): ${abs}`)
-      return
-    }
-    seen.set(name, abs)
-    picked.push({ name, root: abs, title: await titleOf(abs) })
-  }
-
-  for (const r of repos) await add(r)
-  if (root) {
-    const ents = await fs.readdir(path.resolve(root), { withFileTypes: true }).catch(() => [])
-    for (const e of ents.filter((x) => x.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
-      await add(path.join(root, e.name))
-    }
-  }
-  if (!picked.length) {
-    const one = findRepo ? await findRepo(repo) : null
-    if (one) await add(one)
-  }
-  return picked
-}
-
-export async function runStdio(opt = {}) {
-  const { StdioServerTransport } = await import('@modelcontextprotocol/server/stdio')
-  const repos = await resolveRepos(opt)
-  if (!repos.length) {
-    log('지식 레포를 찾을 수 없다. --repo 로 지정하거나 CDP_REPO 를 설정한다.')
-    return 2
-  }
-
-  const prompts = opt.prompts || 'auto'
-  const server = buildServer({ repos, fallback: repos[0].name, mode: 'local', prompts, built: opt.builtAt || BUILT })
-
-  // §2.5 — `auto` 는 Claude Code 에 prompt 를 내놓지 않는다.
-  //
-  // 그 자리에는 이미 스킬이 있고(근거 문서 §7), 같은 절차를 두 통로로 내면
-  // 사람이 어느 쪽을 쓸지 정해야 한다. Desktop·claude.ai 에는 스킬을 깔 자리가
-  // 없으므로 거기서는 내놓는다.
-  //
-  // clientInfo.name 을 stderr 에 한 줄 남긴다 — §10 의 "픽스처로 저장" 은 이
-  // 줄을 보고 닫는다. 값을 모른 채 패턴만 박아 두면 확인할 길이 없다.
-  server.server.oninitialized = () => {
-    const c = server.server.getClientVersion?.() || {}
-    log(`클라이언트 ${c.name || '(이름 없음)'} ${c.version || ''}`)
-    if (prompts === 'auto' && /claude[-_ ]?code/i.test(String(c.name || ''))) {
-      for (const p of Object.values(server._registeredPrompts || {})) p.disable?.()
-      log('prompts: Claude Code 라 내놓지 않는다 (--prompts always 로 강제)')
-    }
-  }
-
-  log(`시작 · 레포 ${repos.length}개 (${repos.map((r) => r.name).join(' · ')}) · 기본 ${repos[0].name} · 번들 ${BUILT}`)
-
-  const transport = new StdioServerTransport()
-  await server.connect(transport)
-
-  // **여기서 돌아가면 안 된다.**
-  //
-  // `ctx-cli.mjs` 의 진입점은 `main()` 이 준 코드로 `process.exit` 를 부른다.
-  // 다른 명령은 한 번 답하고 죽는 것이 맞지만 MCP 서버는 세션 동안 살아서
-  // 계속 답한다 -- 연결하자마자 반환하면 프로세스가 그 자리에서 죽고, 호스트
-  // 쪽에는 "서버가 응답하지 않습니다" 로만 보인다. 실측으로 잡았다.
-  //
-  // 끝내는 쪽은 호스트다. stdin 이 닫히면 전송이 닫히고 그때 반환한다.
-  await new Promise((resolve) => {
-    transport.onclose = resolve
-    process.stdin.on('end', resolve)
-  })
-  log('연결이 닫혔다')
-  return 0
 }
