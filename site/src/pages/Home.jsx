@@ -111,7 +111,7 @@ export default function Home() {
             <More to="/concept" icon="section" title="개념" text="두 층 · 좌표 · 어휘와 등록부 · 파생 누락 · 정정. 「밀림」 이 없는 이유." />
             <More to="/screens" icon="image" title="화면 14장" text="레포 · 콘솔 · 사이트 · 설명서. 판 v0.19 를 데모 레포로 찍었다." />
             <More to="/examples" icon="work" title="예제 다섯" text="찾기 · 기록 · 거절 · 충돌 · 정정 — 녹화한 요청과 응답." />
-            <More to="/agent" icon="plug" title="에이전트" text="도구 14 · 스킬 5 · MCP 가 도는 길 열두 걸음." />
+            <More to="/agent" icon="plug" title="에이전트" text="도구 12 · 스킬 5 · MCP 가 도는 길 열두 걸음." />
             <More to="/deploy" icon="server" title="배치 · 설치" text="서버형 · 로컬형 · 설치 5단계 · 무엇이 PC 를 떠나나." />
             <More to="/releases" icon="list" title="판 이력" text="v0.2 부터 판마다 무엇이 바뀌었나." />
           </div>
