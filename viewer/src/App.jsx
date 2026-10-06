@@ -367,8 +367,8 @@ export default function App() {
       if (!rawId) return
       const id = canonDocId(rawId, managedRef.current)
       const onDoc = routeDocRef.current
-      // 같은 문서 · 같은 자리를 다시 누른 것 — 주소는 그대로, 섹션이면 그리로만 다시 간다
-      if (onDoc && onDoc.id === id && (onDoc.at || null) === (at || null)) {
+      // 같은 문서 · 같은 자리를 다시 누른 것 — 주소는 그대로, 섹션이면 그리로만 다시 간다. 자료를 보던 중이면 본문으로 간다
+      if (onDoc && onDoc.id === id && (onDoc.at || null) === (at || null) && !onDoc.v) {
         if (at) setDocAt({ value: at, seq: ++atSeqRef.current })
         return
       }
@@ -385,6 +385,18 @@ export default function App() {
       }
       tabHowRef.current = how
       navigate(docHref(baseHref, id, at), { replace, state: { cdp: snap } })
+    },
+    [baseHref]
+  )
+
+  // 시각 자료 탭(HTML 시각 자료 검토 V4) — 같은 문서에서 `?v=` 만 바꾼다. 쌓는다 — 뒤로 가기가 「본문」 으로 돌아온다.
+  // 왼쪽 · 「← 이전」 의 이름은 그대로 싣되 `direct` 는 끈다 — 바로 앞 항목이 이전 문서가 아니라 같은 문서의 본문이다
+  const openVisual = useCallback(
+    (v) => {
+      const onDoc = routeDocRef.current
+      if (!onDoc || (onDoc.v || null) === (v || null)) return
+      const was = history.state?.cdp || {}
+      navigate(docHref(baseHref, onDoc.id, null, v), { state: { cdp: { ...was, ...leftRef.current, prev: was.prev || null, direct: false } } })
     },
     [baseHref]
   )
@@ -1001,6 +1013,8 @@ export default function App() {
                    만들면 접는 기능이 없는 것과 같다 */
                 tocOpen={state.panes?.toc !== false}
                 onToggleToc={() => patch({ panes: { toc: state.panes?.toc === false } })}
+                visual={routeDoc?.id === docId ? routeDoc.v : null}
+                onVisual={openVisual}
               />
             ) : (
               <Landing repo={repo} docs={docs} managed={managedList.length} onOpen={openDoc} />

@@ -158,6 +158,7 @@ export default function Finder({
               >
                 <Icon name="managed" size={14} className="fd__ico" />
                 <span className="fd__name">{m.name}</span>
+                {m.hasVisual && <span className="fd__vis" title="HTML 시각 자료가 있다"><Icon name="eye" size={12} /></span>}
                 <span className="fd__n" title={`섹션 ${m.sections}개`}>{m.sections}</span>
               </button>
             ))}
@@ -184,6 +185,7 @@ export default function Finder({
                   <span className="fd__mine" title="내 좌표">내</span>
                 )}
                 <span className="fd__name">{d.title}</span>
+                {d.hasVisual && <span className="fd__vis" title="HTML 시각 자료가 있다"><Icon name="eye" size={12} /></span>}
                 {d.status && <span className="fd__m fd__m--q">{d.status}</span>}
                 {/* 작성자 — 누가 썼나가 이 목록에서 자주 묻는 것이다. 다만
                     좁으면 제목이 먼저다(@container) */}

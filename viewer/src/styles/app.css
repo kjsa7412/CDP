@@ -1151,6 +1151,8 @@
 
 .fd__m { flex: none; padding: 1px 6px; border-radius: var(--r-pill); font-size: 10.5px; }
 .fd__m--q { color: var(--text-3); background: var(--surface-3); }
+/* HTML 시각 자료가 달린 문서(HTML 시각 자료 검토 V7) — 고르기는 문서 머리의 탭에서 */
+.fd__vis { flex: none; display: inline-flex; color: var(--text-3); }
 .fd__mine {
   flex: none; padding: 1px 5px; border-radius: var(--r-xs); font-size: 10px; font-weight: 600;
   color: var(--accent); background: var(--accent-bg);

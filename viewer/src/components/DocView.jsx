@@ -14,6 +14,7 @@ import { summaryText } from '../lib/format.js'
 import ValidityBlock from './ValidityBlock.jsx'
 import SectionRail from './SectionRail.jsx'
 import Icon from './Icon.jsx'
+import VisualFrame, { VisualTabs } from './VisualFrame.jsx'
 import { copyText } from '../lib/clip.js'
 
 export default function DocView({
@@ -29,6 +30,8 @@ export default function DocView({
   savedRatio,
   tocOpen = true,
   onToggleToc,
+  visual = null,
+  onVisual = () => {},
 }) {
   // 본문은 캐시(화면 · 권한 검토 v0.1 R8) — 관리 · 그래프 · 콘솔에 갔다 돌아오면 「불러오는 중…」 없이 그 자리다
   const docKey = (id) => 'api:' + (currentRepo() || 'local') + '/docs/' + id
@@ -85,6 +88,11 @@ export default function DocView({
       coordLinks: reading.coordLinks !== false,
       sectionStates: doc.sectionStates || null,
     })
+    // HTML 시각 자료 링크 — 새 탭이 아니라 이 문서의 자료 탭으로 간다(V5). 표시를 붙여 둔다
+    for (const a of bodyRef.current.querySelectorAll('a[href]')) {
+      const r = repoPath(doc.path, a.getAttribute('href') || '')
+      if (r && !r.outside && VIS.test(r.path)) a.dataset.visual = r.path
+    }
     // 본문 좌표 클릭 → 그 좌표로
     const onClick = (e) => {
       const t = e.target.closest('[data-coord]')
@@ -110,6 +118,10 @@ export default function DocView({
       }
       if (href.startsWith('#')) return
       e.preventDefault()
+      if (a.dataset.visual) {
+        onVisual(a.dataset.visual)
+        return
+      }
       // `.md` 가 아닌 것(pdf · xlsx · 그림)은 문서가 아니라 파일이다 — 파일로 연다. 전에는 `x.pdf` 라는 문서를 찾다 끝났다
       const file = repoPath(doc.path, href)
       if (file && !file.outside && /\.[a-z0-9]{1,8}$/i.test(file.path) && !/\.(md|markdown)$/i.test(file.path)) {
@@ -126,7 +138,7 @@ export default function DocView({
     }
     bodyRef.current.addEventListener('click', onClick)
     return () => bodyRef.current?.removeEventListener('click', onClick)
-  }, [rendered, doc?.id, myCoords.join(','), reading.coordLinks])
+  }, [rendered, doc?.id, myCoords.join(','), reading.coordLinks, onVisual])
 
   // 섹션으로 이동 — 관리 문서에서 섹션(좌표) 줄을 눌러 왔을 때.
   //
@@ -237,8 +249,11 @@ export default function DocView({
   // `supersedes` 는 판정이 아니라 참조다. 정정한/정정당한 문서는 문서 머리의
   // 무채색 3단(ValidityBlock `RelTier`)과 왼쪽 뻗어나가기의 첫 갈래로 나온다 --
   // 무효 표시가 아니라 갈 수 있는 곳으로.
-  return (
-    <div className="docmain">
+  // 시각 자료를 고르면 본문 자리를 틀이 차지한다. 본문은 **숨기기만** 한다 — 내리면 「본문」 으로 돌아왔을 때 읽던 자리를 잃는다
+  const visuals = doc.visuals || []
+  const shown = visual ? visuals.find((v) => v.path === visual) || { path: visual, title: null } : null
+  const main = (
+    <div className="docmain" hidden={!!shown}>
       <div className="docpane" ref={scrollRef}>
         {restored && (
           <div className="readmark">
@@ -305,7 +320,7 @@ export default function DocView({
 
           {/* 첨부 — 프로토콜 §8.5 의 3계층 중 가장 긴 읽기가 여기서 일어난다 */}
           {doc.attachments.length > 0 && (
-            <Attachments items={doc.attachments} base={doc.path} onOpen={onOpen} />
+            <Attachments items={doc.attachments} base={doc.path} onOpen={onOpen} onVisual={onVisual} />
           )}
 
           {/* 이어 읽기 · 백링크 · 좌표 이력은 **왼쪽 뻗어나가기로 나갔다.**
@@ -343,27 +358,38 @@ export default function DocView({
       />
     </div>
   )
+  if (!visuals.length && !shown) return main
+  return (
+    <div className="docvis">
+      <VisualTabs visuals={visuals} active={visual} onPick={onVisual} />
+      {main}
+      {shown && <VisualFrame key={shown.path} path={shown.path} title={shown.title} />}
+    </div>
+  )
 }
+
+const VIS = /\.html?$/i
 
 
 // 첨부 — 프로토콜 §8.5. 외부 원본은 제목·시점·요지를 먼저, 링크는 뒤에.
 // "링크는 썩지만 제목·시점·요지는 썩지 않는다"는 순서를 화면 순서로 옮긴다.
-function Attachments({ items, base, onOpen }) {
+function Attachments({ items, base, onOpen, onVisual }) {
   return (
     <section className="docsec">
       <div className="docsec__title">
         첨부 <span className="count">{items.length}건</span>
       </div>
       {items.map((p) => (
-        <Attachment key={p} path={p} base={base} onOpen={onOpen} />
+        <Attachment key={p} path={p} base={base} onOpen={onOpen} onVisual={onVisual} />
       ))}
     </section>
   )
 }
 
-function Attachment({ path, base, onOpen }) {
+function Attachment({ path, base, onOpen, onVisual }) {
   const [state, setState] = useState(null)
   const isMd = /\.(md|markdown|txt)$/i.test(path)
+  const isVis = VIS.test(path)
   const isImg = /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(path)
 
   // **첨부는 그 문서가 있는 폴더 기준이다.**
@@ -402,6 +428,11 @@ function Attachment({ path, base, onOpen }) {
           {isMd && (
             <button style={{ color: 'var(--accent)' }} onClick={() => onOpen(rel)}>
               열기
+            </button>
+          )}
+          {isVis && (
+            <button style={{ color: 'var(--accent)' }} onClick={() => onVisual(rel)}>
+              보기
             </button>
           )}
           <a href={api.fileUrl(rel)} target="_blank" rel="noreferrer">

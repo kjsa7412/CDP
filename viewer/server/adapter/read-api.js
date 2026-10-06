@@ -13,7 +13,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { resolveInside } from './security.js'
-import { HTML_CSP, HTML_EXTS } from '../../../core/assets.js'
+import { HTML_CSP, HTML_EXTS, themeHtml } from '../../../core/assets.js'
 import { zip } from '../../../core/zip.js'
 import { toolDocs } from '../../../core/tools.js'
 import { lastChanges } from '../../../core/git.js'
@@ -154,8 +154,12 @@ export async function handleRead({ p, method, url, res, send, store }) {
     const svg = ext === '.svg' ? { 'content-security-policy': "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'" } : {}
     // HTML 도 문서다 — 응답 헤더의 sandbox 는 **어떻게 열든**(틀 · 새 탭 · 주소 직접) 불투명 출처로 만든다. 스크립트는 돌되
     // 이 서버의 쿠키 · 저장소 · DOM 에 닿지 못한다. 전에는 CSP 없이 같은 출처로 나갔다(HTML 시각 자료 검토 H0 · S1 · S2)
-    const html = HTML_EXTS.includes(ext) ? { 'content-security-policy': HTML_CSP } : {}
-    send(res, 200, await fs.readFile(r.abs), { 'content-type': MIME[ext] || 'application/octet-stream', ...svg, ...html, ...dl })
+    const isHtml = HTML_EXTS.includes(ext)
+    const html = isHtml ? { 'content-security-policy': HTML_CSP } : {}
+    // `theme=light|dark` — 화면 테마를 루트 `data-theme` 으로 싣는다(V6). 내려받기는 원본 그대로
+    let body = await fs.readFile(r.abs)
+    if (isHtml && !dl['content-disposition']) body = themeHtml(body, url.searchParams.get('theme'))
+    send(res, 200, body, { 'content-type': MIME[ext] || 'application/octet-stream', ...svg, ...html, ...dl })
     return true
   }
 

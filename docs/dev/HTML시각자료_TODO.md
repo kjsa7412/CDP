@@ -8,7 +8,7 @@
 | ① | 파일 API 의 HTML 격리 — H0 를 닫는다(S1 · S2) | **완료** |
 | ② | 첨부로 받기 — 올리기 · save(S4 · W1 · W3) | **완료** |
 | ③ | 문서별 자료 목록 · 제목(V1 · V2) | **완료** |
-| ④ | 화면 — 탭 줄 · 자료 틀 · 링크 · 주소 · 테마 · 트리 표시(V2~V7 · S3) | 할 일 |
+| ④ | 화면 — 탭 줄 · 자료 틀 · 링크 · 주소 · 테마 · 트리 표시(V2~V7 · S3) | **완료** |
 | ⑤ | 스킬 · MCP 명함 · 설명서(W4) | 할 일 |
 | ⑥ | 시험 · 실측 · 판 | 할 일 |
 
@@ -41,14 +41,14 @@
 
 ## ④ 화면
 
-**바뀌는 파일** — `viewer/src/components/DocView.jsx` · 새 `viewer/src/components/VisualFrame.jsx` · `viewer/src/App.jsx` · `viewer/src/lib/doclink.js` · 트리 컴포넌트 · `styles/app.css`.
+**바뀌는 파일** — `viewer/src/components/DocView.jsx` · 새 `viewer/src/components/VisualFrame.jsx` · `viewer/src/App.jsx`(`openVisual`) · `viewer/src/lib/doclink.js` · `Finder.jsx` · `styles/doc.css` · `styles/app.css` · (V6) `core/assets.js` `themeHtml` · `read-api.js`.
 
-- [ ] 탭 줄(V2) — `doc.visuals.length > 0` 일 때만. 「본문」 + 자료마다 하나(`title`). 고른 탭은 `?v=<경로>`(V4) — 「‹ 이전」 · 뒤로 가기 · 열린 문서 탭이 함께 기억한다
-- [ ] 자료 틀(V3 · S3) — 본문 자리를 꽉 채우는 `<iframe sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer">`. 위에 얇은 줄: 새 탭에서 ↗ · 내려받기 · 경로
-- [ ] 테마(V6) — 틀 요소 `style.colorScheme` 을 앱 테마(밝게 · 어둡게)로. **실측으로 틀 안 `prefers-color-scheme` 이 따라오는지 본다**
-- [ ] 본문의 `.html` 링크(V5) — 새 탭 대신 그 자료 탭으로. 링크 뒤에 작은 「자료」 표시. 첨부 목록의 HTML 행에 「보기」
-- [ ] 트리 문서 행에 자료 표시(V7)
-- [ ] 좁은 창(375)에서도 탭 줄이 가로로 넘치지 않는다(가로 스크롤)
+- [x] 탭 줄(V2) — `doc.visuals.length > 0` 일 때만. 「본문」 + 자료마다 하나(`title`). 고른 탭은 `?v=<경로>`(V4) — 「‹ 이전」 · 뒤로 가기 · 열린 문서 탭이 함께 기억한다
+- [x] 자료 틀(V3 · S3) — 본문 자리를 꽉 채우는 `<iframe sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer">`. 위에 얇은 줄: 새 탭에서 ↗ · 내려받기 · 경로. 본문은 내리지 않고 `hidden` — 돌아오면 읽던 자리
+- [x] 테마(V6) — ~~틀 요소 `style.colorScheme`~~ **듣지 않았다**(실측 · 아래 「나온 것」). 대신 파일 API `&theme=light|dark` → 서버가 doctype 뒤에 `<html data-theme>` 를 끼운다. 클로드가 내놓는 자료의 `:root[data-theme]` 규약을 탄다. 테마를 바꾸면 틀을 다시 읽는다
+- [x] 본문의 `.html` 링크(V5) — 새 탭 대신 그 자료 탭으로. 링크 뒤에 작은 「자료」 표시. 첨부 목록의 HTML 행에 「보기」
+- [x] 트리 문서 행에 자료 표시(V7)
+- [x] 좁은 창(375)에서도 탭 줄이 가로로 넘치지 않는다(가로 스크롤)
 
 ## ⑤ 스킬 · 명함 · 설명서
 

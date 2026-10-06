@@ -9,18 +9,21 @@
 //
 // `<id>` 는 작업문서 id 또는 관리 · 기타 문서의 경로(`docs/테이블정의서.md`) — 조각마다 인코딩해 `/` 로 잇는다.
 // 섹션은 해시가 아니라 `?at=` 다 — 해시는 본문 안 `#앵커` 링크가 쓴다.
+// 고른 HTML 시각 자료는 `?v=<레포 경로>` 다(HTML 시각 자료 검토 V4) — 뒤로 가기가 「본문」 으로 돌아온다.
 
-export function docHref(base, id, at = null) {
+export function docHref(base, id, at = null, v = null) {
   const p = String(id).split('/').map(encodeURIComponent).join('/')
-  return base + 'd/' + p + (at ? '?at=' + encodeURIComponent(at) : '')
+  const q = [at ? 'at=' + encodeURIComponent(at) : null, v ? 'v=' + encodeURIComponent(v) : null].filter(Boolean)
+  return base + 'd/' + p + (q.length ? '?' + q.join('&') : '')
 }
 
-// 라우터의 `rest`(조각마다 디코드됨) · `query` → { id, at } | null
+// 라우터의 `rest`(조각마다 디코드됨) · `query` → { id, at, v } | null
 export function docOfRoute(rest, query) {
   if (!rest || rest[0] !== 'd' || rest.length < 2) return null
   const id = rest.slice(1).join('/')
   if (!id) return null
-  return { id, at: (query && query.get && query.get('at')) || null }
+  const get = (k) => (query && query.get && query.get(k)) || null
+  return { id, at: get('at'), v: get('v') }
 }
 
 const base = (p) => String(p).split('/').pop()

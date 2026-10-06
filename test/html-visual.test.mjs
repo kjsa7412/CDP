@@ -215,3 +215,34 @@ test('Store — 문서 응답의 visuals(제목 · 없는 파일 뺌) · 목록�
     await fs.rm(d, { recursive: true, force: true })
   }
 })
+
+// ── 테마 (V6) ───────────────────────────────────────────────────────────────
+
+import { themeHtml } from '../core/assets.js'
+
+test('themeHtml — doctype 뒤에 <html data-theme> · 이미 단 문서 · 모르는 값 · BOM · 주석 앞', () => {
+  const t = (s, th) => themeHtml(Buffer.from(s), th).toString()
+  assert.equal(t('<!doctype html><html lang="ko"><p>', 'dark'), '<!doctype html><html data-theme="dark"><html lang="ko"><p>')
+  assert.equal(t('<!-- c -->\n<!DOCTYPE html>\n<p>', 'light'), '<!-- c -->\n<!DOCTYPE html><html data-theme="light">\n<p>')
+  assert.equal(t('﻿<html><p>', 'dark'), '﻿<html data-theme="dark"><html><p>')
+  assert.equal(t('<!doctype html><html data-theme="light">', 'dark'), '<!doctype html><html data-theme="light">', '자료가 정한 테마는 그대로')
+  for (const th of [null, '', 'system', '"><script>']) assert.equal(t('<!doctype html><p>', th), '<!doctype html><p>', String(th))
+})
+
+test('/file?theme= — HTML 에만 · 내려받기는 원본 그대로', async () => {
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-htmlth-'))
+  try {
+    await fs.writeFile(path.join(d, 'a.html'), '<!doctype html><p>')
+    await fs.writeFile(path.join(d, 'a.md'), '# a')
+    const get = async (q) => {
+      let got = null
+      await handleRead({ p: '/file', method: 'GET', url: new URL('http://x/file?' + q), res: {}, send: (res, status, body, headers = {}) => (got = { status, body, headers }), store: { root: d } })
+      return got
+    }
+    assert.equal(String((await get('path=a.html&theme=dark')).body), '<!doctype html><html data-theme="dark"><p>')
+    assert.equal(String((await get('path=a.html&theme=dark&download=1')).body), '<!doctype html><p>')
+    assert.equal(String((await get('path=a.md&theme=dark')).body), '# a')
+  } finally {
+    await fs.rm(d, { recursive: true, force: true })
+  }
+})

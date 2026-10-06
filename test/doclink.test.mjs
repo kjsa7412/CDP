@@ -24,7 +24,13 @@ test('docHref ↔ docOfRoute — 로컬 · 서버형 · 한글 · 경로 · 섹�
     assert.ok(href.startsWith(base + 'd/'), href)
     assert.ok(!href.includes('#'), '섹션은 해시가 아니다 — 본문 #앵커와 부딪힌다')
     const { rest, query } = parse(href)
-    assert.deepEqual(docOfRoute(rest, query), { id, at }, href)
+    assert.deepEqual(docOfRoute(rest, query), { id, at, v: null }, href)
+  }
+  // 고른 시각 자료(?v=) — 섹션과 같이 실린다 · 한글 · 공백 · & 가 있어도 왕복한다
+  for (const [at, v] of [[null, 'work/assets/2026-1006-SCADA/SCADA_연계_구성도.html'], ['table:a', 'work/assets/x/a & b.html']]) {
+    const href = docHref('/r/gdi/', 'docs/인터페이스정의서.md', at, v)
+    const { rest, query } = parse(href)
+    assert.deepEqual(docOfRoute(rest, query), { id: 'docs/인터페이스정의서.md', at, v }, href)
   }
   // 경로의 / 는 그대로 — 서버 폴백 · 사람 눈에
   assert.equal(docHref('/', 'docs/a.md'), '/d/docs/a.md')

@@ -48,10 +48,28 @@ export const HTML_CSP = [
   "frame-ancestors 'self'",
 ].join('; ')
 
+// HTML 시각 자료를 화면 테마로 — 루트에 `data-theme` 하나를 넣는다(HTML 시각 자료 검토 V6).
+//
+// 틀 요소의 `color-scheme` 으로 틀 안 `prefers-color-scheme` 을 바꾸는 길은 Chrome 154 에서 듣지 않았다(실측 — 같은 출처
+// srcdoc 도). 틀은 불투명 출처라 화면이 안을 만질 수도 없다. 그래서 낼 때 넣는다: 클로드 코드가 내놓는 자료는
+// `:root[data-theme="dark"]` · `:root:not([data-theme="light"])` 로 테마를 받는다. 그 규약을 안 쓰는 자료는 OS 를 따른다.
+//
+// doctype **뒤에** `<html data-theme>` 를 끼운다 — 앞에 두면 quirks 모드다. 원래의 `<html lang>` 이 뒤에 오면 HTML
+// 파서가 그 속성을 루트에 더한다. 이미 `data-theme` 을 단 문서는 건드리지 않는다
+export function themeHtml(buf, theme) {
+  if (theme !== 'light' && theme !== 'dark') return buf
+  const s = buf.toString('utf8')
+  const head = s.slice(0, 8192)
+  if (/<html\b[^>]*\sdata-theme\s*=/i.test(head)) return buf
+  const m = /^\uFEFF?\s*(?:<!--[\s\S]*?-->\s*)*<!doctype[^>]*>/i.exec(s)
+  const at = m ? m[0].length : s.startsWith('\uFEFF') ? 1 : 0
+  return Buffer.from(s.slice(0, at) + `<html data-theme="${theme}">` + s.slice(at), 'utf8')
+}
+
 // HTML 인가 — BOM · 공백 · `<!-- -->` 주석 뒤 첫 태그가 `<!doctype html` 또는 `<html`, 그리고 **전체가 UTF-8 로 풀린다.**
 // 다른 것을 `.html` 이라 부르며 올리지 못하게 바이트로 가린다
 function isHtml(b) {
-  let head = b.subarray(0, 4096).toString('utf8').replace(/^﻿/, '')
+  let head = b.subarray(0, 4096).toString('utf8').replace(/^\uFEFF/, '')
   for (;;) {
     head = head.replace(/^\s+/, '')
     if (!head.startsWith('<!--')) break
