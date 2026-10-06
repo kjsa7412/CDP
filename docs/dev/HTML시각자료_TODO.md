@@ -9,8 +9,8 @@
 | ② | 첨부로 받기 — 올리기 · save(S4 · W1 · W3) | **완료** |
 | ③ | 문서별 자료 목록 · 제목(V1 · V2) | **완료** |
 | ④ | 화면 — 탭 줄 · 자료 틀 · 링크 · 주소 · 테마 · 트리 표시(V2~V7 · S3) | **완료** |
-| ⑤ | 스킬 · MCP 명함 · 설명서(W4) | 할 일 |
-| ⑥ | 시험 · 실측 · 판 | 할 일 |
+| ⑤ | 스킬 · MCP 명함 · 설명서(W4) | **완료** |
+| ⑥ | 시험 · 실측 · 판 | **완료** |
 
 ---
 
@@ -52,17 +52,17 @@
 
 ## ⑤ 스킬 · 명함 · 설명서
 
-- [ ] `agent/skills/cdp-save/SKILL.md` 「그림 · 첨부」 — HTML 을 받는 종류에 더하고, **요지를 본문에 md 로** 적는 규칙과 링크 모양(`[제목](assets/<id>/x.html)`)을 넣는다
-- [ ] `cdp-import` — 작업 레포의 `*.html` 시각 자료를 들이는 한 줄
-- [ ] MCP `save` 명함의 `assets` 줄 — 종류 목록
-- [ ] 사용자 설명서 — 「시각 자료(HTML)」 짧은 절
+- [x] `agent/skills/cdp-save/SKILL.md` 「그림 · 첨부」 — HTML 을 받는 종류에 더하고, **요지를 본문에 md 로** 적는 규칙과 링크 모양(`[제목](assets/<id>/x.html)`)을 넣는다
+- [x] `cdp-import` — 작업 레포의 `*.html` 시각 자료를 들이는 한 줄
+- [x] MCP `save` 명함의 `assets` 줄 — 종류 목록
+- [x] 사용자 설명서 — 「시각 자료(HTML)」 짧은 절
 
 ## ⑥ 시험 · 실측 · 판
 
-- [ ] 단위 — sniff html(문서 · 주석 앞 · BOM · 아닌 것) · save html 한 커밋 · W3 경고 셋 · `visualRefs` · `htmlTitle` · `/file` CSP 헤더
-- [ ] 단위 전체(`node --test test/*.test.mjs`) · 빌드
-- [ ] 실측(로컬 뷰어) — `SCADA_연계_구성도.html` 을 fixture 레포에 기록으로 들여 탭 · 틀 · 어둡게 · 새 탭 열기(CSP) · 뒤로 가기 · 375 폭
-- [ ] 판 v0.25.0 · CHANGELOG
+- [x] 단위 — sniff html(문서 · 주석 앞 · BOM · 아닌 것) · save html 한 커밋 · W3 경고 셋 · `visualRefs` · `htmlTitle` · `/file` CSP 헤더
+- [x] 단위 전체(`node --test test/*.test.mjs`) · 빌드
+- [x] 실측(로컬 뷰어) — `SCADA_연계_구성도.html` 을 fixture 레포에 기록으로 들여 탭 · 틀 · 어둡게 · 새 탭 열기(CSP) · 뒤로 가기 · 375 폭
+- [x] 판 v0.25.0 · CHANGELOG
 
 ---
 
@@ -70,3 +70,11 @@
 
 | | 무엇 | 어디 |
 |---|---|---|
+| 보안(H0) | 파일 API 의 `.html` · `.htm` → `HTML_CSP`(sandbox · `allow-same-origin` 없음 · `connect-src 'none'` · `img-src data: blob:` · 글꼴 · CDN 셋만 · `frame-ancestors 'self'`). **실측(Chrome 154 헤드리스)** — 틀 안 `origin` 이 `null`, `document.cookie` · `parent.document` · `localStorage` 가 SecurityError, `fetch('/api/repo')` 가 CSP 에 막힘. 새 탭에서 직접 열어도 `origin null` | `core/assets.js` · `read-api.js` |
+| 받기 | 올리기가 HTML 을 바이트로 가린다(BOM · 주석 앞 · 대소문자 · 깨진 UTF-8 거절). save 경고 셋(요지 · 막히는 외부 자원 · CDN). HTML 을 안 가리키면 예시가 `![…]` 대신 `[…]` | `core/assets.js` · `core/save.js` · `core/visuals.js` |
+| 자료 목록 | 로드 때 `attachments` + 본문 링크(코드 블록 밖 · 레포 안 · 있는 파일)를 모으고 앞 64 KB 의 `<title>` 을 서버가 읽는다. 문서 응답 `visuals` · 목록 `hasVisual` | `core/store.js` `collectVisuals` |
+| 화면 | 「본문 \| 자료」 탭 · 자료 틀 · 얇은 줄(새 탭 · 내려받기 · 경로 · 「격리된 보기」) · 본문은 `hidden` 으로만(돌아오면 읽던 자리) · `?v=` 로 뒤로 가기가 본문 · 「‹ 이전」 은 `direct: false`(바로 앞이 같은 문서의 본문이라) · 같은 문서를 다시 고르면 본문으로 · 링크 「자료」 표시 · 첨부 「보기」 · 목록 눈 표시. 실측 — 작업 기록 · 관리 문서(본문 링크로 모음) 둘 다 탭 · 뒤로 가기 · 링크 클릭 · 1440 · 375 | `DocView.jsx` · `VisualFrame.jsx` · `App.jsx` · `doclink.js` · `Finder.jsx` |
+| **V6 을 바꿨다** | 틀 요소 `color-scheme` 으로 틀 안 `prefers-color-scheme` 이 바뀌지 않았다(Chrome 154 · 같은 출처 srcdoc 도 실측). 대신 `&theme=light\|dark` → 서버가 doctype 뒤에 `<html data-theme>` 를 끼운다(원래 `<html lang>` 은 파서가 합친다 · 이미 단 문서 · 내려받기는 그대로). OS 어둡게 · 앱 밝게 → 틀 밝게, 그 반대도 실측 | `core/assets.js` `themeHtml` · `VisualFrame.jsx` |
+| 실측 중 안 것 | **앱 안 브라우저 창(Claude 의 Browser pane)은 `sandbox` 를 단 iframe 을 전부 막는다**(`ERR_BLOCKED_BY_CLIENT` — CSP 없는 README 를 sandbox 틀로 열어도 같다). 화면 실측은 시스템 Chrome 헤드리스(playwright-core)로 했다 | — |
+| 이 판에 안 한 것 | HTML 글을 검색 색인에(검토 4.3) · 끌어다 놓아 올리기 · 로컬 HTML 1회용 주소(S5) · 375 폭 상단 바 84px 밀림(v0.24.0 부터 · 무관) | — |
+| 시험 | 단위 전체 ✓ 270(그 뒤 `html-visual` 9건 · 테마 둘 더함 — 따로 ✓) · 하네스 **✓ 101 ✗ 0**(116 첫 판은 시험 본문이 120자 아래라 요지 경고가 의도대로 났다 → 본문을 늘림 · 둘째 실행의 112 `fetch failed` 는 10 MB 초과 업로드를 서버가 끊는 알려진 자리 · 셋째 실행 ✓) | `test/html-visual.test.mjs` · `ops/verify/run.mjs` 116 |

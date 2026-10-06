@@ -3,6 +3,15 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v0.25.0
+
+**HTML 시각 자료를 지식 레포에** — `docs/design/CDP_HTML시각자료_검토_v0.1.md` · `docs/dev/HTML시각자료_TODO.md`
+- **보안** — 파일 API 가 `.html` · `.htm` 을 sandbox CSP(불투명 출처 · `connect-src 'none'` · 외부는 글꼴 · cdnjs · jsdelivr · unpkg 만)로 낸다. 전에는 레포에 든 HTML 이 같은 출처로 나가 연 사람의 세션으로 스크립트가 돌았다
+- 첨부로 HTML 을 받는다 — 올리기 API 가 바이트로 가리고(`<!doctype html` · `<html` · UTF-8) `save assets[]` 가 `work/assets/<id>/` 에 한 커밋. 경고 — 작업 기록 본문이 짧다(요지를 md 로) · 화면이 막는 외부 자원 · CDN(폐쇄망)
+- 문서 머리 **「본문 | 자료」 탭** — 첨부 · 본문 링크의 HTML 을 모아 `<title>` 로 탭을 세우고, 고르면 본문 자리에 격리된 틀로 연다(새 탭 · 내려받기). 주소 `?v=` — 뒤로 가기가 본문으로. 본문의 자료 링크에 「자료」 표시 · 첨부 목록 「보기」 · 목록에 눈 표시. 화면 테마를 따른다(`&theme=` → 루트 `data-theme`)
+- 스킬 — `cdp-save` 「HTML 시각 자료」(첨부 + 요지는 md) · `cdp-import` 한 줄 · MCP `save` 명함 · 사용자 설명서
+- 시험 — `test/html-visual.test.mjs` · 하네스 116
+
 ## v0.24.0
 
 **보던 문서로 돌아갈 수 없던 것** — `docs/design/CDP_문서이동_이력_검토_v0.1.md` · `docs/dev/문서이동_이력_TODO.md`
