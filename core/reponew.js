@@ -21,6 +21,8 @@ import { CtxError } from './tools.js'
 import { status as gitStatus, classifyPushError, maskUrl } from './git.js'
 import { isSsh } from './gitauth.js'
 import { purgeTree } from './examplestree.js'
+import { loadRepo } from './repo.js'
+import { pickRecords, carryVocab, mergeVocab } from './rebuild.js'
 
 export const REPO_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
@@ -62,8 +64,10 @@ async function copyTree(src, dst) {
  * @param dry      무엇을 할지만 낸다
  * @param examples  false 면 서식 예시(`example:` 어휘 · 짝 섹션 · (예시) 섹션)를 빼고 세운다(등록부 사본 검토 X14). 기본은 지금처럼 둔다
  * @param sshCommand  origin 이 ssh 면 레포 로컬 설정으로 거는 한 줄(서버의 배포 키 · git 자격 TODO G2). 없으면 ssh 기본값
+ * @param records  { root } — **다시 세우기**(v1.0 §9.1). 옛 레포의 작업 기록 · 첨부와 그 기록이 건드리는 어휘만 옮겨 첫 커밋에 넣는다.
+ *                 관리 문서 · 등록부 행 · 옛 기계 기록은 옮기지 않는다 — 옮긴 기록은 전부 큐레이션 대기열에 선다
  */
-export async function newRepo({ from, dest, origin = null, push = false, author = 'cdp', dry = false, sshCommand = null, examples = true }) {
+export async function newRepo({ from, dest, origin = null, push = false, author = 'cdp', dry = false, sshCommand = null, examples = true, records = null }) {
   const src = path.resolve(from)
   const dst = path.resolve(dest)
   const name = path.basename(dst)
@@ -81,7 +85,24 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
     throw new CtxError('E_INPUT', 'origin 주소 형식이 아니다', { origin })
   }
 
-  const plan = { name, from: src, dest: dst, origin, push, steps: ['복사', ...(examples ? [] : ['서식 예시 빼기']), 'work/.gitkeep', 'git init', 'core.hooksPath .githooks', '첫 커밋 (훅이 ctx check 를 돈다)'] }
+  let old = null
+  if (records) {
+    const oldRoot = path.resolve(records.root)
+    if (!(await fs.access(path.join(oldRoot, '_vocab.md')).then(() => true).catch(() => false))) {
+      throw new CtxError('E_INPUT', '옮겨 올 옛 레포가 지식 레포가 아니다(_vocab.md 없음)', { from: oldRoot })
+    }
+    if (oldRoot === dst) throw new CtxError('E_INPUT', '옛 레포와 새 자리가 같다', { dest: dst })
+    old = await loadRepo(oldRoot)
+  }
+  const picked = old ? pickRecords(old.works) : null
+  const plan = {
+    name,
+    from: src,
+    dest: dst,
+    origin,
+    push,
+    steps: ['복사', ...(examples ? [] : ['서식 예시 빼기']), ...(picked ? [`작업 기록 ${picked.keep.length}건 · 첨부 · 어휘 옮기기 (옛 기계 기록 ${picked.skip.length}건은 옮기지 않는다)`] : []), 'work/.gitkeep', 'git init', 'core.hooksPath .githooks', '첫 커밋 (훅이 ctx check 를 돈다)'],
+  }
   if (origin) plan.steps.push('remote add origin')
   if (origin && push) plan.steps.push('push -u origin HEAD')
   if (dry) return { ...plan, dry: true }
@@ -95,6 +116,24 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
     if (!examples) purged = await purgeTree(dst)
     await fs.mkdir(path.join(dst, 'work'), { recursive: true })
     await fs.writeFile(path.join(dst, 'work', '.gitkeep'), '')
+    // 다시 세우기 — 기록은 글자 하나 바꾸지 않고 옮긴다(사건이다). 첨부는 그 기록의 자리(`work/assets/<id>/`) 그대로
+    let moved = null
+    if (picked) {
+      for (const d of picked.keep) await fs.copyFile(path.join(old.root, d.path), path.join(dst, 'work', path.basename(d.path)))
+      let assets = 0
+      for (const d of picked.keep) {
+        const a = path.join(old.root, 'work', 'assets', d.id)
+        if (await isDir(a)) {
+          await fs.cp(a, path.join(dst, 'work', 'assets', d.id), { recursive: true })
+          assets++
+        }
+      }
+      const touched = new Set(picked.keep.flatMap((d) => d.touches || []))
+      const v = carryVocab(old.vocabText || '', touched)
+      const base = await fs.readFile(path.join(dst, '_vocab.md'), 'utf8')
+      await fs.writeFile(path.join(dst, '_vocab.md'), mergeVocab(base, v.text))
+      moved = { from: path.basename(old.root), records: picked.keep.length, assets, skipped: picked.skip, vocab: v.carried.length, missing: v.missing }
+    }
     // sh 스크립트 실행 권한 — POSIX 에서만 뜻이 있다
     for (const f of ['bin/ctx', '.githooks/pre-commit']) await fs.chmod(path.join(dst, f), 0o755).catch(() => {})
 
@@ -110,7 +149,8 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
 
     // **첫 커밋에서 훅이 돈다.** 여기서 막히면 패키지가 규약을 어긴 것이다.
     const who = `${author} <${author}@cdp>`
-    r = await git(dst, ['-c', 'user.name=' + author, '-c', 'user.email=' + author + '@cdp', 'commit', '-q', '--author=' + who, '-m', `지식 레포 세움 — ${path.basename(src)}`])
+    const msg = moved ? `지식 레포 다시 세움 — ${moved.from} 의 작업 기록 ${moved.records}건을 옮겼다(관리 문서는 큐레이션으로 다시)` : `지식 레포 세움 — ${path.basename(src)}`
+    r = await git(dst, ['-c', 'user.name=' + author, '-c', 'user.email=' + author + '@cdp', 'commit', '-q', '--author=' + who, '-m', msg])
     if (!r.ok) {
       throw new CtxError('E_CHECK', '첫 커밋이 막혔다 — 훅의 검사가 통과하지 않았다', { message: (r.err || r.out).split('\n').slice(0, 12).join('\n') })
     }
@@ -127,12 +167,12 @@ export async function newRepo({ from, dest, origin = null, push = false, author 
         if (!r.ok) {
           // push 실패는 레포를 지울 이유가 아니다 — 세워진 것은 세워진 것이고,
           // 미러가 밀린 것은 `sync.mirror = lag` 로 보인다. 다만 사실을 알린다.
-          return { ...plan, commit: head.out, files, pushed: false, pushError: (r.err || r.out).split('\n')[0], ...(purged ? { examples: purged } : {}) }
+          return { ...plan, commit: head.out, files, pushed: false, pushError: (r.err || r.out).split('\n')[0], ...(purged ? { examples: purged } : {}), ...(moved ? { records: moved } : {}) }
         }
         pushed = true
       }
     }
-    return { ...plan, commit: head.out, files, pushed, ...(purged ? { examples: purged } : {}) }
+    return { ...plan, commit: head.out, files, pushed, ...(purged ? { examples: purged } : {}), ...(moved ? { records: moved } : {}) }
   } catch (e) {
     // 반쪽 레포를 남기지 않는다. 우리가 만든 것만 지운다.
     if (created) await fs.rm(dst, { recursive: true, force: true }).catch(() => {})

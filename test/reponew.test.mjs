@@ -255,3 +255,50 @@ test('trashRepo — 휴지통으로 옮긴다 · 원래 자리는 빈다 · 지�
     await fs.rm(d, { recursive: true, force: true })
   }
 })
+
+test('newRepo records — 다시 세우기: 작업 기록 · 첨부 · 그 기록의 어휘만 옮긴다 · 관리 문서 · 옛 기계 기록 · 예시 좌표는 두고 온다(v1.0 §9.1)', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const { carryVocab } = await import('../core/rebuild.js')
+  const { loadRepo } = await import('../core/repo.js')
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-rn-'))
+  try {
+    const from = await completedFolder(d)
+    // 빈 틀 — 등록부도 어휘 타입도 없다
+    await fs.writeFile(path.join(from, '_vocab.md'), '# 어휘\n\n---\n\n## 아직 비어 있다\n\n첫 관리 문서를 세울 때 더한다.\n')
+    await fs.writeFile(path.join(from, '_managed.md'), '| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n')
+    await fs.rm(path.join(from, 'docs', 't.md'))
+    const old = path.join(d, 'old')
+    await fs.mkdir(path.join(old, 'work', 'assets', '2026-0902-b'), { recursive: true })
+    await fs.mkdir(path.join(old, 'docs'), { recursive: true })
+    await fs.writeFile(
+      path.join(old, '_vocab.md'),
+      ['# 어휘', '', '## table', '', '- `table:a` — 에이', '  aliases: 에이표', '- `table:ex` — (예시) 예시', '  example: 서식', '- `table:z` — 아무도 안 씀', '', '## 이슈', '', '- `이슈:ISS-1` — 첫 이슈', ''].join('\n')
+    )
+    await fs.writeFile(path.join(old, '_managed.md'), '| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n| `table:*` | `docs/t.md` | `## {값}` |\n')
+    await fs.writeFile(path.join(old, 'docs', 't.md'), '# t\n\n## a — 에이\n<!-- applied: 2026-0901-a -->\n\n엉망인 섹션.\n')
+    const rec = (id, touches, tags = []) => ['---', `id: ${id}`, `title: ${id}`, 'date: 2026-09-01 10:00', 'author: kim', 'touches:', ...touches.map((c) => '  - ' + c), `tags: [${tags.join(', ')}]`, '---', '', `${id} 본문.`, ''].join('\n')
+    await fs.writeFile(path.join(old, 'work', '2026-0901-a.md'), rec('2026-0901-a', ['table:a']))
+    await fs.writeFile(path.join(old, 'work', '2026-0902-b.md'), rec('2026-0902-b', ['이슈:ISS-1']))
+    await fs.writeFile(path.join(old, 'work', 'assets', '2026-0902-b', 'g.png'), 'png')
+    await fs.writeFile(path.join(old, 'work', '2026-0903-prune.md'), rec('2026-0903-prune', [], ['docs-prune']).replace('touches:\n', 'touches: []\n'))
+    const dest = path.join(d, 'out', 'fresh')
+    const r = await newRepo({ from, dest, records: { root: old } })
+    assert.equal(r.records.records, 2)
+    assert.equal(r.records.assets, 1)
+    assert.deepEqual(r.records.skipped, [{ id: '2026-0903-prune', kind: 'system' }])
+    assert.equal(await fs.readFile(path.join(dest, 'work', '2026-0901-a.md'), 'utf8'), await fs.readFile(path.join(old, 'work', '2026-0901-a.md'), 'utf8'), '기록은 글자 그대로')
+    assert.ok(await fs.stat(path.join(dest, 'work', 'assets', '2026-0902-b', 'g.png')))
+    assert.equal(await fs.stat(path.join(dest, 'docs', 't.md')).catch(() => null), null, '관리 문서는 안 옮긴다')
+    const v = await fs.readFile(path.join(dest, '_vocab.md'), 'utf8')
+    assert.match(v, /`table:a` — 에이\n  aliases: 에이표/)
+    assert.match(v, /## 이슈\n\n- `이슈:ISS-1`/)
+    assert.doesNotMatch(v, /table:ex|table:z|아직 비어 있다/)
+    const nr = await loadRepo(dest)
+    assert.deepEqual(nr.curation.queue.map((q) => q.id), ['2026-0901-a', '2026-0902-b'])
+    // carryVocab — 펜스 안 · 없는 좌표
+    const c = carryVocab('## t\n\n```\n- `t:in` — 펜스\n```\n- `t:a` — 가\n', new Set(['t:a', 't:in', 't:none']))
+    assert.deepEqual(c.carried, ['t:a'])
+    assert.deepEqual(c.missing.sort(), ['t:in', 't:none'])
+  } finally {
+    await fs.rm(d, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 })
+  }
+})

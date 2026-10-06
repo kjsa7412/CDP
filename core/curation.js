@@ -136,7 +136,9 @@ export function materialsOf(r, id) {
 export function buildCuration({ works, sections = [], managedIndex = null, coords = null, bodies = null, today = Date.now() }) {
   const kindOf = new Map(works.map((d) => [d.id, recordKind(d)]))
   const curations = works.filter((d) => kindOf.get(d.id) === 'curation').sort(cmpDateAsc)
-  const implicit = curations.length === 0
+  // 암묵 전환은 **옛 파생 이력이 있는 레포**만 — 큐레이션 기록이 없고, 작업 기록을 반영한 섹션(applied)이 하나라도 있을 때.
+  // 다시 세운 레포 · 새 레포는 섹션이 없으니 기록 전부가 대기다(그것이 「큐레이션부터 다시」 의 뜻이다)
+  const implicit = curations.length === 0 && sections.some((s) => s.applied)
 
   // ── 기록마다 상태 ──
   const byId = new Map()

@@ -123,6 +123,7 @@ function parseArgs(argv) {
     else if (a === '--expires') out.expires = argv[++i]
     else if (a === '--repos') out.repos2 = argv[++i]
     else if (a === '--role') out.role = argv[++i]
+    else if (a === '--records-from') out.recordsFrom = argv[++i]
     else if (a === '--curate') out.curate = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : ''
     else if (a === '--manual') out.manual = argv[++i]
     else if (a === '--private-pages') out.privatePages = true

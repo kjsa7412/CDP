@@ -184,3 +184,15 @@ test('materialsOf — 좌표별 자리 · 등록부 없는 타입 · 본문에�
   assert.deepEqual(m.together, [{ coord: 'table:a', also: ['2026-0909-q2'] }])
   assert.equal(materialsOf(r, '2026-0101-없음'), null)
 })
+
+test('새 레포 · 다시 세운 레포(섹션 없음) — 큐레이션 기록이 없어도 암묵 전환이 아니다: 기록 전부 대기', async () => {
+  const root = await repo({
+    '_managed.md': '# 등록부\n\n| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n',
+    'work/2026-0901-a.md': work({ id: '2026-0901-a', date: '2026-09-01 10:00', touches: ['table:a'] }),
+    'work/2026-0902-x.md': work({ id: '2026-0902-x', date: '2026-09-02 10:00', touches: ['term:x'] }),
+  })
+  const r = await loadRepo(root)
+  assert.equal(r.curation.implicit, false)
+  assert.deepEqual(r.curation.queue.map((q) => q.id), ['2026-0901-a', '2026-0902-x'])
+  assert.deepEqual(r.curation.queue[0].coords, [{ coord: 'table:a', cls: 'unregistered' }])
+})

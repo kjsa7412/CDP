@@ -19,6 +19,8 @@ import { toolDocs } from '../../../core/tools.js'
 import { lastChanges } from '../../../core/git.js'
 import { dropBlockers } from '../../../core/docusage.js'
 import { droppedDocs } from '../../../core/docrefs.js'
+import { materialsOf } from '../../../core/curation.js'
+import { cmpDateDesc } from '../../../core/validity.js'
 
 // 화면 자산도 이 표를 쓴다(관리 서비스의 `serveWeb`). **`.js` 가 빠지면
 // 브라우저가 모듈 실행을 거부한다** — 화면이 통째로 안 뜬다.
@@ -49,6 +51,34 @@ const MIME = {
 export async function handleRead({ p, method, url, res, send, store }) {
   if (p === '/repo' && method === 'GET') {
     send(res, 200, store.repoInfo())
+    return true
+  }
+
+  // 큐레이션 — 대기열(오래된 순 · 좌표 셋 분류) · 기록 하나의 판정 재료 · 큐레이션 이력(v1.0 TODO §1.3).
+  // 재료(`/queue/<id>`)는 큐레이터 몫이다 — 권한은 부르는 서버가 먼저 본다(관리 서비스). 여기는 읽기만 한다
+  if (p === '/queue' && method === 'GET') {
+    const c = store.curation
+    send(res, 200, { items: c?.queue || [], total: c?.queue?.length || 0, oldestDays: c?.stats?.oldestDays ?? null, implicit: !!c?.implicit })
+    return true
+  }
+  const qm = /^\/queue\/(.+)$/.exec(p)
+  if (qm && method === 'GET') {
+    const m = store.curation ? materialsOf(store, decodeURIComponent(qm[1])) : null
+    if (!m) send(res, 404, { error: { code: 'E_NOT_FOUND', message: '그 id 의 작업 기록이 없다' } })
+    else send(res, 200, m)
+    return true
+  }
+  if (p === '/curations' && method === 'GET') {
+    const items = (store.works || [])
+      .filter((d) => d.curates)
+      .slice()
+      .sort(cmpDateDesc)
+      .map((d) => {
+        const into = new Set()
+        for (const j of d.curates) for (const c of j.into || []) into.add(c)
+        return { id: d.id, title: d.title, date: d.date, author: d.author, judgments: d.curates, sections: into.size }
+      })
+    send(res, 200, { items, total: items.length })
     return true
   }
 

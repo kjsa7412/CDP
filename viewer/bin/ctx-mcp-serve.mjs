@@ -605,7 +605,7 @@ export async function runServe(opt = {}) {
   // 판정은 `core/reponew.js` 하나 — CLI `ctx repo new` 와 같은 함수다.
   // 서버의 SSH 배포 키가 있으면 그 한 줄 — ssh 원격을 쓰는 연결 · clone · 세우기가 레포 로컬 설정으로 건다(git 자격 TODO G2)
   const sshCmd = async () => (dataDir && (await gitauth.keyInfo(dataDir).catch(() => null))?.exists ? gitauth.sshCommand(dataDir) : null)
-  const buildRepo = async ({ name, pkgName = '', origin = null, clone = null, actor, examples = true }) => {
+  const buildRepo = async ({ name, pkgName = '', origin = null, clone = null, actor, examples = true, recordsFrom = null }) => {
     if (!REPO_NAME_RE.test(name)) return { status: 400, body: { error: { code: 'E_INPUT', message: '레포 이름 형식이 아니다 (영문·숫자·._-)' } } }
     if ((await store.list()).some((r) => r.name === name) || (await fs.stat(path.join(root, name)).catch(() => null))) {
       return { status: 409, body: { error: { code: 'E_EXISTS', message: '그 이름의 레포가 이미 있다', detail: { name } } } }
@@ -622,6 +622,14 @@ export async function runServe(opt = {}) {
       }
     }
     if (!pk) return { status: 400, body: { error: { code: 'E_INPUT', message: '서버에 패키지 폴더가 없다 — --packages' } } }
+    // 다시 세우기(v1.0 §9.1) — 옛 레포의 작업 기록만 옮겨 빈 레포로. 패키지는 빈 틀(blank)이다
+    let oldRoot = null
+    if (recordsFrom) {
+      const o = (await store.list()).find((x) => x.name === recordsFrom)
+      if (!o) return { status: 404, body: { error: { code: 'E_NOT_FOUND', message: `옮겨 올 레포가 없다 — ${recordsFrom}`, detail: { recordsFrom } } } }
+      oldRoot = o.root
+      if (!pkgName) pkgName = 'blank'
+    }
     if (!pkgName) return { status: 400, body: { error: { code: 'E_INPUT', message: 'package 가 필요하다' } } }
     let mat
     try {
@@ -635,10 +643,10 @@ export async function runServe(opt = {}) {
       }
     }
     try {
-      const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor, sshCommand: await sshCmd(), examples })
+      const r = await newRepo({ from: mat.from, dest: path.join(root, name), origin, push: !!origin, author: actor, sshCommand: await sshCmd(), examples, records: oldRoot ? { root: oldRoot } : null })
       await store.refresh()
-      await auth.audit(dataDir, `admin repo new · ${actor} · ${name} · package=${pkgName}${examples ? '' : ' · 예시 뺌'}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
-      return { status: 200, body: { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null, examples: r.examples || null } }
+      await auth.audit(dataDir, `admin repo new · ${actor} · ${name} · package=${pkgName}${examples ? '' : ' · 예시 뺌'}${recordsFrom ? ' · 기록 옮김=' + recordsFrom + '(' + (r.records?.records ?? 0) + '건)' : ''}${origin ? ' · origin=' + origin : ''}${r.pushed ? ' · pushed' : ''}`)
+      return { status: 200, body: { name, package: pkgName, commit: r.commit, files: r.files, origin: r.origin, pushed: !!r.pushed, pushError: r.pushError || null, examples: r.examples || null, records: r.records || null } }
     } catch (e) {
       const code = e?.code || 'E_REPO'
       return { status: code === 'E_EXISTS' ? 409 : 400, body: { error: { code, message: e.message, detail: e.detail } } }
@@ -1280,6 +1288,8 @@ export async function runServe(opt = {}) {
                 note: mirror.describe(m),
                 docs: info.docs ?? null,
                 coords: info.coords ?? null,
+                // 큐레이션 대기 · 가장 오래된 나이 — 서버 › 지식 레포 표의 열(v1.0 S7)
+                curation: info.curation ? { queue: info.curation.queue, oldestDays: info.curation.oldestDays, stale: !!info.curation.stale } : null,
                 users: visibleTo(r.name),
                 // 에이전트 세팅(도구 층)이 이 서버 판과 같은가 — 다르면 작업 레포가 옛 스킬을 받는다
                 kit: await kitState(r.root),
@@ -1292,7 +1302,7 @@ export async function runServe(opt = {}) {
             const body = await readJson()
             if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
             const name = String(body.name || '').trim()
-            const out = await buildRepo({ name, pkgName: String(body.package || '').trim(), origin: body.origin ? String(body.origin).trim() : null, clone: body.clone ? String(body.clone).trim() : null, actor: a.user, examples: body.examples !== false })
+            const out = await buildRepo({ name, pkgName: String(body.package || '').trim(), origin: body.origin ? String(body.origin).trim() : null, clone: body.clone ? String(body.clone).trim() : null, actor: a.user, examples: body.examples !== false, recordsFrom: body.recordsFrom ? String(body.recordsFrom).trim() : null })
             if (out.status === 200 && Array.isArray(body.grant) && body.grant.length) {
               // 세우면서 접근을 준다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다(검토 v0.1 §3.2).
               const granted = []
@@ -1762,6 +1772,59 @@ export async function runServe(opt = {}) {
             const code = e?.code || 'E_REPO'
             const status = code === 'E_FORBIDDEN' ? 403 : code === 'E_CONFLICT' ? 409 : code === 'E_NOT_FOUND' ? 404 : 400
             log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/docs-drop', ms: Date.now() - t0, status, code })
+            return json(res, status, { error: { code, message: e?.message || String(e), detail: e?.detail } })
+          }
+        }
+
+        // 큐레이션 — 판정 재료(`/queue/<id>`)는 그 레포의 큐레이터만 본다. 대기열 목록 · 이력은 볼 수 있는 사람 모두(TODO §1.3)
+        const canCurate = a.curate ? a.curate(name) : !!a.admin
+        if (/^\/queue\/.+/.test(sub) && !canCurate) {
+          log.req({ ip, user: a.user, repo: name, method: req.method, tool: '/queue', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+          return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '판정 재료는 그 레포의 큐레이터만 본다', detail: { need: 'curate' } } })
+        }
+
+        // POST /api/<repo>/curate — **글을 안 쓰는 판정**(기록으로 둠). 화면의 [기록으로 둠] · 큐레이터만.
+        //
+        // 파일을 따로 만지지 않는다 — 큐레이션 기록 하나를 지어 같은 `save` 를 탄다(docs-drop 과 같은 꼴 · 같은 검사 ·
+        // 한 커밋 · 같은 로그). 몸통 { verdict: 'keep', ids: [...], reason }. 반영 · 새 문서는 글을 쓰는 일이라 에이전트 세션이 한다
+        if (sub === '/curate') {
+          if (req.method !== 'POST') return json(res, 405, { error: { code: 'E_INPUT', message: 'POST 다' } })
+          if (!canCurate) {
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/curate', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '큐레이션은 그 레포의 큐레이터만 한다', detail: { need: 'curate' } } })
+          }
+          const got = await readBody(req, 64 * 1024)
+          let body = null
+          try {
+            body = got?.tooLarge ? null : JSON.parse(got.toString('utf8') || '{}')
+          } catch {}
+          try {
+            if (!body || body.verdict !== 'keep') throw new CtxError('E_INPUT', '화면에서는 verdict: keep(기록으로 둠)만 한다 — 반영 · 새 문서는 에이전트 세션(cdp-curate)이 한다', { field: 'verdict' })
+            const ids = Array.isArray(body.ids) ? body.ids.map(String) : []
+            if (!ids.length || ids.length > 50) throw new CtxError('E_INPUT', 'ids 는 기록 id 1~50개다', { field: 'ids' })
+            const reason = String(body.reason || '').trim()
+            if (!reason) throw new CtxError('E_INPUT', '사유를 적는다 — 왜 관리 문서로 옮기지 않나(기록이 원천으로 남는다)', { field: 'reason' })
+            const d = new Date()
+            const p2 = (n) => String(n).padStart(2, '0')
+            const id = `${d.getFullYear()}-${p2(d.getMonth() + 1)}${p2(d.getDate())}-큐레이션-기록으로둠-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`
+            const input = {
+              work: {
+                id,
+                title: `큐레이션 — 기록으로 둠 ${ids.length}건`,
+                date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`,
+                touches: [],
+                curates: ids.map((x) => ({ id: x, verdict: 'keep', reason })),
+                body: [`관리 문서로 옮기지 않고 기록을 원천으로 둔다.`, '', `사유 — ${reason}`, '', ...ids.map((x) => `- [\`${x}\`](${x}.md)`), ''].join('\n'),
+              },
+            }
+            const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: !!a.admin, curate: true, mirror: !!opt.mirror, log: (m) => log.line(m) })
+            await store.reload(name)
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/curate', key: 'keep ' + ids.length, ms: Date.now() - t0, status: 200 })
+            return json(res, 200, out)
+          } catch (e) {
+            const code = e?.code || 'E_REPO'
+            const status = code === 'E_FORBIDDEN' ? 403 : code === 'E_CONFLICT' ? 409 : code === 'E_NOT_FOUND' ? 404 : 400
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/curate', ms: Date.now() - t0, status, code })
             return json(res, status, { error: { code, message: e?.message || String(e), detail: e?.detail } })
           }
         }
