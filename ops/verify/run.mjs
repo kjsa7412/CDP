@@ -1936,6 +1936,38 @@ try {
     must(Buffer.from(await f.arrayBuffer()).equals(png), '바이트')
     return `ref ${u.ref.slice(7, 15)} · viewer 403 · svg 415 · 413 · 커밋 ${o.commit} · file 200`
   })
+  await check(116, 'HTML 시각 자료 — 올리기(text/html) → save → /file 이 sandbox CSP · theme 이 루트 data-theme · 문서 응답 visuals · html 아닌 것을 .html 이라 올리면 415', async () => {
+    const page = Buffer.from('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>연계 구성도</title></head><body><svg></svg></body></html>')
+    const up = (body) => AM('/api/mu/assets', { method: 'POST', headers: { authorization: 'Bearer ' + TMW, 'content-type': 'application/octet-stream' }, body })
+    const r = await up(page)
+    eq(r.status, 200, '올리기')
+    const u = await r.json()
+    eq(u.type, 'text/html', 'type')
+    eq((await up(Buffer.from('<p>html 이 아니다</p>'))).status, 415, 'html 아닌 것')
+    const id = '2026-1006-시각자료'
+    const coord = 'table:rp_plnd_mst'
+    const s = await mtool('section', { coord }, TMW)
+    const o = await mtool('save', {
+      work: { id, title: '시각 자료', date: '2026-10-06 15:00', touches: [coord], body: `연계 구성을 정했다. 게이트웨이 방식이고 책임 구간은 셋으로 나눈다. 프레임 규격 초안 v0.1 의 요점은 길이 · 순번 · 체크섬이며 확인 목록은 다섯 건이다. 제어 시퀀스는 기동 명령 한 건을 기준으로 정리했고, 장애 판정은 통신 두절 · 응답 지연 · 값 이상 세 가지로 나눈다. 보안성 검토 요구 두 건에 대한 대응과 선례(익산 · 평창)도 자료에 있다.${NL}${NL}[연계 구성도](assets/${id}/연계 구성도.html)` },
+      sections: [{ coord, applied: s.applied, body: s.content + NL + NL + `[연계 구성도](<../work/assets/${id}/연계 구성도.html>)` }],
+      assets: [{ ref: u.ref, name: '연계 구성도.html' }],
+    }, TMW)
+    must(o.commit, JSON.stringify(o.error))
+    must(!o.warnings.some((w) => /첨부|HTML|외부|CDN/.test(w)), 'warnings: ' + o.warnings.join(' / '))
+    const rel = `work/assets/${id}/연계 구성도.html`
+    const f = await AM('/api/mu/file?path=' + encodeURIComponent(rel) + '&theme=dark', { headers: { authorization: 'Bearer ' + TMW } })
+    eq(f.status, 200, 'file')
+    must(/^sandbox allow-scripts /.test(f.headers.get('content-security-policy') || '') && !/allow-same-origin/.test(f.headers.get('content-security-policy')), 'csp: ' + f.headers.get('content-security-policy'))
+    must((await f.text()).startsWith('<!doctype html><html data-theme="dark"><html lang="ko">'), 'theme')
+    // 문서 응답은 다시 읽은 뒤에 실린다 — save 뒤 감시가 다시 읽을 때까지 잠깐
+    let d = null
+    for (let i = 0; i < 20 && !d?.visuals?.length; i++) {
+      if (i) await new Promise((ok) => setTimeout(ok, 250))
+      d = await (await AM('/api/mu/docs/' + encodeURIComponent(id), { headers: { authorization: 'Bearer ' + TMW } })).json()
+    }
+    eq(d.visuals, [{ path: rel, title: '연계 구성도' }], 'visuals')
+    return `커밋 ${o.commit} · csp sandbox · data-theme · visuals 1 · 415`
+  })
   await check(114, 'save edits — 등록부 밖 문서(프로그램목록) 머리말을 writer 가 고친다 · 작업 기록과 한 커밋 · 트리 깨끗 · 낡은 old 는 E_CONFLICT · 좌표 섹션 · 문서 전체(—) 문서는 E_INPUT', async () => {
     const DOC = 'docs/프로그램목록.md'
     const doc = await mtool('docs', { doc: DOC }, TMW)
@@ -2093,6 +2125,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(2
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114 + 관리 문서 정리 115)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (§10 전체 69줄 + 제품화 70~77 + 제품관리서비스 78~ + 동시 기록 91~97 + 화면 · 권한 98~103 + 설치 한 줄 104~107 + 에이전트 세팅 108~109 + 관리 문서 동적 생성 110 + 스킬 종료 보고 111 + 첨부 올리기 112 + 등록부 사본 113~114 + 관리 문서 정리 115 + HTML 시각 자료 116)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)
