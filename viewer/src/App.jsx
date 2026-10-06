@@ -1098,7 +1098,7 @@ function shortRoot(root) {
   return s.length > 24 ? s.slice(0, 23) + '…' : s
 }
 
-// 문서를 안 골랐을 때 — 레포가 지금 무엇을 담고 있는지(§26.2)
+// 문서를 안 골랐을 때 — 레포가 지금 무엇을 담고 있는지(§26.2) · 묶어서 내려받기(zip — 옛 관리 › 현황에서 왔다 · 개편안 S6)
 function Landing({ repo, docs, managed = 0, onOpen }) {
   const settled = docs.filter((d) => d.settledCoords > 0)
   return (
@@ -1106,10 +1106,20 @@ function Landing({ repo, docs, managed = 0, onOpen }) {
       <div className="docwrap">
         <h1 style={{ fontSize: 20, margin: '32px 0 4px' }}>{repo.root.split(/[\\/]/).pop()}</h1>
         <p style={{ color: 'var(--text-2)' }}>
-          {/* 무엇을 세는지 이름을 붙인다 — 「문서 8」 이 작업문서인지 관리문서인지 몰랐다(F18) */}
-          작업문서 {docs.length}건 · 관리문서 {managed}종 · 좌표 {repo.coords}개
-          {settled.length > 0 && ` · 후속이 있는 작업문서 ${settled.length}건`}
+          {/* 무엇을 세는지 이름을 붙인다 — 「문서 8」 이 작업 기록인지 관리 문서인지 몰랐다(F18) */}
+          작업 기록 {docs.length}건 · 관리 문서 {managed}종 · 좌표 {repo.coords}개
+          {settled.length > 0 && ` · 후속이 있는 작업 기록 ${settled.length}건`}
         </p>
+        {/* 내려받기 — 읽을 수 있는 사람이면 누구나. 레포 안의 상대 경로 그대로 묶여서 풀면 레포와 같은 모양이다. 문서 하나는 문서 맨 아래 「복사」 줄 */}
+        <div className="landing__dl">
+          <span className="landing__dlcap">내려받기 · zip</span>
+          <a className="abtn" href={api.archiveUrl('managed')} download>
+            <Icon name="doc" size={12} /> docs/ 전부
+          </a>
+          <a className="abtn" href={api.archiveUrl('work')} download title="첨부(work/assets) 포함">
+            <Icon name="work" size={12} /> work/ 전부
+          </a>
+        </div>
         <p style={{ color: 'var(--text-3)', marginTop: 24 }}>
           왼쪽 <b>목록</b>에서 하나를 고르면 <b>뻗어나가기</b>가 켜집니다.{' '}
           <span className="kbd">{kbd('⌘K')}</span> 로 자연어 검색, <span className="kbd">\</span> 로 왼쪽 전환.

@@ -290,6 +290,16 @@ export const api = {
   downloadUrl: (p) => api.fileUrl(p) + '&download=1',
   archiveUrl: (layer) =>
     `${base()}/archive?layer=${encodeURIComponent(layer)}` + (isServer() ? '' : `&t=${encodeURIComponent(token)}`),
+  // ── 큐레이션 · 서식집(개편안 §5.4 · TODO §1.3 — v0.27) ─────────────────────────────────────────────
+  // 옛 서버에는 없다(404) — 화면이 「이 서버는 아직 … 내지 않는다」 를 말한다. 막는 것은 서버다: 판정 재료 · 판정은 curate 만
+  queue: () => req('/queue'),
+  queueItem: (id) => req('/queue/' + encodeURIComponent(id)),
+  curations: () => req('/curations'),
+  forms: () => req('/forms'),
+  // 서식 하나 — `<묶음>/<번호>`(조각마다 인코딩)
+  form: (p) => req('/forms/' + String(p).split('/').map(encodeURIComponent).join('/')),
+  // 글을 안 쓰는 판정(기록으로 둠) — 서버가 큐레이션 기록을 지어 같은 save 를 탄다. 거절(400 · 409)도 읽어야 하는 답이다
+  curate: (body) => req('/curate', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 409] }),
   probeExternal: (p) => req(`/probe-external?path=${encodeURIComponent(p)}`),
   open: (p) => req('/open', { method: 'POST', body: JSON.stringify({ path: p }) }),
   heartbeat: () => req('/heartbeat', { method: 'POST' }).catch(() => {}),

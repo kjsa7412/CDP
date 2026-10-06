@@ -10,6 +10,7 @@
 // 색은 예산 그대로 — 대기 · 미반영은 보라, 반영됨 · 기록으로 둠은 무채색. 초록 · 주황 없음(V19).
 
 import { STATE_LABEL, stateOf } from '../../lib/curation.js'
+import { josa } from '../../lib/format.js'
 
 export function RecordState({ c, title = null }) {
   const s = stateOf(c)
@@ -70,6 +71,16 @@ export function CurationLine({ c, onCoord, onOpen }) {
     </div>
   )
 }
+
+// 엔드포인트가 없는 서버(옛 판 — 404) — 화면 전용 자리(큐레이션 · 서식집)에서만 한 줄로 말한다. 빈 표 · 「읽는 중…」 을 두지 않는다
+export function ServerAbsent({ what }) {
+  return (
+    <div className="anote">
+      이 서버는 아직 <b>{josa(what, '을/를')}</b> 내지 않는다 — 큐레이터 판(v0.27) 이상에서 열린다. 관리자가 서버를 올리면 이 자리가 채워진다.
+    </div>
+  )
+}
+export const isAbsent = (err) => !!err && err.status === 404
 
 export function PendingChip({ n, open, onToggle }) {
   return (

@@ -109,10 +109,13 @@ export default function Server({ say, route }) {
             {sv.manual && <Mono>{sv.manual}</Mono>}
             {!sv.webOk && <span className="awarn">index.html 없음</span>}
           </Row>
-          <Row label="패키지">
-            <Mono>{sv.packages || '—'}</Mono>
-            <span className="amuted">· {sv.packagesList.length}개</span>
-          </Row>
+          {/* 패키지 — 옛 서버만 낸다(v0.27 부터 서식집 · 개편안 §8.1). 없으면 줄째 없다 */}
+          {Array.isArray(sv.packagesList) && (
+            <Row label="패키지">
+              <Mono>{sv.packages || '—'}</Mono>
+              <span className="amuted">· {sv.packagesList.length}개</span>
+            </Row>
+          )}
         </Card>
       </div>
 
@@ -151,21 +154,23 @@ export default function Server({ say, route }) {
             자기 자신(<code>ctx.mjs</code>)을 갈아 끼우고 재시작하는 일이라 브라우저에서 시작하지 않는다 — 실패했을 때 되돌리는 길이 셸뿐이다. 명부 · 대장 · 레포는 건드리지 않는다.
           </Note>
         </Card>
-        <Card title="패키지" hint="새 레포가 여기서 복사된다">
-          {sv.packagesList.length === 0 && <span className="amuted">없다 — --packages</span>}
-          {sv.packagesList.map((p) => (
-            <Row key={p.name} label={<Mono>{p.name}</Mono>}>
-              {p.version ? `v${p.version}` : ''}
-              <div className="amuted asub">
-                {p.title || ''} · 문서 {p.docs}
-                {p.types != null ? ` · 타입 ${p.types}` : ''}
-              </div>
-            </Row>
-          ))}
-          <Note>
-            패키지는 일하는 방식의 서식이다 — 프로젝트에 맞추는 일은 세운 레포 안에서(문서 고르기 · 관리 문서 지우기 · 어휘 등록). 패키지 이름 ≠ 레포 이름.
-          </Note>
-        </Card>
+        {Array.isArray(sv.packagesList) && (
+          <Card title="패키지" hint="옛 판 — v0.27 부터 서식집(큐레이션 › 서식집)">
+            {sv.packagesList.length === 0 && <span className="amuted">없다 — --packages</span>}
+            {sv.packagesList.map((p) => (
+              <Row key={p.name} label={<Mono>{p.name}</Mono>}>
+                {p.version ? `v${p.version}` : ''}
+                <div className="amuted asub">
+                  {p.title || ''} · 문서 {p.docs}
+                  {p.types != null ? ` · 타입 ${p.types}` : ''}
+                </div>
+              </Row>
+            ))}
+            <Note>
+              새 레포는 빈 틀로 선다 — 관리 문서는 큐레이터가 기록을 보고 서식집에서 골라 세운다. 패키지 이름 ≠ 레포 이름.
+            </Note>
+          </Card>
+        )}
       </div>
 
       <Card title="로그" hint={log ? `serve.log 마지막 ${log.lines.length}줄 (전체 ${log.total}) · 회전 3 × 1MB` : 'serve.log'} actions={<Search value={q} onChange={setQ} placeholder="걸러 보기 — 401 · save" style={{ minWidth: 180, height: 26 }} />}>

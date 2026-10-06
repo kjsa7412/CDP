@@ -12,6 +12,10 @@
 
 import { useEffect, useState } from 'react'
 import { api, isServer } from '../../lib/api.js'
+import { useScreen } from '../../lib/slots.js'
+import Queue from '../../features/curation/Queue.jsx'
+import Log from '../../features/curation/Log.jsx'
+import FormLibrary from '../../features/forms/FormLibrary.jsx'
 import Overview from './Overview.jsx'
 import Repo from './Repo.jsx'
 import Sync from './Sync.jsx'
@@ -36,6 +40,7 @@ export default function AdminView({
   onChanged = null,
 }) {
   const server = isServer()
+  const scr = useScreen()
   const [diag, setDiag] = useState(null)
 
   // 진단 값은 여러 화면이 같이 쓴다(스캔 시각 · 번들 · 데이터 폴더).
@@ -51,7 +56,10 @@ export default function AdminView({
   return (
     <div className="admin">
       <div className="admin__body">
-        <div className="admin__wrap">
+        <div className={cur === 'curation' || cur === 'forms' ? 'admin__wrap admin__wrap--wide' : 'admin__wrap'}>
+          {cur === 'curation' && server && <Queue repo={repo} say={say} onChanged={onChanged} />}
+          {cur === 'curation-log' && server && <Log logId={scr?.logId || null} />}
+          {cur === 'forms' && server && <FormLibrary form={scr?.form || null} tab={scr?.formTab || 'stamp'} />}
           {cur === 'overview' && <Overview repo={repo} sync={sync} diag={diag} me={me} onCheck={onCheck} onSync={onSync} />}
           {cur === 'repo' && !server && <Repo state={state} repo={repo} diag={diag} firstRun={firstRun} onOpened={onOpened} say={say} />}
           {cur === 'docs' && <Docs me={me} say={say} onChanged={onChanged} />}

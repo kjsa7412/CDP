@@ -14,6 +14,11 @@ import { PageHead, Card, Row, Note, Btn, when, parseAudit, shortTime } from './u
 export default function Overview({ say }) {
   const [busy, setBusy] = useState(false)
   const { data: d, error, refresh: load } = useResource('/admin/overview', admin.overview)
+  // 큐레이션 대기 — 레포마다의 값은 `/admin/repos` 행에 있다(서버 › 지식 레포 · 레포 메뉴와 같은 키 — 요청 하나). 없으면 칸이 없다
+  const { data: rs } = useResource('/admin/repos', admin.repos, { ttl: 60_000 })
+  const curRows = (rs?.repos || []).filter((r) => r.curation && typeof r.curation === 'object')
+  const queued = curRows.reduce((a, r) => a + (r.curation.queue || 0), 0)
+  const oldest = curRows.reduce((m, r) => (r.curation.queue > 0 && r.curation.oldestDays > m ? r.curation.oldestDays : m), 0)
   useEffect(() => {
     if (error) say(error.message, 6000)
   }, [error, say])
@@ -66,7 +71,8 @@ export default function Overview({ say }) {
           <div className="stats">
             <Stat n={d.repos.count} l="지식 레포" />
             <Stat n={m.lag} l={m.diverged ? `미러 밀림 · 갈림 ${m.diverged}` : '미러 밀림'} warn={m.lag > 0 && !m.diverged} bad={m.diverged > 0} />
-            <Stat n={d.packages} l="패키지" />
+            {/* 패키지 칸은 지웠다 — 레포는 늘 빈 틀로 선다(개편안 S7 · §8.2). 대신 큐레이션 대기(서버가 낼 때만) */}
+            {curRows.length > 0 && <Stat n={queued} l={oldest ? `큐레이션 대기 · 가장 오래된 ${oldest}일` : '큐레이션 대기'} warn={oldest > 14} />}
           </div>
           {/* 판과 빌드를 두 줄로 — 한 줄에 두면 좁을 때 둘째 줄이 「·」 로 시작했다(실서버 종합 시험 L6) */}
           <Row label="판">

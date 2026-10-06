@@ -169,3 +169,274 @@ a.fd__chip:hover {
   color: var(--warn);
   background: var(--warn-bg);
 }
+
+/* ── 큐레이션 › 대기열 · 이력 · 서식집 — 넓은 화면(관리 화면의 860px 를 넘는다) ── */
+.admin__wrap--wide {
+  width: min(1180px, 100%);
+}
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--sp-3);
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+.kpi__l {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.kpi__n {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.kpi__s {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.kpi--warn .kpi__n {
+  color: var(--warn);
+}
+
+.qsplit,
+.fsplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: start;
+}
+.fsplit {
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
+}
+@container shell (max-width: 1000px) {
+  .qsplit,
+  .fsplit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.atable.qtable tbody tr,
+.atable.ltable tbody tr {
+  cursor: pointer;
+}
+.atable tr.is-picked td {
+  background: var(--accent-bg);
+}
+.qtable td:first-child,
+.qtable th:first-child {
+  width: 26px;
+}
+.qtable__title {
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+.qtable__title:hover {
+  color: var(--accent);
+}
+.qtable__sub {
+  font-size: 11.5px;
+}
+.qtable__coords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.qfoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.qmat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.qmat__l {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.qmat__v {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.qmat__v a.cchip:hover {
+  text-decoration: none;
+  filter: brightness(0.97);
+}
+.qmat__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  font-size: 12px;
+}
+.qmat__row code,
+.ljud code {
+  font: 11.5px var(--font-mono);
+}
+.qcmd {
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  font: 12px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.qkeep {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.ltable__open > td {
+  background: var(--surface-2);
+}
+.ljud {
+  padding: 4px 2px;
+}
+.ljud__foot {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+/* 서식집 */
+.fl__q {
+  width: 100%;
+}
+.fl__q input {
+  flex: 1;
+  min-width: 0;
+}
+.fl__groups {
+  flex-wrap: wrap;
+  padding: 8px 0 4px;
+}
+.fl__list {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  margin: 0 -6px;
+}
+.fl__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  color: var(--text);
+  border-radius: var(--r-md);
+}
+.fl__row:hover {
+  background: var(--surface-2);
+  text-decoration: none;
+}
+.fl__row[aria-current='page'] {
+  background: var(--accent-bg);
+}
+.fl__t {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fl__m {
+  grid-column: 1 / -1;
+  font: 10.5px var(--font-mono);
+  color: var(--text-2);
+}
+.fl__used {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.fv__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.fv__tabs {
+  padding: 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.fv__tabs a {
+  display: inline-block;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  border-bottom: 2px solid transparent;
+}
+.fv__tabs a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.fv__tabs a[aria-selected='true'] {
+  color: var(--accent);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.fv__paper {
+  padding: 14px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.fv__paper .doc {
+  font-size: 13.5px;
+}
+.fv__lbl {
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.fv__mark {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.fv__mark code {
+  padding: 1px 5px;
+  font: 11px var(--font-mono);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: var(--r-xs);
+}
+
+/* 문서 화면의 빈 상태 — 묶어서 내려받기(옛 관리 › 현황에서 왔다) */
+.landing__dl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.landing__dl a.abtn:hover {
+  text-decoration: none;
+}
+.landing__dlcap {
+  font-size: 12px;
+  color: var(--text-2);
+}
