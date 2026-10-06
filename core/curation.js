@@ -195,8 +195,11 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
     coords: (d.touches || []).map((c) => ({ coord: c, cls: coordClass(managedIndex, c) })),
   }))
 
-  // ── 섹션의 미반영 ──
-  //   큐레이션된 레포: 그 좌표를 건드린 기록 ∩ 대기열 — 판정을 받은 기록은 큐레이터가 이미 봤다
+  // ── 섹션의 미반영 ── 개편안 §4.4 — `later(applied, C) ∪ (대기열 ∩ C 를 건드린 기록)`
+  //   later    applied 뒤에 그 좌표를 건드린 기록(옛 판정과 같은 `later()`). 다른 좌표로만 반영된 기록이 여기서 잡힌다 —
+  //            판정의 `into` 에서 빠진 좌표의 섹션은 그 기록을 아직 싣지 않았다. **기록으로 둠(keep)은 뺀다** — 큐레이터가
+  //            관리 문서로 보내지 않기로 정한 기록이 섹션마다 미반영으로 남으면 소음이다
+  //   대기열   날짜가 applied 보다 앞서도(원문 날짜를 단 편입) 판정 전이면 미반영이다(H5)
   //   암묵 전환: 옛 판정 그대로(applied 뒤 후속)
   const queued = new Set(queue.map((d) => d.id))
   const workById = new Map(works.map((d) => [d.id, d]))
@@ -205,7 +208,10 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
     if (implicit) {
       list = (row?.items || []).map((it) => workById.get(it.id)).filter(Boolean)
     } else {
-      list = (coords?.byCoord?.get(coord) || []).filter((d) => queued.has(d.id))
+      const later = (row?.items || []).map((it) => workById.get(it.id)).filter((d) => d && byId.get(d.id)?.state !== 'kept')
+      const fromQueue = (coords?.byCoord?.get(coord) || []).filter((d) => queued.has(d.id))
+      const seen = new Set()
+      list = [...later, ...fromQueue].filter((d) => !seen.has(d.id) && seen.add(d.id))
     }
     return list
       .filter((d) => kindOf.get(d.id) === 'work')

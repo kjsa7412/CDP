@@ -413,6 +413,8 @@ export class Store {
       section,
       sectionText,
       works,
+      // 섹션 상태와 미반영 기록(v1.0 I7) — 섹션만 보고 지금이라 믿지 않게
+      curation: this.curation ? { state: this.curation.stateOf(coord, section), pending: this.curation.pendingOf(coord) } : null,
     }
   }
 

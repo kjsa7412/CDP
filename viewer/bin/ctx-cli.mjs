@@ -56,7 +56,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
   --root <폴더>             ctx serve -- 그 폴더의 하위를 전부 레포로 본다
-  --prompts auto|always|never   MCP prompt 노출 (기본 auto)
+  --prompts auto|always|never   MCP prompt 노출 (기본 auto — HTTP 에서는 always 와 같다)
   --bind · --port · --auth · --data · --mirror · --web · --forms · --kit   ctx serve 용
   --manual <dir> · --private-pages · --admin-from <cidr,…>            ctx serve 용 — 설명서 폴더 · 소개/설명서에 로그인 요구 · 관리 API 대역
   --forms <dir> · --kit <dir>   서식집 · 작업 레포 kit (기본: CDP_FORMS · CDP_KIT → 번들 옆 forms/ · kit/ → 소스 agent/)

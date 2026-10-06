@@ -584,6 +584,13 @@ test('save v1.0 — 큐레이션 기록: 판정이 프론트매터에 남고 · 
     assert.equal(r.curation.queue.length, 0)
     assert.equal(r.curation.statusOf('2026-0925-n1').state, 'kept')
     assert.equal(r.curation.statusOf('2026-0925-n1').reason, '회의는 기록이 원천')
+
+    // applied 는 뒤로 가지 않는다 — 원문 날짜를 단 옛 기록(편입)만 반영해도 지금의 더 늦은 applied 를 둔다
+    await save(R.r, { work: { ...work('2026-0920-옛원문', 'table:a'), date: '2026-09-20 09:00', source: '옛 회의록' } }, writer)
+    await save(R.r, cur('2026-0926-c2', [{ id: '2026-0920-옛원문', verdict: 'reflect', into: ['table:a'] }], [{ coord: 'table:a', applied: '2026-0925-a2', body: 'a 의 지금 — 옛 원문도 실었다.' }]), opt())
+    const r2 = await loadRepo(R.r)
+    assert.equal(r2.sections.find((x) => x.coord === 'table:a').applied, '2026-0925-a2', '옛 날짜 기록을 반영해도 applied 는 a2 그대로')
+    assert.deepEqual(r2.curation.pendingOf('table:a'), [], '이미 반영한 a1 · a2 가 미반영으로 되살아나지 않는다')
   } finally {
     await R.rm()
   }

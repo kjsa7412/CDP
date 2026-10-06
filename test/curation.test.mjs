@@ -223,3 +223,49 @@ test('읽기 API — 판정 재료에 등록부 없는 타입의 비슷한 서�
   assert.deepEqual(log.body.items[0].newDocs, ['docs/테이블.md'])
   assert.equal(log.body.items[0].sections, 1)
 })
+
+test('미반영(개편안 §4.4) — applied 뒤에 그 좌표를 건드렸는데 다른 좌표로만 반영된 기록도 미반영 · 기록으로 둠은 빠진다', async () => {
+  const root = await repo({
+    'docs/테이블.md': DOC([
+      ['a', '2026-0905-a5', 'A'],
+      ['b', '2026-0905-a5', 'B'],
+    ]),
+    'work/2026-0905-a5.md': work({ id: '2026-0905-a5', date: '2026-09-05 10:00', touches: ['table:a', 'table:b'] }),
+    // ab 는 a · b 를 건드렸는데 a 로만 반영됐다 — b 의 섹션은 아직 그것을 싣지 않았다
+    'work/2026-0906-ab.md': work({ id: '2026-0906-ab', date: '2026-09-06 10:00', touches: ['table:a', 'table:b'] }),
+    // kb 는 b 를 건드렸지만 기록으로 둠 — b 를 귀찮게 하지 않는다
+    'work/2026-0906-kb.md': work({ id: '2026-0906-kb', date: '2026-09-06 11:00', touches: ['table:b'] }),
+    'work/2026-0907-cur.md': work({
+      id: '2026-0907-cur',
+      date: '2026-09-07 10:00',
+      extra: ['touchesEmpty: 큐레이션', 'curates:', '  - { id: 2026-0905-a5, verdict: reflect, into: [table:a, table:b] }', '  - { id: 2026-0906-ab, verdict: reflect, into: [table:a] }', '  - { id: 2026-0906-kb, verdict: keep, reason: 회의 메모 }'],
+    }),
+  })
+  // 섹션 a 는 ab 를 반영해 applied 가 ab 다(파일을 그렇게 둔다)
+  await fs.writeFile(path.join(root, 'docs/테이블.md'), DOC([['a', '2026-0906-ab', 'A'], ['b', '2026-0905-a5', 'B']]), 'utf8')
+  const r = await loadRepo(root)
+  assert.equal(r.curation.implicit, false)
+  assert.deepEqual(r.curation.queue.map((q) => q.id), [])
+  assert.deepEqual(r.curation.pendingOf('table:a'), [])
+  assert.deepEqual(r.curation.pendingOf('table:b').map((p) => p.id), ['2026-0906-ab'])
+  const { toolSection } = await import('../core/tools.js')
+  assert.equal(toolSection(r, { coord: 'table:b' }).state, 'pending')
+  assert.equal(toolSection(r, { coord: 'table:a' }).state, 'ok')
+})
+
+test('sectionMarkdown — 리소스 · 프롬프트도 섹션 뒤에 미반영 기록을 붙인다(I7) · 없으면 섹션만', async () => {
+  const { toolSection, sectionMarkdown } = await import('../core/tools.js')
+  const root = await repo({
+    'docs/테이블.md': DOC([['a', '2026-0905-a5', 'A 의 정본.']]),
+    'work/2026-0905-a5.md': work({ id: '2026-0905-a5', date: '2026-09-05 10:00', touches: ['table:a'] }),
+    'work/2026-0907-cur.md': work({ id: '2026-0907-cur', date: '2026-09-07 10:00', extra: ['touchesEmpty: 큐레이션', 'curates:', '  - { id: 2026-0905-a5, verdict: reflect, into: [table:a] }'] }),
+    'work/2026-0908-a8.md': work({ id: '2026-0908-a8', date: '2026-09-08 10:00', touches: ['table:a'], body: 'A 에 컬럼을 더했다.' }),
+  })
+  const r = await loadRepo(root)
+  const md = sectionMarkdown(toolSection(r, { coord: 'table:a' }))
+  assert.match(md, /A 의 정본\./)
+  assert.match(md, /## 미반영 기록 1건/)
+  assert.match(md, /### 2026-0908-a8 · 2026-09-08 10:00/)
+  assert.match(md, /A 에 컬럼을 더했다\./)
+  assert.doesNotMatch(sectionMarkdown({ body: '섹션.', pending: [] }), /미반영/)
+})

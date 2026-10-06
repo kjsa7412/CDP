@@ -6,19 +6,17 @@
 // 에서만 만들고 CLI 와 MCP 가 둘 다 이것을 부른다 -- 같음이 규율이 아니라
 // 구조가 된다.
 //
-// 여기 있는 것은 전부 **읽기**다. 파일을 쓰지 않는다(§8). `save` 는 모드 B 의
-// 서버만 갖고 여기 없다.
+// 여기 있는 것은 전부 **읽기**다. 파일을 쓰지 않는다(§8). `save` 는 서버의
+// `core/save.js` 이고 여기 없다.
 //
-// `sync` · `version` · `repos` 는 여기 없다. 앞의 둘은 git 과 프로세스를 봐야
-// 하고(비동기), `repos` 는 레포 하나가 아니라 **서버가 든 목록**이라 층이 다르다.
+// `repos` · `queue` · `forms` 는 여기 없다. `repos` 는 레포 하나가 아니라 **서버가 든 목록**이고,
+// 큐레이터 도구 둘은 `core/curation.js` · `core/formslib.js` 를 MCP 서버가 바로 부른다.
 
 import { repoStatus } from './repo.js'
 import { runBuiltinCheck } from './check.js'
 import { buildIndex, fullText, tokenize } from './search.js'
-import { outline } from './frontmatter.js'
 import { reconcile } from './vocab.js'
 import { resolveCoord } from './managed.js'
-import { cmpDateDesc } from './validity.js'
 import { docNo } from './docrefs.js'
 import { docUsage } from './docusage.js'
 import { CtxError } from './errors.js'
@@ -278,6 +276,19 @@ export function toolWhere(r, { coord, limit = 5 } = {}) {
 // 유일한 근거다. 본문이 가리키는 좌표의 정본 섹션도 한 단계 따라가 싣는다(`refs`) — 큐레이터가 같은 사실을
 // 섹션마다 복제하지 않고 정본 좌표를 걸 수 있는 짝이다.
 
+// `toolSection` 의 결과를 **글 하나로** — MCP 리소스 · 프롬프트처럼 JSON 을 못 싣는 자리도 섹션과 미반영 기록을 같이 낸다(I7).
+// 섹션만 내면 그 자리는 「섹션 = 지금」 이라고 말하는 셈이다
+export function sectionMarkdown(s) {
+  const parts = [s.body ?? '(섹션 없음)']
+  const recs = s.pendingRecords || []
+  if (recs.length) {
+    parts.push('', `## 미반영 기록 ${s.pending?.length ?? recs.length}건 — 이 섹션 뒤에 이 좌표를 건드렸고 큐레이터가 아직 반영하지 않았다. 섹션과 함께 읽어야 지금이다`)
+    for (const p of recs) parts.push('', `### ${p.id}${p.date ? ' · ' + p.date : ''}${p.title ? ' · ' + p.title : ''}`, '', p.body + (p.truncated ? '\n\n(…잘림 — work 로 전문)' : ''))
+    if (s.pendingOmitted) parts.push('', `(더 있다 — ${s.pendingOmitted}건 · section 도구의 pending 목록)`)
+  }
+  return parts.join('\n')
+}
+
 export function toolSection(r, { coord } = {}) {
   const c = checkCoord(coord)
   const cut = sliceSection(r, c)
@@ -424,50 +435,7 @@ function wordHit(w, toks) {
   return t.filter((x) => toks.has(x)).length >= need
 }
 
-// ── derive · apply · check · brief ──────────────────────────────────────────
-
-export function toolDerive(r) {
-  const st = repoStatus(r)
-  return { pendingDerive: [...st.pendingDerive], brokenSections: st.brokenSections }
-}
-
-// 붙일 **변경 줄**만 낸다. CLI 는 사람을 향한 안내문을 같이 내지만 도구는
-// 값만 낸다 -- 절차 문장은 스킬의 것이다(근거 문서 §3).
-export function toolApply(r, { coord } = {}) {
-  const c = checkCoord(coord)
-  const sec = r.sections.find((x) => x.coord === c)
-  if (!sec) return { coord: c, doc: null, anchor: null, lines: [], reason: 'unregistered' }
-  if (sec.state === 'ok') {
-    return { coord: c, doc: sec.doc, anchor: sec.anchor ?? null, lines: [], reason: 'already-applied', applied: sec.applied }
-  }
-  const items = sec.items.length ? sec.items : (r.coords.byCoord.get(c) || []).slice().sort(cmpDateDesc)
-  if (!items.length) return { coord: c, doc: sec.doc, anchor: sec.anchor ?? null, lines: [], reason: 'no-work' }
-
-  const newest = items[0]
-  const lines = [`<!-- applied: ${sec.applied || 'null'} -> ${newest.id} -->`]
-  for (const i of items.slice().reverse()) {
-    lines.push(`**변경** · ${i.date || ''} [\`${String(i.id).replace(/^\d{4}-\d{4}-/, '')}\`](../work/${i.id}.md)`)
-  }
-  return {
-    coord: c,
-    doc: sec.doc,
-    anchor: sec.anchor ?? null,
-    applied: sec.applied ?? null,
-    lines,
-    // 목차를 같이 준다 — "무엇을 옮겨야 하는지" 없이 "직접 고치세요" 는
-    // 지시가 아니라 소원이다(ctx-cli.mjs 의 같은 주석).
-    sources: items.map((i) => {
-      const doc = r.byId.get(i.id) || i
-      const body = r.bodies.get(doc.path) || ''
-      return {
-        id: i.id,
-        date: i.date ?? null,
-        path: `work/${i.id}.md`,
-        outline: outline(body.slice(doc.bodyOffset || 0)).slice(0, 12).map((h) => h.title),
-      }
-    }),
-  }
-}
+// ── check · brief ──────────────────────────────────────────
 
 export function toolCheck(r) {
   const res = runBuiltinCheck({
@@ -536,7 +504,7 @@ export function bundleAgeNotice(built, now = Date.now(), maxDays = BUNDLE_MAX_DA
 export function guardSize(obj, what) {
   const n = Buffer.byteLength(JSON.stringify(obj), 'utf8')
   if (n > BODY_LIMIT) {
-    throw new CtxError('E_INPUT', `${what} 이 ${Math.round(n / 1024)}KB 로 상한(512KB)을 넘는다 — cdp://<repo>/doc 리소스로 읽어라`, {
+    throw new CtxError('E_INPUT', `${what} 이 ${Math.round(n / 1024)}KB 로 상한(512KB)을 넘는다 — 더 좁혀 부른다(좌표 하나 · 문서 하나 · 기록 하나)`, {
       bytes: n,
       limit: BODY_LIMIT,
     })
