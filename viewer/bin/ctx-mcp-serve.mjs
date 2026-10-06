@@ -717,7 +717,9 @@ export async function runServe(opt = {}) {
             const out = await doSave(r.root, input, {
               user: a.user,
               write: a.write,
-              admin: !!a.admin, // 등록부 정리(rename · merge · retire)는 admin 만
+              admin: !!a.admin,
+              // 그 레포의 큐레이터인가(v1.0 V2) — 섹션 · 등록부 · 큐레이션 판정은 큐레이터만 쓴다
+              curate: a.curate ? a.curate(name) : !!a.admin,
               mirror: !!opt.mirror,
               staging: stagingDir, // assets[].ref 를 여기서 꺼낸다
               log: (m) => log.line(m),
@@ -1024,6 +1026,8 @@ export async function runServe(opt = {}) {
           role: a.role,
           admin: !!a.admin,
           write: !!a.write,
+          // 큐레이션할 수 있는 레포(v1.0 · 화면의 `can(me, 'curate', repo)`) — admin 은 ['*']
+          curate: a.curateRepos || [],
           sudo: !!(su && su.user === a.user),
           expiresInDays: a.expiresInDays ?? null,
           // 'never' · 'YYYY-MM-DD' · null(모름) — 화면이 「무기한」 과 「모름」 을 가른다(관리 › 정보 · R3)
@@ -1184,8 +1188,8 @@ export async function runServe(opt = {}) {
           if (sub === '/users' && req.method === 'POST') {
             const body = await readJson()
             if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
-            const u = auth.userAdd(db, { name: String(body.name || '').trim(), label: body.label ? String(body.label).trim().slice(0, 80) : null, repos: body.repos ?? [], role: body.role ?? 'viewer' })
-            await commit(`user add · ${a.user} · ${u.name} · repos=${u.repos.join(',')} · role=${u.role}${u.label ? ' · label=' + u.label : ''}`)
+            const u = auth.userAdd(db, { name: String(body.name || '').trim(), label: body.label ? String(body.label).trim().slice(0, 80) : null, repos: body.repos ?? [], role: body.role ?? 'viewer', curate: body.curate ?? [] })
+            await commit(`user add · ${a.user} · ${u.name} · repos=${u.repos.join(',')} · role=${u.role}${u.curate?.length ? ' · curate=' + u.curate.join(',') : ''}${u.label ? ' · label=' + u.label : ''}`)
             okLog('/users', u.name)
             return json(res, 200, auth.userList(db).find((x) => x.name === u.name))
           }
@@ -1195,7 +1199,7 @@ export async function runServe(opt = {}) {
             const body = await readJson()
             if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
             const patch = {}
-            for (const k of ['label', 'role', 'repos', 'active']) if (body[k] !== undefined) patch[k] = body[k]
+            for (const k of ['label', 'role', 'repos', 'active', 'curate']) if (body[k] !== undefined) patch[k] = body[k]
             if (patch.label !== undefined) patch.label = patch.label ? String(patch.label).trim().slice(0, 80) : null
             const u = auth.userSet(db, name, patch, { actor: a.user })
             await commit(`user set · ${a.user} · ${name} · ${JSON.stringify(patch)}`)
@@ -2082,7 +2086,7 @@ export async function runAuthCmd(opt) {
       if (sub === 'add') {
         const name = need(opt, 'name', '이름')
         if (!name) return 2
-        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos: reposOpt() ?? [], role: opt.role ?? null, write: !!opt.write })
+        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos: reposOpt() ?? [], role: opt.role ?? null, write: !!opt.write, curate: opt.curate ? String(opt.curate).split(',') : [] })
         out(`명부에 넣었다: ${u.name} · repos ${u.repos.join(',') || '(없음)'} · role ${u.role}`)
         return done(`user add · ${u.name} · repos=${u.repos.join(',')} · role=${u.role}`)
       }
@@ -2096,6 +2100,7 @@ export async function runAuthCmd(opt) {
         if (opt.role !== undefined) patch.role = opt.role
         else if (opt.write !== undefined) patch.write = opt.write
         if (opt.active !== undefined) patch.active = opt.active
+        if (opt.curate !== undefined) patch.curate = opt.curate === true || opt.curate === '' ? [] : String(opt.curate).split(',')
         // 셸에는 actor 가 없다 — 자기 해제 가드는 화면의 것이고, 마지막 admin 가드만 여기서도 선다.
         const u = auth.userSet(db, name, patch)
         out(`고쳤다: ${u.name} · active ${u.active} · repos ${(u.repos || []).join(',')} · role ${u.role}`)

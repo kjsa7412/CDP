@@ -913,6 +913,7 @@ export class Store {
       managedIndex: this.managedIndex,
       sections: this.sections,
       bodies: this.bodies,
+      curation: this.curation,
       vocabText: this.vocabText ?? null,
       managedText: this.managedText ?? null,
     })

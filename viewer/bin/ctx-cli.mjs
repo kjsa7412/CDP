@@ -64,7 +64,7 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
                             모드 B — 지식 레포 없이 서버에서 kit 을 받아 넣는다
   ctx mcp                   MCP 서버로 선다 (stdio). 호스트가 띄운다 -- 직접 칠 일은 없다
   ctx serve --root <폴더>    MCP 서버 + 관리 서비스 (HTTP). 상주 프로세스
-  ctx serve user add|set|list --auth <f> [--role viewer|writer|admin]   명부 — 권한은 여기 붙는다
+  ctx serve user add|set|list --auth <f> [--role viewer|writer|admin] [--curate <레포,…|*>]   명부 — 권한은 여기 붙는다(--curate 는 레포별 큐레이터 · 빈 값이면 해제)
   ctx serve token [list|reissue|set|revoke] --auth <f>   토큰 — 신원만 증명한다. 폐기는 상태로 남는다
   ctx serve git-auth --host <h[:p]> --user <계정> [--test <url>]   origin 자격 — PAT 를 숨김 입력으로(.git-credentials 600)
   ctx serve git-auth --ssh --data <dir> [--rotate] | --list      SSH 배포 키(공개 키를 GitLab 에) · 지금 상태
@@ -123,6 +123,7 @@ function parseArgs(argv) {
     else if (a === '--expires') out.expires = argv[++i]
     else if (a === '--repos') out.repos2 = argv[++i]
     else if (a === '--role') out.role = argv[++i]
+    else if (a === '--curate') out.curate = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : ''
     else if (a === '--manual') out.manual = argv[++i]
     else if (a === '--private-pages') out.privatePages = true
     else if (a === '--admin-from') out.adminFrom = argv[++i]
@@ -253,6 +254,7 @@ async function cmdCheck(r, opt) {
     managedIndex: r.managedIndex,
     sections: r.sections,
     bodies: r.bodies,
+    curation: r.curation,
   })
   const errors = res.findings.filter((f) => f.sev === 'error')
   const warns = res.findings.filter((f) => f.sev === 'warn')

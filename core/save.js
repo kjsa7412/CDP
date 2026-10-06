@@ -1,6 +1,11 @@
-// save — 모드 B 의 유일한 쓰기 도구. 설계서 §4.5.
+// save — 모드 B 의 유일한 쓰기 도구. 설계서 §4.5 · v1.0 개편안 §5.2.
 //
-// 단위는 **작업 기록 1건 + 파생 섹션 갱신 + 어휘 등재**이고 한 커밋이다(§0).
+// 단위는 **작업 기록 1건 + (큐레이터면) 관리 문서 섹션 · 등록부 + 어휘 등재**이고 한 커밋이다(§0).
+//
+// **v1.0 — 역할이 입력을 가른다.** writer 는 작업 기록(`work` · `vocab` · `assets`)만 쓴다 — 관리 문서는
+// 큐레이션으로만 바뀐다(I6). 섹션 · 등록부 · 섹션 밖 손질 · 서식 예시 정리 · 큐레이션 판정(`work.curates`)은
+// 그 레포의 큐레이터(`curate`)만. 기록만 쓴 save 는 파생 때문에 막히지 않는다 — 기록은 대기열에 서고, 섹션을
+// 읽는 모든 자리가 그 미반영 기록을 같이 낸다(I7).
 // 모드 A 에서는 스킬이 Edit/Write 로 하고 커밋 훅이 검사하던 것을, 여기서는
 // 서버가 한 번에 한다 — 클라이언트에 작업 트리가 없기 때문이다(§4.2).
 //
@@ -16,14 +21,16 @@ import path from 'node:path'
 import { loadRepo } from './repo.js'
 import { runBuiltinCheck, newErrors } from './check.js'
 import { resolveCoord, parseRegistry, docEscapes, normValue } from './managed.js'
-import { planManaged, checkManagedShape, needsAdmin } from './managedops.js'
+import { planManaged, checkManagedShape } from './managedops.js'
 import { readText } from './scan.js'
 import { renderIndex, renderByCoord } from './indexes.js'
 import * as git from './git.js'
 import { CtxError, checkCoord, checkId, sliceSection } from './tools.js'
 import { withLock } from './lock.js'
 import { enqueuePush, lastPush, describe as mirrorLine } from './mirror.js'
-import { topApplied } from './frontmatter.js'
+import { topApplied, normalizeCurates } from './frontmatter.js'
+import { recordKind, SYSTEM_TAGS } from './curation.js'
+import { cmpDateDesc } from './validity.js'
 import { take as takeAsset, checkAssetName, ASSETS_COUNT_MAX, ASSETS_TOTAL_MAX } from './assets.js'
 import { repoPath, mdRefs } from './repopath.js'
 import { htmlExternal, proseLength } from './visuals.js'
@@ -291,9 +298,10 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
 
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
-export async function save(root, input, { user, write = false, admin = false, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS, staging = null } = {}) {
+export async function save(root, input, { user, write = false, admin = false, curate = undefined, mirror = false, now = Date.now(), log = null, mirrorWaitMs = MIRROR_WAIT_MS, commitTimeout = COMMIT_TIMEOUT_MS, staging = null } = {}) {
   const out = await withLock(path.resolve(root), async () => {
-    const r = await run(root, input, { user, write, admin, now, staging })
+    // 큐레이터인가 — 서버는 토큰의 레포별 권한을 넘긴다. 안 넘기면 admin 만 큐레이터다(안전한 쪽)
+    const r = await run(root, input, { user, write, admin, curate: curate ?? !!admin, now, staging })
 
     // 미리보기 — 검사까지 지난 트리를 되돌리고 커밋하지 않는다. 색인에는 아무것도 올리지 않았다
     if (r.dryRun) {
@@ -393,12 +401,70 @@ export async function save(root, input, { user, write = false, admin = false, mi
   return out
 }
 
-async function run(root, input, { user, write, admin, mirror, now, staging }) {
+// 큐레이터만 쓰는 입력과 예약 태그 — writer 가 보내면 파일을 만지기 전에 거절한다(H7)
+export const RESERVED_TAGS = ['curate', 'baseline', ...SYSTEM_TAGS]
+
+function curatorOnly(input, w) {
+  const why = []
+  if ((input.sections || []).length) why.push('sections')
+  if ((input.managed || []).length) why.push('managed')
+  if ((input.edits || []).length) why.push('edits')
+  if (input.examples != null) why.push('examples')
+  if ((input.baseline || []).length) why.push('baseline')
+  if (w.curates != null) why.push('work.curates')
+  if (w.baseline != null) why.push('work.baseline')
+  const tags = (w.tags || []).filter((t) => RESERVED_TAGS.includes(t))
+  if (tags.length) why.push(`work.tags(${tags.join(', ')})`)
+  return why
+}
+
+async function run(root, input, { user, write, admin, curate, mirror, now, staging }) {
   // 1 권한
   if (!write) throw new CtxError('E_FORBIDDEN', '쓰기 권한이 없다', { user })
 
   // 2 스키마
   const w = checkSchema(input)
+
+  // 2.1 역할 — **writer 는 기록만**(v1.0 I6 · 개편안 §5.2). 관리 문서 층은 큐레이터 한 갈래로만 바뀐다
+  if (!curate) {
+    const why = curatorOnly(input, w)
+    if (why.length) {
+      throw new CtxError(
+        'E_FORBIDDEN',
+        `관리 문서 · 등록부 · 큐레이션은 그 레포의 큐레이터만 쓴다 — ${why.join(' · ')} 를 빼고 work 만 다시 보낸다. 기록은 대기열에 서고 큐레이터가 반영한다(섹션을 읽는 자리는 그동안 이 기록을 같이 낸다)`,
+        { user, need: 'curate', fields: why }
+      )
+    }
+  }
+
+  // 2.2 큐레이션 기록 — 다룬 기록은 `curates` 에, 자신은 좌표를 갖지 않는다(대기열 · 미반영 계산이 섞이지 않게)
+  let curates = null
+  if (w.curates != null) {
+    curates = normalizeCurates(w.curates) || []
+    if (!curates.length) throw new CtxError('E_INPUT', 'work.curates 가 비었다 — 다룬 기록이 없으면 큐레이션 기록이 아니다', { field: 'work.curates' })
+    const ids = new Set()
+    for (const j of curates) {
+      if (j.bad) throw new CtxError('E_INPUT', `work.curates — ${j.id || '(id 없음)'}: ${j.bad}`, { field: 'work.curates', id: j.id || null })
+      if (ids.has(j.id)) throw new CtxError('E_INPUT', `work.curates — ${j.id} 가 두 번 나온다`, { field: 'work.curates', id: j.id })
+      ids.add(j.id)
+    }
+    if ((w.touches || []).length) throw new CtxError('E_INPUT', '큐레이션 기록은 touches 를 갖지 않는다 — 다룬 기록과 좌표는 curates 의 id · into 에 적는다', { field: 'work.touches' })
+    if (!w.touchesEmpty) w.touchesEmpty = '큐레이션'
+    if (!(w.tags || []).includes('curate')) w.tags = [...(w.tags || []), 'curate']
+    // 반영(reflect · new)한 좌표는 같은 save 의 섹션이어야 한다 — 「반영했다」 는 판정이 그 섹션을 쓴 커밋에 붙는다
+    const sent = new Set((input.sections || []).map((s) => s.coord))
+    for (const j of curates) {
+      for (const c of j.into) {
+        if (!sent.has(c)) {
+          throw new CtxError('E_INPUT', `work.curates — ${j.id} 의 into ${c} 가 이 save 의 sections 에 없다. 반영한 섹션을 같이 보낸다(바뀐 것이 없으면 section 의 content 그대로) · 반영하지 않을 기록이면 verdict: keep`, {
+            field: 'work.curates',
+            id: j.id,
+            coord: c,
+          })
+        }
+      }
+    }
+  }
   const managedOps = checkManagedShape(input.managed)
   const editOps = checkEditsShape(input.edits)
   const sections = input.sections || []
@@ -412,10 +478,7 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     warnings.push('date 에 시각이 없다 — 같은 날 같은 좌표의 선후를 알 수 없다')
   }
 
-  // 2.5 구조 정리는 admin 만 — **파일을 만지기 전에.** 행을 더하는 것(add)은 덧붙임이라 writer 도 한다
-  if (needsAdmin(managedOps) && !admin) {
-    throw new CtxError('E_FORBIDDEN', '등록부 정리(rename · merge · retire · drop)는 admin 만 한다 — admin 에게 요청한다', { user, need: 'admin' })
-  }
+  // 2.5 구조 정리(rename · merge · retire · drop)도 큐레이터의 일이다(v1.0 V2) — 2.1 이 이미 걸렀다
 
   // 3 존재 — 기존 기록은 고치지도 지우지도 않는다. 정정은 supersedes 를 단 새 기록이다.
   const workRel = 'work/' + w.id + '.md'
@@ -484,6 +547,17 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     const r0 = await loadRepo(root, { settings: SETTINGS })
     // 쓰기 전 검사 — 8단계가 「이 save 가 새로 만든 오류」 만 가리는 기준(v1.0 I10 · V21). 어휘 추가는 오류를 만들지 않는다
     const before = checkOf(r0)
+    // 5.0 큐레이션 판정의 대상 — 있는 기록이고 사람의 작업 기록이어야 한다
+    for (const j of curates || []) {
+      const d = r0.byId.get(j.id)
+      if (!d) throw new CtxError('E_INPUT', `work.curates — ${j.id} 라는 작업 기록이 없다`, { field: 'work.curates', id: j.id })
+      if (recordKind(d) !== 'work') throw new CtxError('E_INPUT', `work.curates — ${j.id} 는 큐레이션 · 기준선 · 옛 기계 기록이다 — 사람의 작업 기록만 다룬다`, { field: 'work.curates', id: j.id })
+    }
+    // 섹션의 applied — 반영(into)한 기록 중 그 좌표를 건드린 **가장 늦은 기록**(v1.0 §4.4 · H3). 판정이 없으면 이 기록
+    const appliedFor = (coord) => {
+      const hits = (curates || []).filter((j) => j.verdict !== 'keep' && j.into.includes(coord)).map((j) => r0.byId.get(j.id)).filter(Boolean)
+      return hits.length ? hits.sort(cmpDateDesc)[0].id : w.id
+    }
     const known = new Set(r0.vocab.coords.keys())
     for (const v of vocabAdds) known.add(v.coord)
     const readRaw = (rel) => fs.readFile(path.join(root, rel), 'utf8').catch(() => null)
@@ -640,7 +714,7 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
         value: hit.value,
         level: hit.level,
         body: s.body,
-        id: w.id,
+        id: appliedFor(s.coord),
         heading: s.heading,
       })
       // 새 섹션의 `heading` 은 제목 줄 **전체**(`값 — 설명`)다 — 값이 빠지면 그 섹션은 이 좌표의 것으로 안 읽힌다(앵커 없음)
@@ -726,7 +800,7 @@ async function run(root, input, { user, write, admin, mirror, now, staging }) {
     }
 
     // 7 기록 — TEMPLATE 순서의 프론트매터. author 는 토큰의 user 다. 첨부는 `attachments` 로 — 화면의 첨부 목록이 이것을 읽는다
-    await snap.write(workRel, renderWork(w, user, assetsOut.map((a) => a.path.slice('work/'.length))))
+    await snap.write(workRel, renderWork(w, user, assetsOut.map((a) => a.path.slice('work/'.length)), curates))
 
     // 9→8 **인덱스를 검사보다 먼저 만든다.**
     //
@@ -793,10 +867,11 @@ function checkOf(r) {
     managedIndex: r.managedIndex,
     sections: r.sections,
     bodies: r.bodies,
+    curation: r.curation,
   })
 }
 
-function renderWork(w, user, attachments = []) {
+function renderWork(w, user, attachments = [], curates = null) {
   const fm = ['---', `id: ${w.id}`, `title: ${yamlStr(w.title)}`, `date: ${w.date || ''}`, `author: ${yamlStr(user)}`]
   if (w.source) fm.push(`source: ${yamlStr(w.source.trim())}`)
   // 0개는 `touches: []` — 빈 `touches:` 는 YAML 로 null 이라 "0개임을 확인했다" 는 선언이 안 된다.
@@ -806,6 +881,16 @@ function renderWork(w, user, attachments = []) {
   if (!touches.length && w.touchesEmpty) fm.push(`touchesEmpty: ${yamlStr(w.touchesEmpty.trim())}`)
   if (w.supersedes) fm.push(`supersedes: ${w.supersedes}`)
   if (attachments.length) fm.push(`attachments: [${attachments.map(yamlStr).join(', ')}]`)
+  // 큐레이션 판정 — 한 줄에 하나. 좌표 · 사유는 JSON 문자열로(콜론 · 대괄호가 YAML 을 깨지 않게)
+  if (curates?.length) {
+    fm.push('curates:')
+    for (const j of curates) {
+      const parts = [`id: ${JSON.stringify(j.id)}`, `verdict: ${j.verdict}`]
+      if (j.into.length) parts.push(`into: [${j.into.map((c) => JSON.stringify(c)).join(', ')}]`)
+      if (j.reason) parts.push(`reason: ${JSON.stringify(j.reason)}`)
+      fm.push(`  - { ${parts.join(', ')} }`)
+    }
+  }
   fm.push(`tags: [${(w.tags || []).map(yamlStr).join(', ')}]`, '---', '')
   return fm.join(NL) + NL + w.body.replace(/\s*$/, '') + NL
 }

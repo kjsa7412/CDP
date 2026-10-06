@@ -31,7 +31,7 @@ import { lintGenerated, proseLint } from './regen.js'
 const AGENDA = new Set(['미결', '제안'])
 const REQUIRED = ['id', 'title', 'date', 'author']
 
-export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus, bodies, vocabText = null, managedText = null }) {
+export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex, sections, gitStatus, bodies, vocabText = null, managedText = null, curation = null }) {
   const findings = []
   // `fix` — 누가 무엇으로 치우는가(등록부 사본 검토 X30). 경고를 받은 사람이 다음 할 일을 안다
   const push = (sev, kind, label, items, fix) => {
@@ -221,24 +221,12 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
     push('warn', 'body-only-coord', '본문에만 있는 좌표 — 바꾼 것이면 touches 에 넣는다', bodyOnly)
   }
 
-  // 등록부가 가리키는데 없는 것 — 앵커 없음. **커밋을 막는다.**
+  // 등록부가 가리키는데 섹션이 없는 좌표를 기록이 건드린 것 — **v1.0 에서 오류가 아니다**(개편안 H1).
   //
-  // 등록부에 `screen:RS*` → `화면정의서_사업.md ## {값}` 이 있는데 그 문서에
-  // `## RSB020` 이 없으면, 그 좌표의 현재 상태를 적을 자리가 없다는 뜻이다.
-  // 조용히 지나가면 cdp-load 가 빈손으로 돌아오고 읽는 쪽은 그것을
-  // "정의되지 않았다"로 읽는다 — 프로토콜 §9.6 조용한 실패다.
+  // 전에는 error 였다(「적을 자리가 없으면 cdp-load 가 빈손」). 그런데 writer 가 등록부 패턴 아래 **새 좌표**를 건드리는
+  // 것 — 가장 흔한 일 — 이 전부 막혔고, writer 는 섹션을 쓸 수 없다. 이제 그 기록은 대기열의 「등록부 있음 · 섹션 없음」
+  // 으로 서고, `section` 은 섹션 대신 그 미반영 기록을 낸다 — 빈손이 아니다. 자리를 만드는 것은 큐레이터다.
   if (managedIndex) {
-    const coords = [...new Set(units.flatMap((d) => d.touches))]
-    const dangling = managedIndex.danglingFor(coords)
-    push(
-      'error',
-      'dangling-anchor',
-      '등록부가 가리키는 섹션이 없음',
-      dangling.map((x) => ({
-        coord: x.coord,
-        detail: x.reason === 'doc' ? `${x.doc} 문서가 없음` : `${x.doc} 에 \`${x.anchor}\` 섹션이 없음`,
-      }))
-    )
 
     // **같은 좌표의 섹션이 한 문서에 둘** — 뒤의 것은 도달할 수 없다(`buildManagedIndex` 는
     // 앞의 것을 쓴다). 헤딩이 두 번 들어간 save 가 이렇게 만들었고(2026-09-23 실사용), 그때
@@ -349,60 +337,49 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       'applied 가 없는 작업 기록을 가리킴',
       sections.filter((r) => r.state === 'orphan').map((r) => ({ coord: r.coord, detail: `${r.doc} → ${r.applied}` }))
     )
-    // **파생 누락은 커밋을 막는다** (정정_판정모델_v2 §1).
+    // **미반영은 상태다**(v1.0 개편안 I7 · 「파생 누락은 오류」 를 대신한다).
     //
-    // 수행 v1.0 §6.2 는 이것을 warn 으로 뒀고 이유 셋을 댔다 -- 파생이 넓다 ·
-    // 남의 확인이 필요하다 · 급하다. 셋 다 성립하지 않는다:
-    //
-    //   넓어도 해야 한다. 넓다는 것은 그 작업이 실제로 그만큼 건드렸다는 뜻이다.
-    //   확인은 필요 없다. 판단 근거가 지식공유문서에 이미 다 들어 있다.
-    //   급할 이유가 없다. **막히는 것은 코드 커밋이 아니라 지식 레포 커밋**이고,
-    //   그것은 작업이 끝난 뒤에 하는 일이다.
-    //
-    // 지식공유문서를 만들면서 관리 문서 파생은 **필수다. 선택이 아니다.**
-    //
-    // **한 건으로 낸다.** 전에는 둘로 갈라 `stale`(applied 뒤에 후속이 있다)은
-    // error, `unwritten`(applied 가 아예 없다)은 info 였다. 둘은 같은 위반이다
-    // -- 파생을 안 했다. 등급이 다르면 절반은 안 막히고, 그러면 "밀림"이라는
-    // 없는 상태가 화면에 다시 생긴다.
-    //
-    // `empty`(작업 기록이 아직 없는 섹션)는 위반이 아니다 -- 낼 것이 없다.
+    // 전에는 기록을 남기면서 섹션까지 고치는 것이 필수였고 안 했으면 error 로 커밋을 막았다. 그 강제가 세션 하나에
+    // 기록과 섹션을 한꺼번에 쓰게 했고, 섹션이 근거보다 커지고 같은 결정이 여러 섹션에 복제됐다(파생 검토 §2).
+    // 이제 기록은 대기열에 서고 큐레이터가 반영한다. 늦은 반영이 정보를 새게 하지 않도록 **섹션을 내보내는 모든
+    // 자리가 미반영 기록을 같이 낸다** — 그래서 여기서는 막지 않고 알리기만 한다.
+    const pend = curation
+      ? sections.filter((r) => r.state !== 'doc-missing' && r.state !== 'anchor-missing' && curation.pendingOf(r.coord).length)
+      : sections.filter((r) => r.state === 'stale' || r.state === 'unwritten')
     push(
-      'error',
-      'derive-missing',
-      '관리 문서 파생 누락 — 지식공유문서를 남기면 파생 갱신은 필수입니다',
-      sections
-        .filter((r) => r.state === 'stale' || r.state === 'unwritten')
-        .map((r) => ({
-          coord: r.coord,
-          detail: r.applied
-            ? `${r.doc} · applied ${r.applied} 뒤 후속 ${r.count}건 — \`ctx apply ${r.coord}\``
-            : `${r.doc} · applied 없음 · 작업 ${r.total}건 — \`ctx apply ${r.coord}\``,
-        }))
+      'info',
+      'curation-pending',
+      '미반영 섹션 — 그 좌표를 건드린 기록이 큐레이션을 기다린다(section 이 섹션과 함께 그 기록을 낸다)',
+      pend.map((r) => {
+        const n = curation ? curation.pendingOf(r.coord).length : r.count || r.total
+        return { coord: r.coord, detail: `${r.doc} · 미반영 ${n}건` }
+      }),
+      '큐레이터가 cdp-curate 로 대기열을 다룬다'
     )
+    if (curation?.stats?.stale) {
+      const q = curation.queue[0]
+      push(
+        'warn',
+        'curation-stale',
+        `큐레이션 대기가 ${curation.stats.oldestDays}일 됐다 — 14일을 넘겼다`,
+        [{ id: q?.id, detail: `가장 오래된 대기 ${q?.id ?? ''} (${q?.date ?? ''}) · 대기 ${curation.stats.queue}건` }],
+        '큐레이터가 cdp-curate 로 오래된 것부터 다룬다'
+      )
+    }
+  }
 
-    // **같은 날 기록 — 경고다. 막지 않는다.**
-    //
-    // 날짜 입도가 하루라 하루 안의 순서를 모른다. 그래서 같은 날짜는 후속으로
-    // 세지 않는데(validity.later), 그 대가로 **하루에 같은 좌표를 두 번 건드린
-    // 두 번째가 아무에게도 안 보였다** — 실측에서 파생을 안 하고도 커밋이
-    // 통과했다. 하루에 같은 화면을 두 번 고치는 것은 드문 일이 아니다.
-    //
-    // 오류로 올리지 않는 이유는 **반영됐는지 기계가 알 수 없기 때문**이다.
-    // 섹션이 이미 둘 다 담고 있을 수 있고, `applied` 는 하나만 가리킨다.
-    // 오탐으로 커밋을 막으면 사람들이 이 목록 전체를 안 믿는다. 경고는
-    // 틀려도 부식되지 않고, 맞으면 눈에 띈다.
-    push(
-      'warn',
-      'derive-sameday',
-      '같은 날 기록이 더 있습니다 — 반영됐는지 눈으로 확인하세요',
-      sections
-        .filter((r) => r.state === 'ok' && (r.peers || []).length)
-        .map((r) => ({
-          coord: r.coord,
-          detail: `${r.doc} · applied ${r.applied} 와 같은 날 ${r.peers.length}건 — ${r.peers.map((p) => p.id).join(' · ')}`,
-        }))
-    )
+  // 큐레이션 기록의 판정 — save 가 거르지만 손으로 고친 기록 · 지운 대상은 여기서 본다. 판정이 틀린 기록은 그 대상을
+  // 「큐레이션됐다」 로 만든 채 근거가 없다 — 확신 있게 틀린 상태라 error 다.
+  if (units.some((d) => d.curates)) {
+    const byId = new Map(units.map((d) => [d.id, d]))
+    const bad = []
+    for (const d of units) {
+      for (const j of d.curates || []) {
+        if (j.bad) bad.push({ id: d.id, path: d.path, detail: `${j.id || '(id 없음)'} — ${j.bad}` })
+        else if (!byId.has(j.id)) bad.push({ id: d.id, path: d.path, detail: `${j.id} — 그런 작업 기록이 없다` })
+      }
+    }
+    push('error', 'curates-shape', '큐레이션 판정이 틀렸다 — 대상이 없거나 모양이 아니다', bad, '큐레이터가 바른 판정으로 다시 큐레이션한다(가장 늦은 판정이 이긴다)')
   }
 
   // 훅 미설치 — **조용한 실패다.** 커밋은 통과하고 검사는 안 돈다.

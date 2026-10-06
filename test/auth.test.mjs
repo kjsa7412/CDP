@@ -371,3 +371,27 @@ test('부트스트랩 — 명부가 비면 코드가 생기고 · 맞는 코드�
     await fs.rm(dir, { recursive: true, force: true })
   }
 })
+
+test('curate — 레포별 큐레이터: admin 은 전부 · writer 는 목록 · viewer 는 없음 · 볼 수 있는 레포여야 한다(v1.0 V2)', async () => {
+  const { userAdd, userSet, decide, issue, emptyDb, userList, curateOf } = await import('../core/auth.js')
+  const db = emptyDb()
+  userAdd(db, { name: 'boss', repos: ['*'], role: 'admin' })
+  userAdd(db, { name: 'lead', repos: ['alpha', 'beta'], role: 'writer', curate: ['alpha'] })
+  userAdd(db, { name: 'dev', repos: ['alpha'], role: 'writer' })
+  userAdd(db, { name: 'see', repos: ['alpha'], role: 'viewer', curate: ['alpha'] })
+  const tok = (u) => issue(db, { user: u }).raw
+  const g = (u) => decide(db, tok(u))
+  assert.equal(g('boss').curate('alpha'), true)
+  assert.deepEqual(g('boss').curateRepos, ['*'])
+  assert.equal(g('lead').curate('alpha'), true)
+  assert.equal(g('lead').curate('beta'), false)
+  assert.equal(g('dev').curate('alpha'), false)
+  assert.equal(g('see').curate('alpha'), false, 'viewer 는 적어 둬도 큐레이터가 아니다')
+  userSet(db, 'lead', { curate: ['*'] })
+  assert.equal(decide(db, tok('lead')).curate('beta'), true)
+  assert.equal(decide(db, tok('lead')).curate('gamma'), false, '볼 수 없는 레포는 큐레이션도 못 한다')
+  userSet(db, 'lead', { curate: [] })
+  assert.equal(db.users.find((u) => u.name === 'lead').curate, undefined)
+  assert.deepEqual(userList(db).find((u) => u.name === 'see').curate, [])
+  assert.deepEqual(curateOf({ role: 'writer', curate: ['a', '*'] }), ['*'])
+})

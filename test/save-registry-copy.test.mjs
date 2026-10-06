@@ -21,7 +21,8 @@ const g = (cwd, ...args) => run('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'u
 const skip = !hasGit && 'git 이 없다'
 const PKG = path.resolve('agent/packages/public-si')
 const BM = 'docs/1.관리/BM_411_회의록.md'
-const writer = { user: 'hong', write: true }
+// 큐레이터(admin 아님) — v1.0 에서 등록부 · 섹션 · 손질은 레포별 큐레이터가 쓴다
+const writer = { user: 'hong', write: true, curate: true }
 
 // 옛 패키지 문구 — dpms_wiki 가 들고 있는 것(이 판 전의 패키지)
 const OLD_RULE4 = '| 4 | 애초에 **`회의록:` · `보고서:` · `형상관리:` 라는 타입이 없다.** 위 표의 13개가 전부다 |'

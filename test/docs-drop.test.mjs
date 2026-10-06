@@ -91,10 +91,10 @@ test('drop 의 모양 — doc 필수 · reason 한 줄 · 모르는 키 거절',
   assert.throws(() => checkManagedShape([{ op: 'drop', doc: P, to: 'x' }]), /받지 않는다/)
 })
 
-test('writer 는 지우지 못한다 — 파일을 만지기 전에 E_FORBIDDEN', { skip }, async () => {
+test('큐레이터가 아닌 writer 는 지우지 못한다 — 파일을 만지기 전에 E_FORBIDDEN(v1.0 I6)', { skip }, async () => {
   const R = await repo()
   try {
-    await untouched(R, () => save(R.r, { work: work('2026-1001-drop-w'), managed: [{ op: 'drop', doc: P }] }, { user: 'hong', write: true }), 'E_FORBIDDEN', /admin/)
+    await untouched(R, () => save(R.r, { work: work('2026-1001-drop-w'), managed: [{ op: 'drop', doc: P }] }, { user: 'hong', write: true }), 'E_FORBIDDEN', /큐레이터/)
   } finally {
     await R.rm()
   }

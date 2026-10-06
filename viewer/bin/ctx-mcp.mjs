@@ -305,6 +305,20 @@ export function buildServer({ repos = [], fallback = null, mode = 'local', promp
             source: z.string().max(400).optional(),
             supersedes: z.string().max(140).nullable().optional(),
             tags: z.array(z.string().max(60)).max(30).optional(),
+            // 큐레이션 판정(큐레이터만) — 다룬 기록과 판정. reflect · new 는 into(이 save 의 sections 좌표) · keep 은 reason
+            curates: z
+              .array(
+                z
+                  .object({
+                    id: z.string().max(140),
+                    verdict: z.enum(['reflect', 'new', 'keep']),
+                    into: z.array(z.string().max(240)).max(50).optional(),
+                    reason: z.string().max(400).optional(),
+                  })
+                  .strict()
+              )
+              .max(100)
+              .optional(),
             body: z.string(),
           })
             // **모르는 키를 거절한다.** zod 는 기본으로 조용히 버리는데,

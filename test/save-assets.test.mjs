@@ -133,7 +133,7 @@ test('save assets — 그림 · 작업 기록 · 섹션이 한 커밋 · work/as
         sections: [{ coord: 'table:a', applied: null, body: `a 의 본문.${NL}${NL}![시스템 개요](../work/assets/${id}/%EC%8B%9C%EC%8A%A4%ED%85%9C%20%EA%B0%9C%EC%9A%94.png)` }],
         assets: [{ ref: up.ref, name: '시스템 개요.png' }],
       },
-      { user: 'hong', write: true, staging: R.staging }
+      { user: 'hong', write: true, curate: true, staging: R.staging }
     )
     assert.ok(out.commit)
     assert.deepEqual(out.assets, [{ path: `work/assets/${id}/시스템 개요.png`, size: PNG.length }])
@@ -151,13 +151,13 @@ test('save assets — 그림 · 작업 기록 · 섹션이 한 커밋 · work/as
   }
 })
 
-test('save assets — 검사에서 걸리면 첨부도 되돌린다(파생 누락)', { skip }, async () => {
+test('save assets — 검사에서 걸리면 첨부도 되돌린다(없는 기록을 정정한다는 supersedes)', { skip }, async () => {
   const R = await repo()
   try {
     const n0 = await commits(R.r)
     const up = await stage(R.staging, PNG)
     await assert.rejects(
-      save(R.r, { work: work('2026-0930-누락'), assets: [{ ref: up.ref, name: 'a.png' }] }, { user: 'hong', write: true, staging: R.staging }),
+      save(R.r, { work: work('2026-0930-누락', { supersedes: '2026-0101-없는기록' }), assets: [{ ref: up.ref, name: 'a.png' }] }, { user: 'hong', write: true, staging: R.staging }),
       (e) => e.code === 'E_CHECK'
     )
     assert.equal(await commits(R.r), n0)
@@ -182,13 +182,13 @@ test('save assets — 확장자 ↔ 종류 · 모르는 ref · 이름 겹침 · 
       [{ assets: [{ ref: png.ref, name: '../a.png' }] }, /구분자/],
     ]
     for (const [extra, re] of cases) {
-      await assert.rejects(save(R.r, { work: work('2026-0930-거절'), sections: sec, ...extra }, { user: 'hong', write: true, staging: R.staging }), (e) => e.code === 'E_INPUT' && re.test(e.message))
+      await assert.rejects(save(R.r, { work: work('2026-0930-거절'), sections: sec, ...extra }, { user: 'hong', write: true, curate: true, staging: R.staging }), (e) => e.code === 'E_INPUT' && re.test(e.message))
     }
-    await assert.rejects(save(R.r, { work: work('2026-0930-거절'), sections: sec, assets: [{ ref: png.ref, name: 'a.png' }] }, { user: 'hong', write: true }), (e) => /첨부를 받지 않는다/.test(e.message))
+    await assert.rejects(save(R.r, { work: work('2026-0930-거절'), sections: sec, assets: [{ ref: png.ref, name: 'a.png' }] }, { user: 'hong', write: true, curate: true }), (e) => /첨부를 받지 않는다/.test(e.message))
     assert.equal(await commits(R.r), n0)
     assert.equal(await porcelain(R.r), '')
     // 같은 파일을 이름 둘로는 된다 — 내용이 같아도 자리가 다르다
-    const ok = await save(R.r, { work: work('2026-0930-두이름', { body: '![a](assets/2026-0930-두이름/a.png) ![b](assets/2026-0930-두이름/b.png)' }), sections: sec, assets: [{ ref: png.ref, name: 'a.png' }, { ref: png.ref, name: 'b.png' }] }, { user: 'hong', write: true, staging: R.staging })
+    const ok = await save(R.r, { work: work('2026-0930-두이름', { body: '![a](assets/2026-0930-두이름/a.png) ![b](assets/2026-0930-두이름/b.png)' }), sections: sec, assets: [{ ref: png.ref, name: 'a.png' }, { ref: png.ref, name: 'b.png' }] }, { user: 'hong', write: true, curate: true, staging: R.staging })
     assert.equal(ok.assets.length, 2)
   } finally {
     await R.rm()
@@ -210,7 +210,7 @@ test('save 경고 — 본문이 가리키는 그림이 없다 · 올린 첨부�
         sections: [{ coord: 'table:a', applied: null, body: '![있음](img/있음.png) ![밖](../../밖.png) [링크는 그림이 아니다](nope.pdf)' }],
         assets: [{ ref: up.ref, name: '외톨이.png' }],
       },
-      { user: 'hong', write: true, staging: R.staging }
+      { user: 'hong', write: true, curate: true, staging: R.staging }
     )
     assert.ok(out.commit)
     const miss = out.warnings.find((w) => /가리키는 그림 2개가 레포에 없다/.test(w))

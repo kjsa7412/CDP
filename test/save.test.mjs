@@ -54,7 +54,8 @@ async function repo({ origin = false } = {}) {
 const work = (id, coord, extra = {}) => ({ id, title: id, date: '2026-09-25 10:00', touches: coord ? [coord] : [], body: `${id} 의 본문 — 왜 그렇게 했나.`, ...extra })
 const commits = async (r) => Number((await run('git', ['-C', r, 'rev-list', '--count', 'HEAD'])).stdout.trim())
 const porcelain = async (r) => (await run('git', ['-C', r, 'status', '--porcelain'])).stdout.trim()
-const opt = (user = 'hong', more = {}) => ({ user, write: true, ...more })
+// 큐레이터 호출이 기본이다 — 섹션을 쓰는 시험이 대부분이다. writer(기록만)는 따로 시험한다(v1.0 I6)
+const opt = (user = 'hong', more = {}) => ({ user, write: true, curate: true, ...more })
 
 test('withLock — 앞 것이 거부돼도 다음 것이 순서대로 돈다', async () => {
   const order = []
@@ -194,12 +195,12 @@ test('save — 더러운 트리는 E_GIT dirty 로 거절 · 트리는 그대로
   }
 })
 
-test('save — 검사 실패면 Snap 이 되돌리고 커밋 0 (파생 누락)', { skip: !hasGit && 'git 이 없다' }, async () => {
+test('save — 검사 실패면 Snap 이 되돌리고 커밋 0 (없는 기록을 정정한다는 supersedes)', { skip: !hasGit && 'git 이 없다' }, async () => {
   const R = await repo()
   try {
     const n0 = await commits(R.r)
     const before = await fs.readFile(path.join(R.r, 'docs', 't.md'), 'utf8')
-    await assert.rejects(save(R.r, { work: work('2026-0925-파생누락', 'table:a') }, opt()), (e) => e.code === 'E_CHECK')
+    await assert.rejects(save(R.r, { work: work('2026-0925-파생누락', 'table:a', { supersedes: '2026-0101-없는기록' }), sections: [{ coord: 'table:a', applied: null, body: 'a 를 고쳤다.' }] }, opt()), (e) => e.code === 'E_CHECK' && e.detail.findings.some((f) => f.kind === 'broken-supersedes'))
     assert.equal(await commits(R.r), n0)
     assert.equal(await porcelain(R.r), '')
     assert.equal(await fs.readFile(path.join(R.r, 'docs', 't.md'), 'utf8'), before)
@@ -220,8 +221,8 @@ test('save — 레포에 원래 있던 오류(중복 섹션)는 막지 않고 �
     const out = await save(R.r, { work: work('2026-0925-무관한기록', 'table:b'), sections: [{ coord: 'table:b', applied: null, body: 'b 를 고쳤다.' }] }, opt())
     assert.equal(await commits(R.r), n0 + 1)
     assert.ok(out.warnings.some((w) => /원래 있던 오류 1건/.test(w) && /같은 좌표의 섹션/.test(w)), out.warnings.join(' / '))
-    // 이 save 가 새로 만든 오류(파생 누락)는 여전히 막는다
-    await assert.rejects(save(R.r, { work: work('2026-0925-새오류', 'table:c') }, opt()), (e) => e.code === 'E_CHECK' && e.detail.findings.every((f) => f.kind !== 'dup-anchor'))
+    // 이 save 가 새로 만든 오류(없는 기록을 정정한다는 supersedes)는 여전히 막는다
+    await assert.rejects(save(R.r, { work: work('2026-0925-새오류', 'table:c', { supersedes: '2026-0101-없는기록' }) }, opt()), (e) => e.code === 'E_CHECK' && e.detail.findings.every((f) => f.kind !== 'dup-anchor'))
     assert.equal(await commits(R.r), n0 + 1)
   } finally {
     await R.rm()
@@ -522,6 +523,67 @@ test('mirror — origin 만 앞서 있으면 stateOf 는 behind · syncWithOrigi
     await fs.writeFile(path.join(R.r, 'stray.txt'), 'x')
     const d = await syncWithOrigin(R.r)
     assert.equal(d.reason, 'dirty')
+  } finally {
+    await R.rm()
+  }
+})
+
+test('save v1.0 — writer 는 기록만: 파생 없이 커밋 · 섹션 · 예약 태그 · curates 는 E_FORBIDDEN(need curate)', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    const n0 = await commits(R.r)
+    const writer = { user: 'lee', write: true }
+    // 섹션 없이 기록만 — 전에는 파생 누락 E_CHECK 였다
+    const out = await save(R.r, { work: work('2026-0925-기록만', 'table:a') }, writer)
+    assert.equal(await commits(R.r), n0 + 1)
+    assert.equal(out.sections, 0)
+    for (const bad of [
+      { sections: [{ coord: 'table:b', applied: null, body: 'x' }] },
+      { work: work('2026-0925-태그', 'table:b', { tags: ['curate'] }) },
+      { work: work('2026-0925-판정', null, { curates: [{ id: '2026-0925-기록만', verdict: 'keep' }] }) },
+      { edits: [{ file: 'README.md', old: '시험 레포.', new: '시험.' }] },
+    ]) {
+      await assert.rejects(save(R.r, { work: work('2026-0925-거절', 'table:b'), ...bad }, writer), (e) => e.code === 'E_FORBIDDEN' && e.detail.need === 'curate')
+    }
+    assert.equal(await commits(R.r), n0 + 1)
+    assert.equal(await porcelain(R.r), '')
+  } finally {
+    await R.rm()
+  }
+})
+
+test('save v1.0 — 큐레이션 기록: 판정이 프론트매터에 남고 · applied 는 반영한 기록 중 가장 늦은 것 · into 가 sections 에 없으면 E_INPUT', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    const writer = { user: 'lee', write: true }
+    await save(R.r, { work: { ...work('2026-0925-a1', 'table:a'), date: '2026-09-25 09:00' } }, writer)
+    await save(R.r, { work: { ...work('2026-0925-a2', 'table:a'), date: '2026-09-25 11:00' } }, writer)
+    await save(R.r, { work: { ...work('2026-0925-n1', 'note:회의'), date: '2026-09-25 12:00' } }, writer)
+    const cur = (id, curates, sections) => ({ work: { id, title: id, date: '2026-09-26 10:00', touches: [], body: '큐레이션 — 판정표.', curates }, sections })
+    // into 가 sections 에 없다
+    await assert.rejects(save(R.r, cur('2026-0926-c0', [{ id: '2026-0925-a1', verdict: 'reflect', into: ['table:a'] }], []), opt()), (e) => e.code === 'E_INPUT' && /sections 에 없다/.test(e.message))
+    // 없는 기록
+    await assert.rejects(save(R.r, cur('2026-0926-c0', [{ id: '2026-0101-없음', verdict: 'keep' }], []), opt()), (e) => e.code === 'E_INPUT' && /작업 기록이 없다/.test(e.message))
+    const out = await save(
+      R.r,
+      cur('2026-0926-c1', [
+        { id: '2026-0925-a1', verdict: 'reflect', into: ['table:a'] },
+        { id: '2026-0925-a2', verdict: 'reflect', into: ['table:a'] },
+        { id: '2026-0925-n1', verdict: 'keep', reason: '회의는 기록이 원천' },
+      ], [{ coord: 'table:a', applied: null, body: 'a 의 지금 — 두 기록을 합쳤다.' }]),
+      opt()
+    )
+    assert.equal(out.sections, 1)
+    const r = await loadRepo(R.r)
+    const sec = r.sections.find((x) => x.coord === 'table:a')
+    assert.equal(sec.applied, '2026-0925-a2', 'applied 는 반영한 기록 중 가장 늦은 것')
+    const c = r.byId.get('2026-0926-c1')
+    assert.deepEqual(c.curates.map((j) => [j.id, j.verdict]), [['2026-0925-a1', 'reflect'], ['2026-0925-a2', 'reflect'], ['2026-0925-n1', 'keep']])
+    assert.ok(c.tags.includes('curate'))
+    assert.equal(c.touchesEmpty, '큐레이션')
+    assert.equal(r.curation.queue.length, 0)
+    assert.equal(r.curation.statusOf('2026-0925-n1').state, 'kept')
+    assert.equal(r.curation.statusOf('2026-0925-n1').reason, '회의는 기록이 원천')
   } finally {
     await R.rm()
   }

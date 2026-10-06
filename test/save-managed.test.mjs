@@ -49,7 +49,9 @@ const commits = async (r) => Number((await run('git', ['-C', r, 'rev-list', '--c
 const porcelain = async (r) => (await run('git', ['-C', r, 'status', '--porcelain'])).stdout.trim()
 const read = (r, rel) => fs.readFile(path.join(r, rel), 'utf8')
 const exists = (r, rel) => fs.access(path.join(r, rel)).then(() => true).catch(() => false)
-const writer = { user: 'hong', write: true }
+// 큐레이터(admin 아님) — v1.0 에서 등록부 · 섹션은 레포별 큐레이터가 쓴다. 기록만 쓰는 writer 는 `plain`
+const writer = { user: 'hong', write: true, curate: true }
+const plain = { user: 'lee', write: true }
 const admin = { user: 'kim', write: true, admin: true }
 
 // 한 save 가 거절되면 — 커밋 그대로 · 트리 깨끗 · 파일 그대로
@@ -157,16 +159,16 @@ test('등록부에 안 걸리는 좌표의 sections — 거절하되 풀 길(man
   }
 })
 
-test('권한 — writer 의 rename · merge · retire 는 E_FORBIDDEN · 파일을 만지기 전에 · add 는 writer 도 된다', { skip }, async () => {
+test('권한 — 큐레이터가 아닌 writer 는 등록부(add 포함) · 섹션을 못 쓴다 · 파일을 만지기 전에(v1.0 I6)', { skip }, async () => {
   const R = await repo()
   try {
-    for (const op of [{ op: 'rename', doc: 'docs/t.md', to: 'docs/tt.md' }, { op: 'merge', doc: 'docs/v.md', into: 'docs/t.md' }, { op: 'retire', pattern: 'note:*' }]) {
-      await untouched(R, () => save(R.r, { work: work('2026-0930-권한', ['table:a']), managed: [op], sections: [{ coord: 'table:a', applied: null, body: 'x' }] }, writer), 'E_FORBIDDEN')
+    for (const op of [{ op: 'rename', doc: 'docs/t.md', to: 'docs/tt.md' }, { op: 'merge', doc: 'docs/v.md', into: 'docs/t.md' }, { op: 'retire', pattern: 'note:*' }, { pattern: 'term:*', doc: 'docs/g.md' }]) {
+      await untouched(R, () => save(R.r, { work: work('2026-0930-권한', ['table:a']), managed: [op], sections: [{ coord: 'table:a', applied: null, body: 'x' }] }, plain), 'E_FORBIDDEN')
     }
     assert.ok(await exists(R.r, 'docs/t.md'))
     assert.ok(!(await exists(R.r, 'work/2026-0930-권한.md')))
-    // add 가 섞여 있어도 정리가 하나라도 있으면 admin
-    await untouched(R, () => save(R.r, { work: work('2026-0930-섞임', ['table:a']), managed: [{ pattern: 'term:*', doc: 'docs/g.md' }, { op: 'retire', pattern: 'note:*' }], sections: [{ coord: 'table:a', applied: null, body: 'x' }] }, writer), 'E_FORBIDDEN')
+    // 섹션만 보내도 막는다 — 기록은 대기열로, 반영은 큐레이터가
+    await untouched(R, () => save(R.r, { work: work('2026-0930-섞임', ['table:a']), sections: [{ coord: 'table:a', applied: null, body: 'x' }] }, plain), 'E_FORBIDDEN')
     assert.ok(!(await exists(R.r, 'docs/g.md')))
   } finally {
     await R.rm()

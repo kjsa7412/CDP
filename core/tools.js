@@ -476,6 +476,7 @@ export function toolCheck(r) {
     managedIndex: r.managedIndex,
     sections: r.sections,
     bodies: r.bodies,
+    curation: r.curation,
   })
   const errors = res.findings.filter((f) => f.sev === 'error').reduce((a, f) => a + f.items.length, 0)
   const warnings = res.findings.filter((f) => f.sev === 'warn').reduce((a, f) => a + f.items.length, 0)

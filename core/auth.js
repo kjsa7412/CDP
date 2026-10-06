@@ -54,11 +54,21 @@ function assertRole(role) {
   return role
 }
 
+// 큐레이터 — **레포별** 권한(v1.0 개편안 §3.1 · V2). 전역 역할은 그대로 두고 사람마다 `curate: [레포]` 한 줄을 더한다.
+// admin 은 모든 레포의 큐레이터다. writer 는 목록에 그 레포(또는 `*`)가 있으면. viewer 는 아니다 — 큐레이션은 쓰기다.
+export function curateOf(u) {
+  const role = roleOf(u)
+  if (role === 'admin') return ['*']
+  if (role !== 'writer') return []
+  return normRepos(u?.curate || [])
+}
+
 // 권한 묶음 — `decide` 와 `decideSession` 이 같은 모양을 낸다.
 function grantOf(u) {
   const repos = Array.isArray(u.repos) ? u.repos : []
   const all = repos.includes('*')
   const role = roleOf(u)
+  const cur = curateOf(u)
   return {
     user: u.name,
     label: u.label ?? null,
@@ -66,6 +76,9 @@ function grantOf(u) {
     admin: role === 'admin',
     write: canWrite(role),
     allow: all ? null : (name) => repos.includes(name),
+    // 그 레포를 큐레이션할 수 있나 — 볼 수 있는 레포여야 한다
+    curate: (name) => (cur.includes('*') || cur.includes(name)) && (all || repos.includes(name)),
+    curateRepos: cur,
   }
 }
 
@@ -165,12 +178,14 @@ export async function store(file, db) {
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
-export function userAdd(db, { name, label = null, repos = [], role = null, write = false }) {
+export function userAdd(db, { name, label = null, repos = [], role = null, write = false, curate = [] }) {
   if (!NAME_RE.test(String(name || ''))) throw new AuthError('E_INPUT', '이름 형식이 아니다', { name })
   if (db.users.some((u) => u.name === name)) throw new AuthError('E_EXISTS', '이미 명부에 있다', { name })
   // `write` 는 옛 이름이다 — `--write` 로 부르던 자리가 그대로 돈다.
   const r = assertRole(role ?? (write ? 'writer' : 'viewer'))
   const u = { name, label, active: true, repos: normRepos(repos), role: r }
+  const cur = normRepos(curate)
+  if (cur.length) u.curate = cur
   db.users.push(u)
   return u
 }
@@ -210,6 +225,11 @@ export function userSet(db, name, patch, { actor = null } = {}) {
 
   if (patch.label !== undefined) u.label = patch.label
   if (patch.repos !== undefined) u.repos = normRepos(patch.repos)
+  if (patch.curate !== undefined) {
+    const cur = normRepos(patch.curate)
+    if (cur.length) u.curate = cur
+    else delete u.curate
+  }
   u.role = nextRole
   if (patch.active !== undefined) {
     u.active = nextActive
@@ -246,6 +266,8 @@ export function userList(db, { repo = null, now = Date.now() } = {}) {
         role,
         admin: role === 'admin',
         write: canWrite(role),
+        // 큐레이션할 수 있는 레포 — admin 은 `*` · viewer 는 빈 목록(적어 둔 값이 있어도 역할이 이긴다)
+        curate: curateOf(u),
         tokens: mine.length,
         liveTokens: live.length,
         left: u.left ?? null,

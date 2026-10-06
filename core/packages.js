@@ -202,6 +202,7 @@ export async function checkPackage(dir, { assemble = null } = {}) {
       managedIndex: r.managedIndex,
       sections: r.sections,
       bodies: r.bodies,
+      curation: r.curation,
     })
     const errors = res.findings.filter((f) => f.sev === 'error')
     for (const f of errors) for (const i of f.items) problems.push({ kind: f.kind, detail: `${f.label}  ${i.coord || i.id || i.path || ''} ${i.detail || ''}`.trim() })

@@ -407,6 +407,7 @@ export async function applyImport(plan) {
       managedIndex: r.managedIndex,
       sections: r.sections,
       bodies: r.bodies,
+      curation: r.curation,
     })
     const errors = res.findings.filter((f) => f.sev === 'error')
     if (errors.length) {
