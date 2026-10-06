@@ -6,7 +6,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
-import { BEGIN, END, KIT_MARK, kitOf, mergeClaude, mergeMcpJson, mcpEntryLocal, mcpEntryServer, desktopConfigPath, mergeDesktopConfig } from '../core/setup.js'
+import { BEGIN, END, KIT_MARK, kitOf, mergeClaude, mergeMcpJson, mcpEntryServer } from '../core/setup.js'
 
 const BODY = '## 업무 맥락\n\n지식 레포가 딸려 있다.\n'
 
@@ -73,38 +73,4 @@ test('mcpEntryServer — 끝 슬래시를 떼고 /mcp/<repo> · 토큰은 환경
   assert.equal(e.type, 'http')
   assert.equal(e.url, 'http://10.10.20.188:7374/mcp/gdi')
   assert.equal(e.headers.Authorization, 'Bearer ${CDP_TOKEN}')
-})
-
-test('mcpEntryLocal — Windows 는 cmd /c ctx.cmd · 그 밖은 bin/ctx', () => {
-  const root = path.resolve('C:/work/cdp')
-  const w = mcpEntryLocal(root, 'win32')
-  assert.equal(w.type, 'stdio')
-  assert.equal(w.command, 'cmd')
-  assert.deepEqual(w.args, ['/c', path.join(root, 'bin', 'ctx.cmd'), 'mcp'])
-  const p = mcpEntryLocal(root, 'linux')
-  assert.equal(p.command, path.join(root, 'bin', 'ctx'))
-  assert.deepEqual(p.args, ['mcp'])
-})
-
-test('mcpEntryLocal --also — 레포 둘 이상은 한 항목에 --repo 반복 · 첫 번째가 기본', () => {
-  const a = path.resolve('C:/work/a')
-  const b = path.resolve('C:/work/b')
-  const e = mcpEntryLocal(a, 'linux', [b])
-  assert.deepEqual(e.args, ['mcp', '--repo', a, '--repo', b])
-  const w = mcpEntryLocal(a, 'win32', [b])
-  assert.deepEqual(w.args.slice(0, 3), ['/c', path.join(a, 'bin', 'ctx.cmd'), 'mcp'])
-  assert.deepEqual(w.args.slice(3), ['--repo', a, '--repo', b])
-})
-
-test('desktop — 경로는 OS 마다 · 병합은 다른 키를 보존한다', () => {
-  assert.equal(desktopConfigPath('darwin', {}, '/Users/k'), path.join('/Users/k', 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'))
-  assert.ok(desktopConfigPath('win32', { APPDATA: 'C:\\Users\\k\\AppData\\Roaming' }).endsWith(path.join('Claude', 'claude_desktop_config.json')))
-  assert.ok(desktopConfigPath('linux', {}, '/home/k').endsWith(path.join('.config', 'Claude', 'claude_desktop_config.json')))
-
-  const had = JSON.stringify({ mcpServers: { other: { command: 'x' } }, theme: 'dark' })
-  const out = JSON.parse(mergeDesktopConfig(had, 'cdp-gdi', { type: 'stdio', command: 'c', args: ['mcp'] }))
-  assert.deepEqual(out.mcpServers.other, { command: 'x' })
-  assert.equal(out.theme, 'dark')
-  assert.deepEqual(out.mcpServers['cdp-gdi'].args, ['mcp'])
-  assert.throws(() => mergeDesktopConfig('{oops', 'k', {}), /JSON 이 아닙니다/)
 })

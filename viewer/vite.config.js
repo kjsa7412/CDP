@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// 정적 빌드가 viewer/server/adapter 에 내장된다(§8). 개발 중에는 Vite 가 화면을,
-// node viewer/server/index.js --dev 가 API 를 맡고 /api 만 프록시한다.
+// 정적 빌드(ops/out/web)를 서버(`ctx serve`)가 낸다. 개발 중에는 Vite 가 화면을, 개인 서버
+// (`npm run dev:server` — `ctx serve --personal viewer/fixture --port 7373`)가 API 를 맡는다.
 export default defineConfig({
   // 설정 파일이 `viewer/` 로 내려갔다. **루트를 명시한다** — 안 그러면 vite 가
   // 설정 파일 자리를 루트로 잡아 `viewer/index.html` 을 못 찾는다.
@@ -10,13 +10,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      // changeOrigin — 프록시가 Host 를 대상(127.0.0.1:7373)으로 바꿔 준다.
-      // 그대로 두면 Host 가 localhost:5173 인 채 도착해 §7.2 의 Host 화이트리스트가
-      // 소켓을 끊고, vite 는 500 을 낸다. Origin 은 프록시가 손대지 않으므로
-      // 서버 쪽에서 --dev 로 받은 루프백 오리진만 통과시킨다.
-      '/api': { target: 'http://127.0.0.1:7373', changeOrigin: true },
-    },
+    // 서버가 내는 자리만 넘긴다 — 화면 주소(/r · /console · /manual …)는 vite 가 그린다. Origin 이 루프백이라
+    // 서버의 같은 출처 검사를 통과한다. 로그인은 POST 와 개인 서버의 첫 접속 주소(GET /login?auto=)만 서버로
+    proxy: Object.fromEntries(
+      ['/api', '/admin', '/me', '/logout', '/kit', '/mcp', '/healthz', '/install.mjs', '/site']
+        .map((p) => [p, { target: 'http://127.0.0.1:7373', changeOrigin: true }])
+        .concat([['/login', { target: 'http://127.0.0.1:7373', changeOrigin: true, bypass: (req) => (req.method === 'GET' && !/[?&]auto=/.test(req.url) ? '/index.html' : undefined) }]])
+    ),
   },
   build: {
     // **산출물은 전부 `ops/out/` 아래 한 자리에 모은다.** 전에는 `dist/`(화면)와

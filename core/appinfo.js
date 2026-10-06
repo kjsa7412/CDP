@@ -1,14 +1,10 @@
-// 이 프로그램이 자기에 대해 아는 것 — 버전과 번들 시각.
-//
-// **없는 것과 낡은 것은 다르고, 낡은 쪽이 더 나쁘다.** 도구를 고쳤는데
-// 레포의 `bin/ctx.mjs` 를 안 갈아 끼우면 그 레포만 옛 답을 낸다 — 그리고
-// 그것은 "모르는 명령" 으로만 나타난다(README 의 경고). 그래서 두 시각을
-// 나란히 볼 수 있어야 한다: 앱이 든 번들과 레포가 든 번들.
+// 이 프로그램이 자기에 대해 아는 것 — 버전과 번들 시각. 서버 번들(`bin/ctx.mjs`) 하나가 낸다
+// (v1.0 — 레포마다 든 번들은 없다).
 
 import fs from 'node:fs'
 import path from 'node:path'
 
-// exe 빌드가 치환한다(`ops/lib/build-exe.mjs`). node 로 돌 때는 그대로 남고,
+// 번들 빌드가 치환한다(`ops/lib/build-ctx.mjs`). node 로 돌 때는 그대로 남고,
 // 그때는 아래에서 package.json 을 읽는다.
 const STAMPED = '__CDP_VERSION__'
 

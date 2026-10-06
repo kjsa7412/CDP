@@ -1,7 +1,5 @@
-// 작업 레포에 에이전트 세팅을 넣는다.
-//
-// **앱과 `ctx` 가 같은 함수를 부른다**(불변식 12). 화면의 [에이전트 설치]와
-// `ctx setup` 이 다른 일을 하면 둘 중 하나는 반드시 거짓말이 된다.
+// 작업 레포에 에이전트 세팅을 넣는다 — 설치 한 줄(`install.mjs`)이 서버에서 받은 kit 으로 부른다.
+// v1.0 의 작업 레포는 늘 서버의 HTTP MCP 를 쓴다(모드 A · `ctx setup` 은 끝났다 — 개편안 §5.6).
 //
 // 계획(plan)과 적용(apply)이 나뉘어 있다. 화면은 계획을 먼저 보여 주고
 // 사람이 누르면 적용한다 — **레포 밖에 파일을 쓰는 일**이라 무엇을 쓸지
@@ -9,13 +7,13 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import crypto from 'node:crypto'
 
 // CLAUDE.md 안에서 우리가 관리하는 구획.
 //
 // 전에는 파일을 통째로 덮고 `.bak` 을 남겼다. **남의 집을 갈아엎는 것**이다 --
 // 실제 프로젝트의 CLAUDE.md 에는 빌드 명령과 컨벤션이 들어 있다.
 // 블록만 갈아 끼우면 몇 번을 다시 돌려도 사용자 내용이 다치지 않는다.
+// (표지 글의 「ctx setup」 은 옛 이름이다 — 이미 심긴 블록을 찾는 열쇠라 바꾸지 않는다)
 export const BEGIN = '<!-- cdp:begin -- 이 블록은 ctx setup 이 관리한다. 손으로 고치지 마라 -->'
 export const END = '<!-- cdp:end -->'
 
@@ -52,9 +50,8 @@ async function sameTree(a, b) {
 
 // 블록 첫 줄에 **kit 해시**를 박는다 (MCP 설계서 §6.7.4).
 //
-// 모드 B 에서 서버는 클라이언트의 `.claude/skills` 를 볼 수 없다 — `kitHash()` 도
-// `inspect()` 도 로컬 지식 레포를 전제한다. 그래서 비교의 한쪽을 **클라이언트가
-// 들고 오게** 만든 것이 이 한 줄이다. `sync` 도구가 서버의 해시를 내고, 스킬이
+// 서버는 클라이언트의 `.claude/skills` 를 볼 수 없다 — 그래서 비교의 한쪽을 **클라이언트가
+// 들고 오게** 만든 것이 이 한 줄이다. `brief` 도구가 서버 kit 의 해시(`sync.kit.hash`)를 내고, 스킬이
 // 둘을 견준다.
 export const KIT_MARK = /<!--\s*cdp:kit\s+([0-9a-f]{4,64})\s*-->/
 
@@ -92,13 +89,14 @@ export function mergeClaude(existing, body, kit = null) {
 /**
  * 무엇을 할지 정한다. 파일은 건드리지 않는다.
  */
-// `server` 를 주면 모드 B 다(§4.7). 포인터가 `{ server, repo }` 가 되고
-// **커밋한다** — 모드 A 가 커밋하지 않은 이유는 `knowledgeRepo` 가 PC 마다
-// 다른 절대경로여서였다. `{ server, repo }` 는 PC 와 무관하다.
-export async function planSetup(knowledgeRoot, workRoot, { server = null, repo = null, kit = null, also = [] } = {}) {
+// `knowledgeRoot` 는 서버에서 받은 kit 을 푼 자리다(`.claude/skills` · `.claude/work-repo/CLAUDE.md`).
+// 포인터는 `{ server, repo }` 이고 **커밋한다** — PC 와 무관하다.
+export async function planSetup(knowledgeRoot, workRoot, { server = null, repo = null, kit = null } = {}) {
   const kn = path.resolve(knowledgeRoot)
   const wk = path.resolve(workRoot)
   const bad = (reason) => ({ ok: false, reason, knowledge: kn, work: wk, actions: [], warnings: [] })
+
+  if (!server || !repo) return bad('서버 주소와 레포가 필요하다 — v1.0 의 작업 레포는 늘 서버의 HTTP MCP 를 쓴다(설치 한 줄)')
 
   if (!(await isDir(wk))) return bad(`폴더가 없습니다 — ${wk}`)
   if (kn === wk) return bad('지식 레포 자신에는 설치하지 않습니다. 코드가 있는 레포를 지정하세요.')
@@ -171,48 +169,13 @@ export async function planSetup(knowledgeRoot, workRoot, { server = null, repo =
   // 쓴다" 는 규약을 강요해야 했다. 규약이 아니라 설계로 풀 문제였다.
   const ptr = path.join(wk, '.claude', 'cdp.json')
   const curPtr = await read(ptr)
-  const nextPtr =
-    JSON.stringify(server ? { server, repo } : { knowledgeRepo: kn.split(path.sep).join('/') }, null, 2) + '\n'
+  const nextPtr = JSON.stringify({ server, repo }, null, 2) + '\n'
   actions.push({
     kind: 'pointer',
     to: ptr,
     op: curPtr == null ? 'create' : curPtr === nextPtr ? 'same' : 'update',
     content: nextPtr,
   })
-
-  // ── .mcp.json — **모드 A 도 쓴다** ────────────────────────────────
-  //
-  // 모드 B 는 부르는 쪽(`ctx setup --server` · `install.mjs`)이 넣는다 --
-  // 거기서는 서버 주소를 알아야 해서다. 모드 A 는 지식 레포 경로만 있으면
-  // 되므로 여기서 만든다.
-  if (!server) {
-    const mcpPath = path.join(wk, '.mcp.json')
-    const hadMcp = await read(mcpPath)
-    let nextMcp = null
-    // `--also` — 지식 레포 둘 이상을 **한 항목**으로(§3.2). 항목을 늘리지 않는다 —
-    // 명함 12 × N 이 매 요청 실리는 자리다(§2.9). 지식 레포가 아닌 경로는 경고하고 뺀다.
-    const extra = []
-    for (const p of also || []) {
-      const abs = path.resolve(p)
-      if (await fs.access(path.join(abs, '_vocab.md')).then(() => true).catch(() => false)) extra.push(abs)
-      else warnings.push(`--also ${p} 는 지식 레포가 아니다 (_vocab.md 없음) — .mcp.json 에 넣지 않았다`)
-    }
-    try {
-      nextMcp = mergeMcpJson(hadMcp, mcpEntryLocal(kn, process.platform, extra))
-    } catch (e) {
-      // 깨진 `.mcp.json` 은 덮지 않는다. 계획에서 빼고 경고로 낸다 --
-      // 여기서 던지면 skill 설치까지 통째로 막힌다.
-      warnings.push(e.message)
-    }
-    if (nextMcp) {
-      actions.push({
-        kind: 'mcp',
-        to: mcpPath,
-        op: hadMcp == null ? 'create' : hadMcp === nextMcp ? 'same' : 'update',
-        content: nextMcp,
-      })
-    }
-  }
 
   // ── .gitignore — 두 가지가 반대다 ─────────────────────────────────
   const gi = (await read(path.join(wk, '.gitignore'))) || ''
@@ -226,23 +189,7 @@ export async function planSetup(knowledgeRoot, workRoot, { server = null, repo =
         '팀은 받지 못합니다. `!.claude/skills/` 한 줄을 넣으세요.'
     )
   }
-  if (!server && !ptrIgnored) {
-    warnings.push(
-      '.claude/cdp.json 은 **커밋하지 않습니다** — 지식 레포 경로는 사람마다 다릅니다.\n' +
-        '.gitignore 에 `.claude/cdp.json` 을 넣으세요.'
-    )
-  }
-  // `.mcp.json` 도 같은 이유다 -- 모드 A 의 항목에는 **그 PC 의 지식 레포
-  // 절대경로**가 들어간다. 커밋하면 팀원마다 다른 값이 오간다.
-  // 모드 B 는 반대다: `{ server, repo }` 뿐이라 PC 와 무관하고 커밋한다.
-  if (!server && !/^[.]mcp[.]json\s*$/m.test(gi)) {
-    warnings.push(
-      '.mcp.json 은 **커밋하지 않습니다** — 이 모드의 항목에는 이 PC 의 지식 레포\n' +
-        '경로가 들어갑니다. .gitignore 에 `.mcp.json` 을 넣고, 팀원은 각자\n' +
-        '`ctx setup` 을 돌립니다. (서버 모드에서는 커밋합니다)'
-    )
-  }
-  if (server && ptrIgnored) {
+  if (ptrIgnored) {
     warnings.push(
       '.gitignore 가 .claude/cdp.json 을 막고 있습니다. 서버 모드에서는 **커밋합니다** — ' +
         '{ server, repo } 는 PC 와 무관하고, 커밋해 두면 팀원은 pull 과 토큰만으로 끝납니다.'
@@ -273,53 +220,6 @@ export function mergeMcpJson(existing, entry) {
   return JSON.stringify(j, null, 2) + '\n'
 }
 
-// 모드 A — **stdio 로 `ctx mcp` 를 띄운다.**
-//
-// 이것이 빠져 있어서 로컬은 MCP 를 못 쓰고 에이전트가 bash 로 `ctx` 를 직접
-// 불렀다. 도구 12종은 2단계에서 실측까지 끝나 있었는데 **등록하는 줄이
-// 없었다** -- 서버가 있어도 아무도 붙지 않으면 없는 것과 같다.
-//
-// **껍데기를 부른다. `ctx.mjs` 를 직접 부르지 않는다.** `bin/ctx` 는 Node 가
-// 없으면 exe 로 넘기는 판단을 들고 있고(작업환경 §3.1), 그 판단이 여기서도
-// 그대로 필요하다 -- 폐쇄망 PC 가 이 모드의 대상이다.
-//
-// Windows 의 `.cmd` 는 셸이 있어야 돈다. 그래서 `cmd /c` 로 감싼다.
-export function mcpEntryLocal(knowledgeRoot, platform = process.platform, also = []) {
-  const root = path.resolve(knowledgeRoot)
-  // 레포가 둘 이상이면 `--repo` 를 반복한다. **첫 번째가 기본 레포**다(§3.1) —
-  // 하나뿐일 때는 인자를 붙이지 않는다. `bin/ctx` 가 자기 위치로 레포를 찾는다.
-  const tail = also && also.length ? ['--repo', root, ...also.flatMap((p) => ['--repo', path.resolve(p)])] : []
-  if (platform === 'win32') {
-    return { type: 'stdio', command: 'cmd', args: ['/c', path.join(root, 'bin', 'ctx.cmd'), 'mcp', ...tail] }
-  }
-  return { type: 'stdio', command: path.join(root, 'bin', 'ctx'), args: ['mcp', ...tail] }
-}
-
-// ── Claude Desktop (§3.2 `--desktop`) ─────────────────────────────────────
-//
-// Desktop 은 스킬을 깔 자리가 없어 prompt 로 간다(§2.5). 설정 파일 하나에
-// `mcpServers["cdp-<레포 폴더명>"]` 를 병합한다 — 다른 키는 보존한다.
-export function desktopConfigPath(platform = process.platform, env = process.env, home = null) {
-  const h = home || env.HOME || env.USERPROFILE || ''
-  if (platform === 'darwin') return path.join(h, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
-  if (platform === 'win32') return path.join(env.APPDATA || path.join(h, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json')
-  return path.join(env.XDG_CONFIG_HOME || path.join(h, '.config'), 'Claude', 'claude_desktop_config.json')
-}
-
-export function mergeDesktopConfig(existing, key, entry) {
-  let j = {}
-  if (existing) {
-    try {
-      j = JSON.parse(existing)
-    } catch {
-      throw new Error('claude_desktop_config.json 이 JSON 이 아닙니다 — 손으로 고친 뒤 다시 돌리세요')
-    }
-  }
-  if (!j.mcpServers || typeof j.mcpServers !== 'object') j.mcpServers = {}
-  j.mcpServers[key] = entry
-  return JSON.stringify(j, null, 2) + '\n'
-}
-
 // 지금 `.mcp.json` 의 `cdp` 가 가리키는 레포(`…/mcp/<이름>`) — 등록부 사본 검토 X27.
 // 설치는 두 파일을 같은 repo 로 쓰지만, 그 뒤 손으로 바뀌면 repo 를 빠뜨린 읽기가 다른 레포로 간다
 // (작업 레포의 `.mcp.json` 은 다른 레포의 `/mcp/<이름>` 인데 `cdp.json` 은 이 레포였다). 다시 설치하면 고쳐진다 — 고쳐진다는 사실을 한 줄로 알린다.
@@ -343,77 +243,6 @@ export function mcpEntryServer(server, repo) {
     type: 'http',
     url: String(server).replace(/\/+$/, '') + '/mcp/' + repo,
     headers: { Authorization: 'Bearer ${CDP_TOKEN}' },
-  }
-}
-
-// ── kit 해시 — **무엇을 심었는지 말할 수 있어야 한다** ────────────────────
-//
-// 지금까지 남는 것은 "설치했다" 까지였다. *어느 판을* 심었는지는 아무도 모른다.
-// skill 을 고친 뒤 작업 레포 여섯 곳 중 어디가 옛 판인지 확인할 방법이 없었다.
-//
-// **판정에는 쓰지 않는다.** 낡았는지 아닌지는 `planSetup` 의 내용 비교가
-// 그대로 판단한다 -- 판정을 두 곳에 두면 갈라진다. 이 값은 **이력에 적는
-// 이름표**다.
-export async function kitHash(knowledgeRoot) {
-  const kn = path.resolve(knowledgeRoot)
-  const h = crypto.createHash('sha256')
-  const sSrc = path.join(kn, '.claude', 'skills')
-
-  const walk = async (dir, rel) => {
-    const ents = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
-    for (const e of ents.sort((a, b) => a.name.localeCompare(b.name))) {
-      const p = path.join(dir, e.name)
-      const r = rel + '/' + e.name
-      if (e.isDirectory()) await walk(p, r)
-      else h.update(r + '\0' + ((await read(p)) ?? '') + '\0')
-    }
-  }
-
-  const skills = (await fs.readdir(sSrc, { withFileTypes: true }).catch(() => []))
-    .filter((e) => e.isDirectory() && e.name.startsWith(PREFIX))
-    .map((e) => e.name)
-    .sort()
-  for (const n of skills) await walk(path.join(sSrc, n), n)
-  h.update((await read(path.join(kn, '.claude', 'work-repo', 'CLAUDE.md'))) ?? '')
-
-  return { hash: h.digest('hex').slice(0, 6), skills }
-}
-
-// ── 설치 상태 — **열어 보지 않고 안다** ───────────────────────────────────
-//
-// 계획을 dry 로 돌려서 한 글자로 접는다. 새 판정을 만들지 않는다.
-//
-//   ok      전부 same
-//   update  쓸 것이 있다
-//   none    아직 하나도 안 들어갔다
-//   error   폴더가 없다 · git 레포가 아니다 · 지식 레포 자신이다
-export async function inspect(knowledgeRoot, workRoot) {
-  const plan = await planSetup(knowledgeRoot, workRoot)
-  const wk = path.resolve(workRoot)
-
-  if (!plan.ok) return { path: wk, state: 'error', reason: plan.reason, changes: [], warnings: [] }
-
-  const changes = plan.actions
-    .filter((a) => a.op !== 'same')
-    .map((a) => ({ kind: a.kind, name: a.name || null, op: a.op }))
-
-  // 미설치 — `cdp-` skill 이 하나도 없고 포인터도 없다. 전부 새로 쓴다는 뜻.
-  const skills = plan.actions.filter((a) => a.kind === 'skill')
-  const pointer = plan.actions.find((a) => a.kind === 'pointer')
-  const fresh = skills.length > 0 && skills.every((a) => a.op === 'create') && pointer?.op === 'create'
-
-  // `.mcp.json` 의 상태를 따로 낸다 — "MCP 가 붙었나" 를 화면이 말할 수 있게(§3.2).
-  const mcp = plan.actions.find((a) => a.kind === 'mcp')
-  const mcpState = !mcp ? null : mcp.op === 'same' ? 'ok' : mcp.op === 'create' ? 'none' : 'update'
-
-  return {
-    path: wk,
-    state: fresh ? 'none' : changes.length ? 'update' : 'ok',
-    // 들어가 있는 skill 수 — 카드가 "skill 7종" 이라고 말할 근거
-    skills: skills.filter((a) => a.op === 'same' || a.op === 'update').map((a) => a.name),
-    mcp: mcpState,
-    changes,
-    warnings: plan.warnings,
   }
 }
 

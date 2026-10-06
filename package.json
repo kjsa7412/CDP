@@ -9,15 +9,13 @@
   },
   "scripts": {
     "dev": "vite --config viewer/vite.config.js",
-    "dev:server": "node viewer/server/index.js --repo ./viewer/fixture --dev http://localhost:5173 --no-open",
+    "dev:server": "node viewer/bin/ctx-cli.mjs serve --personal viewer/fixture --port 7373 --data ops/out/dev-personal",
     "build": "vite build --config viewer/vite.config.js",
-    "start": "node viewer/server/index.js --repo ./viewer/fixture",
+    "start": "node viewer/bin/ctx-cli.mjs serve --personal viewer/fixture --port 7373 --data ops/out/dev-personal --web ops/out/web",
     "seed": "node ops/lib/seed.mjs",
     "ctx": "node viewer/bin/ctx-cli.mjs",
     "build:ctx": "node ops/lib/build-ctx.mjs",
-    "build:exe": "node ops/lib/build-exe.mjs",
     "release": "node ops/lib/release.mjs",
-    "test:tray": "node ops/lib/tray-selftest.mjs",
     "test": "node --test test/",
     "verify": "node ops/verify/run.mjs",
     "check:packages": "node viewer/bin/ctx-cli.mjs package check --all",
@@ -42,8 +40,6 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "playwright-core": "^1.63.0",
-    "postject": "1.0.0-alpha.6",
-    "rcedit": "^4.0.1",
     "vite": "^6.0.7"
   },
   "engines": {
