@@ -129,7 +129,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
   return (
     <div className="statusbar">
       <span className="statusbar__quiet">
-        {/* 「문서」 는 작업문서 수였다 — 관리문서와 헷갈렸다(실서버 종합 시험 F18) */}
+        {/* 「문서」 는 작업 기록 수였다 — 관리 문서와 헷갈렸다(실서버 종합 시험 F18) */}
         작업 <b className="num">{repo.docs}</b>
         <span className="statusbar__sep">·</span>
         좌표 <b className="num">{repo.coords}</b>
@@ -158,7 +158,7 @@ export default function StatusBar({ repo, scanning, onRescanned, onCheck = () =>
         </button>
       )}
 
-      {/* 서버형 — 미러 · 갈림 · 더러움 한 줄. 이상이 있을 때만. 단추는 콘솔(관리자)에 있다 */}
+      {/* 서버형 — 미러 · 갈림 · 더러움 한 줄. 이상이 있을 때만. 단추는 서버 › 지식 레포(관리자)에 있다 */}
       {server && serverLine(mine) && (
         <span className="is-warn" title={mine.note || undefined}>
           <Icon name="warn" size={12} /> {serverLine(mine)}

@@ -60,7 +60,7 @@ export default function Overview({ say }) {
               <Icon name={a.level === 'bad' ? 'block' : 'warn'} size={14} />
               <span>{a.text}</span>
               <span className="sp" />
-              {a.to && <Link to={'/console/' + a.to}>{({ users: '사용자', tokens: '토큰', repos: '지식 레포', workrepos: '작업 레포', server: '서버' })[a.to] || a.to} →</Link>}
+              {a.to && <Link to={'/console/' + a.to}>{({ users: '사용자', tokens: '토큰', repos: '지식 레포', workrepos: '작업 레포 대장', server: '서버 설정' })[a.to] || a.to} →</Link>}
             </div>
           ))}
         </div>
@@ -97,14 +97,14 @@ export default function Overview({ say }) {
           </Row>
         </Card>
 
-        <Card title="작업 레포" actions={<Btn onClick={() => navigate('/console/workrepos')}>자세히</Btn>}>
+        <Card title="작업 레포 대장" actions={<Btn onClick={() => navigate('/console/workrepos')}>자세히</Btn>}>
           <div className="stats">
             <Stat n={wr.count} l="등록" />
             <Stat n={wr['최신'] || 0} l="최신" />
             <Stat n={(wr['낡음'] || 0) + (wr['미설치'] || 0)} l="낡음 · 미설치" warn={(wr['낡음'] || 0) + (wr['미설치'] || 0) > 0} />
           </div>
           <Note>
-            등록 · 꾸러미는 그 지식 레포의 <b>관리 &gt; 작업 레포</b>에서 한다. 여기서는 서버 전체를 한눈에.
+            등록 · 꾸러미는 그 지식 레포의 <b>레포 관리 › 연결된 작업 레포</b>에서 한다. 여기서는 서버 전체를 한눈에.
           </Note>
         </Card>
 

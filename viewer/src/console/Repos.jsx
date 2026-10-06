@@ -531,7 +531,7 @@ function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
       </Field>
       <div className="anote" style={{ fontSize: 12, lineHeight: 1.7 }}>
         두 모양 다 받는다 — <Mono>{ORIGIN_EX[0]}</Mono> 은 서버에 넣은 <b>PAT</b>(셸의 <code>ctx serve git-auth</code>) 로,{' '}
-        <Mono>{ORIGIN_EX[1]}</Mono> 은 서버의 <b>SSH 배포 키</b>(콘솔 › 서버 › git 자격)로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
+        <Mono>{ORIGIN_EX[1]}</Mono> 은 서버의 <b>SSH 배포 키</b>(서버 › 서버 설정 › git 자격)로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
       </div>
       {miss && (
         <div className="anote anote--warn" style={{ fontSize: 12 }}>

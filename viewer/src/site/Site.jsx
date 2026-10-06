@@ -51,7 +51,7 @@ function NotFound({ path }) {
         <div className="acard__head"><span className="acard__title">없는 주소입니다</span></div>
         <div className="acard__body">
           <div className="arow"><span className="arow__label">주소</span><span className="arow__value"><span className="amono">{path}</span></span></div>
-          <div className="anote">소개(<Link to="/">/</Link>) · 설명서(<Link to="/manual">/manual</Link>) · 레포(<Link to={repoHref()}>/r</Link>) · 콘솔(<Link to="/console">/console</Link>) 가운데 하나다.</div>
+          <div className="anote">소개(<Link to="/">/</Link>) · 설명서(<Link to="/manual">/manual</Link>) · 레포(<Link to={repoHref()}>/r</Link>) · 서버(<Link to="/console">/console</Link>) 가운데 하나다.</div>
         </div>
       </section>
     </div>

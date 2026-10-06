@@ -59,7 +59,7 @@ export default function Server({ say, route }) {
   const prefix = sv.data ? sv.data.replace(/[\\/][^\\/]+$/, '') : '/opt/cdp'
   return (
     <>
-      <PageHead title="서버" sub="이 프로세스가 무엇으로 떠 있나 · 진단 · 패키지 · 갱신 · 로그. 고치는 것은 셸이고 여기는 보는 자리다">
+      <PageHead title="서버 설정" sub="이 프로세스가 무엇으로 떠 있나 · 진단 · git 자격 · 갱신 · 로그. 고치는 것은 셸이고 여기는 보는 자리다">
         <Btn onClick={recheck} disabled={busy}>
           <Icon name="sync" size={13} className={busy ? 'spin' : undefined} /> {busy ? '검사 중…' : '다시 검사'}
         </Btn>
