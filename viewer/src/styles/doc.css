@@ -768,6 +768,7 @@
   .popover,
   .toast,
   .readmark,
+  .docnav,
   .docsec--copy,
   .codeblock__copy {
     display: none !important;

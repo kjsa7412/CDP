@@ -1605,3 +1605,147 @@ a.repomenu__row, a.repomenu__row:hover { text-decoration: none; color: inherit; 
   .who__name { display: none; }
   .topbar__center .topbar__search { min-width: 120px; }
 }
+
+/* ── 문서 이동 줄 — 「← 이전」 · 최근 · 열린 문서 탭(문서 이동 검토 v0.1) ─────────────────
+ * 본문 위 한 줄. 「어디서 왔나」 를 맡는다 — 왼쪽(찾기 · 뻗어나가기)과 오른쪽(목차)이 답하지 않는 것.
+ * 탭은 아래로 붙는 모양이 아니라 **칩**이다 — 본문과 한 장이 아니라 그 위에 펴 둔 것들이다. */
+.docnav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  height: 38px;
+  padding: 0 var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+.docnav__back { position: relative; flex: none; display: flex; align-items: center; gap: 2px; }
+.docnav__prev,
+.docnav__more,
+.docnav__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.docnav__prev:hover,
+.docnav__more:hover:not(:disabled),
+.docnav__all:hover { background: var(--surface-3); color: var(--text); }
+.docnav__more:disabled { opacity: 0.45; cursor: default; }
+.docnav__prev { max-width: 260px; }
+.docnav__cap { color: var(--text-3); }
+.docnav__t { overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 500; }
+.docnav__all { flex: none; margin-left: auto; color: var(--text-3); }
+
+.docnav__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 240px;
+  max-width: 420px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--raised);
+  box-shadow: var(--shadow-2);
+}
+.docnav__mcap { padding: 6px 8px 4px; color: var(--text-3); font-size: 11.5px; }
+.docnav__mrow {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: keep-all;
+  cursor: pointer;
+}
+.docnav__mrow:hover { background: var(--surface-2); }
+.docnav__mrow[data-missing='1'] { color: var(--text-3); }
+
+.docnav__tabs {
+  flex: 1 1 0;
+  /* 탭 여덟의 폭이 위로 새지 않게 — 안 막으면 줄 전체 폭이 .panes 의 최소 폭이 되어 창이 가로로 밀렸다(1440 에서 1705) */
+  contain: inline-size;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-left: var(--sp-2);
+  border-left: 1px solid var(--border);
+}
+.docnav__tabs::-webkit-scrollbar { display: none; }
+.dtab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  max-width: 200px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-2);
+}
+.dtab[aria-selected='true'] { border-color: var(--accent-line); background: var(--accent-bg); color: var(--accent); }
+.dtab[data-missing='1'] .dtab__t { color: var(--text-3); text-decoration: line-through; }
+.dtab__main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 9px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.dtab__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dtab__pinmark { flex: none; }
+.dtab__btn {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 2px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.dtab__btn:hover { background: var(--surface-3); color: var(--text); }
+/* 고정 단추는 손이 올 때만 — 탭마다 늘 셋이면 이름이 밀린다. 고정된 탭은 이름 앞 표시로 말한다 */
+.dtab__pin { display: none; }
+.dtab:hover .dtab__pin,
+.dtab:focus-within .dtab__pin { display: inline-grid; }
+.dtab[data-pin='1'] .dtab__x { display: none; }
+.dtab[data-pin='1']:hover .dtab__x { display: inline-grid; }
+
+/* 좁은 창 — 탭을 숨기고 「← 이전」 · 최근만(검토 §6 ③) */
+@media (max-width: 900px) {
+  .docnav__tabs,
+  .docnav__all { display: none; }
+}

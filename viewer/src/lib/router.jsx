@@ -31,12 +31,14 @@ function read() {
   }
 }
 
-export function navigate(to, { replace = false } = {}) {
+// `state` — 그 히스토리 항목에 실을 것. 레포 화면이 문서마다 왼쪽(뿌리 · 범위)과 직전 문서를 싣고, 뒤로 가기에서
+// 되살린다(문서 이동 검토 v0.1). 새로고침해도 브라우저가 들고 있다.
+export function navigate(to, { replace = false, state = null } = {}) {
   const cur = location.pathname + location.search + location.hash
   // 같은 주소를 다시 누른 것 — 히스토리를 쌓지 않는다
   if (to === cur) return
-  if (replace) history.replaceState(null, '', to)
-  else history.pushState(null, '', to)
+  if (replace) history.replaceState(state, '', to)
+  else history.pushState(state, '', to)
   for (const l of listeners) l()
 }
 
@@ -60,7 +62,7 @@ export function useRoute() {
 // 얼굴 — **주소가 말해 준다.** 한 번들이 셋에서 돈다(MCP 설계서 §6.8).
 //
 //   로컬   /                 face: local   (window.__CDP_SERVER__ 없음)
-//   레포   /r/<repo>/…       face: repo    rest = 그 뒤 조각(graph · manage/<탭>)
+//   레포   /r/<repo>/…       face: repo    rest = 그 뒤 조각(d/<문서> · graph · manage/<탭>)
 //   사이트 / · /manual · /login · /setup · /r      face: site    ┐ 서버가 index.html 에 심은
 //   콘솔   /console/…                              face: console ┘ window.__CDP_SERVER__ 로 안다
 //

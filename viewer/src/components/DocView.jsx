@@ -116,7 +116,12 @@ export default function DocView({
         window.open(api.fileUrl(file.path), '_blank', 'noopener')
         return
       }
-      const id = href.replace(/^\.\//, '').replace(/#.*$/, '').replace(/\.md$/i, '').split('/').pop()
+      // **href 는 인코딩돼 있다**(마크다운 렌더가 `../work/2026-0821-%EC%9D%91….md` 로 낸다) — 그대로 id 로 넘기면 한글 이름 문서가
+      // 전부 「문서를 열 수 없습니다 · not-found」 였다(문서 이동 검토 실측). 풀어서 넘긴다
+      let id = href.replace(/^\.\//, '').replace(/#.*$/, '').replace(/\.md$/i, '').split('/').pop()
+      try {
+        id = decodeURIComponent(id)
+      } catch {}
       onOpen(id)
     }
     bodyRef.current.addEventListener('click', onClick)

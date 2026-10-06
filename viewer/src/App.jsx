@@ -37,6 +37,8 @@ import Explore from './components/Explore.jsx'
 import CoordGraph from './components/CoordGraph.jsx'
 import Icon from './components/Icon.jsx'
 import { copyText } from './lib/clip.js'
+import DocNav from './components/DocNav.jsx'
+import { docHref, docOfRoute, canonDocId, docTitle, tabsOpen, tabsClose, tabsPin, recentPush } from './lib/doclink.js'
 
 // 왼쪽 폭 — 하는 일에 따라 다르다. 목록은 제목 한 줄이면 되고, 뻗어나가기는
 // 열이 둘 이상 들어가야 "가로로 뻗는다"가 성립한다.
@@ -70,7 +72,9 @@ export default function App() {
     const s = stateNow() || peek(k('/state')) || null
     const d = peek(k('/docs'))
     const m = peek(k('/managed'))
-    return { r: peek(k('/repo')) || null, d, v: peek(k('/vocab')) || null, m, s, at: restoreOf(s, d, m) }
+    // 주소에 문서가 있으면(새로고침 · 받은 링크) 그 문서가 첫 화면이다 — 마지막 문서(lastDoc)는 주소가 비었을 때만
+    const rd = docOfRoute(modeOf().rest || [], new URLSearchParams(location.search))
+    return { r: peek(k('/repo')) || null, d, v: peek(k('/vocab')) || null, m, s, at: restoreOf(s, d, m), rd }
   })
   const [state, setState] = useState(boot.s)
   const [repo, setRepo] = useState(boot.r)
@@ -82,7 +86,9 @@ export default function App() {
   const [others, setOthers] = useState(boot.d?.others || [])
   // 뻗어나가기의 뿌리. 목록에서 고른 것 하나. { kind, key, label }
   const [root, setRoot] = useState(boot.at?.root || null)
-  const [docId, setDocId] = useState(boot.at?.docId || null)
+  const [docId, setDocId] = useState(boot.rd?.id || boot.at?.docId || null)
+  // 첫 읽기(서버의 state)가 끝났나 — 그 전에 탭 · 최근을 고치면 곧이어 오는 서버 state 가 덮는다
+  const [ready, setReady] = useState(false)
   // 900px 아래 — 왼쪽은 문서 **위에 뜬다**(app.css). 문서를 고르거나 문서 쪽을 누르면 덮개를 걷는다. 전에는 골라도 그대로
   // 덮고 있어서 ◀ 를 찾아야 읽혔다(실서버 종합 시험 F11). 읽기 모드(reading.mode)와 달리 **기억하지 않는다** — 넓히면 원래대로
   const narrowQ = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 900px)') : null
@@ -105,6 +111,8 @@ export default function App() {
   const rest = here.rest || []
   const topMode = rest[0] === 'graph' ? 'graph' : rest[0] === 'manage' ? 'admin' : 'doc'
   const baseHref = here.server ? '/r/' + encodeURIComponent(here.repo) + '/' : '/'
+  // 문서도 주소다 — `/d/<id>[?at=]`(문서 이동 검토 v0.1 A). 문서 화면에서만 읽는다
+  const routeDoc = topMode === 'doc' ? docOfRoute(rest, route.query) : null
   const [lastTab, setLastTab] = useState('overview')
   const adminTab = topMode === 'admin' && rest[1] ? rest[1] : lastTab
   useEffect(() => {
@@ -114,9 +122,13 @@ export default function App() {
   useEffect(() => {
     if (topMode === 'admin' && rest[1] && !menuFor(here.server).some((m) => m.key === rest[1])) navigate(baseHref + 'manage/overview', { replace: true })
   }, [topMode, rest[1], here.server, baseHref])
+  // 「문서」 로 오면 보던 문서의 주소로 — 그래프 · 관리에 갔다 와도 그 문서다
   const setTopMode = useCallback(
-    (mode) => navigate(mode === 'graph' ? baseHref + 'graph' : mode === 'admin' ? baseHref + 'manage/' + lastTab : baseHref),
-    [baseHref, lastTab]
+    (mode) =>
+      navigate(
+        mode === 'graph' ? baseHref + 'graph' : mode === 'admin' ? baseHref + 'manage/' + lastTab : docId ? docHref(baseHref, docId) : baseHref
+      ),
+    [baseHref, lastTab, docId]
   )
   const setAdminTab = useCallback((t) => navigate(baseHref + 'manage/' + t), [baseHref])
   // 동기화 진행 — **서버가 갖고 SSE 로 온다.** 이 컴포넌트가 들고 있으면
@@ -152,8 +164,23 @@ export default function App() {
   // 무엇 중에서 찾고 있나"를 부제로 적으려면 머리와 목록이 같은 값을 봐야
   // 한다. 아래에 있으면 머리는 그것을 모른다.
   const [scope, setScope] = useState('managed')
-  const historyRef = useRef({ stack: [], pos: -1 })
   const atSeqRef = useRef(0)
+  // 문서 이동이 콜백 · effect 안에서 「지금」 을 읽는 자리 — 매 렌더 맞춘다
+  const leftRef = useRef(null)
+  leftRef.current = { root, leftMode, scope }
+  const docIdRef = useRef(docId)
+  docIdRef.current = docId
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const managedRef = useRef(managedList)
+  managedRef.current = managedList
+  const routeDocRef = useRef(routeDoc)
+  routeDocRef.current = routeDoc
+  // 다음 「주소 → 문서」 가 탭을 어떻게 할지 — openDoc 이 정하고 거기서 쓴다. 뒤로 · 앞으로면 비어 있다(= 지금 탭을 바꾼다)
+  const tabHowRef = useRef(null)
+  const appliedRef = useRef(null)
+  // 「← 이전」 — 지금 히스토리 항목이 실은 직전 문서
+  const [nav, setNav] = useState({ prev: null, direct: false })
 
   const reading = state?.reading || { mode: 'browse', fontSize: 15, measure: 760, coordLinks: true }
   const myCoords = state?.myCoords || []
@@ -188,7 +215,7 @@ export default function App() {
           if (!s.repoPath) setNeedSetup(true)
         }
         // 첫 화면 — 마지막에 읽던 문서(restoreOf). 캐시로 이미 열었으면 그대로 둔다
-        if (!boot.at) {
+        if (!boot.at && !boot.rd) {
           const at = restoreOf(s, d, m)
           if (at) {
             setDocId(at.docId)
@@ -196,6 +223,7 @@ export default function App() {
           }
         }
         api.saveState({ lastVisit: new Date().toISOString() })
+        setReady(true)
       })
       .catch((e) => {
         // 서버 — 401 은 api.js 가 이미 로그인으로 보냈다. 404(없는 레포 · 권한 밖)는 서버 판정 그대로 `/r?from=` 화면으로(D4)
@@ -322,29 +350,135 @@ export default function App() {
     }
   }, [reload, say])
 
+  // ── 문서 열기 · 돌아가기 — **주소가 문서다**(문서 이동 검토 v0.1 A) ─────────────────────────────
+  //
+  // `openDoc` 은 주소만 바꾼다. 문서를 실제로 바꾸는 것은 아래 「주소 → 문서」 한 길이다 — 뒤로 · 앞으로도 같은 길을
+  // 지나므로 읽음 · 마지막 문서 · 바뀜 표시 · 탭 · 왼쪽이 같이 따라온다. 전에는 메모리 스택을 `Alt+←` 로만 되짚었고
+  // 되돌리기가 `setDocId` 하나라 왼쪽이 다른 문서를 가리킨 채 남았으며(H4), 브라우저 뒤로 가기는 앱을 나갔다(H5).
+  //
+  // 히스토리 항목마다 `cdp` 를 싣는다 — { root, leftMode, scope, prev, direct }.
+  //   root · leftMode · scope  그 문서를 볼 때의 왼쪽. 돌아오면 되살린다
+  //   prev     직전에 보던 문서 — 「← 이전」 의 이름
+  //   direct   바로 앞 항목이 그 문서인가 — 그러면 「← 이전」 이 `history.back()` 이다(사이에 그래프 · 관리가 끼면 아니다)
+  // how — 탭을 어떻게 하나('tab' 더한다 · 'replace' 지금 탭을 바꾼다 — `doclink.js`).
+  // replace — 히스토리를 쌓지 않는다(j/k 훑기 · H8).
   const openDoc = useCallback(
-    (id, at = null) => {
-      if (!id) return
-      setDocId(id)
-      if (narrowQ?.matches) setDrawerShut(true)
-      // 문서 안에서 갈 자리 — 뻗어나가기에서 섹션(좌표)을 눌러 온 경우.
-      // 같은 줄을 다시 눌러도 다시 가야 하므로 seq 를 붙인다.
-      setDocAt(at ? { value: at, seq: ++atSeqRef.current } : null)
-      const h = historyRef.current
-      h.stack = h.stack.slice(0, h.pos + 1)
-      h.stack.push(id)
-      h.pos = h.stack.length - 1
-      patch({ read: { [id]: new Date().toISOString() }, lastDoc: id })
-      setChangedPaths((s) => {
-        if (!s.size) return s
-        const n = new Set(s)
-        const d = docs.find((x) => x.id === id)
-        if (d) n.delete(d.path)
-        return n
-      })
+    (rawId, at = null, { how = 'tab', replace = false, root: r } = {}) => {
+      if (!rawId) return
+      const id = canonDocId(rawId, managedRef.current)
+      const onDoc = routeDocRef.current
+      // 같은 문서 · 같은 자리를 다시 누른 것 — 주소는 그대로, 섹션이면 그리로만 다시 간다
+      if (onDoc && onDoc.id === id && (onDoc.at || null) === (at || null)) {
+        if (at) setDocAt({ value: at, seq: ++atSeqRef.current })
+        return
+      }
+      const was = history.state?.cdp || null
+      const cur = docIdRef.current
+      const L = leftRef.current
+      const snap = {
+        root: r !== undefined ? r : L.root,
+        leftMode: L.leftMode,
+        scope: L.scope,
+        ...(replace || (onDoc && onDoc.id === id)
+          ? { prev: was?.prev || null, direct: replace ? !!was?.direct : false }
+          : { prev: cur || null, direct: !!onDoc && !!cur }),
+      }
+      tabHowRef.current = how
+      navigate(docHref(baseHref, id, at), { replace, state: { cdp: snap } })
     },
-    [patch, docs]
+    [baseHref]
   )
+
+  // 주소 → 문서. **문서가 바뀌는 길은 이것 하나다.**
+  useEffect(() => {
+    if (topMode !== 'doc') {
+      appliedRef.current = null
+      return
+    }
+    if (!routeDoc) {
+      // 문서 없는 주소를 지났다 — 뒤로 가기로 같은 문서 주소에 돌아와도 다시 연다(「모두 닫기」 뒤)
+      appliedRef.current = null
+      // 주소에 문서가 없다 — 첫 화면에서 마지막 문서를 열었으면(restoreOf) 주소를 그 문서로 바꿔 쓴다. 쌓지 않는다
+      if (docId) navigate(docHref(baseHref, docId), { replace: true, state: { cdp: { ...leftRef.current, prev: null, direct: false } } })
+      return
+    }
+    if (!ready) return
+    if (appliedRef.current === route.href) return
+    appliedRef.current = route.href
+    const { id, at } = routeDoc
+    const c = history.state?.cdp
+    if (c) {
+      if ('root' in c) setRoot(c.root || null)
+      if (c.scope) setScope(c.scope)
+      if (c.leftMode) setLeftMode(c.leftMode === 'explore' && !c.root ? 'list' : c.leftMode)
+    } else {
+      // 히스토리가 실은 왼쪽이 없다(받은 링크 · 주소창에 친 주소) — 첫 화면 복원과 같이 그 문서를 뿌리로
+      const at = restoreOf({ lastDoc: id }, { docs }, managedRef.current)
+      if (at) setRoot(at.root)
+    }
+    setNav({ prev: c?.prev && c.prev !== id ? c.prev : null, direct: !!c?.direct })
+    setDocAt(at ? { value: at, seq: ++atSeqRef.current } : null)
+    const how = tabHowRef.current || 'replace'
+    tabHowRef.current = null
+    // 좁은 창 — 문서 주소에 왔으면 목록 덮개를 걷는다(F11). 받은 링크 · 새로고침도 문서가 먼저 보여야 한다
+    if (narrowQ?.matches) setDrawerShut(true)
+    const s = stateRef.current || {}
+    const before = docIdRef.current
+    if (id === before && (s.tabs || []).some((t) => t.id === id)) return
+    setDocId(id)
+    const tabs = tabsOpen(s.tabs || [], id, { mode: how, active: before, seen: s.read || {} })
+    patch({
+      read: { [id]: new Date().toISOString() },
+      lastDoc: id,
+      recent: recentPush(s.recent || [], id),
+      ...(tabs !== s.tabs ? { tabs } : {}),
+    })
+    setChangedPaths((cp) => {
+      if (!cp.size) return cp
+      const n = new Set(cp)
+      const d = docs.find((x) => x.id === id)
+      if (d) n.delete(d.path)
+      return n
+    })
+  }, [topMode, route.href, docId, ready])
+
+  // 뿌리 · 찾기/뻗어나가기가 바뀌면 지금 히스토리 항목에 적어 둔다 — 떠났다가 돌아오면 「떠날 때의 뻗어나가기」 다.
+  // **범위(관리문서 · 작업문서 · 좌표)는 적지 않는다** — 범위를 바꾸는 것은 떠나려는 몸짓이다. 돌아왔을 때 목록은 그 문서를
+  // 고른 범위여야 그 줄이 칠해져 보인다(작업문서를 읽다 관리문서 › 용어집으로 갔다 돌아오면 작업문서 목록)
+  useEffect(() => {
+    // 첫 읽기 전에는 적지 않는다 — 비어 있는 뿌리를 적으면 받은 링크로 연 문서가 「뿌리 없음」 이 된다
+    if (!routeDoc || !ready) return
+    const st = history.state || {}
+    history.replaceState({ ...st, cdp: { ...(st.cdp || {}), root, leftMode } }, '', location.href)
+  }, [root, leftMode, routeDoc?.id, ready])
+
+  // ── 탭 ──
+  const closeTab = useCallback(
+    (id) => {
+      const s = stateRef.current || {}
+      const { tabs, next } = tabsClose(s.tabs || [], id, docIdRef.current)
+      patch({ tabs })
+      if (id !== docIdRef.current) return
+      // 지금 탭을 닫았다 — 옆 탭으로 **바꿔 쓴다.** 쌓으면 뒤로 가기가 방금 닫은 문서를 다시 연다
+      if (next) openDoc(next, null, { replace: true })
+      else {
+        setDocId(null)
+        navigate(baseHref)
+      }
+    },
+    [patch, openDoc, baseHref]
+  )
+  const closeAllTabs = useCallback(() => {
+    patch({ tabs: [] })
+    setDocId(null)
+    navigate(baseHref)
+  }, [patch, baseHref])
+  const pinTab = useCallback((id) => patch({ tabs: tabsPin(stateRef.current?.tabs || [], id) }), [patch])
+  const goPrev = useCallback(() => {
+    if (!nav.prev) return
+    if (nav.direct) history.back()
+    else openDoc(nav.prev)
+  }, [nav, openDoc])
 
   // 시작점을 고른다 — 뻗어나가기가 여기서부터 뻗는다.
   //
@@ -356,7 +490,7 @@ export default function App() {
   // 좌표를 고르는 유일한 이유가 뻗어나가기이므로 거기 두면 한 번 더 누르게 된다.
   const pickRoot = useCallback((node) => {
     setRoot(node)
-    if (node?.open) openDoc(node.open)
+    if (node?.open) openDoc(node.open, null, { root: node })
     else setLeftMode('explore')
   }, [openDoc])
 
@@ -375,7 +509,7 @@ export default function App() {
     setRoot({ kind: 'coord', key: coord, label: coord })
     setLeftMode('explore')
     setTopMode('doc')
-  }, [])
+  }, [setTopMode])
 
   const saveScroll = useCallback(
     (id, ratio) => patch({ scroll: { [id]: { ratio, at: Date.now() } } }),
@@ -421,26 +555,16 @@ export default function App() {
         e.preventDefault()
         return patch({ reading: { fontSize: 15 } })
       }
-      if (e.altKey && e.key === 'ArrowLeft') {
-        e.preventDefault()
-        const h = historyRef.current
-        if (h.pos > 0) {
-          h.pos--
-          setDocId(h.stack[h.pos])
-        }
-        return
-      }
-      if (e.altKey && e.key === 'ArrowRight') {
-        e.preventDefault()
-        const h = historyRef.current
-        if (h.pos < h.stack.length - 1) {
-          h.pos++
-          setDocId(h.stack[h.pos])
-        }
-        return
-      }
-
       if (inField || mod) return
+
+      // 이전 · 다음 문서 — 브라우저의 뒤로 · 앞으로 그대로(문서가 주소다). **입력칸 밖에서만** — 검색칸에서
+      // ⌥← 는 Mac 의 단어 이동이다(문서 이동 검토 H7). 브라우저도 같은 키를 쓰므로 한 번만 가게 막는다
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault()
+        if (e.key === 'ArrowLeft') history.back()
+        else history.forward()
+        return
+      }
 
       // **Esc 는 위에서부터 하나씩 벗긴다.** 겹쳐 뜬 것을 한 번에 다 닫으면
       // 실수로 누른 사람이 하던 자리를 통째로 잃는다.
@@ -463,7 +587,8 @@ export default function App() {
         const list = docs
         const i = list.findIndex((d) => d.id === docId)
         const next = e.key === 'j' ? Math.min(i + 1, list.length - 1) : Math.max(i - 1, 0)
-        if (list[next]) openDoc(list[next].id)
+        // 훑기는 이력에 쌓지 않고 지금 탭을 바꾼다(H8)
+        if (list[next]) openDoc(list[next].id, null, { how: 'replace', replace: true })
         return
       }
       if (e.key === 'x' && docId) {
@@ -494,6 +619,8 @@ export default function App() {
   }, [repo?.root])
 
   const coordIndex = useMemo(() => buildCoordIndex(tree), [tree])
+  // 문서 이름을 찾는 목록 — 탭 · 「← 이전」 · 최근
+  const lists = useMemo(() => ({ docs, managed: managedList, others }), [docs, managedList, others])
 
   // 스텝 1의 부제 — 지금 무엇 중에서 찾고 있나
   const scopeCount = useMemo(() => {
@@ -832,7 +959,7 @@ export default function App() {
                 }
               />
             ) : (
-              <Explore root={root} onOpen={openDoc} onBack={() => setLeftMode('list')} />
+              <Explore root={root} onOpen={(id, at) => openDoc(id, at, { how: 'replace' })} onBack={() => setLeftMode('list')} />
             )}
           </section>
 
@@ -844,6 +971,20 @@ export default function App() {
           />
 
           <main className="pane pane--doc" onMouseDown={() => narrow && docId && effectiveMode === 'browse' && setDrawerShut(true)}>
+            {docId && (
+              <DocNav
+                prev={nav.prev ? { id: nav.prev, ...docTitle(nav.prev, lists) } : null}
+                onPrev={goPrev}
+                recent={(state.recent || []).filter((x) => x !== docId).slice(0, 10).map((id) => ({ id, ...docTitle(id, lists) }))}
+                onOpen={(id) => openDoc(id)}
+                tabs={(state.tabs || []).map((t) => ({ ...t, ...docTitle(t.id, lists) }))}
+                active={docId}
+                onTab={(id) => openDoc(id)}
+                onClose={closeTab}
+                onPin={pinTab}
+                onCloseAll={closeAllTabs}
+              />
+            )}
             {docId ? (
               <DocView
                 docId={docId}

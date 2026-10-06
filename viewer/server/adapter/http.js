@@ -455,7 +455,8 @@ async function serveStatic({ req, res, url, send, devProxy }) {
   }
 
   let rel = decodeURIComponent(url.pathname)
-  if (rel === '/' || !path.extname(rel)) rel = '/index.html'
+  // 화면 주소는 전부 index.html — 문서 주소(`/d/docs/테이블정의서.md`)는 확장자가 있어도 화면이다(문서 이동 검토 v0.1)
+  if (rel === '/' || !path.extname(rel) || rel.startsWith('/d/')) rel = '/index.html'
 
   // 단일 실행 파일(SEA)로 빌드하면 ops/out/web 이 파일로 존재하지 않는다.
   // tools/build-exe.mjs 가 화면을 전역에 인라인해 둔다(§5.1 A안).
