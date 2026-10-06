@@ -1,14 +1,9 @@
-// 내장 검증 — 설계서 §12.
+// 레포 검사 — 설계서 §12 · v1.0 개편안 §5.5. **검사는 여기 하나다** — save(V21) · MCP `check` · 화면의 검증 ·
+// `ctx check` · 진단이 같은 함수를 부른다(I1). v1.0 에는 커밋 훅이 없다 — 레포 안 `bin/ctx` 에 위임하던 시절의 폴백이
+// 아니라 이것이 보증 층이다.
 //
-// 원칙은 실제 bin/ctx 에 위임하는 것이고, 이것은 폴백이다. 그래서 결과에
-// source: 'builtin' 을 실어 보내고 화면이 그것을 표시한다. 내장 검사를
-// 정본처럼 보여주면 뷰어와 훅이 어긋났을 때 사용자가 훅을 의심하지 않는다.
-//
-// 뷰어만 할 수 있는 검사와 ctx check 만 할 수 있는 검사(조직이 추가한 규칙)가
-// 서로 달라 둘은 대체 관계가 아니라 보완 관계다.
-//
-// **error 는 커밋을 막을 근거다.** 그 등급을 함부로 쓰지 않는다 — 막히는 것이
-// 잦으면 사람들이 훅을 끄고, 그 순간 보증 층이 사라진다.
+// **error 는 save 를 막을 근거다** — 다만 그 save 가 **새로 만든** error 로만 막힌다(V21 · `newErrors`). 원래 있던
+// 오류는 경고로 싣는다. 그 등급을 함부로 쓰지 않는다 — 막히는 것이 잦으면 사람들이 기록을 남기지 않는다.
 
 // touches 는 넣지 않는다 — **좌표 0개가 정상이기 때문이다** (수행 v1.0 §5.3).
 // "일정을 정했을 뿐 어떤 대상도 바꾸지 않았다" 는 작업이 실제로 있고, 그것을
@@ -92,7 +87,7 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
     'example-coord',
     '서식 예시 좌표가 남아 있다 — 시작할 때 _vocab.md 와 문서에서 같이 지운다',
     examples.map((e) => ({ coord: e.coord, detail: `_vocab.md:${e.line}${e.label ? ' · ' + e.label : ''}` })),
-    '쓰기 권한자가 save 의 examples: "purge" 한 번으로 어휘 줄과 짝 섹션을 같이 지운다(작업 기록 하나) · 모드 A 는 ctx examples --purge 뒤 커밋'
+    '큐레이터가 save 의 examples: "purge" 한 번으로 어휘 줄과 짝 섹션을 같이 지운다(작업 기록 하나) · 옛 레포 전체는 ctx migrate'
   )
 
   // supersedes 대상 없음
@@ -276,7 +271,7 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       'registry-missing',
       '등록부 행이 없는 관리 문서를 가리킴 — 그 타입에 작업 기록이 닿으면 커밋이 막힌다',
       (managedIndex.registry?.rules || []).filter((r) => !docEscapes(r.doc) && !paths.has(r.doc.toLowerCase())).map((r) => ({ detail: `_managed.md:${r.line} \`${r.pattern}\` → ${r.doc}` })),
-      '서버형은 admin 이 save 의 managed: retire(행만) · 모드 A 는 그 행을 지운다'
+      '큐레이터가 save 의 managed: retire(행만) — cdp-registry'
     )
     // **끊긴 참조**(K3) — 없는 관리 문서로 가는 링크 · 지운 문서의 이름. drop 은 거절로 막지만 셸에서 지운 것 · reviewed 로 넘긴 것이
     // 계속 보여야 한다
@@ -286,7 +281,7 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
         'doc-ref-dangling',
         '없는 관리 문서를 가리키는 줄',
         danglingRefs({ texts: bodies, exists: (p) => paths.has(String(p).toLowerCase()), managedText }).map((x) => ({ path: x.file, detail: `${x.file}:${x.line} → ${x.docs.join(' · ')}` })),
-        '쓰기 권한자가 save 의 edits 로 그 줄을 고친다 · 모드 A 는 손으로'
+        '큐레이터가 save 의 edits 로 그 줄을 고친다 — cdp-registry'
       )
     }
 
