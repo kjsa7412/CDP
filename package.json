@@ -17,7 +17,6 @@
     "build:ctx": "node ops/lib/build-ctx.mjs",
     "test": "node --test test/",
     "verify": "node ops/verify/run.mjs",
-    "seed:kit": "node ops/lib/seed-kit.mjs",
     "release:server": "node ops/lib/release-server.mjs",
     "dev:site": "vite --config site/vite.config.js",
     "build:site": "vite build --config site/vite.config.js && node site/tools/prerender.mjs && node site/tools/check-leaks.mjs",
