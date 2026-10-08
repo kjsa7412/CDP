@@ -15,6 +15,7 @@ import { extractFromDoc } from '../../core/baseline.js'
 import { sliceSection, toError } from '../../core/tools.js'
 import { docNo } from '../../core/docrefs.js'
 import { formsLib } from '../../core/formslib.js'
+import { rebaseLinks } from '../../core/repopath.js'
 
 const NL = '\n'
 const out = (s = '') => process.stdout.write(s + NL)
@@ -53,7 +54,8 @@ export async function runBaseline(opt) {
         asof,
         managed: x.rules.map((rule) => ({ op: 'add', pattern: rule.pattern, doc: to, ...(form ? { form } : {}) })),
         vocab: x.vocab,
-        items: x.items,
+        // 본문의 상대 링크 · 그림은 옛 문서 자리 기준이다 — 새 문서 자리(`to`) 기준으로 고친다(옛 `docs/2.개발/` → 새 `docs/`)
+        items: x.items.map((it) => ({ ...it, body: rebaseLinks(it.body, opt.doc, to) })),
       }
       out(JSON.stringify(json, null, 2))
       err(`ctx baseline extract: 섹션 ${x.items.length} · 등록부 행 ${x.rules.length} · 서식 ${form || '(없음)'} → ${to}`)

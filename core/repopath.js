@@ -47,6 +47,46 @@ export function repoPath(docPath, href) {
   return out.length ? { path: out.join('/'), outside: false } : null
 }
 
+// 글을 다른 문서로 옮길 때 상대 링크를 새 자리 기준으로 고친다 — `docs/2.개발/A.md` 의 `../../work/x.png` 는
+// `docs/A.md` 에서 `../work/x.png` 다(옛 문서에서 기준선을 뽑아 다시 세운 레포의 새 문서로 옮길 때 · v1.0 리허설 실측).
+// 레포 루트 기준(`/work/…` · `work/…`) · 레포 밖 · 스킴 · `#…` 은 그대로 둔다. 코드 블록 안은 건드리지 않는다.
+export function rebaseLinks(text, fromDoc, toDoc) {
+  const dirOf = (p) => String(p || '').replace(/\\/g, '/').replace(/\/?[^/]*$/, '')
+  const fromDir = dirOf(fromDoc)
+  const toDir = dirOf(toDoc)
+  if (fromDir === toDir) return String(text ?? '')
+  const rel = (target) => {
+    const a = toDir ? toDir.split('/') : []
+    const b = target.split('/')
+    let i = 0
+    while (i < a.length && i < b.length - 1 && a[i] === b[i]) i++
+    return [...Array(a.length - i).fill('..'), ...b.slice(i)].join('/')
+  }
+  let fence = null
+  return String(text ?? '')
+    .split('\n')
+    .map((line) => {
+      const f = /^\s*(`{3,}|~{3,})/.exec(line)
+      if (f) {
+        if (!fence) fence = f[1]
+        else if (line.trim().startsWith(fence)) fence = null
+        return line
+      }
+      if (fence) return line
+      return line.replace(/(!?\[[^\]\n]*\]\(\s*)(<[^>\n]*>|[^)\s]*)/g, (m, pre, href) => {
+        const angled = href.startsWith('<')
+        const raw = angled ? href.slice(1, -1) : href
+        if (!raw || raw.startsWith('#') || raw.startsWith('/') || SCHEME.test(raw) || DRIVE.test(raw) || ROOTED.test(raw.replace(/^(\.\/)+/, ''))) return m
+        const hit = repoPath(fromDoc, raw)
+        if (!hit || hit.outside) return m
+        const tail = (/[#?].*$/.exec(raw) || [''])[0]
+        const out = rel(hit.path) + tail
+        return pre + (angled || /\s/.test(out) ? '<' + out + '>' : out)
+      })
+    })
+    .join('\n')
+}
+
 // 마크다운 원문의 링크 · 그림 대상 — `[말](대상)` · `![말](대상 "제목")` · `![말](<공백 있는 대상>)`.
 // 코드 블록 · 인라인 코드 안은 예시라 뺀다. 참조식 링크(`[말][1]`)는 드물어 보지 않는다.
 export function mdRefs(text) {

@@ -107,13 +107,14 @@ export function extractFromDoc(r, doc, { sliceSection }) {
   return { items, rules: rules.map((x) => ({ pattern: x.pattern, anchor: '#'.repeat(x.level) + ' {값}' })), vocab }
 }
 
-// 옛 반영 이력 — `**변경**` · `**경과**` 머리와 그 아래 날짜 목록
+// 옛 반영 이력 — `**변경**` · `**경과**` 머리와 그 아래 날짜 목록. 옛 문서는 `**신설** · 날짜 [기록](…)` · `**제기** · …`
+// 한 줄도 썼다(dpms_wiki 의 사업분석 · gdi 의 이슈 대장) — 그 줄이 기준선 블록에 새면 옛 경로의 기록 링크가 따라온다
 export function stripHistory(text) {
   const lines = String(text || '').split(NL)
   const out = []
   let inHist = false
   for (const l of lines) {
-    if (/^\s*\*\*(변경|경과)\*\*/.test(l)) {
+    if (/^\s*\*\*(신설|변경|경과|제기)\*\*/.test(l)) {
       inHist = true
       continue
     }
