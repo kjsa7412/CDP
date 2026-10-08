@@ -682,6 +682,7 @@ export async function runServe(opt = {}) {
         curate: (name) => (a.curate ? a.curate(name) : !!a.admin),
         curateAny: !!a.admin || (a.curateRepos || []).length > 0,
         formsOpt: { explicit: opt.forms || null, dataDir },
+        kitDir: opt.kit || null,
         // `save` 는 토큰의 사용자로 author 를 채운다. 클라이언트가 보내면
         // 거절한다 — 보낼 수 있으면 남의 이름으로 기록이 남는다(§4.5).
         // viewer 에게는 등록하지 않는다 — 역할에 없는 도구는 보이지도 않는다(v1.0 §5.3)
@@ -2522,9 +2523,6 @@ function installNote({ origin, repo, row, kit }) {
     kit/.claude/cdp.json       →  <작업레포>/.claude/cdp.json    그대로 복사
     kit/.mcp.json              →  이미 있으면 mcpServers.cdp 항목만 더한다
     kit/CLAUDE.md              →  이미 있으면 cdp:begin ~ cdp:end 블록만 갈아 끼운다
-
-\`bin/ctx\` 를 가진 사람은 이것도 된다 —
-\`ctx setup --server ${origin} --repo ${repo} --workrepo ${row.id} <작업레포>\`
 
 ## 3. Claude Code 를 다시 켠다
 

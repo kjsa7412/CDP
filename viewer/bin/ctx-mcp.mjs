@@ -151,7 +151,8 @@ export function makeRepoCache(root) {
 // curate   (name) => boolean   그 레포의 큐레이터인가(v1.0 V2). 없으면 아무도 아니다
 // curateAny  큐레이터 도구(queue)를 등록할지 — 한 레포라도 큐레이터면. 역할에 없는 도구는 보이지도 않는다(개편안 §5.3)
 
-export function buildServer({ repos = [], fallback = null, mode = 'server', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT, curate = null, curateAny = null, formsOpt = null } = {}) {
+// kitDir   서버의 --kit(없으면 번들 옆 · 소스) — brief 의 kit 해시와 프롬프트의 스킬이 `/kit` 과 같은 자리를 본다
+export function buildServer({ repos = [], fallback = null, mode = 'server', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT, curate = null, curateAny = null, formsOpt = null, kitDir = null } = {}) {
   if (!repos.length) throw new CtxError('E_REPO', '지식 레포가 하나도 없다', {})
 
   const caches = new Map()
@@ -226,7 +227,7 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
     }
     if (notice) lines.push(notice)
     // 옛 `sync` · `version` 도구를 흡수했다(v1.0 W1) — 미러 · kit 해시 · 번들 판이 같은 응답에
-    return { ...b, lines, sync: await syncOf(r, canCurate(name) ? 'curator' : 'writer'), built }
+    return { ...b, lines, sync: await syncOf(r, canCurate(name) ? 'curator' : 'writer', kitDir), built }
   })
 
   // 큐레이터 도구 — 큐레이터가 아니면 등록하지 않는다(보이지도 않는다). 레포마다는 부를 때 다시 본다
@@ -433,7 +434,7 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
   }
 
   registerResources(server, { caches, meta, pick, visible })
-  if (prompts !== 'never') registerPrompts(server, { caches, pick, fallback, prompts })
+  if (prompts !== 'never') registerPrompts(server, { caches, pick, fallback, prompts, kitDir })
 
   return server
 }
@@ -478,7 +479,7 @@ export function mirrorOf(st, root = null) {
   return stateOf(st, root ? lastPush(root) : null)
 }
 
-async function syncOf(r, role = 'writer') {
+async function syncOf(r, role = 'writer', kitDir = null) {
   const git = await import('../../core/git.js')
   const st = await git.status(r.root).catch(() => null)
   {
@@ -487,7 +488,7 @@ async function syncOf(r, role = 'writer') {
     // `CLAUDE.md` 의 `cdp:kit` 에서 읽는다.
     // kit 은 서버 번들의 것이다(v1.0 W5) — 큐레이터면 큐레이터 kit 의 해시와 대 본다
     const { kitFiles } = await import('../../core/kit.js')
-    const kit = await kitFiles({ role }).catch(() => null)
+    const kit = await kitFiles({ role, explicit: kitDir }).catch(() => null)
     const m = await mirrorSummary(r.root, st)
     return {
       mode: 'server',
@@ -556,7 +557,7 @@ function registerResources(server, { caches, meta, pick, visible }) {
 // 도구는 확률이고 prompt 는 확정이다 — 사람이 시작하기 때문이다(근거 문서 §7).
 // 절차 문장은 **스킬 파일을 읽어서** 낸다. 따로 적으면 스킬과 어긋난다.
 
-function registerPrompts(server, { caches, pick, fallback, prompts }) {
+function registerPrompts(server, { caches, pick, fallback, prompts, kitDir }) {
   const say = (t) => ({ messages: [{ role: 'user', content: { type: 'text', text: t } }] })
 
   server.registerPrompt(
@@ -565,7 +566,7 @@ function registerPrompts(server, { caches, pick, fallback, prompts }) {
     async ({ coord, repo }) => {
       const n = pick(repo)
       const r = await caches.get(n)()
-      const rules = await readSkill('cdp-work')
+      const rules = await readSkill('cdp-work', kitDir)
       const parts = [rules, '', `## ${n} · ${coord}`, '', '### where', '```json', JSON.stringify(T.toolWhere(r, { coord }), null, 1), '```']
       const sec = T.toolSection(r, { coord })
       parts.push('', '### section', T.sectionMarkdown(sec))
@@ -579,9 +580,9 @@ function registerPrompts(server, { caches, pick, fallback, prompts }) {
   })
 }
 
-async function readSkill(name) {
+async function readSkill(name, kitDir = null) {
   const { findKitDir } = await import('../../core/kit.js')
-  const found = await findKitDir().catch(() => null)
+  const found = await findKitDir({ explicit: kitDir }).catch(() => null)
   const body = found ? await fs.readFile(path.join(found.dir, 'skills', name, 'SKILL.md'), 'utf8').catch(() => null) : null
   if (!body) return '(스킬 파일을 찾지 못했다 — 서버 번들의 kit/ 이 없다)'
   return body.replace(/^---[\s\S]*?^---\s*/m, '').trim()

@@ -3,10 +3,7 @@
   "private": true,
   "version": "0.25.0",
   "type": "module",
-  "description": "CDP 작업 환경 — 지식 레포 뷰어 + ctx 도구",
-  "bin": {
-    "cdp": "server/index.js"
-  },
+  "description": "CDP — 지식 레포 서버(MCP · 화면 · ctx) · 작업 기록과 큐레이션",
   "scripts": {
     "dev": "vite --config viewer/vite.config.js",
     "dev:server": "node viewer/bin/ctx-cli.mjs serve --personal viewer/fixture --port 7373 --data ops/out/dev-personal",
