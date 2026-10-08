@@ -641,30 +641,30 @@ ctx baseline push base.json --server <주소> --repo <새 레포>          # CDP
 
 ## 12. 개편안과 코드가 어긋난 곳 · 남은 것
 
-코드가 맞다. 아래는 고치지 않고 적어 둔 것이다(2026-10-07 · `d5e0a1c`).
+코드가 맞다. 아래는 2026-10-07(`d5e0a1c`)에 적은 것이고, 그 뒤 고친 줄에는 「→ **고침**」 과 커밋을 붙였다. 고치지 않고 둔 것의 까닭은 [TODO §5](../dev/v1.0_개편_TODO.md#5-나온-것) 끝 줄.
 
 | 개편안 · TODO | 적은 것 | 코드 |
 |---|---|---|
 | §5.1 모듈 배치 | `core/model · judge · plan · read` · `node/` · `server/routes/*` · `cli/` · `core/layout.js` | 하지 않았다 — `core/` 평평 · `ctx-mcp-serve.mjs` 2,565줄 한 파일 · 예약 태그는 `save.js` · 시스템 태그는 `curation.js` 에 |
 | §5.1 캐시 | RepoCache 하나(HEAD sha) — save 안에서도 재사용 · 도구 · 화면 공용 | MCP 캐시(HEAD sha 스탬프)와 화면 `Store` 둘 · save 는 `loadRepo` 를 두 번(전 · 후) · `repoInfo()` 가 부를 때마다 검사를 돈다 |
-| §4.4 · TODO §1.2 미반영 | `later(applied, C) ∪ (대기열 ∩ C)` | 큐레이션된 레포는 `대기열 ∩ C` 만 — reflect 의 `into` 에서 빠진 좌표는 미반영으로 다시 서지 않는다(코드 주석: 「판정을 받은 기록은 큐레이터가 이미 봤다」) |
+| §4.4 · TODO §1.2 미반영 | `later(applied, C) ∪ (대기열 ∩ C)` | 큐레이션된 레포는 `대기열 ∩ C` 만 — reflect 의 `into` 에서 빠진 좌표는 미반영으로 다시 서지 않는다(코드 주석: 「판정을 받은 기록은 큐레이터가 이미 봤다」) → **고침** — `later(applied, C)`(기록으로 둠 빼고) ∪ (대기열 ∩ C) · applied 는 뒤로 가지 않는다(8d92edf) |
 | §5.2 writer 의 `edits` | `work/` · `docs/` 밖만(사실상 README) 허용 | `edits` 는 통째로 큐레이터만 |
-| §5.2 `curation-stale` | curator · admin 에게만 — writer 응답에 매번 싣지 않는다 | save 가 warn 을 전부 `warnings` 에 싣는다 — writer 응답에도 간다 |
-| §5.3 save 도구 | viewer 에게 안 보인다 | 모든 연결에 등록된다 — viewer 가 부르면 `E_FORBIDDEN`(쓰기 권한 없음) |
-| §6.3 · A6 역할별 kit | 작업 레포에는 writer kit · 큐레이터 kit 은 큐레이터 폴더에 | 작업 레포 설치(`/kit/<레포>?workrepo=`)도 **부른 사람의 역할**로 kit 을 고른다 — admin · 큐레이터가 깔면 큐레이터 kit 이 그 작업 레포에 들어가고, 대장은 writer kit 해시와 대 보므로 「낡음」 으로 보일 수 있다(코드로 읽은 것 · [MCP 설계서 §14](CDP_MCP_설계서_v2.0.md#14-코드와-개편안이-어긋난-곳)) |
+| §5.2 `curation-stale` | curator · admin 에게만 — writer 응답에 매번 싣지 않는다 | save 가 warn 을 전부 `warnings` 에 싣는다 — writer 응답에도 간다 → **고침** — writer 응답에서 뺀다(eeaa1c8) |
+| §5.3 save 도구 | viewer 에게 안 보인다 | 모든 연결에 등록된다 — viewer 가 부르면 `E_FORBIDDEN`(쓰기 권한 없음) → **고침** — viewer 에게 등록하지 않는다(8d92edf) |
+| §6.3 · A6 역할별 kit | 작업 레포에는 writer kit · 큐레이터 kit 은 큐레이터 폴더에 | 작업 레포 설치(`/kit/<레포>?workrepo=`)도 **부른 사람의 역할**로 kit 을 고른다 — admin · 큐레이터가 깔면 큐레이터 kit 이 그 작업 레포에 들어가고, 대장은 writer kit 해시와 대 보므로 「낡음」 으로 보일 수 있다(코드로 읽은 것 · [MCP 설계서 §14](CDP_MCP_설계서_v2.0.md#14-코드와-개편안이-어긋난-곳)) → **고침** — 등록된 작업 레포(`?workrepo=`)는 늘 writer kit(8d92edf) |
 | §5.5 새 경고 | `section-journal` · `derive-outgrows-source` · `form-unknown` · 기준선 블록 형식 error | `curation-stale` 만 있다 |
 | §4.2 지운다 | `status` · `{ id, scope }` supersedes · `knowledge/` 층 | `status` 는 값이 있으면 error(그대로) · 나머지 둘은 읽기가 남았다 |
 | V8 섹션 레벨 | `##` 하나 · 새 행에서 `###` 를 뺀다 | 서식(`lintForm`)은 `## {값}` · `—` 만 받지만 save 의 `managed.add` 는 `level` 0~6 을 받는다 |
-| I7 섹션을 내보내는 모든 자리 | 미반영을 같이 | MCP 리소스 `cdp://{repo}/section/{coord}` · prompt `load` · 화면이 안 쓰는 `/api/<r>/coord` 는 섹션 글만 낸다 |
+| I7 섹션을 내보내는 모든 자리 | 미반영을 같이 | MCP 리소스 `cdp://{repo}/section/{coord}` · prompt `load` · 화면이 안 쓰는 `/api/<r>/coord` 는 섹션 글만 낸다 → **고침** — 리소스 · prompt · `/coord` 도 미반영을 같이(`sectionMarkdown` · 8d92edf) |
 | H4 | 관리 문서에 YAML 을 달면 섹션이 밀린다 | 표지를 주석으로 둬 **피했다**(V6). 근원 — 섹션 줄은 프론트매터 뒤 기준(`parseManagedSections(body)`)이고 `sliceSection` 은 전체 글로 자른다 — 은 그대로다. 프론트매터가 있는 관리 문서의 `section` · `E_CONFLICT.content` 는 어긋난다 |
 | §9.2 2단계 | 서식 잔재 — 예시 purge · 서식 그대로인 문서 drop · `## 작성지침` · 머리 표 칸 · 서식 표지 | `ctx migrate` 는 예시 purge 만 한다 |
-| §8.1 도구 | `ctx forms list · show · check` | CLI 에 없다 — 서식은 MCP `forms` · 화면 서식집 · `GET /api/<r>/forms` |
-| TODO §1.3 | `/site/info` 에도 `curate` | `/me` 에만 있다(화면은 `/me` 를 쓴다) |
-| W1 | `derive` · `apply` 삭제 | MCP · CLI 에서는 지웠고 `core/tools.js` 의 `toolDerive` · `toolApply` 가 부르는 곳 없이 남았다. 같은 꼴 — `ctx-mcp-serve.mjs` 의 `collectKit`, `core/indexes.js`(시험만) |
+| §8.1 도구 | `ctx forms list · show · check` | CLI 에 없다 — 서식은 MCP `forms` · 화면 서식집 · `GET /api/<r>/forms` → **고침** — `ctx forms list · show · check`(eeaa1c8) |
+| TODO §1.3 | `/site/info` 에도 `curate` | `/me` 에만 있다(화면은 `/me` 를 쓴다) → **고침** — `/site/info` 에도 `curate`(8d92edf) |
+| W1 | `derive` · `apply` 삭제 | MCP · CLI 에서는 지웠고 `core/tools.js` 의 `toolDerive` · `toolApply` 가 부르는 곳 없이 남았다. 같은 꼴 — `ctx-mcp-serve.mjs` 의 `collectKit`, `core/indexes.js`(시험만) → **고침** — `toolDerive` · `toolApply` · `collectKit`(8d92edf) · `core/indexes.js`(a517d12) 삭제 |
 | W2 · §7.2 | 로컬 얼굴 없음 | 화면 코드에 남았다 — [화면 설계서 §12](CDP_화면_설계서_v1.0.md#12-코드와-개편안이-어긋난-곳) |
 | W10 | 판 1.0.0 | `package.json` 0.25.0 · `"bin": { "cdp": "server/index.js" }`(없는 파일)도 남았다 |
 
-옛 문구가 남은 자리 — `tools.guardSize` 의 거절 문장이 v1.0 에 없는 리소스 `cdp://<repo>/doc` 로 안내한다 · `CARD.saveCurator`(명함)가 걷은 「어긋나는 산문」 거절을 아직 설명한다 · 서식 guide 일부가 옛 원칙을 적는다([서식집 규약 §12](CDP_서식집_규약_v1.0.md#12-코드와-어긋난-곳)). `agent/` 에는 v0.x 원본(`hooks/pre-commit` · `manual/` · `CLAUDE-지식레포.md` · `TEMPLATE-work.md`)이 남았다 — 산출물(`copyKit`)에는 안 간다.
+옛 문구가 남았던 자리 — `tools.guardSize` 의 거절 문장 · `CARD.saveCurator` 의 걷은 「어긋나는 산문」 거절(8d92edf) · 서식 guide 의 `**변경**` · 「ctx check 가 막는다」(8331dad)는 고쳤다. `agent/` 의 v0.x 원본(`hooks/pre-commit` · `CLAUDE-지식레포.md` · `manual/` · `TEMPLATE-work.md`)은 지웠다(99dd9d5 · 설명서 갈래).
 
 ---
 

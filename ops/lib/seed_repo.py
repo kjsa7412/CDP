@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-샘플 지식 레포 시드 — 확정된 CDP 구조 (수행 v1.0 · 작업환경 v1.1)
+샘플 지식 레포 시드 — CDP v1.0 구조 (개편안 §4.1 · I9 「레포에는 지식만」)
 
 내용은 GDI(경북연구원 연구관리 시스템) 실제 작업 자료에서 가져오고,
 **구조는 확정 설계 그대로** 만든다.
@@ -9,7 +9,11 @@
   docs/          관리 문서 — 팀이 하나로 관리하는 산출물 · 섹션마다 applied 주석
   _vocab.md      통제 어휘 — 7 타입 (table screen api module term domain code)
   _managed.md    등록부 — 좌표 패턴 → 관리 문서 · 섹션
-  .claude/skills 지식 레포가 자족하도록 skill 을 여기 둔다
+  README.md · .gitattributes · .gitignore   빈 틀(core/skeleton.js) — **없을 때만** 쓴다
+
+**도구 층은 만들지 않는다**(v1.0 I9) — bin · .githooks · .claude · CLAUDE.md · TEMPLATE-work.md ·
+MANUAL*.md · INDEX*.md 는 레포에 두지 않는다. 스킬 · CLAUDE 블록은 서버 번들의 kit/ 이 작업 레포에 내고,
+검사는 서버 save 가 한다(훅 없음). 옛 시드가 남긴 것이 있으면 지운다.
 
 **의도적으로 심는 이상 케이스** — 정상 데이터만으로는 이 설계가 무엇을 하는지
 검증할 수 없다.
@@ -28,15 +32,19 @@
                      적지 않고, 결정 대기는 이슈 대장으로 간다.
                      **쓸 수 있는 값이 하나도 없다.** 있으면 오류다
   · supersedes        오기재 정정 1쌍 (그 용도로만 남았다 · 수행 §6.3)
-  · INDEX.md 불일치   4건 -- `ctx index` 를 안 돌린 상태. 경고 1건(커밋은 된다)
+  · 큐레이션 기록     없음 — 옛 레포(파생 필수 시절)의 모양이다. 서버는 「암묵 전환」 으로 읽고
+                     applied 뒤 후속만 대기열에 세운다(core/curation.js · 하네스 121 · 130)
 
     python ops/lib/seed_repo.py [출력경로]
 """
 
 import csv
 import io
+import json
 import os
+import pathlib
 import re
+import subprocess
 
 BR = chr(10)
 BR2 = chr(10) * 2
@@ -1312,30 +1320,26 @@ PS002_SPEC = """
 """
 
 
-TEMPLATE_WORK = """
----
-id: YYYY-MMDD-slug
-title:
-date: YYYY-MM-DD
-author:
-touches:
-  # 이 작업이 **바꾼** 대상만 적는다 (신설·변경·삭제).
-  # 참조·호출·언급만 한 것은 좌표가 아니다. 본문에 쓰면 된다. (수행 §5)
-  # 0개도 정상이다.
-  - screen:
+# 표본 레포의 README 첫 문단 — 빈 틀(core/skeleton.js)의 title 자리다
+FIXTURE_TITLE = '시험 · 개발용 표본 레포 — 공공 SI 한 사업의 작업 기록과 관리 문서(데모 판의 원본)'
 
-# supersedes 는 **이 기록 자체가 틀렸을 때만** 쓴다. (수행 §6.3)
-# 같은 좌표를 나중에 또 바꾼 것은 적을 필요가 없다 — 계산으로 나온다.
-# supersedes: 2026-MMDD-잘못쓴기록
-tags: []
----
+# 옛 시드가 레포 안에 만들던 도구 층(core/migrate.js 의 TOOL_LAYER) — v1.0 레포에는 없다(I9). 다시 시드하면 지운다
+LEGACY = ('bin', '.githooks', '.claude', 'tools', 'MANUAL.md', 'MANUAL-관리자.md', 'MANUAL-시스템.md',
+          'CLAUDE.md', 'TEMPLATE-work.md', 'INDEX.md', 'INDEX-by-coord.md')
 
-<!--
-  본문은 자유다. 형식을 강제하지 않는다. (수행 §13)
-  다만 6개월 뒤 이 결정을 뒤집으려는 사람은 "무엇을 했는지"가 아니라
-  "어떤 제약 때문에 그렇게 했는지"를 찾는다.
--->
-"""
+
+def skeleton(name, title):
+    """빈 틀의 README · .gitattributes · .gitignore — **정본은 `core/skeleton.js` 하나다.**
+
+    여기에 글을 베끼면 새 레포(`ctx repo new` · 콘솔 「새 지식 레포」)와 표본이 갈라진다(같은 것을 두 곳에
+    두면 한쪽만 고쳐진다). node 로 그 함수를 불러 받는다 — 이 프로젝트는 node 없이 돌지 않는다.
+    """
+    url = pathlib.Path(ROOT, 'core', 'skeleton.js').as_uri()
+    js = ('import(process.argv[1]).then((m) => process.stdout.write('
+          'JSON.stringify(m.skeletonFiles({ name: process.argv[2], title: process.argv[3] }))))')
+    out = subprocess.run(['node', '-e', js, url, name, title], capture_output=True, check=True)
+    return json.loads(out.stdout.decode('utf-8'))
+
 
 def main():
     # **시드가 만든 것만 지운다.**
@@ -1345,11 +1349,9 @@ def main():
     # 옮긴 뒤 되돌리기 전에 죽으면 잃고, 다음 실행이 그 임시 폴더까지 지웠다.
     #
     # 옮기지 않으면 잃을 수 없다. 지우는 목록을 명시하는 쪽이 항상 안전하다.
-    OWNED_DIRS = ('work', 'docs', '.githooks', '.claude')
-    OWNED_FILES = ('_vocab.md', '_managed.md', 'INDEX.md', 'INDEX-by-coord.md',
-                   'README.md', 'CLAUDE.md', 'TEMPLATE-work.md', 'MANUAL.md',
-                   'MANUAL-관리자.md',
-                   '.gitignore', '.gitattributes')
+    # 지식(work · docs · 어휘 · 등록부)만 시드의 것이다. 빈 틀(README · git 설정 둘)은 없을 때만 쓴다(아래).
+    OWNED_DIRS = ('work', 'docs')
+    OWNED_FILES = ('_vocab.md', '_managed.md')
     os.makedirs(OUT, exist_ok=True)
 
     # **지우기 전에 읽는다.** `docs/` 는 곧 rmtree 되므로 그 뒤에는 되살릴
@@ -1367,6 +1369,16 @@ def main():
         p_ = os.path.join(OUT, f)
         if os.path.isfile(p_):
             os.remove(p_)
+    # 옛 도구 층 — 레포에는 지식만 둔다(v1.0 I9). 옛 시드가 남긴 사본(추적하지 않던 .claude/ 포함)을 걷는다
+    removed = []
+    for rel in LEGACY:
+        p_ = os.path.join(OUT, rel)
+        if os.path.isdir(p_):
+            shutil.rmtree(p_)
+            removed.append(rel)
+        elif os.path.isfile(p_):
+            os.remove(p_)
+            removed.append(rel)
 
     w('_vocab.md', VOCAB)
     w('_managed.md', MANAGED)
@@ -1400,99 +1412,20 @@ def main():
     for _n, _t in NEW_MANAGED:
         w('docs/%s.md' % _n, _t)
 
-    # `TEMPLATE-work.md` · `CLAUDE.md` 는 위에서 `agent/` 에서 복사했다.
-    # **여기서 다시 쓰지 않는다** -- 같은 것을 두 곳에 두면 한쪽만 고쳐진다.
-
-    # INDEX.md — **일부러 뒤처뜨린다.**
+    # 빈 틀 — README · .gitattributes · .gitignore. **없을 때만** 쓴다. 정본은 `core/skeleton.js`(새 레포와 같은 것)이고,
+    # 있으면 사람이 고친 것이라 덮지 않는다 — 표본의 README 는 저장소에 커밋된 그대로가 정본이다.
     #
-    # `ctx index` 가 무엇을 하는지 보여주려면 재생성이 필요한 상태여야 한다.
-    # 검사에서 warn 이라 커밋을 막지 않는다 -- 자동 생성물이고 사람이 손으로
-    # 맞출 것이 아니기 때문이다.
-    #
-    # 형식은 `ctx index` 와 같게 둔다. `status` 는 **빈 칸이 정상이다** --
-    # 완료가 기본값이라 적지 않는다. 전에는 여기서 파이썬 None 이 그대로
-    # 찍혀 표에 'None' 이 들어갔다.
-    behind = WORK[:-3]
-    rows = ['| id | date | status | touches |', '|---|---|---|---|']
-    for d in sorted(behind, key=lambda x: x['date'], reverse=True):
-        rows.append('| %s | %s | %s | %s |' % (
-            d['id'], d['date'], d['status'] or '', ', '.join(d['touches']) or '-'))
-    w('INDEX.md', '# INDEX' + BR2 + '자동 생성 — `ctx index`' + BR2 + BR.join(rows) +
-      BR2 + '> 이 파일은 **일부러 %d건 뒤처진 상태**로 만들어져 있다 -- '
-      '`ctx index` 를 돌리면 맞는다.' % (len(WORK) - len(behind)))
-
-    # **설계서를 레포에 넣지 않는다.**
-    #
-    # 전에는 `docs/*.md` 를 통째로 `design/` 에 복사했다. 자족(작업환경 §3)이
-    # 취지였는데, 그 결과 지식 레포에 **도구 개발 중의 작업 메모**까지 따라
-    # 들어갔다 -- 실측에서 421KB · 10부, 그중 절반이 폐기본이거나 내부 메모였다.
-    #
-    # 레포를 여는 사람은 자기 프로젝트를 찾으러 온 것이다. 자족 층은 이미
-    # **매뉴얼 두 부**가 맡고 있고, 설계서는 도구를 고칠 사람 것이며 그 사람은
-    # 이 프로젝트에서 일한다.
-
-    # 클로드코드 세팅 -- **원본은 `agent/`.**
-    #
-    # 전에는 스킬 4개가 `viewer/fixture/.claude/skills/` 에만 있었다. fixture 안의
-    # 사본이 사실상 원본이라, 고칠 때 fixture 를 고치고 다른 레포에는 손으로
-    # 복사해야 했다. 레포가 셋이면 세 번이다.
-    agent = os.path.join(ROOT, 'agent')
-    sk_src = os.path.join(agent, 'skills')
-    if os.path.isdir(sk_src):
-        sk_dst = os.path.join(OUT, '.claude', 'skills')
-        if os.path.isdir(sk_dst):
-            shutil.rmtree(sk_dst)
-        shutil.copytree(sk_src, sk_dst)
-    # **CLAUDE.md 는 두 종류다.** 지식 레포에 들어가는 것과, 그 옆의
-    # 프로젝트 레포에 들어가는 것. 전에는 둘을 구분하지 않고 `agent/CLAUDE.md`
-    # 하나만 두어서, 지식 레포 자리에 프로젝트용이 복사되고 있었다.
-    for nm, dst in (('CLAUDE-지식레포.md', 'CLAUDE.md'),
-                    ('TEMPLATE-work.md', 'TEMPLATE-work.md'),
-                    # 작업 레포용 서식 -- `ctx setup` 이 여기서 읽는다
-                    ('CLAUDE-프로젝트레포.md', os.path.join('.claude', 'work-repo', 'CLAUDE.md'))):
-        src = os.path.join(agent, nm)
-        if os.path.exists(src):
-            d = os.path.join(OUT, dst)
-            os.makedirs(os.path.dirname(d), exist_ok=True)
-            shutil.copyfile(src, d)
-
-    # git 훅 -- 유일한 결정론적 보증 층. 원본은 `agent/hooks/pre-commit`.
-    hook_src = os.path.join(ROOT, 'agent', 'hooks', 'pre-commit')
-    if os.path.exists(hook_src):
-        dst = os.path.join(OUT, '.githooks', 'pre-commit')
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        shutil.copyfile(hook_src, dst)
-        os.chmod(dst, 0o755)
-
-    # 매뉴얼 두 부 -- 폐쇄망에서는 물어볼 사람이 없다.
-    #
-    # 하나로 두면 사용자가 배포·어휘 운영 절을 넘기며 읽고, 관리자가 하루
-    # 흐름 절에서 자기 것을 못 찾는다. **독자가 둘이면 문서도 둘이다.**
-    #
-    # **원본은 `agent/manual/` 이다.** 전에는 `repo-kit/manual-user.md` 를
-    # 봤는데 그 폴더는 `agent/` 로 재편되면서 없어졌다. `os.path.exists` 로
-    # 감싸 둔 탓에 **없어진 줄 아무도 몰랐다** -- 시드는 조용히 넘어가고,
-    # OWNED_FILES 는 두 파일을 지우기까지 하므로 샘플에서 매뉴얼이 사라졌다.
-    # README 가 거는 링크 둘이 그때부터 죽어 있었다. 이제는 없으면 말한다.
-    for src_name, dst_name in (('user.md', 'MANUAL.md'),
-                               ('admin.md', 'MANUAL-관리자.md')):
-        man_src = os.path.join(ROOT, 'agent', 'manual', src_name)
-        if os.path.exists(man_src):
-            shutil.copyfile(man_src, os.path.join(OUT, dst_name))
-        else:
-            print('  [경고] 매뉴얼 원본 없음: %s → %s 를 못 넣었다 '
-                  '(README 링크가 죽는다)' % (man_src, dst_name))
-
-    # **원본은 `agent/` 다.** 전에는 이 파일 안에 문자열로 박혀 있었다 --
-    # CLAUDE.md 가 그렇게 두 곳에 있다가 갈라진 전례가 있다(설계서 §2.8).
-    # 배포본도 같은 파일을 담으므로 시드와 배포가 어긋날 수 없다.
-    for name in ('gitattributes', 'gitignore'):
-        src = os.path.join(ROOT, 'agent', name)
-        if os.path.exists(src):
-            w('.' + name, io.open(src, encoding='utf-8').read())
-        else:
-            print('  [seed] 경고: agent/%s 가 없습니다 -- 훅이 CRLF 로 깨질 수 있습니다' % name)
-    w('README.md', README)
+    # INDEX · 등록부 사본 · CLAUDE.md · TEMPLATE-work.md · 스킬 사본 · 훅 · 설명서는 **만들지 않는다**(v1.0 I9) —
+    # 목록과 좌표별 색인은 화면 · 도구가 계산하고, 스킬 · CLAUDE 블록은 서버 번들의 kit/ 이, 검사는 서버 save 가 한다.
+    frame = None
+    kept = []
+    for rel in ('README.md', '.gitattributes', '.gitignore'):
+        if os.path.exists(os.path.join(OUT, rel)):
+            kept.append(rel)
+            continue
+        if frame is None:
+            frame = skeleton('지식 레포', FIXTURE_TITLE)
+        w(rel, frame[rel])
 
     print('seeded: %s' % OUT)
     # **세어서 말한다.** 손으로 적은 숫자는 시드가 바뀌면 조용히 거짓말이 된다
@@ -1506,120 +1439,12 @@ def main():
     print('  managed docs   : %d' % len(
         [f for f in os.listdir(os.path.join(OUT, 'docs')) if f.endswith('.md')]))
     print('  table sections : %d' % table_doc.count('\n## '))
-    kept = [d for d in ('bin',) if os.path.exists(os.path.join(OUT, d))]
     if kept_table:
         kept.append('docs/테이블정의서.md (GDI 덤프 없음 — 직전 문서 유지)')
     print('  kept (not seed) : ' + (', '.join(kept) if kept else '(none)'))
+    if removed:
+        print('  removed (I9)   : ' + ', '.join(removed) + ' — 레포에는 지식만 둔다')
 
-
-
-
-README = """
-# 지식 레포
-
-프로젝트의 **"지금 어떤 상태인가"** 와 **"왜 그렇게 됐나"** 가 전부 여기 있다.
-사람에게 묻지 않고 여기서 찾는다.
-
-## 두 층
-
-| | |
-|---|---|
-| `docs/` | **관리 문서** — 지금 어떤 상태인가. 표준 산출물 16종 |
-| `work/` | **작업 기록** — 무슨 일이 있었나. append-only · 자유 형식 |
-
-`_managed.md` 가 좌표 → 문서·섹션 매핑이고, `_vocab.md` 가 정본 이름과 별칭이다.
-
-## 5분 안에 시작하기
-
-**1. 앱을 띄운다** — `tools/cdp.exe`(맥은 `tools/cdp`) 실행 *(없으면 `npx cdp`)*
-**2. 이 폴더 경로를 넣는다**
-**3. 화면 셋을 본다**
-
-```
-왼쪽 위    시작점을 고른다 — 문서 · 좌표 · 그래프(3D)
-왼쪽 아래  뻗어나가기.  고른 것에서 다음 한 계층씩.  루프를 허용한다
-오른쪽     문서
-Ctrl+K     검색.  별칭으로도 걸린다
-```
-
-뻗어나가기는 계층이 섞이지 않는다 —
-
-```
-작업문서 → 관리문서 · 좌표      좌표 → 관리문서 · 작업문서
-관리문서 → 섹션
-```
-
-**4. 커밋할 사람은 한 번 더 한다**
-
-```
-git config core.hooksPath .githooks
-```
-
-훅은 clone 을 따라오지 않는다. **이걸 안 하면 검사가 조용히 통과한다** —
-커밋은 되는데 미등재 좌표가 그대로 들어간다.
-
-## 작업할 때
-
-프로젝트 세션에서 요청하면 AI 가 **cdp-work** skill 로
-① 검토 → ② 맥락 주입 → ③ 요청수행 순서로 처리한다.
-
-작업이 끝나면 **cdp-save** 로 기록하고 커밋한다. **push 는 사람이 누른다.**
-
-**자세한 것은 [MANUAL.md](MANUAL.md).** 3장(작업 절차)과 4장(좌표 붙이기)이
-가장 길다 — 그 둘이 갈리면 나머지가 무의미해진다.
-
-## 터미널에서
-
-```
-bin/ctx brief                     지금 레포 상태 두 줄
-bin/ctx where table:rp_plnd_mst   그 좌표의 상태가 어디 있나
-bin/ctx match "면접심사의견등록"    이름 -> 정본 좌표
-bin/ctx derive                    파생이 남은 섹션
-bin/ctx check                     커밋 가능한가 (오류면 exit 1)
-bin/ctx sync                      원격과의 차이 · 훅 설정 여부
-```
-
-**Node 가 없어도 된다** — `bin/ctx` 가 알아서 `tools/` 의 실행 파일로 넘긴다
-(Windows `cdp.exe` · macOS/Linux `cdp` 둘 다 찾는다).
-
-## 지금 이 레포의 상태
-
-**커밋 가능한 정상 레포다.** `bin/ctx check` 가 통과한다.
-
-전에는 밀림·미작성을 일부러 심어 시연했는데, 그것이 오류가 된 뒤로는
-**clone 직후 커밋이 막히는 샘플**이 됐다 — 폐쇄망 반입 검증(clone 해서 커밋이
-되는가)이 무의미해진다. 그래서 걷었다.
-
-대신 **판정이 갈리는 것**은 남겨 두었다.
-
-| 볼 것 | 어디 |
-|---|---|
-| **좌표별로 판정이 다르다** | `2026-0821-면접심사의견-개편` — 아래 |
-| 좌표 0개도 정상 | `2026-0630-통합테스트-1차` (`touches: []`) |
-| 등록부 없는 타입 | `domain:` — 대상이 아니라 축이다. **계산에서 뺀다** |
-| 아젠다는 여기 쓰지 않는다 | `docs/위험및이슈관리대장.md` 의 `issue:ISS-001` |
-| 오기재 정정 | `2026-0902-업무이력-오기재` ← `2026-0903-업무이력-상태분리` |
-| 작업 기록이 없는 섹션 | `applied: null` — **위반이 아니다.** 실을 것이 없다 |
-
-```
-screen:PSC043           최신      화면설계서    반영됨
-table:ps_ext_emp_mst    후속 1건  테이블정의서  반영됨   <- 이게 핵심
-domain:인사채용          (계산 제외)
-```
-
-**같은 문서 안에서 좌표마다 판정이 다르다.** `table:ps_ext_emp_mst` 는 이 문서
-뒤에 그 좌표를 건드린 작업이 하나 더 있다 — 그러니 *"이 문서는 최신"* 도
-*"이 문서는 낡았다"* 도 둘 다 틀린 말이다. **낡음은 (문서, 좌표) 쌍의
-성질이다.**
-
-## 더 읽을 것
-
-| | |
-|---|---|
-| 하루 쓰는 법 | [MANUAL.md](MANUAL.md) |
-| 설치 · 배포 · 어휘 운영 | [MANUAL-관리자.md](MANUAL-관리자.md) |
-| **왜 이렇게 만들었는가** | `design/CDP_시스템설계서_v1.0.md` |
-"""
 
 if __name__ == '__main__':
     main()

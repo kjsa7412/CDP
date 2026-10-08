@@ -4,7 +4,7 @@ cd /d "%~dp0.."
 echo [ops] 의존성 설치
 call npm install || goto :fail
 echo.
-echo [ops] 끝났습니다. ops\release.cmd 로 배포본을 만들 수 있습니다.
+echo [ops] 끝났습니다. ops\start.cmd 로 띄우거나 ops\release.cmd 로 서버 산출물을 만듭니다.
 pause
 goto :eof
 :fail

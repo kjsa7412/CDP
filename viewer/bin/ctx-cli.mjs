@@ -669,6 +669,13 @@ export async function main(argv = process.argv.slice(2)) {
       const { runAuthCmd } = await import('./ctx-mcp-serve.mjs')
       return runAuthCmd({ ...opt, repos: opt.repos2 })
     }
+    // 모르는 하위 명령은 서버를 띄우지 않는다 — 전에는 오타 · 없앤 명령(kit-refresh)도 상주 서버로 떴다.
+    // 위치 인자를 받는 것은 `--personal` 뒤의 레포 경로 하나뿐이다
+    if (opt.args[0] && !(opt.personal === true && opt.args.length === 1)) {
+      if (opt.args[0] === 'kit-refresh') err('ctx serve kit-refresh: v1.0 에서 없앴다 — 레포 안에 도구 층이 없다. 작업 레포의 kit 은 서버 번들에서 나간다(설치 한 줄 --update)')
+      else err(`ctx serve: 모르는 하위 명령 "${opt.args[0]}" — doctor · init · git-auth · user · token (서버를 띄우려면 인자 없이 --root …)`)
+      return 2
+    }
     const { runServe } = await import('./ctx-mcp-serve.mjs')
     return runServe(opt)
   }

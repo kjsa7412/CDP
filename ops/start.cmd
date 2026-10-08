@@ -1,5 +1,5 @@
 @echo off
-REM 앱 실행. 인자로 지식 레포 경로를 줄 수 있다.
+REM 개인 서버로 띄운다(127.0.0.1, 첫 접속 주소로 로그인). 인자로 지식 레포 경로를 줄 수 있다 -- 없으면 viewer/fixture.
 cd /d "%~dp0.."
 if not exist node_modules (
   echo [ops] node_modules 가 없습니다. 설치부터 합니다.
@@ -12,7 +12,7 @@ if not exist "ops\out\web\index.html" (
 if "%~1"=="" (
   call npm start || goto :fail
 ) else (
-  node viewer/server/index.js --repo "%~1" || goto :fail
+  node viewer/bin/ctx-cli.mjs serve --personal "%~1" --data ops\out\dev-personal --web ops\out\web || goto :fail
 )
 goto :eof
 :fail

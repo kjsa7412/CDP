@@ -319,7 +319,7 @@ cdp-curate dpms_wiki
 | §7.4 폴더 | `src/features/{repo, docs, graph, search, curation, forms, repo-admin, server-admin, site}` · `src/ui/` · 순서 「표 → 셸 → App 쪼개기 → 큐레이션」 | 표 · 셸 · 큐레이션까지 왔다. `features/` 는 `curation` · `forms` 둘 · `components/` · `console/` 는 그대로 · **App 쪼개기는 안 했다**(`App.jsx` 1,283줄) · `app.css` 1,751줄 |
 | §6.3 큐레이터 자리 | 설치 한 줄 `--curator <레포>` | 화면에 큐레이터 한 줄이 없다 — 설치기의 거절 문장(「관리 화면의 큐레이터 한 줄을 쓰세요」)이 가리키는 자리가 없다. 개인 서버만 시작할 때 찍는다 |
 | W1 · W2 | 콘솔의 「에이전트 세팅 갱신」 · `/packages` 를 지운다 | 서버 라우트는 지웠고 화면에 부르는 코드가 남았다 — `admin.repoKit` · `api.packages` · 서버 › 지식 레포의 `kit` 단추(서버가 `kit` 값을 안 내 그려지지 않는다) |
-| TODO §1.3 | `/me` · `/site/info` 에 `curate` | `/me` 에만 — 화면은 `/me` 를 쓰므로 판정에는 문제가 없다 |
+| TODO §1.3 | `/me` · `/site/info` 에 `curate` | `/me` 에만 — 화면은 `/me` 를 쓰므로 판정에는 문제가 없다 → **고침** — `/site/info` 에도(8d92edf) |
 
 ---
 

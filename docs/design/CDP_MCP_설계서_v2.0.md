@@ -363,8 +363,8 @@ v0.x 는 전송이 둘이었다 — 모드 A(`ctx mcp` · stdio · PC 의 지식
 
 | 개편안 | 적은 것 | 코드 |
 |---|---|---|
-| §5.3 | `save` 는 viewer 에게 안 보인다 | 모든 연결에 등록된다 — viewer 는 `E_FORBIDDEN` |
-| §6.3 · A6 | 작업 레포 CLAUDE 블록은 writer 것 · 큐레이터 블록은 큐레이터 폴더 | `/kit/<레포>?workrepo=` 도 **부른 사람의 역할**로 kit 을 고른다 — admin · 큐레이터가 작업 레포를 깔면 큐레이터 kit(스킬 다섯 · 큐레이터 블록)이 그 작업 레포에 커밋되고, 대장의 「낡음」 은 writer kit 해시와 대 보므로 그 행이 늘 「낡음」 으로 보일 수 있다(코드로 읽은 것 — 실측 안 함) |
-| I7 | 섹션을 내보내는 모든 자리가 미반영을 같이 | 리소스 `cdp://{repo}/section/{coord}` · prompt `load` 는 섹션 글만 |
-| §5.3 명함 | 명함은 규칙과 맞는다 | `CARD.saveCurator` 가 v1.0 에서 걷은 「등록부 행과 어긋나는 문구 → `E_INPUT` 에 `파일:행`」 을 아직 설명한다 · `guardSize` 의 문장이 없는 리소스 `cdp://<repo>/doc` 로 안내한다 |
+| §5.3 | `save` 는 viewer 에게 안 보인다 | 모든 연결에 등록된다 — viewer 는 `E_FORBIDDEN` → **고침** (8d92edf) |
+| §6.3 · A6 | 작업 레포 CLAUDE 블록은 writer 것 · 큐레이터 블록은 큐레이터 폴더 | `/kit/<레포>?workrepo=` 도 **부른 사람의 역할**로 kit 을 고른다 — admin · 큐레이터가 작업 레포를 깔면 큐레이터 kit(스킬 다섯 · 큐레이터 블록)이 그 작업 레포에 커밋되고, 대장의 「낡음」 은 writer kit 해시와 대 보므로 그 행이 늘 「낡음」 으로 보일 수 있다(코드로 읽은 것 — 실측 안 함) → **고침** — 작업 레포는 늘 writer kit(8d92edf) |
+| I7 | 섹션을 내보내는 모든 자리가 미반영을 같이 | 리소스 `cdp://{repo}/section/{coord}` · prompt `load` 는 섹션 글만 → **고침** — `sectionMarkdown`(8d92edf) |
+| §5.3 명함 | 명함은 규칙과 맞는다 | `CARD.saveCurator` 가 v1.0 에서 걷은 「등록부 행과 어긋나는 문구 → `E_INPUT` 에 `파일:행`」 을 아직 설명한다 · `guardSize` 의 문장이 없는 리소스 `cdp://<repo>/doc` 로 안내한다 → **고침** (8d92edf) |
 | 옛 설계 §2.5 | `--prompts auto` 는 Claude Code 에서 숨긴다 | `auto` = `always` |
