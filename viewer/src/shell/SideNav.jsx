@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'react'
 import Icon from '../components/Icon.jsx'
 import { Link } from '../lib/router.jsx'
-import { api, admin, gotoRepo, repoApi } from '../lib/api.js'
+import { admin, gotoRepo, repoApi } from '../lib/api.js'
 import { load, useResource } from '../lib/cache.js'
 import { kbd } from '../lib/keys.js'
 import { can } from '../lib/roles.js'
@@ -35,7 +35,7 @@ export function setRail(rail) {
 }
 
 // 배지 — 큐레이션 대기 수. 레포 얼굴은 `/api/<레포>/repo` 의 curation(App 이 이미 읽는 캐시 · 같은 키), 콘솔은 `/admin/repos` 의
-// 그 레포 행. **없으면 그리지 않는다**(옛 서버 · 로컬). 창 초점이 돌아오고 60초가 지났으면 다시 읽는다(개편안 §7.2)
+// 그 레포 행. **없으면 그리지 않는다**(옛 서버). 창 초점이 돌아오고 60초가 지났으면 다시 읽는다(개편안 §7.2)
 function useQueue(face, repo, me) {
   const repoKey = face === 'repo' && repo ? 'api:' + repo + '/repo' : null
   const fetchRepo = () => repoApi(repo).repo()
@@ -93,7 +93,7 @@ export default function SideNav({ face, me, info, repo, item, rail, onRail, onNa
               </div>
               {g.items.map((it) => {
                 const n = badgeOf(it)
-                const to = it.scope === 'server' ? it.to() : it.to(face === 'local' ? null : repo)
+                const to = it.scope === 'server' ? it.to() : it.to(repo)
                 return (
                   <Link
                     key={it.key}
@@ -119,42 +119,23 @@ export default function SideNav({ face, me, info, repo, item, rail, onRail, onNa
         })}
       </nav>
 
-      {/* 로컬은 설명서(서버의 것) · 계정이 없다 — 빈 칸을 그리지 않는다 */}
-      {face !== 'local' && (
-        <div className="snav__foot">
-          <Link to="/manual" className="snav__i" aria-label="설명서" title={rail ? '설명서' : undefined} onClick={onNavigate}>
-            <Icon name="book" size={17} />
-            <span className="snav__t">설명서</span>
-          </Link>
-          {me && <AccountMenu me={me} info={info} repo={repo} onLogout={onLogout} />}
-        </div>
-      )}
+      <div className="snav__foot">
+        <Link to="/manual" className="snav__i" aria-label="설명서" title={rail ? '설명서' : undefined} onClick={onNavigate}>
+          <Icon name="book" size={17} />
+          <span className="snav__t">설명서</span>
+        </Link>
+        {me && <AccountMenu me={me} info={info} repo={repo} onLogout={onLogout} />}
+      </div>
     </aside>
   )
 }
 
 // 레포 고르기 — 옛 상단 「레포 ▾」 메뉴를 그대로 옮겼다. **항상 메뉴다**(하나여도 · 제품관리서비스 검토 §4.8).
-// 로컬은 고를 것이 없다 — 이 PC 가 보는 레포 이름만(App 이 읽는 `/repo` 와 같은 캐시 키).
 function RepoPicker({ face, me, repo, onNavigate }) {
   const [open, setOpen] = useState(false)
-  const local = face === 'local'
-  const { data: localRepo } = useResource(local ? 'api:local/repo' : null, api.repo, { enabled: local, ttl: 60_000 })
   // 얼굴 · 레포가 바뀌면 닫는다 — 이 부품은 살아남으므로 스스로 닫아야 한다
   useEffect(() => setOpen(false), [face, repo])
 
-  if (local) {
-    const name = localRepo?.root ? localRepo.root.split(/[\\/]/).filter(Boolean).pop() : ''
-    return (
-      <div className="snav__repo">
-        <div className="snav__repobtn snav__repobtn--static" title={localRepo?.root || '이 PC 의 지식 레포'}>
-          <span className="snav__rk" aria-hidden="true">
-            {(name || '·').slice(0, 2)}
-          </span>
-          <span className="snav__rn">{name || '지식 레포'}</span>
-        </div>
-      </div>
-    )
-  }
   if (!me) return null
   const label = repo || '레포 고르기'
   return (

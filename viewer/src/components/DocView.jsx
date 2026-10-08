@@ -1,8 +1,8 @@
 // 본문 — 설계서 §13-⓿ 의 본체.
 //
 // 화면의 주인은 본문이다. 유효성 블록은 읽기 전 판단 장치이고, 판단이 끝나면
-// 시야에서 사라진다. 읽고 있는 본문은 디스크가 바뀌어도 자동으로 바꾸지
-// 않는다 — 읽는 사람의 자리를 빼앗지 않는다(§13-⑥).
+// 시야에서 사라진다. 읽고 있는 본문을 뒤에서 갈아치우지 않는다 — 읽는 사람의 자리를 빼앗지 않는다(§13-⑥).
+// 다시 열면 새것이다(캐시 30초 · `cache.js`) — 알림 · SSE 로 밀어 넣지 않는다(서버가 유일한 작성자다).
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -25,7 +25,6 @@ export default function DocView({
   coordIndex,
   myCoords,
   reading,
-  changedPaths,
   onOpen,
   onCoord,
   onScrollSave,
@@ -36,11 +35,9 @@ export default function DocView({
   onVisual = () => {},
 }) {
   // 본문은 캐시(화면 · 권한 검토 v0.1 R8) — 관리 · 그래프 · 콘솔에 갔다 돌아오면 「불러오는 중…」 없이 그 자리다
-  const docKey = (id) => 'api:' + (currentRepo() || 'local') + '/docs/' + id
+  const docKey = (id) => 'api:' + currentRepo() + '/docs/' + id
   const [doc, setDoc] = useState(() => (docId ? peek(docKey(docId)) || null : null))
   const [error, setError] = useState(null)
-  const [reloadKey, setReloadKey] = useState(0)
-  const [staleNote, setStaleNote] = useState(false)
   const [restored, setRestored] = useState(false)
   const [progress, setProgress] = useState(0)
   const [copied, setCopied] = useState('')
@@ -54,24 +51,16 @@ export default function DocView({
     setError(null)
     const hit = peek(docKey(docId))
     if (hit) setDoc(hit)
-    // 디스크가 바뀌어 다시 읽는 것(reloadKey)은 캐시를 건너뛴다
-    load(docKey(docId), () => api.doc(docId), { ttl: 30_000, force: reloadKey > 0 })
+    load(docKey(docId), () => api.doc(docId), { ttl: 30_000 })
       .then((d) => {
         if (dead) return
         setDoc(d)
-        setStaleNote(false)
       })
       .catch((e) => !dead && setError(e.message))
     return () => {
       dead = true
     }
-  }, [docId, reloadKey])
-
-  // 읽는 중인 문서가 디스크에서 변경되면 — 내용은 그대로 두고 바 하나만 띄운다.
-  // 자동으로 갈아치우면 읽던 자리를 잃는다(§23.2).
-  useEffect(() => {
-    if (doc && changedPaths?.has(doc.path)) setStaleNote(true)
-  }, [changedPaths, doc?.path])
+  }, [docId])
 
   const rendered = useMemo(() => (doc ? renderMarkdown(doc.text) : null), [doc?.id, doc?.text])
 
@@ -324,13 +313,6 @@ export default function DocView({
         )}
 
         <div className="docwrap">
-          {staleNote && (
-            <div className="docchanged">
-              이 문서가 디스크에서 변경되었습니다
-              <button onClick={() => setReloadKey((k) => k + 1)}>다시 읽기</button>
-            </div>
-          )}
-
           {doc.isUnit ? (
             <ValidityBlock doc={doc} onOpen={onOpen} onRelation={onCoord} />
           ) : (

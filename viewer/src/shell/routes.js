@@ -10,8 +10,9 @@
 //              /r/<레포>/manage/curation[/log[/<id>]]            큐레이션 › 대기열 · 이력
 //              /r/<레포>/manage/forms[/<묶음>/<id>][?tab=]       큐레이션 › 서식집
 //   콘솔       /console[/<page>]                                 서버 묶음
-//   로컬       같은 꼴에서 `/r/<레포>` 만 뺀 것(+ manage/repo · sync · diag)
+//   사이트     그 밖 전부(/ · /manual · /login · /setup · /r)    소개 · 설명서 · 로그인 · 마법사 · 레포 고르기
 //
+// 화면은 늘 서버(`ctx serve` · 개인 서버 `--personal`)가 낸다 — 로컬 얼굴(PC 의 뷰어 · `/` 가 레포였던 것)은 v1.0 에 없앴다(개편안 §5.6).
 // 서버는 `/r/<레포>/` 아래 아무 주소에나 같은 index.html 을 낸다 — 새 주소에 서버 고칠 것이 없다(개편안 §7.3).
 // React 를 import 하지 않는다(`lib/router.jsx` 의 modeOf 도 이것을 쓴다).
 
@@ -26,13 +27,12 @@ const dec = (s) => {
   }
 }
 
-// 얼굴 — 주소가 말해 준다. `/r/` 밖에서는 경로만으로 로컬과 서버를 가를 수 없어(둘 다 `/`) 서버가 index.html 에 심은
-// 표식(`window.__CDP_SERVER__`)을 `server` 로 받는다.
-export function faceOf(path = '/', server = false) {
+// 얼굴 — **주소 하나로 정한다.** 전에는 `/r/` 밖에서 로컬(`/` 가 레포)과 서버(`/` 가 소개)를 가를 수 없어 서버가 심은
+// 표식(`window.__CDP_SERVER__`)을 받았다. 로컬 얼굴이 없어져 표식 없이 갈린다 — vite 개발 서버(표식 없음)도 같은 얼굴이다.
+export function faceOf(path = '/') {
   const seg = String(path).split('/').filter(Boolean).map(dec)
-  if (seg[0] === 'r' && seg[1]) return { server: true, repo: seg[1], face: 'repo', rest: seg.slice(2) }
-  if (server) return { server: true, repo: null, face: seg[0] === 'console' ? 'console' : 'site', rest: seg }
-  return { server: false, repo: null, face: 'local', rest: seg }
+  if (seg[0] === 'r' && seg[1]) return { repo: seg[1], face: 'repo', rest: seg.slice(2) }
+  return { repo: null, face: seg[0] === 'console' ? 'console' : 'site', rest: seg }
 }
 
 const ONLY = ['pending', 'mine']
@@ -58,10 +58,10 @@ const FORM_TABS = ['stamp', 'guide', 'example']
 //   tab      관리 화면이 그릴 것 · page 는 콘솔이 그릴 것
 //   logId    큐레이션 이력에서 펼친 기록 · form 은 서식집에서 고른 서식({ group, id }) · formTab 은 그 탭
 //   finder   왼쪽 목록(문서 화면)
-export function screenOf({ path = '/', query = null, server = false, hist = null } = {}) {
-  const m = faceOf(path, server)
+export function screenOf({ path = '/', query = null, hist = null } = {}) {
+  const m = faceOf(path)
   const rest = m.face === 'console' ? m.rest.slice(1) : m.rest
-  const finder = m.face === 'repo' || m.face === 'local' ? finderOf(rest, query, hist) : null
+  const finder = m.face === 'repo' ? finderOf(rest, query, hist) : null
   const item = currentItem(m.face, rest, finder)
   const out = { ...m, rest, item, finder, tab: item?.tab || null, page: item?.page || null, logId: null, form: null, formTab: null }
   if (item?.key === 'log' && rest[3]) out.logId = rest[3]
@@ -73,7 +73,7 @@ export function screenOf({ path = '/', query = null, server = false, hist = null
   return out
 }
 
-// 메뉴가 가리키는 레포 — 레포 얼굴은 주소의 레포, 콘솔은 **마지막으로 본 레포**(볼 수 있을 때만 · 셸 설계 §3). 로컬은 null
+// 메뉴가 가리키는 레포 — 레포 얼굴은 주소의 레포, 콘솔은 **마지막으로 본 레포**(볼 수 있을 때만 · 셸 설계 §3)
 export function navRepoOf(face, repo, me, last = null) {
   if (face === 'repo') return repo
   if (face !== 'console' || !me) return null
@@ -87,11 +87,7 @@ export function crumbOf(s) {
   if (!s || !s.item) return []
   const g = groupOf(s.item.group)
   if (s.face === 'console') return [{ label: g.label }, { label: s.item.label, to: s.item.to() }]
-  const base = repoBase(s.face === 'repo' ? s.repo : null)
-  const out = []
-  if (s.face === 'repo') out.push({ label: s.repo, to: base })
-  out.push({ label: g.label })
-  out.push({ label: s.item.label, to: s.item.to(s.face === 'repo' ? s.repo : null) })
+  const out = [{ label: s.repo, to: repoBase(s.repo) }, { label: g.label }, { label: s.item.label, to: s.item.to(s.repo) }]
   if (s.logId) out.push({ label: s.logId })
   if (s.form) out.push({ label: `${s.form.group}/${s.form.id}` })
   return out
@@ -101,8 +97,7 @@ export function crumbOf(s) {
 export function titleOf(s) {
   if (!s?.item) return null
   if (s.face === 'console') return `서버 › ${s.item.label} · CDP`
-  if (s.face === 'repo') return `${s.item.label} · ${s.repo} · CDP`
-  return `${s.item.label} · CDP`
+  return `${s.item.label} · ${s.repo} · CDP`
 }
 
 // 없는 주소 · 권한 밖 주소 — **그리지 않고 바꿔 쓴다**(replace · D4 — 「권한이 필요합니다」 로 존재를 알리지 않는다).
@@ -111,10 +106,10 @@ export function titleOf(s) {
 //   콘솔의 비관리자는 Console 이 서버의 403 과 같은 문장을 낸다(명부에 관리자가 0명인 서버를 세우는 길을 그 문장이 든다)
 export function redirectOf(s, me = null) {
   if (!s) return null
-  if (s.face === 'repo' || s.face === 'local') {
-    const base = repoBase(s.face === 'repo' ? s.repo : null)
+  if (s.face === 'repo') {
+    const base = repoBase(s.repo)
     if (!s.item) return s.rest[0] === 'manage' ? base + 'manage' : base
-    if (s.face === 'local' || !me || !canRead(me, s.repo)) return null
+    if (!me || !canRead(me, s.repo)) return null
     return can(me, s.item.need, s.repo) ? null : base
   }
   if (s.face === 'console') return s.item ? null : '/console'

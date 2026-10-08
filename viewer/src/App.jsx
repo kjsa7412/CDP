@@ -19,12 +19,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api, subscribe, startHeartbeat, ApiError, isServer, currentRepo, rememberRepo, stateNow, getTheme, setTheme, applyTheme } from './lib/api.js'
+import { api, ApiError, currentRepo, rememberRepo, stateNow } from './lib/api.js'
 import { useRoute, modeOf, navigate, Link } from './lib/router.jsx'
 import { useSession } from './lib/session.jsx'
 import { useSlots, useScreen } from './lib/slots.js'
 import { useToast } from './shell/toast.jsx'
-import { load, peek, put } from './lib/cache.js'
+import { repoBase } from './shell/nav.js'
+import { load, peek } from './lib/cache.js'
 import { buildCoordIndex } from './lib/markdown.js'
 import { summaryText } from './lib/format.js'
 import { filterRecords } from './lib/curation.js'
@@ -69,11 +70,12 @@ function restoreOf(s, d, m) {
 export default function App() {
   // 이 레포의 캐시 키 — `<App key={repo}>` 라 마운트 동안 바뀌지 않는다(화면 · 권한 검토 v0.1 R8).
   // 콘솔 · 설명서에 갔다 돌아오면 마지막 값으로 **즉시** 그리고 뒤에서 다시 읽는다 — 「불러오는 중…」 이 없다.
-  const RK = currentRepo() || 'local'
+  const RK = currentRepo()
   const ck = useCallback((p) => 'api:' + RK + p, [RK])
   const [boot] = useState(() => {
     const k = (p) => 'api:' + RK + p
-    const s = stateNow() || peek(k('/state')) || null
+    // 화면 상태는 브라우저에 있다 — 첫 렌더부터 있다
+    const s = stateNow()
     const d = peek(k('/docs'))
     const m = peek(k('/managed'))
     // 주소에 문서가 있으면(새로고침 · 받은 링크) 그 문서가 첫 화면이다 — 마지막 문서(lastDoc)는 주소가 비었을 때만
@@ -85,7 +87,7 @@ export default function App() {
   const [docs, setDocs] = useState(boot.d?.docs || [])
   const [tree, setTree] = useState(boot.v)
   const [managedList, setManagedList] = useState(boot.m || [])
-  // 레포 안의 그 밖 문서 — MANUAL.md · README.md · CLAUDE.md 등.
+  // 레포 안의 그 밖 문서 — README.md 등. 탭 · 「← 이전」 · 최근이 이름을 찾는 목록에 들어간다.
   // **레포마다 있을 수도 없을 수도 있다.** 없는 것을 버튼으로 내밀지 않는다.
   const [others, setOthers] = useState(boot.d?.others || [])
   // 뻗어나가기의 뿌리. 목록에서 고른 것 하나. { kind, key, label }
@@ -132,24 +134,18 @@ export default function App() {
   const topMode = item?.key === 'graph' ? 'graph' : item?.tab ? 'admin' : 'doc'
   const adminTab = item?.tab || 'overview'
   const finder = scr?.finder || { list: 'docs', only: null }
-  const baseHref = here.server ? '/r/' + encodeURIComponent(here.repo) + '/' : '/'
+  const baseHref = repoBase(here.repo)
   // 문서도 주소다 — `/d/<id>[?at=]`(문서 이동 검토 v0.1 A). 문서 화면에서만 읽는다
   const routeDoc = topMode === 'doc' ? docOfRoute(rest, route.query) : null
-  // 동기화 진행 — **서버가 갖고 SSE 로 온다.** 이 컴포넌트가 들고 있으면
-  // 탭이 둘일 때 한쪽만 알게 된다. { phase, startedAt, last, log }
-  const [sync, setSync] = useState(null)
-  // 도움말은 설정이 아니다. 단축키와 매뉴얼은 **읽는 것**이고, 레포 경로와
-  // 에이전트 설치는 **바꾸는 것**이다. 한 창에 두면 매일 찾는 쪽이 매번
-  // 평생 한 번 하는 것을 지나야 한다.
+  // 도움말은 설정이 아니다. 단축키와 설명서는 **읽는 것**이고, 작업 레포 연결은
+  // **바꾸는 것**이다. 한 창에 두면 매일 찾는 쪽이 매번 평생 한 번 하는 것을 지나야 한다.
   const [helpOpen, setHelpOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [changedPaths, setChangedPaths] = useState(new Set())
   // 알림은 셸에 하나(`shell/toast.jsx`) — 얼굴을 넘어도 떠 있던 것이 살아남는다
   const toast = useToast()
-  const [scanning, setScanning] = useState(false)
-  const [fatal, setFatal] = useState(null)
-  const [needSetup, setNeedSetup] = useState(false)
-  // 서버 모드의 나 — 누구인가 · 무엇을 볼 수 있는가(§6.6.2). **Shell 의 세션 하나**를 쓴다(R8). 로컬은 null.
+  // 첫 읽기가 실패했다(404 · 401 밖) — 「불러오는 중…」 에 멈춰 있지 않게 그 문장과 [다시 읽기] 를 그린다
+  const [failed, setFailed] = useState(null)
+  // 나 — 누구인가 · 무엇을 볼 수 있는가(§6.6.2). **Shell 의 세션 하나**를 쓴다(R8)
   const session = useSession()
   const me = session?.me || null
   const slots = useSlots()
@@ -213,14 +209,12 @@ export default function App() {
     return { r, d, v, s, m: m || [] }
   }, [ck])
 
+  // 첫 읽기 — 고를 레포 경로도 첫 실행 분기도 없다(§6.6.3). 로그인 뒤 바로 문서다. 다시 읽기([다시 읽기] · 관리에서 바꾼 뒤)도 이 길
+  const [tries, setTries] = useState(0)
   useEffect(() => {
+    setFailed(null)
     reload()
-      .then(({ r, d, s, m }) => {
-        // **서버 모드에는 첫 실행 분기가 없다**(§6.6.3). 고를 레포 경로가
-        // 없고, 로그인 뒤 바로 문서다.
-        if (!isServer() && (!s.repoPath || r.docs === 0)) {
-          if (!s.repoPath) setNeedSetup(true)
-        }
+      .then(({ d, s, m }) => {
         // 첫 화면 — 마지막에 읽던 문서(restoreOf). 캐시로 이미 열었으면 그대로 둔다
         if (!boot.at && !boot.rd) {
           const at = restoreOf(s, d, m)
@@ -233,52 +227,15 @@ export default function App() {
         setReady(true)
       })
       .catch((e) => {
-        // 서버 — 401 은 api.js 가 이미 로그인으로 보냈다. 404(없는 레포 · 권한 밖)는 서버 판정 그대로 `/r?from=` 화면으로(D4)
-        if (isServer()) {
-          if (e instanceof ApiError && e.status === 404) navigate('/r?from=' + encodeURIComponent(RK), { replace: true })
-          return
-        }
-        if (e instanceof ApiError && e.status === 401) setFatal(e.message)
-        else setNeedSetup(true)
+        // 401 은 api.js 가 이미 로그인으로 보냈다. 404(없는 레포 · 권한 밖)는 서버 판정 그대로 `/r?from=` 화면으로(D4)
+        if (e instanceof ApiError && e.status === 401) return
+        if (e instanceof ApiError && e.status === 404) return navigate('/r?from=' + encodeURIComponent(RK), { replace: true })
+        // 그 밖(서버 오류 · 끊김) — **조용히 멈추지 않는다.** 캐시로 이미 그렸으면 알림 한 줄, 아니면 화면에 문장과 [다시 읽기]
+        const msg = e?.message || String(e)
+        setFailed(msg)
+        if (peek(ck('/repo'))) toast(`레포를 다시 읽지 못했다 — ${msg}`, 6000)
       })
-    const stopBeat = startHeartbeat()
-    return stopBeat
-  }, [reload])
-
-  // ── SSE — 변경 반영(§23.2) ─────────────────────────────────────────────
-  useEffect(() => {
-    return subscribe((ev) => {
-      if (ev.type === 'watch') {
-        setRepo((r) => (r ? { ...r, watchAlive: ev.alive } : r))
-        return
-      }
-      // 동기화 단계 — **어느 탭에서 눌렀든 모든 화면이 같은 것을 본다**
-      if (ev.type === 'sync') {
-        setSync((s) => ({ ...(s || {}), phase: ev.phase, startedAt: ev.startedAt ?? s?.startedAt ?? null, last: ev.last ?? s?.last ?? null }))
-        // 끝났으면 이력까지 다시 읽는다. 그 한 줄이 표에 남아야 한다.
-        if (ev.phase === 'idle' && !isServer()) api.sync().then(setSync).catch(() => {})
-        return
-      }
-      if (ev.type !== 'changed') return
-      // 목록은 즉시 갱신. 읽고 있는 본문은 바꾸지 않는다(§13-⑥)
-      setChangedPaths(new Set([...ev.changed, ...ev.added]))
-      reload()
-      const n = ev.changed.length + ev.added.length + ev.removed.length
-      if (n > 0) {
-        toast(
-          `문서 ${ev.changed.length}건 갱신${ev.added.length ? ` · 신규 ${ev.added.length}건` : ''}${
-            ev.removed.length ? ` · 삭제 ${ev.removed.length}건` : ''
-          }`,
-          5000
-        )
-      }
-    }, () => {
-      // SSE 가 붙었다. 그 전에 지나간 상태 변화를 여기서 한 번 맞춘다.
-      api.repo().then(setRepo).catch(() => {})
-      // 모드 B 에는 `/sync` 가 없다 — 부르면 404 만 쌓인다.
-      if (!isServer()) api.sync().then(setSync).catch(() => {})
-    })
-  }, [reload])
+  }, [reload, tries])
 
   // ── 읽기 설정을 CSS 변수로(§27.7) ──────────────────────────────────────
   useEffect(() => {
@@ -300,23 +257,11 @@ export default function App() {
     document.documentElement.style.setProperty('--w-find', `${w}px`)
   }, [leftMode, state?.panes?.list, state?.panes?.explore])
 
-  // 테마 — **로컬만 여기서.** 서버형은 왼쪽 메뉴의 내 계정이 `cdp.theme` 에 바로 쓴다(얼굴 무관한 값 — `shell/AccountMenu.jsx`).
-  // 로컬은 값이 서버 파일(`/state`)에 있어 ⋯ 메뉴의 세그가 그것을 고치고, 여기서 localStorage 와 다를 때 그 키에 쓰고 붙인다
-  // (첫 페인트 전에는 `index.html` 의 인라인 스크립트가 같은 키로 이미 붙였다 · R9). 같은 값이면 DOM 을 건드리지 않는다.
-  useEffect(() => {
-    if (!state || isServer()) return
-    const t = state.theme || 'system'
-    if (t !== getTheme()) setTheme(t)
-    applyTheme(t)
-  }, [state?.theme])
-  // 로컬 상태는 캐시에도 — 같은 모양으로 둔다(서버 모드는 브라우저에 있으니 stateNow 가 바로 준다)
-  useEffect(() => {
-    if (state && !isServer()) put(ck('/state'), state)
-  }, [state, ck])
+  // 테마는 여기 없다 — 왼쪽 메뉴의 내 계정이 `cdp.theme` 에 바로 쓴다(얼굴 무관한 값 — `shell/AccountMenu.jsx`)
   // 마지막에 보던 레포 · 경로를 기억한다 — 열렸다 = 볼 수 있다(아니면 404 로 위에서 `/r?from=`). 콘솔 → 「레포」 가 여기로 온다
   useEffect(() => {
-    if (repo && here.server && here.repo) rememberRepo(here.repo, route.path)
-  }, [repo, here.server, here.repo, route.path])
+    if (repo && here.repo) rememberRepo(here.repo, route.path)
+  }, [repo, here.repo, route.path])
 
   // ── 상태 저장 ─────────────────────────────────────────────────────────
   const patch = useCallback((p) => {
@@ -328,31 +273,6 @@ export default function App() {
   }, [])
 
   const say = useCallback((msg, ms = 2600) => toast(msg, ms), [toast])
-
-  // 매뉴얼이 레포에 있나. 파일명으로 찾는다 -- 시드가 그 이름으로 넣는다.
-  const manualDoc = useMemo(() => {
-    const hit = (others || []).find((d) => MANUAL_MAIN.test(d.path))
-    return hit ? hit.path : null
-  }, [others])
-
-  // 문서 동기화 — **순서는 서버가 갖는다**(`core/sync.js`).
-  //
-  // 전에는 여기서 `git?fetch=1` -> `gitPull` -> `reload` 를 엮었다. 그래서
-  // 진행이 이 컴포넌트 안에만 있었고, 탭을 바꾸면 도는 중인지도 알 수 없었다.
-  // 지금은 한 번 부르고 단계는 SSE 로 받는다. `ctx sync` 도 같은 것을 쓴다.
-  const syncNow = useCallback(async () => {
-    try {
-      const r = await api.runSync(true)
-      if (r?.error === 'busy') return say('이미 동기화가 도는 중입니다')
-      // ff 가 안 되면 **그대로 알린다.** 앱이 정리하지 않는다.
-      say(r.line || (r.ok ? '완료' : '동기화 실패'), r.ok ? 2600 : 8000)
-      if (r.ok && r.pulled > 0) await reload()
-    } catch (e) {
-      say(e?.message || '동기화 실패', 6000)
-    } finally {
-      api.sync().then(setSync).catch(() => {})
-    }
-  }, [reload, say])
 
   // ── 문서 열기 · 돌아가기 — **주소가 문서다**(문서 이동 검토 v0.1 A) ─────────────────────────────
   //
@@ -450,13 +370,6 @@ export default function App() {
       lastDoc: id,
       recent: recentPush(s.recent || [], id),
       ...(tabs !== s.tabs ? { tabs } : {}),
-    })
-    setChangedPaths((cp) => {
-      if (!cp.size) return cp
-      const n = new Set(cp)
-      const d = docs.find((x) => x.id === id)
-      if (d) n.delete(d.path)
-      return n
     })
   }, [topMode, route.href, docId, ready])
 
@@ -645,45 +558,20 @@ export default function App() {
   const scopeName = SCOPE_LABEL[scope] + (scope === 'work' && finder.only ? ' · ' + ONLY_LABEL[finder.only] : '')
 
   // ── 렌더 ──────────────────────────────────────────────────────────────
-  if (fatal) {
-    return (
-      <div className="empty" style={{ paddingTop: '20vh' }}>
-        <p style={{ fontSize: 15, color: 'var(--danger)' }}>{fatal}</p>
-        <p>주소창의 <code>?t=</code> 토큰이 필요합니다. 터미널에 표시된 URL 로 다시 여세요.</p>
-      </div>
-    )
-  }
-
-  // 첫 실행 — **관리>지식 레포와 같은 화면을 쓴다.**
-  //
-  // 전에는 `SetupView` 한 장이 따로 있었다. 그런데 경로를 지정하는 일은
-  // 나중에 또 하고, 그때는 설정 팝오버의 입력칸 하나로 했다 — 같은 일을
-  // 두 군데서 서로 다르게 하고 있었다. 구조 검증 다섯 줄이 첫 실행에만
-  // 있었던 이유도 그것이다.
-  if (needSetup) {
-    return (
-      <div className="app app--bare">
-        <AdminView
-          tab="repo"
-          state={state || { repoPath: '' }}
-          repo={repo}
-          patch={() => {}}
-          sync={null}
-          onSync={() => {}}
-          onCheck={() => {}}
-          firstRun
-          onOpened={() => {
-            setNeedSetup(false)
-            setScanning(true)
-            reload().finally(() => setScanning(false))
-          }}
-          say={(m) => say(m, 6000)}
-        />
-      </div>
-    )
-  }
-
   if (!state || !repo) {
+    // 첫 읽기가 실패했으면 그 문장과 다시 읽는 길 — 「불러오는 중…」 에 멈춰 있지 않는다(조용한 실패를 오류로)
+    if (failed) {
+      return (
+        <div className="empty" style={{ paddingTop: '20vh' }}>
+          <p style={{ fontSize: 15, color: 'var(--danger)' }}>레포를 읽지 못했다 — {failed}</p>
+          <p>
+            <button className="btn btn--sm" onClick={() => setTries((n) => n + 1)}>
+              다시 읽기
+            </button>
+          </p>
+        </div>
+      )
+    }
     return <div className="empty" style={{ paddingTop: '20vh' }}>불러오는 중…</div>
   }
 
@@ -695,8 +583,6 @@ export default function App() {
   const effectiveMode = (reading.mode === 'focus' || (narrow && drawerShut && docId)) && topMode === 'doc' ? 'focus' : 'browse'
   const c = repo.checkCounts || { error: 0, warn: 0, info: 0 }
 
-  // data-force-status: 감시가 끊기면 읽기 모드에서도 상태바를 되살린다 —
-  //   화면이 낡았을 수 있는데 조용한 화면으로 읽고 있으면 안 된다(§23.3 · §27.5).
   return (
     <div
       ref={appRef}
@@ -705,18 +591,13 @@ export default function App() {
       data-top={topMode}
       data-density={state.density || 'normal'}
       data-nodoc={docId ? '0' : '1'}
-      data-force-status={repo.watchEnabled && !repo.watchAlive ? '1' : '0'}
     >
       {/* 상단 — 셸의 위치 줄(AppBar) 안 두 자리에 이 레포의 도구를 포털로 넣는다. 상태와 핸들러는 여기 남고, 얼굴을 넘어도
-          상단 바 DOM 은 그대로다. 화면 고르기(옛 세그 문서 · 그래프 · 관리)와 레포 고르기는 왼쪽 메뉴가 든다. */}
+          상단 바 DOM 은 그대로다. 화면 고르기(옛 세그 문서 · 그래프 · 관리)와 레포 고르기는 왼쪽 메뉴가 든다.
+          받기(동기화) 단추는 없다 — 서버가 유일한 작성자라 화면이 받을 것이 없다(§4.8). */}
       {slots &&
         createPortal(
           <>
-            {/* loopback 경고는 **로컬만의 것**이다. 원격에서는 늘 참이라 경고가 아니다(§6.6.3). */}
-            {!isServer() && repo.hostWarning && (
-              <span className="hostwarn"><Icon name="warn" size={13} /> loopback 아님</span>
-            )}
-
             <button className="topbar__search" onClick={() => setPaletteOpen(true)} aria-label={`검색 · 이동 (${kbd('⌘K')})`}>
               <Icon name="search" size={14} />
               <span>검색 · 이동</span>
@@ -724,17 +605,13 @@ export default function App() {
               <span className="kbd">{kbd('⌘K')}</span>
             </button>
 
-            {/* 동기화 — **하루에 제일 먼저 누르는 것이다.** 도는 동안 단계와 경과 초가 이 버튼에 뜬다.
-                로컬만 — 서버는 언제나 origin HEAD 이고 받을 것이 없다(§4.8). */}
-            {!isServer() && <SyncButton sync={sync} onSync={syncNow} />}
-
             {/* 검증 — **아침에 제일 먼저 보는 값이다.** 0건이면 조용하다. */}
             {c.error > 0 ? (
               <button
                 className="pill pill--error"
                 onClick={() => setCheckOpen(true)}
-                // 서버형 save 는 **레포 전체** 검사에서 오류가 하나라도 있으면 거절한다 — 건드린 문서가 아니어도(core/save.js 8)
-                title={isServer() ? '검사 오류 — 고칠 때까지 이 레포의 save 가 전부 거절된다' : '검사 결과 — 커밋이 거부된다'}
+                // save 는 **그 save 가 새로 만든 오류**로만 막힌다 — 레포에 원래 있던 오류는 경고로 싣는다(core/save.js 8 · v1.0 V21)
+                title="검사 오류 — 오류를 새로 만드는 save 는 거절된다(원래 있던 오류는 막지 않는다)"
               >
                 <Icon name="block" size={13} /> 검증 {c.error}
               </button>
@@ -760,10 +637,7 @@ export default function App() {
 
       {/* 더보기 — 하루에 몇 번 안 누르는 것들. 상단바에 늘 펴 둘 이유가 없다.
           전에는 동기화·매뉴얼·읽기모드·비율 4개·설정이 전부 상단바에 있었다.
-          **동기화는 다시 상단바로 나갔다** — 매일 누르는 것이고 도는 동안
-          보여야 하는 것이라 메뉴 안에 둘 것이 아니었다. 여기서 한 번 더
-          누를 수 있게 남기지 않는다: 같은 일을 하는 버튼 둘이 서로 다른
-          영역에 살면 도는 중 표시도 둘로 갈린다. */}
+          테마는 여기 없다 — 왼쪽 메뉴의 내 계정에 있다(얼굴 무관한 값). 같은 값을 고치는 자리를 둘 두지 않는다. */}
       {menuOpen && (
         <>
           <div className="scrim" onMouseDown={() => setMenuOpen(false)} />
@@ -802,43 +676,18 @@ export default function App() {
                 ))}
               </div>
             </div>
-            {/* 테마 — 서버형은 왼쪽 메뉴의 내 계정에 있다(얼굴 무관한 값). 로컬만 여기 — 값이 이 PC 의 상태 파일에 있다 */}
-            {!isServer() && (
-              <>
-                <div className="menu__cap">테마</div>
-                <div className="menu__seg">
-                  <div className="seg">
-                    {['system', 'light', 'dark'].map((t) => (
-                      <button key={t} aria-pressed={(state.theme || 'system') === t} onClick={() => patch({ theme: t })}>
-                        {{ system: '자동', light: '밝게', dark: '어둡게' }[t]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
           </div>
         </>
       )}
 
-      {helpOpen && (
-        <Help
-          docs={others}
-          onOpen={(id) => { setHelpOpen(false); openDoc(id) }}
-          onClose={() => setHelpOpen(false)}
-        />
-      )}
+      {helpOpen && <Help onClose={() => setHelpOpen(false)} />}
 
       {topMode === 'admin' ? (
         /* 관리 — 창 전체. **세팅과 현황이 구석의 팝오버에 있을 일이 아니다.** */
         <AdminView
           tab={adminTab}
-          state={state}
           repo={repo}
           me={me}
-          patch={patch}
-          sync={sync}
-          onSync={syncNow}
           onCheck={() => setCheckOpen(true)}
           onChanged={() => reload().catch(() => {})}
           say={(m) => say(m, 6000)}
@@ -984,7 +833,6 @@ export default function App() {
                 coordIndex={coordIndex}
                 myCoords={myCoords}
                 reading={reading}
-                changedPaths={changedPaths}
                 savedRatio={state.scroll?.[docId]?.ratio}
                 onOpen={openDoc}
                 onCoord={(c) => pickRoot({ kind: 'coord', key: c, label: c })}
@@ -1003,13 +851,7 @@ export default function App() {
         </div>
       )}
 
-      <StatusBar
-        repo={repo}
-        scanning={scanning}
-        onRescanned={reload}
-        onCheck={() => setCheckOpen(true)}
-        onSay={(m) => say(m, 6000)}
-      />
+      <StatusBar repo={repo} onCheck={() => setCheckOpen(true)} />
 
       {checkOpen && (
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setCheckOpen(false)}>
@@ -1035,52 +877,6 @@ export default function App() {
         />
       )}
     </div>
-  )
-}
-
-// ── 상단 동기화 — **하나뿐인 받기 버튼** ────────────────────────────────
-//
-// 단계 이름은 관리>동기화와 **같은 말**을 쓴다. 두 자리가 같은 순간을 다른
-// 말로 부르면 사용자는 둘이 다른 일인 줄 안다.
-//
-// **경과 초를 뺄 수 없다.** 사내망 fetch 실측이 19.5초다. 그 20초 동안 숫자가
-// 안 움직이면 멎은 것으로 읽고 한 번 더 누른다 — 두 번째 클릭은 `busy` 로
-// 튕기므로 아무 일도 안 일어나고, 그러면 앱이 고장난 것으로 읽는다.
-const SYNC_PHASE = { fetching: '원격 확인 중', pulling: '받는 중', rescanning: '다시 읽는 중' }
-
-function SyncButton({ sync, onSync }) {
-  const running = !!sync?.phase && sync.phase !== 'idle'
-  const [elapsed, setElapsed] = useState(0)
-
-  useEffect(() => {
-    if (!running || !sync?.startedAt) return setElapsed(0)
-    const tick = () => setElapsed(Math.floor((Date.now() - sync.startedAt) / 1000))
-    tick()
-    const t = setInterval(tick, 250)
-    return () => clearInterval(t)
-  }, [running, sync?.startedAt])
-
-  const last = sync?.last
-  // 직전 결과는 **툴팁으로만** 말한다. 성공을 상단바에 띄우면 정상이 소리를
-  // 내게 되고(색 예산), 실패는 어차피 토스트와 관리>동기화가 문장으로 낸다.
-  const title = running
-    ? '원격에서 받아오는 중입니다 (fetch → ff pull)'
-    : last
-      ? `직전 — ${last.line || (last.ok ? '완료' : '실패')}`
-      : '원격에서 받아온다 (ff 만) · push 는 아래 상태바에 따로 있다'
-
-  return (
-    <button className="pill pill--sync" onClick={onSync} disabled={running} title={title} aria-live="polite">
-      <Icon name="sync" size={13} className={running ? 'spin' : undefined} />
-      {running ? (
-        <>
-          {SYNC_PHASE[sync.phase] || sync.phase}
-          <span className="num">{elapsed}초</span>
-        </>
-      ) : (
-        '동기화'
-      )}
-    </button>
   )
 }
 
@@ -1135,16 +931,12 @@ function Landing({ repo, docs, managed = 0, onOpen }) {
   )
 }
 
-// 도움말 — **읽는 것**만 있다. 단축키와 매뉴얼.
+// 도움말 — **읽는 것**만 있다. 단축키와 설명서.
 //
 // 전에는 설정 팝오버 맨 아래 380px 폭에 단축키가 눌려 있었고, 매뉴얼은 그
 // 위 `문서` 절에 있었다. 둘 다 레포 경로·에이전트 설치와 같은 스크롤을
-// 지나야 닿는 자리였다.
-function Help({ docs = [], onOpen, onClose }) {
-  const manuals = (docs || [])
-    .filter((d) => MANUAL_RE.test(d.path))
-    .sort((a, b) => (MANUAL_MAIN.test(b.path) ? 1 : 0) - (MANUAL_MAIN.test(a.path) ? 1 : 0))
-
+// 지나야 닿는 자리였다. 설명서는 서버의 것 하나다 — 레포 안 MANUAL*.md(옛 도구 층)는 v1.0 레포에 없다(레포에는 지식만).
+function Help({ onClose }) {
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="overlay__box overlay__box--help" role="dialog" aria-label="도움말">
@@ -1172,50 +964,15 @@ function Help({ docs = [], onOpen, onClose }) {
             ))}
           </dl>
 
-          {isServer() && (
-            <>
-              <div className="help__cap">설명서</div>
-              <Link className="help__doc" to="/manual" style={{ textDecoration: 'none' }}>
-                <Icon name="book" size={14} /> 제품 설명서 — 사용자 · 관리자 · 개발자
-              </Link>
-            </>
-          )}
-          {manuals.length > 0 && (
-            <>
-              <div className="help__cap">레포 문서</div>
-              {manuals.map((d) => (
-                <button key={d.path} className="help__doc" onClick={() => onOpen?.(d.path)}>
-                  <Icon name="book" size={14} /> {manualLabel(d.path)}
-                </button>
-              ))}
-              <p className="help__note">
-                설계서는 레포의 <code>design/</code> 에 있다 — <b>왜 이렇게 만들었는지</b>가
-                거기 있다.
-              </p>
-            </>
-          )}
+          <div className="help__cap">설명서</div>
+          <Link className="help__doc" to="/manual" style={{ textDecoration: 'none' }}>
+            <Icon name="book" size={14} /> 제품 설명서 — 사용자 · 큐레이터 · 서버 관리자 · 개발자
+          </Link>
         </div>
       </div>
     </div>
   )
 }
-
-// 매뉴얼 이름 — **파일명이 이미 갖고 있는 구분을 버리지 않는다.**
-//
-// 전에는 `MANUAL.md` 가 아니면 전부 "관리자용"이었다. 레포에 관리자용과
-// 시스템용이 같이 있으면 **같은 이름 두 줄**이 뜬다 — 어느 것이 어느 것인지
-// 파일을 열어봐야 알았다.
-//
-// MANUAL.md · MANUAL-관리자.md · MANUAL-시스템.md — 시드가 넣는 이름.
-const MANUAL_RE = new RegExp('^MANUAL(-.+)?[.]md$', 'i')
-const MANUAL_MAIN = new RegExp('^MANUAL[.]md$', 'i')
-
-function manualLabel(path) {
-  const m = String(path).match(/^MANUAL(?:-(.+))?\.md$/i)
-  if (!m) return path
-  return m[1] ? `사용 매뉴얼 — ${m[1]}용` : '사용 매뉴얼 — 일반 사용자용'
-}
-
 
 // 폭 조절 — **드래그 중에는 CSS 변수만 만진다.**
 //

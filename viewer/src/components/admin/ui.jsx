@@ -94,29 +94,6 @@ export function ShellTabs({ shell, setShell }) {
   )
 }
 
-// 경로 — 길다. 줄바꿈시키고, 누르면 복사된다.
-export function PathText({ children }) {
-  const [done, setDone] = useState(false)
-  const text = String(children || '')
-  if (!text) return <span className="amuted">(없음)</span>
-  return (
-    <button
-      className="apath"
-      title="경로 복사"
-      onClick={() => {
-        copyText(text).then((ok) => {
-          if (!ok) return
-          setDone(true)
-          setTimeout(() => setDone(false), 1400)
-        })
-      }}
-    >
-      {text}
-      <Icon name={done ? 'check' : 'copy'} size={12} />
-    </button>
-  )
-}
-
 export function Note({ children, tone = 'quiet' }) {
   return <div className={`anote anote--${tone}`}>{children}</div>
 }
@@ -142,9 +119,4 @@ export function when(iso, { now = serverNow() } = {}) {
   const d = new Date(iso)
   const p = (n) => String(n).padStart(2, '0')
   return `${rel} · ${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
-
-export function secs(ms) {
-  if (ms == null) return ''
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }

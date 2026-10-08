@@ -81,9 +81,6 @@ button.snav__repobtn:hover,
 button.snav__repobtn[aria-expanded='true'] {
   border-color: var(--border-strong);
 }
-.snav__repobtn--static {
-  cursor: default;
-}
 .snav__repobtn .ico {
   color: var(--text-3);
 }

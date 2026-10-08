@@ -10,7 +10,7 @@
 // 보기는 누구나 · 지우기 단추는 그 레포의 큐레이터에게만(v1.0 — 관리 문서는 큐레이터만 바꾼다 · admin 은 모든 레포의 큐레이터).
 
 import { useMemo, useState } from 'react'
-import { api, isServer, currentRepo } from '../../lib/api.js'
+import { api, currentRepo } from '../../lib/api.js'
 import { can } from '../../lib/roles.js'
 import { useResource } from '../../lib/cache.js'
 import { Card, Note, Btn } from './ui.jsx'
@@ -26,11 +26,10 @@ const CHOICE = { 'drop-row': '행 지우기', unlink: '링크만 풀기', review
 const groupOf = (no) => (no && /\d{2,}$/.test(no) ? no.slice(0, -1) : null)
 
 export default function Docs({ me = null, say, onChanged = null }) {
-  const server = isServer()
-  const canDrop = server && can(me, 'curate', currentRepo())
+  const rk = currentRepo()
+  const canDrop = can(me, 'curate', rk)
   // 목록은 캐시(화면 · 권한 검토 v0.1 R8) — 전에는 마운트마다 처음부터 읽어 메뉴로 오갈 때마다 「읽는 중…」 이 섰다(실측 55/59 프레임).
   // 지운 뒤에는 refresh 로 새로 읽는다
-  const rk = currentRepo() || 'local'
   const list = useResource('api:' + rk + '/managed-docs', api.managedDocs, { ttl: 30_000 })
   const data = list.data || null
   const error = list.error ? list.error.message || String(list.error) : null
@@ -209,7 +208,7 @@ export default function Docs({ me = null, say, onChanged = null }) {
             </Btn>
           </div>
         )}
-        {server && !canDrop && <Note>지우기는 그 레포의 큐레이터가 한다 — 지울 문서를 골라 큐레이터에게 요청한다.</Note>}
+        {!canDrop && <Note>지우기는 그 레포의 큐레이터가 한다 — 지울 문서를 골라 큐레이터에게 요청한다.</Note>}
       </Card>
 
       {preview && <Preview preview={preview} setPreview={setPreview} reason={reason} setReason={setReason} busy={busy} onDrop={runDrop} onCancel={() => setPreview(null)} />}
