@@ -599,7 +599,14 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     const { text: nextVocab, added, newTypes } = addVocab(vocabText, vocabAdds)
     if (added) await snap.write(vocabPath, nextVocab)
     // 타입을 만들었으면 말한다 — 오타면 사람이 _vocab.md 에서 고친다. 등록부에 없으면 섹션은 못 쓴다(6단계).
-    for (const t of newTypes) warnings.push(`새 어휘 타입 "${t}" 을 만들었다 (_vocab.md 끝) — 의도한 타입이 맞는지 본다. 관리 문서로 파생하려면 managed 로 등록부 행을 같이 · 오타면 admin 이 _vocab.md 를 고친다(지우는 연산은 없다)`)
+    // 같은 save 가 그 타입의 등록부 행을 더하면(큐레이터가 새 문서를 세운다) 등록부 안내는 붙이지 않는다
+    const rowFor = (t) => managedOps.some((o) => (o.op ?? 'add') === 'add' && String(o.pattern || '').startsWith(t + ':'))
+    for (const t of newTypes) {
+      warnings.push(
+        `새 어휘 타입 "${t}" 을 만들었다 (_vocab.md 끝) — 의도한 타입이 맞는지 본다 · 오타면 admin 이 _vocab.md 를 고친다(지우는 연산은 없다)` +
+          (rowFor(t) ? '' : ' · 이 타입의 관리 문서는 큐레이터가 세운다(대기열의 「등록부 없음」 → managed 로 등록부 행)')
+      )
+    }
 
     // 5 좌표 — 어휘 등재 **뒤에** 본다. 새 좌표를 같은 save 에서 등재하고 쓰는 것이 정상이다.
     const r0 = await loadRepo(root, { settings: SETTINGS })
@@ -848,13 +855,13 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       )
     }
 
-    // 6.8 HTML 시각 자료(W3) — **경고다.** 지식이 HTML 안에만 갇히면 검색 · load · 파생 어디에도 걸리지 않는다.
+    // 6.8 HTML 시각 자료(W3) — **경고다.** 지식이 HTML 안에만 갇히면 검색 · section · 큐레이션 어디에도 걸리지 않는다.
     // 부르는 외부 자원은 CSP(`HTML_CSP`)가 막거나 폐쇄망에서 빈다 — 쓰는 순간에 안다
     const htmls = pulled.filter((a) => a.type === 'text/html')
     if (htmls.length) {
       if (proseLength(w.body) < 120) {
         warnings.push(
-          `HTML 시각 자료(${htmls.map((a) => a.name).join(' · ')})를 들였는데 작업 기록 본문이 짧다 — 검색 · load · 파생은 md 만 본다. 요지(무엇 · 결정 · 확인 목록)를 본문에 md 로 적는다`
+          `HTML 시각 자료(${htmls.map((a) => a.name).join(' · ')})를 들였는데 작업 기록 본문이 짧다 — 검색 · section · 큐레이션은 md 만 본다. 요지(무엇 · 결정 · 확인 목록)를 본문에 md 로 적는다`
         )
       }
       for (const a of htmls) {

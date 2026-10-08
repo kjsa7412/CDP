@@ -21,7 +21,7 @@ export async function runImportDir(opt) {
   const src = opt.args[0]
   if (!src || !opt.repo) {
     err('ctx import-dir <원본 폴더> --repo <지식 레포> [--author <이름>] [--keep-touches] [--dry] [--yes] [--json]')
-    err('  --keep-touches   프론트매터의 touches 를 그대로 둔다 (기본은 tags 로 보존). 파생이 남으면 검사가 막고 되돌린다')
+    err('  --keep-touches   프론트매터의 touches 를 그대로 둔다 (기본은 tags 로 보존). 그 좌표의 섹션에는 큐레이션 전까지 미반영으로 실린다')
     return 2
   }
   let plan

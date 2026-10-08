@@ -436,8 +436,8 @@ async function cmdWhere(r, opt) {
 // ①만 쓰면 그 좌표가 안 나온다.
 const NL = String.fromCharCode(10)
 
-// **판정이 아니라 사실을 적는다.** 무엇이 실려 있나(applied), 파생이 남았으면
-// 그것은 `ctx check` 가 오류로 말한다.
+// **판정이 아니라 사실을 적는다.** 무엇이 실려 있나(applied). 미반영 기록은 `ctx check` 가
+// 알림(info)으로 말하고 `section` 이 섹션과 함께 낸다(v1.0 I7).
 // 비어 있음은 **재서** 말한다. 상태로 추측하면 내용이 있는 섹션까지 비었다고
 // 말한다 -- 코드그룹 섹션은 작업 기록이 0건이어도 코드 표가 들어 있다.
 function thin(sec) {
@@ -448,9 +448,9 @@ function thin(sec) {
 function stateLabel(sec, coord) {
   if (!sec) return '등록부에 없음'
   if (sec.applied) return `반영 ${sec.applied}`
-  if (sec.state === 'anchor-missing') return '섹션이 없음 — 주입해도 빈손이다'
+  if (sec.state === 'anchor-missing') return '섹션이 없음 — 큐레이터가 세운다(그동안은 section 이 대기 기록을 근거로 준다)'
   if (sec.state === 'doc-missing') return '문서가 없음 — 주입해도 빈손이다'
-  if (sec.state === 'unwritten') return `파생 남음 — 작업 ${sec.total}건 (ctx apply ${coord})`
+  if (sec.state === 'unwritten') return `미반영 — 작업 ${sec.total}건 · 큐레이터가 반영한다(section 이 그 기록을 같이 준다)`
   return '아직 실린 작업 없음'
 }
 
