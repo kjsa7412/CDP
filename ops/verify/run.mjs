@@ -33,6 +33,7 @@
 // ── v1.0 으로 바꾼 항목(번호는 그대로) ───────────────────────────────────────────────────────────────
 //
 //   1~10 · 17 · 19 · 20 · 5   stdio 클라이언트 → HTTP MCP. 19 · 20 은 옛 sync · version 도구 대신 brief 의 sync · built
+//   21                        viewer 의 save 는 E_FORBIDDEN 이 아니라 도구 자체가 없다(역할에 없는 도구는 보이지 않는다)
 //   28                        save(writer) — 기록만 · INDEX · 등록부 사본 없음 · 대기열 · section 의 미반영 본문
 //   29 · 76                   섹션은 큐레이터가 쓴다(cur) · 30 은 「이 save 가 만든 오류」(V21)로
 //   41 · 72                   도구 14 → writer 10 · 큐레이터 12
@@ -48,8 +49,8 @@
 //   118 역할별 도구 · 119 writer 의 큐레이터 입력 E_FORBIDDEN · 120 큐레이션 save · 121 queue · forms 도구
 //   122 원래 있던 오류는 막지 않는다(V21) · 123 POST /curate · 124 기준선 push · 125 /kit 역할별 · 126 --curator
 //   127 POST /admin/repos 빈 틀 · 128 다시 세우기 · 129 · 130 ctx migrate · 131 개인 서버 · 132 doctor kit · forms
-//   133 없앤 CLI 명령 exit 2 · 134 /admin/users curate · 135 큐레이터가 깐 작업 레포의 대장 · 136 save 는 훅을 안 돈다
-//   137 기준선 extract → push(다시 세운 레포의 출발점)
+//   133 없앤 CLI 명령 exit 2 · 134 /admin/users curate · 135 작업 레포 kit 은 누가 깔든 writer · 136 save 는 훅을 안 돈다
+//   137 기준선 extract → push(다시 세운 레포의 출발점) · 138 팀 서식(<data>/forms) · lint · ctx forms check
 
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -154,6 +155,20 @@ async function stage() {
   const { copyKit } = await import(pathToFileURL(path.join(ROOT, 'ops/lib/bundle-files.mjs')).href)
   const k = copyKit(ROOT, kit)
   if (k.missing.length) throw new Error('kit 원본이 없다 — ' + k.missing.join(' · '))
+  // 팀 서식 — 서버의 데이터 폴더 `<data>/forms/<묶음>/`(upgrade 가 덮지 않는 자리). 좋은 것 하나 · 깨진 것 하나(138).
+  // 서버는 서식집을 한 번 읽고 들고 있다 — 서버가 뜨기 **전에** 둔다
+  const team = path.join(TMP, 'data', 'forms', 'team-x')
+  await fs.mkdir(team, { recursive: true })
+  await fs.writeFile(path.join(team, '_묶음.json'), JSON.stringify({ name: 'team-x', title: '팀 서식(하네스)', version: '0.1.0', description: '하네스가 심은 팀 서식 — 좋은 것 하나 · 깨진 것 하나' }, null, 2) + NL)
+  await fs.writeFile(
+    path.join(team, 'T_001_시험대장.md'),
+    ['---', 'form: team-x/T_001', 'title: 시험대장', 'number: T_001', 'due: 착수', 'required: false', 'kind: 대장', 'registry:', '  - { pattern: "시험대장:*", anchor: "## {값}" }', 'coordValue: 시험 id', '---', '<!-- form:head -->', '팀이 직접 만든 서식 — 시험 하나가 섹션 하나다.', '', '<!-- form:guide -->', '**무엇** — 시험마다 목적과 결과를 적는다.', '', '<!-- form:example -->', '로그인 시험 — 목적 · 결과 · 확인한 날.', ''].join(NL)
+  )
+  // 깨진 것 — 제출시기 · 종류가 없고 머리(head)에 섹션 제목이 들어갔다
+  await fs.writeFile(
+    path.join(team, 'T_002_깨진서식.md'),
+    ['---', 'form: team-x/T_002', 'title: 깨진서식', 'number: T_002', 'required: false', '---', '<!-- form:head -->', '## 섹션이 머리에 들어갔다', '', '<!-- form:guide -->', '지침.', '', '<!-- form:example -->', '예시.', ''].join(NL)
+  )
   return { repos: path.join(TMP, 'repos'), data: path.join(TMP, 'data'), auth: path.join(TMP, 'auth.json'), kit }
 }
 
@@ -450,14 +465,17 @@ await check(36, '--expires 기본 90일', async () => {
   return `${d}일 · never 없음`
 })
 
-await check(21, '토큰 없음/무효 401 · 권한 밖 · viewer 의 save 거부', async () => {
+await check(21, '토큰 없음/무효 401 · 권한 밖 · viewer 에게는 save 가 없다(목록에 없고 부르면 도구 없음)', async () => {
   eq((await H.rpc('/mcp/alpha', 'tools/list', {})).status, 401, '토큰 없음')
   eq((await H.rpc('/mcp/alpha', 'tools/list', {}, 'nonsense')).status, 401, '무효')
   const outside = await M('/mcp', 'brief', { repo: 'beta' }, TQ)
   eq(outside.error?.code, 'E_REPO', '권한 밖 레포는 없는 것')
-  const w = await M('/mcp', 'save', { repo: 'alpha', work: { id: '2026-0921-권한', title: 'x', date: '2026-09-21 10:00', body: '본문' } }, TQ)
-  eq(w.error?.code, 'E_FORBIDDEN', 'viewer save')
-  return '401 · 401 · E_REPO · E_FORBIDDEN'
+  // v1.0 §5.3 — 역할에 없는 도구는 보이지도 않는다. 등록되지 않은 도구를 부르면 SDK 가 도구 없음으로 답한다
+  must(!(await toolNames(TQ)).includes('save'), 'viewer 의 목록에 save 가 있다')
+  const w = await H.rpc('/mcp', 'tools/call', { name: 'save', arguments: { repo: 'alpha', work: { id: '2026-0921-권한', title: 'x', date: '2026-09-21 10:00', body: '본문' } } }, TQ)
+  must(w.j?.error || w.j?.result?.isError, 'viewer 가 save 를 불렀다 — ' + String(w.raw).slice(0, 120))
+  must(!(await exists(path.join(F.repos, 'alpha', 'work', '2026-0921-권한.md'))), '기록이 생겼다')
+  return '401 · 401 · E_REPO · viewer 목록에 save 없음 · 부르면 도구 없음'
 })
 
 await check(25, '한 사람의 토큰 둘이 같은 권한 · user set 이 둘 다에 먹는다', async () => {
@@ -527,9 +545,9 @@ await check(41, 'POST /mcp 와 /mcp/<name> 이 같은 도구 목록 (writer 10)'
   return '10건 동일'
 })
 
-await check(118, '역할별 도구 목록 — viewer 10(save 는 부르면 E_FORBIDDEN) · writer 10(queue · forms 없음) · 큐레이터 12 · derive · apply · sync · version 은 없다', async () => {
+await check(118, '역할별 도구 목록 — viewer 9(save 없음) · writer 10(queue · forms 없음) · 큐레이터 12 · derive · apply · sync · version 은 없다', async () => {
   const BASE10 = ['brief', 'check', 'docs', 'match', 'repos', 'save', 'search', 'section', 'where', 'work']
-  eq(await toolNames(TQ), BASE10, 'viewer')
+  eq(await toolNames(TQ), BASE10.filter((t) => t !== 'save'), 'viewer')
   eq(await toolNames(TW), BASE10, 'writer')
   eq(await toolNames(TC), [...BASE10, 'forms', 'queue'].sort(), '큐레이터')
   for (const gone of ['derive', 'apply', 'sync', 'version']) {
@@ -539,7 +557,7 @@ await check(118, '역할별 도구 목록 — viewer 10(save 는 부르면 E_FOR
   // 명함도 역할별 — writer 의 save 는 기록만, 큐레이터의 save 는 판정 · 섹션을 말한다
   const card = async (tk) => (await H.rpc('/mcp/alpha', 'tools/list', {}, tk)).j.result.tools.find((t) => t.name === 'save').description
   must(/E_FORBIDDEN/.test(await card(TW)) && /큐레이터의 save/.test(await card(TC)), 'save 명함이 역할과 맞지 않는다')
-  return 'viewer 10 · writer 10 · 큐레이터 12 · 옛 넷 없음 · save 명함 둘'
+  return 'viewer 9 · writer 10 · 큐레이터 12 · 옛 넷 없음 · save 명함 둘'
 })
 
 await check(113, 'docs 도구 — 관리 문서 목록 · 등록부 여부 / match 의 문서 이름 대조 / brief({ repo }) 가 이 연결의 기본 레포와 다르면 경고', async () => {
@@ -839,7 +857,10 @@ await check(125, '/kit 역할별 — writer 는 cdp-work · cdp-save · cdp-push
   const cw = await kit(TC, 'alpha', '&role=writer')
   eq([cw.role, cw.kit], ['writer', w.kit], 'role=writer')
   eq((await kit(TC, 'beta')).role, 'writer', 'beta 의 큐레이터가 아니다')
-  return `writer ${w.kit} (스킬 3) · 큐레이터 ${c.kit} (스킬 5)`
+  // 등록된 작업 레포(`?workrepo=`)는 누가 받든 writer kit — 팀이 같이 커밋하는 자리다. 큐레이터 kit 은 큐레이터 폴더에만
+  const ww = await (await H.call(`/kit/alpha?workrepo=${WR1}&as=json`, bearer(TC))).json()
+  eq([skillsOf(ww), ww.kit], [WRITER_SKILLS, w.kit], '큐레이터가 받은 작업 레포 kit')
+  return `writer ${w.kit} (스킬 3) · 큐레이터 ${c.kit} (스킬 5) · 작업 레포는 누가 받든 writer`
 })
 
 // 설치기가 이 PC 의 설치 목록을 쓴다(에이전트 세팅 갱신 T9) — 하네스는 진짜 %APPDATA% · ~/.config 를 건드리지 않는다
@@ -1176,15 +1197,16 @@ if (SLOW) {
 //
 // 번호 70 이상은 설계서 §10 밖이다 — 판마다 더한 「끝났다고 보는 기준」 이다.
 
-await check(70, '서식집 — GET /packages 는 없다 · /api/<레포>/forms 가 묶음 넷 · 서식 79 · /forms/<id> 가 서버가 찍을 빈 문서', async () => {
+await check(70, '서식집 — GET /packages 는 없다 · /api/<레포>/forms 가 번들 묶음 넷 · 서식 79(문제 0) + 팀 서식 · /forms/<id> 가 서버가 찍을 빈 문서', async () => {
   eq((await H.call('/packages', bearer(TK3))).status, 404, '/packages')
   const j = await apiJson('/api/alpha/forms', TK3)
-  eq(j.groups?.length, 4, '묶음')
-  eq(j.total, 79, '서식')
-  must(j.forms.every((f) => f.id && f.title && Array.isArray(f.registry)), '행 모양')
+  const bundle = j.forms.filter((f) => f.origin === 'bundle')
+  eq([j.groups.filter((g) => g.origin === 'bundle').length, bundle.length], [4, 79], '번들 묶음 · 서식')
+  must(bundle.every((f) => f.id && f.title && Array.isArray(f.registry) && f.problems === 0), '행 모양 · 문제 0')
+  must(j.forms.some((f) => f.origin === 'team'), '팀 서식(<data>/forms)이 안 든다')
   const d = await apiJson('/api/alpha/forms/public-si/DE_431', TK3)
   must(String(d.stamp).startsWith('# 테이블정의서\n<!-- cdp:form public-si/DE_431 -->'), 'stamp')
-  return `묶음 ${j.groups.map((g) => g.name).join(' · ')} · 서식 ${j.total}`
+  return `번들 ${j.groups.filter((g) => g.origin === 'bundle').map((g) => g.name).join(' · ')} · 서식 ${bundle.length} · 팀 ${j.forms.length - bundle.length}`
 })
 
 await check(71, 'ctx repo new — 이름 형식 · 빈 폴더가 아닌 자리 · origin 형식을 거절한다 · 거절한 것은 남기지 않는다 · --dry 는 쓰지 않는다 (콘솔 POST /admin/repos 와 같은 core/reponew)', async () => {
@@ -1318,7 +1340,35 @@ await check(74, '서식집 검사 — 서버가 쓰는 자리(agent/forms)의 �
     if (/\(예시\)|작성지침|<!--\s*applied/.test(s)) bad.push(`${f.id}: 빈 문서에 예시 · 작성지침 · applied`)
   }
   must(!bad.length, bad.slice(0, 4).join(' / '))
-  return `${lib.forms.length}종 ok — ` + lib.groups.map((g) => `${g.name} ${lib.forms.filter((f) => f.group === g.name).length}`).join(' · ')
+  // 서버 관리자의 길 — ctx forms check(같은 lint 를 읽을 때 단다)
+  const c = await cli(['forms', 'check', '--forms', FORMS])
+  must(c.code === 0 && /✓ 서식 79 · 문제 있는 서식 0/.test(c.stdout), 'ctx forms check — exit ' + c.code + ' · ' + c.stdout.slice(-120))
+  return `${lib.forms.length}종 ok — ` + lib.groups.map((g) => `${g.name} ${lib.forms.filter((f) => f.group === g.name).length}`).join(' · ') + ' · ctx forms check 0'
+})
+
+await check(138, '팀 서식(<data>/forms) — 서식집에 「팀」 으로 든다 · 읽을 때 lint(problems) · 문제 있는 서식으로는 save 가 문서를 세우지 않는다 · 좋은 팀 서식은 찍힌다 · ctx forms check --data 가 깨진 것을 낸다(exit 1)', async () => {
+  const D = path.join(F.repos, 'delta')
+  const j = await apiJson('/api/delta/forms', TC)
+  must(j.groups?.find((x) => x.name === 'team-x')?.origin === 'team', '팀 묶음 — ' + JSON.stringify(j.groups?.map((x) => [x.name, x.origin])))
+  const good = j.forms.find((f) => f.id === 'team-x/T_001')
+  const broken = j.forms.find((f) => f.id === 'team-x/T_002')
+  must(good?.origin === 'team' && good.problems === 0, 'T_001 — ' + JSON.stringify(good))
+  must(broken?.problems > 0, 'T_002 — ' + JSON.stringify(broken))
+  const d = await M('/mcp/delta', 'forms', { repo: 'delta', form: 'team-x/T_002' }, TC)
+  eq(d.problemList?.length, broken.problems, 'forms(form) 의 problemList')
+  const n0 = await commits(D)
+  const work = (id) => ({ id, title: '팀 서식으로 문서 세우기', date: '2026-09-22 17:00', touches: [], touchesEmpty: '등록부 행 · 빈 문서만', body: '팀 서식으로 시험대장을 세운다.' })
+  const bad = await M('/mcp/delta', 'save', { repo: 'delta', work: work('2026-0922-팀서식-깨짐'), managed: [{ pattern: '깨진:*', doc: 'docs/깨진.md', form: 'team-x/T_002' }] }, TC)
+  eq(bad.error?.code, 'E_INPUT', '깨진 서식 — ' + JSON.stringify(bad).slice(0, 160))
+  must(/문제가 있다/.test(bad.error.message), bad.error.message)
+  eq([await commits(D), await porcelain(D)], [n0, ''], '거절 뒤 커밋 · 트리')
+  const ok = await M('/mcp/delta', 'save', { repo: 'delta', work: work('2026-0922-팀서식'), managed: [{ pattern: '시험대장:*', doc: 'docs/시험대장.md', form: 'team-x/T_001' }] }, TC)
+  must(ok.commit, JSON.stringify(ok.error || ok).slice(0, 160))
+  const doc = await fs.readFile(path.join(D, 'docs', '시험대장.md'), 'utf8')
+  must(doc.startsWith('# 시험대장\n<!-- cdp:form team-x/T_001 -->') && !/예시|지침/.test(doc), '찍힌 문서 — ' + doc.slice(0, 80))
+  const c = await cli(['forms', 'check', '--forms', FORMS, '--data', F.data])
+  must(c.code === 1 && /✗ team-x\/T_002 \[팀\]/.test(c.stdout) && /문제 있는 서식 1/.test(c.stdout), 'ctx forms check --data — exit ' + c.code + ' · ' + c.stdout.slice(-200))
+  return `팀 묶음 · T_001 문제 0 → 문서 찍힘(${ok.commit}) · T_002 문제 ${broken.problems} → save E_INPUT · ctx forms check --data exit 1`
 })
 
 // 헤딩이 든 body — 2026-09-23 실측. `section` 의 `body` 를 그대로 고쳐 save 에 보내니 헤딩이
@@ -1465,11 +1515,11 @@ await check(78, '/site/info — 공개 · 레포 이름 없음 · setupNeeded fa
   eq(j.setupNeeded, false, 'setupNeeded')
   must(Array.isArray(j.manuals) && j.manuals.length >= 3, `설명서 ${j.manuals?.length}`)
   must(j.version, 'version 없음')
-  eq(j.user, null, '세션 없이 user 가 있다')
-  // 세션이 있으면 user · role 만 더 온다
+  eq([j.user, j.curate], [null, []], '세션 없이 user · curate')
+  // 세션이 있으면 user · role · curate(큐레이션할 수 있는 레포 — 화면이 메뉴를 가른다)만 더 온다
   const me = JSON.parse(await (await H.call('/site/info')).text())
-  must(me.user, '세션이 있는데 user 가 없다')
-  return `repos ${j.repos} · 설명서 ${j.manuals.length} · v${j.version} · 세션 user ${me.user}`
+  must(me.user && Array.isArray(me.curate), '세션이 있는데 user · curate 가 없다 — ' + JSON.stringify(me).slice(0, 120))
+  return `repos ${j.repos} · 설명서 ${j.manuals.length} · v${j.version} · 세션 user ${me.user} · curate [${me.curate}]`
 })
 
 if (WEB_OK) {
@@ -1800,7 +1850,7 @@ await check(137, '기준선 extract → push — 옛 레포(alpha)의 테이블�
   return `섹션 ${j.items.length} → 블록 ${j.items.length} · 등록부 table:* · 대기 ${q0} 그대로`
 })
 
-await check(135, '작업 레포 설치 한 줄 — 큐레이터(admin) 토큰으로 깔아도 대장이 「최신」 이다(설치한 kit 과 대장이 대는 kit 이 같다)', async () => {
+await check(135, '작업 레포 설치 한 줄은 역할과 무관하게 writer kit — 큐레이터(admin) 토큰으로 깔아도 스킬 셋 · 작업 레포 블록 · 대장 「최신」(설치한 kit 과 대장이 대는 kit 이 같다)', async () => {
   const ok = await A('/workrepos', { method: 'POST', ...ADM(TKA), ...jbody({ name: 'admin-app', knowledge: 'alpha', owner: 'kjsa' }) })
   const id = (await ok.json()).id
   const W6 = path.join(TMP, 'work6')
@@ -1811,7 +1861,9 @@ await check(135, '작업 레포 설치 한 줄 — 큐레이터(admin) 토큰으
   const skills = (await fs.readdir(path.join(W6, '.claude', 'skills'))).sort()
   const row = (await (await A('/workrepos', ADM(TKA))).json()).repos.find((r) => r.id === id)
   eq(row?.state, '최신', `대장 — 설치한 kit ${row?.applied?.kit}(스킬 ${skills.length}) · 대장이 대는 kit ${row?.kitNow}`)
-  return `대장 최신 · 스킬 ${skills.length}`
+  eq(skills, WRITER_SKILLS, '작업 레포에 깔린 스킬')
+  must(/업무 맥락 — CDP/.test(await fs.readFile(path.join(W6, 'CLAUDE.md'), 'utf8')), '작업 레포 블록이 아니다')
+  return `대장 최신 · 스킬 ${skills.length} · 작업 레포 블록`
 })
 
 await check(88, 'v1.1 명부(write:true) 를 서버가 읽으면 writer · admin 으로 올려도 --admin-from 밖이면 403', async () => {
@@ -2658,6 +2710,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(3
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (설계서 §10 1~69 · 제품화 70~77 · 관리 서비스 78~90 · 동시 기록 91~97 · 화면 · 권한 98~103 · 설치 한 줄 104~108 · 관리 문서 110 · 112~116 · 스킬 111 · 117 · v1.0 118~137)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (설계서 §10 1~69 · 제품화 70~77 · 관리 서비스 78~90 · 동시 기록 91~97 · 화면 · 권한 98~103 · 설치 한 줄 104~108 · 관리 문서 110 · 112~116 · 스킬 111 · 117 · v1.0 118~138)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)
