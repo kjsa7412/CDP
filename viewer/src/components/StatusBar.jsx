@@ -5,7 +5,7 @@
 // (tokens.css) 상태바만 그 밖에 있었다. 지금 남는 것은 —
 //
 //   늘      작업 기록 · 좌표 수(무채색)
-//   있을 때  큐레이션 대기 · 미등재 · 미러 이상(밀림 · 갈림 · origin 앞섬 · 트리 더러움)
+//   있을 때  큐레이션 대기 · 미등재 · 미러 이상(못 보냄 · 갈림 · origin 앞섬 · 트리 더러움)
 //
 // **검증 건수는 상단바로 올라갔다.** 아침에 제일 먼저 보는 값을 11.5px 글씨로
 // 화면 맨 아래 두면 매일 찾아 읽어야 한다. 여기서 한 번 더 세지 않는다.
@@ -33,7 +33,7 @@ const REASON = { 'non-ff': 'non-ff', auth: '인증 실패', net: '원격 불통'
 function mirrorLine(m) {
   if (!m) return null
   const parts = []
-  if (m.mirror === 'lag') parts.push(`미러 밀림 ${m.ahead}${m.mirrorReason ? ' · ' + (REASON[m.mirrorReason] || m.mirrorReason) : ''}`)
+  if (m.mirror === 'lag') parts.push(`미러 못 보냄 ${m.ahead}${m.mirrorReason ? ' · ' + (REASON[m.mirrorReason] || m.mirrorReason) : ''}`)
   else if (m.mirror === 'diverged') parts.push(`origin 과 갈림 ${m.ahead}/${m.behind ?? '?'}`)
   else if (m.mirror === 'behind') parts.push(`origin 앞섬 ${m.behind}`)
   if (m.dirty > 0) parts.push(`트리 더러움 ${m.dirty}`)

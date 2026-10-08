@@ -218,9 +218,8 @@ export const api = {
 
   // ── 설치 대장 (§6.7.2) — 등록과 추적. 레포 관리 › 연결된 작업 레포가 이 레포의 행만 그린다
   registry: () => req('/workrepos', { absolute: true }),
-  // ── 지식 레포 (서버판 · 검토 §3.5) — 목록 · 패키지. 세우기(`POST /repos`)는 없앴다 — 콘솔 `admin.repoNew` 만(화면 · 권한 검토 v0.1 R1)
+  // ── 지식 레포 — 볼 수 있는 것의 목록(미러 상태 · 수). 세우기(`POST /repos`)는 없앴다 — 콘솔 `admin.repoNew` 만(화면 · 권한 검토 v0.1 R1)
   repos: () => req('/repos', { absolute: true }),
-  packages: () => req('/packages', { absolute: true }),
   registryAdd: (body) => req('/workrepos', { absolute: true, method: 'POST', body: JSON.stringify(body) }),
   registryDel: (id) => req('/workrepos/' + encodeURIComponent(id), { absolute: true, method: 'DELETE' }),
   // 설치 꾸러미. **토큰은 들어 있지 않다**(§6.7.3) — 브라우저가 그냥 받는다.
@@ -280,8 +279,6 @@ export const admin = {
   repoSync: (name) => A(`/repos/${encodeURIComponent(name)}/sync`, { ...J('POST', {}), allowStatus: [409] }),
   repoPush: (name) => A(`/repos/${encodeURIComponent(name)}/push`, { ...J('POST', {}), allowStatus: [409] }),
   repoRestore: (name) => A(`/repos/${encodeURIComponent(name)}/restore`, { ...J('POST', {}), allowStatus: [409] }),
-  // 에이전트 세팅(도구 층)을 이 서버 판으로 — 건너뜀(409 · 더러움 · origin 앞섬 · 훅)도 답이다
-  repoKit: (name) => A(`/repos/${encodeURIComponent(name)}/kit`, { ...J('POST', {}), allowStatus: [409] }),
   // 원격에 잇는다 — 세울 때 빠뜨린 origin. push 거절(409)도 답이다(사유 · 문장). 강제 push 는 없다
   repoOrigin: (name, url) => A(`/repos/${encodeURIComponent(name)}/origin`, { ...J('POST', { url }), allowStatus: [409] }),
   // 치운다 — 휴지통(<data>/trash)으로 옮긴다. 확인 이름이 레포 이름과 같아야 한다

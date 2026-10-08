@@ -30,7 +30,8 @@ const STALE_DAYS = 14
 const movedOf = (r) => (typeof r?.records === 'number' ? r.records : Array.isArray(r?.records) ? r.records.length : typeof r?.moved === 'number' ? r.moved : null)
 
 // 상태 다섯 — 사실만(동시 기록 검토 v0.1 D4 · §5.7). 갈라짐은 기계가 못 푸는 것이라 bad.
-const MIRROR = { ok: [null, '최신'], lag: ['warn', '밀림'], diverged: ['bad', '갈림'], behind: ['warn', 'origin 앞섬'], off: ['off', '원격 없음'] }
+// lag 는 「못 보냄」 — 커밋은 됐는데 origin 에 아직 못 갔다(옛 이름 「밀림」 은 용어 v1.0 에서 버렸다 · 개편안 §4.5)
+const MIRROR = { ok: [null, '최신'], lag: ['warn', '못 보냄'], diverged: ['bad', '갈림'], behind: ['warn', 'origin 앞섬'], off: ['off', '원격 없음'] }
 // 사유 — 서버의 `core/mirror.REASON_TEXT` 와 같은 말. 칩에는 짧게, 문장은 `title` 로.
 const REASON = { 'non-ff': 'non-ff', auth: '인증 실패', net: '원격 불통', protected: '보호 브랜치', locked: 'ref 잠김', 'no-upstream': 'upstream 없음', unknown: '원인 미상' }
 
@@ -72,9 +73,8 @@ export default function Repos({ say }) {
       .catch((e) => say(e.message, 6000))
       .finally(() => setLoading(false))
   }, [refresh, refreshDoc, say])
-  // 레포 이름 → 진단 줄(트리 · origin · push) 중 warn · fail 인 것
-  // 에이전트 세팅 줄은 칩이 따로 말한다 — 진단 줄로 두 번 쓰지 않는다
-  const docOf = (name) => (doc || []).filter((r) => r.state !== 'ok' && !/에이전트 세팅/.test(r.what) && new RegExp(`^레포 ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`).test(r.what))
+  // 레포 이름 → 진단 줄(트리 · origin · push · 옛 도구 층) 중 warn · fail 인 것
+  const docOf = (name) => (doc || []).filter((r) => r.state !== 'ok' && new RegExp(`^레포 ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`).test(r.what))
   const create = async (body) => {
     setBusy(true)
     setDone(null)
@@ -98,21 +98,13 @@ export default function Repos({ say }) {
   }
 
   // 복구 셋 — 서버가 판정하고(`core/mirror.js` · save 와 같은 뮤텍스 · auth.log) 여기는 결과 문장을 그대로 전한다.
+  // 옛 넷째 「에이전트 세팅 갱신」(POST /admin/repos/<r>/kit)은 지웠다 — v1.0 은 kit 을 레포가 아니라 서버 번들에서 낸다(개편안 §6.3)
   const act = async (name, kind) => {
     setActing(name + ':' + kind)
     try {
-      const fn = kind === 'sync' ? admin.repoSync : kind === 'push' ? admin.repoPush : kind === 'kit' ? admin.repoKit : admin.repoRestore
+      const fn = kind === 'sync' ? admin.repoSync : kind === 'push' ? admin.repoPush : admin.repoRestore
       const r = await withSudo(() => fn(name))
-      if (kind === 'kit')
-        say(
-          r.ok
-            ? r.state === 'same'
-              ? `${name} — 에이전트 세팅이 이미 이 서버 판이다`
-              : `${name} — 에이전트 세팅 ${r.changes.length}건을 갈았다 · ${r.commit}${r.pushed && !r.pushed.ok ? ' · origin 에는 못 보냄' : ''} — 작업 레포는 「낡음」 으로 뜬다`
-            : `${name} — 갈지 못했다: ${r.reasonText || r.reason || ''}${r.message ? ' — ' + r.message : ''}`,
-          r.ok ? 7000 : 12000
-        )
-      else if (kind === 'sync') say(r.ok ? (r.pulled ? `${name} — origin 에서 ${r.pulled}건 받았다` : `${name} — 이미 origin 과 같다`) : r.message || '맞추지 못했다', r.ok ? 4000 : 12000)
+      if (kind === 'sync') say(r.ok ? (r.pulled ? `${name} — origin 에서 ${r.pulled}건 받았다` : `${name} — 이미 origin 과 같다`) : r.message || '맞추지 못했다', r.ok ? 4000 : 12000)
       else if (kind === 'push') say(r.ok ? `${name} — origin 에 보냈다` : `${name} — 보내지 못했다: ${r.message || r.reason || ''}`, r.ok ? 4000 : 10000)
       else say(r.ok ? `${name} — 트리를 되돌렸다 · 버린 것 ${r.discarded.length}` : r.message || '되돌리지 못했다', r.ok ? 5000 : 10000)
       invalidate('/admin/')
@@ -227,21 +219,12 @@ export default function Repos({ say }) {
                           </Chip>
                         </>
                       )}
-                      {(r.kit?.state === 'dry' || r.kit?.state === 'skipped') && (
-                        <>
-                          {' '}
-                          <Chip kind="warn" icon="warn" title={(r.kit.changes || []).map((c) => `${c.op} ${c.path}`).join('\n')}>
-                            에이전트 세팅 다름 {r.kit.changes.length}
-                          </Chip>
-                          {r.kit.state === 'skipped' && <div className="sub" style={{ marginTop: 3, color: 'var(--warn)' }}>에이전트 세팅 — {r.kit.line.replace(/^건너뜀 — /, '')}</div>}
-                        </>
-                      )}
                       {notes.map((n, i) => (
                         <div key={i} className="sub" style={{ marginTop: 3, color: n.state === 'fail' ? 'var(--danger)' : 'var(--warn)' }} title={n.note}>
                           진단 · {n.what.replace(`레포 ${r.name}`, '').trim() || '레포'} — {n.note.split(' — ')[0].split('. ')[0]}
                         </div>
                       ))}
-                      {(r.mirror === 'lag' || r.mirror === 'diverged' || originAhead || r.dirty > 0 || r.kit?.state === 'dry') && (
+                      {(r.mirror === 'lag' || r.mirror === 'diverged' || originAhead || r.dirty > 0) && (
                         <div className="rowact" style={{ marginTop: 4 }}>
                           {originAhead && (
                             <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'sync')} title="fetch → 뒤처졌으면 ff-only → 재스캔. 갈라졌으면 거절하고 문장을 낸다">
@@ -249,13 +232,8 @@ export default function Repos({ say }) {
                             </button>
                           )}
                           {(r.mirror === 'lag' || r.mirror === 'diverged') && (
-                            <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'push')} title="밀린 커밋을 origin 에 한 번 더 보낸다">
+                            <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'push')} title="못 보낸 커밋을 origin 에 한 번 더 보낸다">
                               {acting === r.name + ':push' ? '보내는 중…' : '다시 보내기'}
-                            </button>
-                          )}
-                          {r.kit?.state === 'dry' && (
-                            <button className="abtn" disabled={!!acting} onClick={() => act(r.name, 'kit')} title="스킬 · 도구 · 훅을 이 서버 판으로 한 커밋 — 지식(_vocab · docs · work)은 안 건드린다. 작업 레포는 그 뒤 「낡음」 으로 뜬다">
-                              {acting === r.name + ':kit' ? '가는 중…' : '에이전트 세팅 갱신'}
                             </button>
                           )}
                           {r.dirty > 0 && (
@@ -350,14 +328,13 @@ export default function Repos({ say }) {
         커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 표의 칩이 이상을 말하면 —
         <table className="ckeys">
           <tbody>
-            <tr><th>밀림</th><td>사유와 함께 뜬다(인증 실패면 PAT · 셸)</td><td>「다시 보내기」</td></tr>
+            <tr><th>못 보냄</th><td>커밋은 됐고 origin 에 아직 못 갔다 — 사유와 함께 뜬다(인증 실패면 PAT · 셸)</td><td>「다시 보내기」</td></tr>
             <tr><th>origin 앞섬</th><td>누군가 서버 밖에서 썼다</td><td>「origin 과 맞추기」(ff-only)</td></tr>
             <tr><th>갈림</th><td>기계가 합치지 않는다</td><td>셸에서 rebase 뒤 「다시 보내기」</td></tr>
             <tr><th>트리 더러움</th><td><code>save</code> 가 거절되는 상태</td><td>「트리 되돌리기」</td></tr>
-            <tr><th>에이전트 세팅 다름</th><td>레포의 스킬 · 도구 · 훅이 이 서버 판이 아니다 — 작업 레포가 옛 스킬을 받는다</td><td>「에이전트 세팅 갱신」</td></tr>
           </tbody>
         </table>
-        upgrade 가 갈지만 그때 건너뛴 레포(더러움 · origin 앞섬)는 치운 뒤 「에이전트 세팅 갱신」. 전부 관리자 확인 뒤에 돌고 감사에 남습니다(설명서 7.6).
+        진단에 「옛 도구 층」 이 뜨는 레포는 v1.0 으로 옮기지 않은 레포다 — 서버를 멈추고 셸에서 <code>ctx migrate</code>. 전부 관리자 확인 뒤에 돌고 감사에 남습니다.
       </Note>
 
       {restoring && (
@@ -391,9 +368,7 @@ function NewRepo({ data, busy, onClose, onOk }) {
   const repos = data.repos || []
   const ok = okName && (tab === 'empty' ? (!f.origin.trim() || originOk(f.origin.trim())) && (!f.from || !!f.fromRepo) : originOk(f.clone.trim()))
   const grantable = (data.users || []).filter((u) => !u.all)
-  // 옛 서버(v0.27 미만)는 패키지가 있어야 세운다 — 응답에 패키지 목록이 남아 있고 그중 빈 틀(blank)이 있으면 그것으로 세운다.
-  // 새 서버는 목록을 내지 않는다(계약 1.3) — 그때는 보내지 않는다
-  const legacyBlank = Array.isArray(data.packages) && data.packages.some((p) => p.name === 'blank')
+  // 패키지는 보내지 않는다 — v1.0 서버는 패키지를 모르고 늘 빈 틀로 세운다(개편안 §8.2)
   const body = () =>
     tab === 'empty'
       ? {
@@ -401,7 +376,6 @@ function NewRepo({ data, busy, onClose, onOk }) {
           grant: f.grant,
           ...(f.origin.trim() ? { origin: f.origin.trim() } : {}),
           ...(f.from && f.fromRepo ? { recordsFrom: f.fromRepo } : {}),
-          ...(legacyBlank ? { package: 'blank' } : {}),
         }
       : { name: f.name.trim(), clone: f.clone.trim(), grant: f.grant }
   return (

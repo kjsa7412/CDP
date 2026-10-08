@@ -22,7 +22,7 @@ import { Card, Row, Mono, Note, Btn } from './ui.jsx'
 const STALE_DAYS = 14
 
 // 미러 상태 다섯 — 사실만(동시 기록 검토 v0.1 §5.7). 고치는 것은 서버 › 지식 레포.
-const MIRROR = { ok: [null, '최신 — origin 과 같다'], lag: ['warn', '밀림'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 이 앞서 있다'], off: [null, '원격 없음'] }
+const MIRROR = { ok: [null, '최신 — origin 과 같다'], lag: ['warn', 'origin 에 못 보냄'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 이 앞서 있다'], off: [null, '원격 없음'] }
 
 export default function Overview({ repo, me = null, onCheck }) {
   // 전부 캐시(화면 · 권한 검토 v0.1 R8) — 탭을 오가도 「읽는 중…」 이 다시 뜨지 않는다. 키는 레포 + 경로.
@@ -68,7 +68,7 @@ export default function Overview({ repo, me = null, onCheck }) {
           )}
           {/* 못 들어가는 곳을 안내하지 않는다 — writer · viewer 에게는 「관리자에게」(화면 · 권한 검토 v0.1 P6 · R4) */}
           <Note>
-            커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 밀림 · 갈림 · 더러움을 푸는 단추는{' '}
+            커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 못 보냄 · 갈림 · 더러움을 푸는 단추는{' '}
             {me?.admin ? <><b>서버 › 지식 레포</b>에 있습니다.</> : <><b>관리자</b>에게 있습니다(서버 › 지식 레포).</>}
           </Note>
         </Card>

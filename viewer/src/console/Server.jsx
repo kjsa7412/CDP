@@ -1,4 +1,4 @@
-// 서버 — 이 프로세스가 무엇으로 떠 있나 · 진단 · 패키지 · 갱신 · 로그. 제품관리서비스 검토 §4.7.
+// 서버 — 이 프로세스가 무엇으로 떠 있나 · 진단 · git 자격 · 갱신 · 로그. 제품관리서비스 검토 §4.7.
 //
 // **거의 읽기다.** 고치는 것은 셸이다(D7 · D8) — 갱신은 upgrade.sh, PAT 는 셸에서. 여기는
 // 그 명령과 지금 값을 보이는 자리. 파일 위치 · 로그는 관리자에게만 보인다.
@@ -109,21 +109,12 @@ export default function Server({ say, route }) {
             {sv.manual && <Mono>{sv.manual}</Mono>}
             {!sv.webOk && <span className="awarn">index.html 없음</span>}
           </Row>
-          {/* 서식집 · kit — 새 문서의 서식과 작업 레포의 스킬이 나가는 자리(v1.0 §8). 옛 서버는 값이 없어 줄째 없다 */}
-          {('forms' in sv || 'kit' in sv) && (
-            <Row label="서식집 · kit">
-              <Mono>{sv.forms || '—'}</Mono>
-              <Mono>{sv.kit || '—'}</Mono>
-              {(!sv.forms || !sv.kit) && <span className="awarn">없음 — --forms · --kit</span>}
-            </Row>
-          )}
-          {/* 패키지 — 옛 서버만 낸다(v0.27 부터 서식집 · 개편안 §8.1). 없으면 줄째 없다 */}
-          {Array.isArray(sv.packagesList) && (
-            <Row label="패키지">
-              <Mono>{sv.packages || '—'}</Mono>
-              <span className="amuted">· {sv.packagesList.length}개</span>
-            </Row>
-          )}
+          {/* 서식집 · kit — 새 문서의 서식과 작업 레포 · 큐레이터 폴더의 스킬이 나가는 자리(v1.0 §8). 패키지 줄은 지웠다 — v1.0 서버는 패키지를 모른다 */}
+          <Row label="서식집 · kit">
+            <Mono>{sv.forms || '—'}</Mono>
+            <Mono>{sv.kit || '—'}</Mono>
+            {(!sv.forms || !sv.kit) && <span className="awarn">없음 — --forms · --kit</span>}
+          </Row>
         </Card>
       </div>
 
@@ -159,26 +150,9 @@ export default function Server({ say, route }) {
             <Cmd>{`sudo bash ${prefix}/deploy/upgrade.sh /tmp/cdp-server-v<버전>.tar.gz`}</Cmd>
           </Row>
           <Note>
-            자기 자신(<code>ctx.mjs</code>)을 갈아 끼우고 재시작하는 일이라 브라우저에서 시작하지 않는다 — 실패했을 때 되돌리는 길이 셸뿐이다. 명부 · 대장 · 레포는 건드리지 않는다.
+            자기 자신(<code>ctx.mjs</code>) · 화면 · 서식집 · kit 을 갈아 끼우고 재시작하는 일이라 브라우저에서 시작하지 않는다 — 실패했을 때 되돌리는 길이 셸뿐이다. 명부 · 대장 · 레포는 건드리지 않는다.
           </Note>
         </Card>
-        {Array.isArray(sv.packagesList) && (
-          <Card title="패키지" hint="옛 판 — v0.27 부터 서식집(큐레이션 › 서식집)">
-            {sv.packagesList.length === 0 && <span className="amuted">없다 — --packages</span>}
-            {sv.packagesList.map((p) => (
-              <Row key={p.name} label={<Mono>{p.name}</Mono>}>
-                {p.version ? `v${p.version}` : ''}
-                <div className="amuted asub">
-                  {p.title || ''} · 문서 {p.docs}
-                  {p.types != null ? ` · 타입 ${p.types}` : ''}
-                </div>
-              </Row>
-            ))}
-            <Note>
-              새 레포는 빈 틀로 선다 — 관리 문서는 큐레이터가 기록을 보고 서식집에서 골라 세운다. 패키지 이름 ≠ 레포 이름.
-            </Note>
-          </Card>
-        )}
       </div>
 
       <Card title="로그" hint={log ? `serve.log 마지막 ${log.lines.length}줄 (전체 ${log.total}) · 회전 3 × 1MB` : 'serve.log'} actions={<Search value={q} onChange={setQ} placeholder="걸러 보기 — 401 · save" style={{ minWidth: 180, height: 26 }} />}>

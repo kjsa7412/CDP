@@ -1,7 +1,7 @@
 // 관리 문서 — 목록 · 사용 현황 · 안 쓰는 문서 지우기. 관리문서 정리 검토 v0.1 §4.9.
 //
-// 옛 레포는 패키지가 40종을 부어 한 프로젝트가 다 쓰지 않는다. 여기서 문서마다 「쓰는가」(작업 기록이 쓴 섹션 · 닿은 작업 기록 ·
-// 들어오는 참조 · 필수 제출 · 마지막 변경)를 보고, 그 레포의 큐레이터는 고른 문서를 지운다.
+// 옛 레포는 문서 40종을 한꺼번에 부어 세웠고 한 프로젝트가 다 쓰지 않는다. 여기서 문서마다 「쓰는가」(작업 기록이 쓴 섹션 ·
+// 닿은 작업 기록 · 들어오는 참조 · 필수 제출 · 마지막 변경)를 보고, 그 레포의 큐레이터는 고른 문서를 지운다.
 //
 // **화면은 계획을 세우지 않는다.** 미리보기도 지우기도 서버의 `save`(managed drop)를 부른다 — 미리보기는 `dryRun` 이고
 // 고칠 줄(refs)과 그 초안(edit)도 서버가 준다. 화면은 줄마다 「행 지우기 · 링크만 풀기 · 알고 둔다」 를 고르게 할 뿐이다.
@@ -126,7 +126,7 @@ export default function Docs({ me = null, say, onChanged = null }) {
       >
         <Note>
           「서식 그대로」 는 작업 기록이 쓴 섹션도 · 닿은 작업 기록도 없는 문서다 — <b>아직 안 쓴 것</b>일 수도 <b>안 쓸 것</b>일 수도 있다.
-          지울지는 사람이 정한다. 작업 기록이 쓴 문서는 고를 수 없다(합치거나 등록부에서 떼는 것은 에이전트의 「구조 정리」).
+          지울지는 사람이 정한다. 작업 기록이 쓴 문서는 고를 수 없다(합치거나 등록부에서 떼는 것은 큐레이터의 에이전트 — <code>cdp-registry</code>).
         </Note>
         <div className="adocs__bar">
           <div className="adocs__seg" role="tablist" aria-label="거르기">
@@ -291,7 +291,7 @@ function Preview({ preview, setPreview, reason, setReason, busy, onDrop, onCance
       </div>
       {d.vocabRemoved?.length > 0 && (
         <div className="arow">
-          <span className="arow__label">예시 좌표</span>
+          <span className="arow__label">같이 지울 어휘 좌표</span>
           <span className="arow__value amono">{d.vocabRemoved.join(' · ')}</span>
         </div>
       )}
