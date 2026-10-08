@@ -1,10 +1,9 @@
-// core 의 조립부 — 스캔 · 어휘 · 유효성 · 최신성 · 검색 · 감시를 하나로 묶는다.
-// HTTP 를 모른다 (설계서 §8). 이벤트는 콜백으로만 내보낸다.
+// core 의 조립부 — 스캔 · 어휘 · 유효성 · 최신성 · 검색을 하나로 묶는다. 서버(`ctx serve`)의 화면 API 가 쓴다.
+// HTTP 를 모른다 (설계서 §8). 파일 감시는 없다 — 서버가 유일한 작성자라 save 가 끝나면 그때 다시 읽는다
+// (로컬 뷰어의 chokidar 감시는 v1.0 에서 로컬 뷰어와 함께 걷었다).
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import chokidar from 'chokidar'
-import { IGNORED_DIRS } from './scan.js'
 import { loadRepo, repoStatus, unregisteredCoords } from './repo.js'
 import * as git from './git.js'
 import { reconcile } from './vocab.js'
@@ -25,37 +24,15 @@ const SEARCH_SEEDS = 8
 const FETCH_FRESH_MS = 60_000
 
 export class Store {
-  constructor({ root, settings = {}, onEvent = () => {}, hostWarning = false }) {
+  constructor({ root, settings = {} }) {
     this.root = root
     this.settings = settings
-    this.hostWarning = hostWarning
-    this.onEvent = onEvent
     this.cache = new Map()
     this.docs = []
     this.bodies = new Map()
     this.visuals = new Map()
     this.vocab = { types: [], excludedTypes: [], coords: new Map(), counted: new Map(), aliasIndex: new Map(), errors: [] }
     this.stats = null
-    this.watcher = null
-    this.watchAlive = false
-    this._pending = null
-  }
-
-  // 레포 경로 교체 — 화면에서 경로를 지정하면 이 경로로 들어온다(§26.1).
-  //
-  // appState 의 repoPath 만 바꾸면 스캔은 원래 폴더를 계속 본다. 경로를 넣어도
-  // 문서가 0건으로 남던 원인이 그것이었다. 캐시는 경로 단위이므로 함께 버린다.
-  async setRoot(next) {
-    if (!next || next === this.root) return this.repoInfo()
-    await this.stopWatch()
-    this.root = next
-    this._fetchedAt = 0
-    this.cache.clear()
-    this.docs = []
-    this.bodies = new Map()
-    await this.load()
-    await this.startWatch() // ready 를 기다린 뒤 응답해야 화면이 맞는다
-    return this.repoInfo()
   }
 
   async load({ onProgress } = {}) {
@@ -436,89 +413,9 @@ export class Store {
       section,
       sectionText,
       works,
+      // 섹션 상태와 미반영 기록(v1.0 I7) — 섹션만 보고 지금이라 믿지 않게
+      curation: this.curation ? { state: this.curation.stateOf(coord, section), pending: this.curation.pendingOf(coord) } : null,
     }
-  }
-
-  // ── 감시 ────────────────────────────────────────────────────────────────
-  // 최신화는 뷰어의 일이 아니다(§2.2 ④). 밖에서 git pull 한 것을 알아차리는 것이
-  // 뷰어의 일이고, pull 을 안 하기 때문에 오히려 감시가 더 중요해진다(§2.3).
-  // ready 를 기다릴 수 있게 프라미스를 돌려준다.
-  //
-  // chokidar 의 ready 는 비동기인데 응답을 먼저 보내면 watchAlive=false 가
-  // 화면에 박히고, 뒤늦게 오는 SSE 는 그 사이 갱신에 덮인다. 실제로 경로를
-  // 지정한 직후 "감시 끊김"이 뜨는 원인이었다.
-  startWatch() {
-    if (this.settings.watch === false) return Promise.resolve(false)
-    return new Promise((resolve) => {
-      let settled = false
-      const done = (v) => {
-        if (settled) return
-        settled = true
-        resolve(v)
-      }
-      // 대형 레포에서 ready 가 오래 걸릴 수 있다. 무한정 막지 않는다.
-      const timer = setTimeout(() => done(false), 4000)
-      timer.unref?.()
-
-      try {
-        this.watcher = chokidar.watch(this.root, {
-          ignoreInitial: true,
-          ignored: (p) =>
-            path.basename(p).startsWith('.git') ||
-            [...IGNORED_DIRS].some((d) => p.includes(`${path.sep}${d}${path.sep}`) || p.endsWith(`${path.sep}${d}`)),
-          awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 30 },
-        })
-        this.watcher
-          .on('all', () => this.scheduleRescan())
-          .on('ready', () => {
-            clearTimeout(timer)
-            this.watchAlive = true
-            this.onEvent({ type: 'watch', alive: true })
-            done(true)
-          })
-          .on('error', () => {
-            clearTimeout(timer)
-            this.watchAlive = false
-            this.onEvent({ type: 'watch', alive: false })
-            done(false)
-          })
-      } catch {
-        clearTimeout(timer)
-        this.watchAlive = false
-        done(false)
-      }
-    })
-  }
-
-  // git pull 이나 브랜치 전환은 수십~수백 이벤트를 쏟아낸다. 파일마다
-  // 재계산하면 화면이 수십 번 깜빡인다. 조용해진 뒤 한 번 계산한다(§23.2).
-  scheduleRescan() {
-    clearTimeout(this._pending)
-    this._pending = setTimeout(async () => {
-      const before = new Map(this.docs.map((d) => [d.path, d.mtime]))
-      await this.load()
-      const changed = []
-      const added = []
-      for (const d of this.docs) {
-        if (!before.has(d.path)) added.push(d.path)
-        else if (before.get(d.path) !== d.mtime) changed.push(d.path)
-      }
-      const removed = [...before.keys()].filter((p) => !this.byPath.has(p))
-      this.onEvent({ type: 'changed', changed, added, removed, stats: this.stats })
-    }, 300)
-  }
-
-  async stopWatch() {
-    clearTimeout(this._pending)
-    if (this.watcher) {
-      await this.watcher.close().catch(() => {})
-      this.watcher = null
-    }
-    this.watchAlive = false
-  }
-
-  async stop() {
-    await this.stopWatch()
   }
 
   // ── 조회 ────────────────────────────────────────────────────────────────
@@ -933,9 +830,6 @@ export class Store {
         unregistered: 0,
         parseErrors: 0,
         checkCounts: { error: 0, warn: 0, info: 0 },
-        watchAlive: false,
-        watchEnabled: this.settings.watch !== false,
-        hostWarning: this.hostWarning,
         scannedAt: null,
         scanMs: null,
         indexInfo: { exists: false },
@@ -960,10 +854,6 @@ export class Store {
       curation: this.curation ? this.curation.stats : null,
       parseErrors: errors,
       checkCounts: counts,
-      watchAlive: this.watchAlive,
-      watchEnabled: this.settings.watch !== false,
-      // loopback 이 아닌 주소에 리스너를 열었으면 화면에 상시 경고를 띄운다(§7.2)
-      hostWarning: this.hostWarning,
       scannedAt: this.stats?.scannedAt || null,
       scanMs: this.stats?.ms ?? null,
       indexInfo: this.indexInfo,

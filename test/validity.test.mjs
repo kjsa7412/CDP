@@ -8,7 +8,6 @@ import assert from 'node:assert/strict'
 import { buildCoordIndex, buildSectionStatus, buildValidity, cmpDateDesc } from '../core/validity.js'
 import { parseRegistry, buildManagedIndex } from '../core/managed.js'
 import { parseDoc } from '../core/frontmatter.js'
-import { renderIndex, renderByCoord } from '../core/indexes.js'
 
 const W = (id, date, touches, extra = {}) => ({
   id,
@@ -143,15 +142,4 @@ test('buildValidity — supersedes 참조 · 대상 없음 · 순환', () => {
   assert.deepEqual(v.of('d').partialBy, [{ by: 'c', scope: ['table:x'] }])
   assert.deepEqual(v.of('c').brokenTargets, ['없음'])
   assert.deepEqual(v.of('b').correctedBy, ['a'])
-})
-
-test('renderIndex · renderByCoord — 행 수가 작업 기록 수와 같다 · 상태를 적지 않는다', () => {
-  const idx = buildCoordIndex(works)
-  const r = { works, allCoords: ['table:a', 'screen:X'], coords: idx, sections: [] }
-  const index = renderIndex(r)
-  assert.equal(index.split('\n').filter((l) => l.startsWith('| 2026-')).length, works.length)
-  const by = renderByCoord(r)
-  assert.ok(by.includes('## table'))
-  assert.ok(by.includes('`table:a` 작업 5건'))
-  assert.ok(by.includes('... 2건 더'), '3건까지만 펴고 나머지는 센다')
 })

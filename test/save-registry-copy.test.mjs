@@ -12,7 +12,6 @@ import { promisify } from 'node:util'
 import { save } from '../core/save.js'
 import { loadRepo } from '../core/repo.js'
 import { toolCheck, toolDocs, toolMatch } from '../core/tools.js'
-import { regenerate, proseConflicts } from '../core/regen.js'
 
 const run = promisify(execFile)
 const hasGit = await run('git', ['--version']).then(() => true).catch(() => false)

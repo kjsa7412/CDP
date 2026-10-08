@@ -88,3 +88,27 @@ test('save — 큐레이터가 서식으로 문서를 세우고 첫 섹션을 �
     await fs.rm(d, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 })
   }
 })
+
+test('팀 서식에 문제가 있으면 — 목록에 문제 수가 붙고 그 서식으로는 문서를 세우지 않는다', async () => {
+  const fs = await import('node:fs/promises')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const { loadForms, formRow } = await import('../core/formslib.js')
+  const { planManaged } = await import('../core/managedops.js')
+  const data = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-teamforms-'))
+  try {
+    await fs.mkdir(path.join(data, 'forms', 'team'), { recursive: true })
+    // 종류가 다섯 밖 · head 에 (예시) — lint 가 잡는다
+    await fs.writeFile(path.join(data, 'forms', 'team', 'TM_001_팀회의.md'), ['---', 'form: team/TM_001', 'title: 팀회의', 'number: TM_001', 'kind: 회의', '---', '<!-- form:head -->', '(예시) 첫 문단', '<!-- form:guide -->', '쓰는 법.', ''].join('\n'))
+    const lib = await loadForms({ explicit: null, dataDir: data })
+    const f = lib.byId.get('team/TM_001')
+    assert.ok(f.problems.length >= 1, JSON.stringify(f.problems))
+    assert.ok(formRow(f).problems >= 1)
+    await assert.rejects(
+      planManaged({ ops: [{ op: 'add', pattern: '팀회의:*', doc: 'docs/팀회의.md', form: 'team/TM_001' }], registryText: '| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n', docPaths: [], read: async () => null, workId: '2026-1007-x', forms: lib.byId }),
+      (e) => e.code === 'E_INPUT' && /문제가 있다/.test(e.message)
+    )
+  } finally {
+    await fs.rm(data, { recursive: true, force: true })
+  }
+})

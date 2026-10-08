@@ -51,12 +51,13 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx repo list --root <폴더>               서버 <root> 의 레포 목록
   ctx repo new <경로> --records-from <옛 레포>   다시 세우기 — 작업 기록 · 첨부 · 그 기록이 쓰는 어휘만 옮긴다
   ctx baseline extract|push …               옛 섹션을 기준선 블록으로 옮긴다(다시 세운 레포의 출발점)
+  ctx forms list|show <id>|check [--forms <dir>] [--data <dir>]   서식집 — 목록 · 서식 하나(찍힐 빈 문서까지) · 번들과 팀 서식(<data>/forms) 검사
   ctx migrate <레포> [--dry] [--by <이름>] [--keep-tools]   제자리 이행 — 전환 기록 하나 · 서식 예시 · 도구 층 걷기(서버를 멈추고)
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
   --root <폴더>             ctx serve -- 그 폴더의 하위를 전부 레포로 본다
-  --prompts auto|always|never   MCP prompt 노출 (기본 auto)
+  --prompts auto|always|never   MCP prompt 노출 (기본 auto — HTTP 에서는 always 와 같다)
   --bind · --port · --auth · --data · --mirror · --web · --forms · --kit   ctx serve 용
   --manual <dir> · --private-pages · --admin-from <cidr,…>            ctx serve 용 — 설명서 폴더 · 소개/설명서에 로그인 요구 · 관리 API 대역
   --forms <dir> · --kit <dir>   서식집 · 작업 레포 kit (기본: CDP_FORMS · CDP_KIT → 번들 옆 forms/ · kit/ → 소스 agent/)
@@ -634,6 +635,10 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'repo') {
     const { runRepo } = await import('./ctx-repo.mjs')
     return runRepo(opt)
+  }
+  if (opt.cmd === 'forms') {
+    const { runForms } = await import('./ctx-forms.mjs')
+    return runForms(opt)
   }
   if (opt.cmd === 'migrate') {
     const { runMigrate } = await import('./ctx-migrate.mjs')
