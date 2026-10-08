@@ -36,8 +36,9 @@ curl.exe -fsSLo "$env:TEMP\cdp-install.mjs" http://<서버>:7374/install.mjs; if
 1. **설치기** — 공개 `GET /install.mjs`. 서버 주소만 박혀 있다 — 레포 이름 · 사람 · kit · 토큰은 없다.
 2. **토큰** — `CDP_TOKEN` 이 있으면 서버에 확인하고, 없거나 안 통하면 숨김 입력으로 묻는다. 확인되면 이 PC 에 둘지 묻는다
    (Windows 사용자 환경변수 · macOS/Linux `~/.config/cdp/token` 600 + rc 한 줄). **명령 · 설치기 · 꾸러미 어디에도 원문은 없다.**
-3. **kit** — 그 토큰으로 `GET /kit/<레포>?workrepo=<id>&as=json`(큐레이터 폴더는 `?as=json&role=curator`). 다른 레포의 등록 id 면 409 ·
-   권한 밖 레포는 404 · 큐레이터 폴더인데 토큰이 그 레포의 큐레이터가 아니면 멈춘다.
+3. **kit** — 그 토큰으로 `GET /kit/<레포>?workrepo=<id>&as=json` — 등록된 작업 레포는 **토큰의 역할과 무관하게 writer kit** 이다.
+   큐레이터 폴더는 `?as=json&role=curator`(등록 없이 · 토큰이 그 레포의 큐레이터가 아니면 멈춘다). 다른 레포의 등록 id 면 409 ·
+   권한 밖 레포는 404.
 4. **병합** — `core/setup.js` 한 벌. 바뀔 것을 보여 주고 묻는다(`--dry` 는 보기만 · `--yes` 는 묻지 않는다).
 
    ```

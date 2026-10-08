@@ -28,8 +28,9 @@ agent/CLAUDE-큐레이터.md      →  kit/CLAUDE-큐레이터.md      →  큐�
 agent/forms/<묶음>/           →  forms/<묶음>/              →  (레포로 가지 않는다) 서버가 새 관리 문서를 찍을 때 읽는다
 ```
 
-**역할별 kit** — 서버(`GET /kit/<레포>`)가 토큰의 역할로 고른다(`core/kit.js`). writer 는 스킬 셋(cdp-work · cdp-save · cdp-push) +
-프로젝트레포 블록, 큐레이터는 다섯 + 큐레이터 블록. kit 의 해시가 작업 레포 `CLAUDE.md` 첫 줄의 `<!-- cdp:kit <해시> -->` 이고, 작업 레포
+**역할별 kit** — 서버(`GET /kit/<레포>`)가 고른다(`core/kit.js`). writer 는 스킬 셋(cdp-work · cdp-save · cdp-push) + 프로젝트레포
+블록, 큐레이터는 다섯 + 큐레이터 블록. **등록된 작업 레포는 누가 깔아도 writer kit** 이다(팀이 같이 커밋하는 자리) — 큐레이터 kit 은
+큐레이터 폴더(`--curator`)에만 간다. kit 의 해시가 작업 레포 `CLAUDE.md` 첫 줄의 `<!-- cdp:kit <해시> -->` 이고, 작업 레포
 대장의 「낡음」 이 이것으로 갈린다. 판을 올리면 모든 레포의 kit 이 같이 바뀐다 — 레포마다 다르지 않다.
 
 **지식 레포에는 아무것도 가지 않는다**(v1.0 I9). 옛 판이 레포에 넣던 `MANUAL*.md` · `CLAUDE.md` · `TEMPLATE-work.md` · 훅 · `bin/ctx` · 스킬
