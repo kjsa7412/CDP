@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="520" viewBox="0 0 680 520" role="img">
+<title>CDP 관리 문서의 원천 셋 — 쓰는 길은 save 하나</title>
+<desc>writer 세션은 작업 기록을, 큐레이터 세션은 판정과 섹션을, 생성기는 기준선 블록을 서버의 save 하나로 쓴다. 작업 기록은 불변이고 판정 안 된 기록이 대기열에 선다. 큐레이터는 대기열의 판정 재료를 보고 관리 문서에 반영한다. 읽는 사람과 에이전트는 섹션과 기준선과 아직 반영 안 된 기록을 같이 받는다.</desc>
+<style>
+text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif}
+.th{font-size:14px;font-weight:500}
+.ts{font-size:12px;font-weight:400}
+.arr{stroke:#888780;stroke-width:1.5;fill:none}
+.dash{stroke:#888780;stroke-width:1.2;fill:none;stroke-dasharray:5 3}
+.gray{fill:#F1EFE8;stroke:#5F5E5A;stroke-width:0.5}
+.purple{fill:#EEEDFE;stroke:#534AB7;stroke-width:0.5}
+.teal{fill:#E1F5EE;stroke:#0F6E56;stroke-width:0.5}
+.white{fill:#FFFFFF;stroke:#B4B2A9;stroke-width:0.5}
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect width="680" height="520" fill="#FFFFFF"/>
+
+<text class="th" x="40" y="30" dominant-baseline="central" fill="#2C2C2A">관리 문서의 원천 셋 — 쓰는 길은 save 하나</text>
+<text class="ts" x="330" y="58" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">서버 save — 검사 · 한 커밋 · 미러</text>
+
+<!-- 쓰는 쪽 -->
+<rect class="gray" x="40" y="76" width="190" height="56" rx="8"/>
+<text class="th" x="135" y="95" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">writer 세션</text>
+<text class="ts" x="135" y="115" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">cdp-work · cdp-save</text>
+
+<rect class="purple" x="40" y="206" width="190" height="56" rx="8"/>
+<text class="th" x="135" y="225" text-anchor="middle" dominant-baseline="central" fill="#3C3489">큐레이터 세션</text>
+<text class="ts" x="135" y="245" text-anchor="middle" dominant-baseline="central" fill="#534AB7">cdp-curate · 판정표 승인</text>
+
+<rect class="gray" x="40" y="336" width="190" height="56" rx="8"/>
+<text class="th" x="135" y="355" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">생성기</text>
+<text class="ts" x="135" y="375" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">코드 · DB 에서 기계로</text>
+
+<!-- save 셋 -->
+<rect class="white" x="262" y="86" width="136" height="36" rx="18"/>
+<text class="ts" x="330" y="104" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">save — 작업 기록</text>
+<rect class="white" x="262" y="216" width="136" height="36" rx="18"/>
+<text class="ts" x="330" y="234" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">save — 큐레이션</text>
+<rect class="white" x="262" y="346" width="136" height="36" rx="18"/>
+<text class="ts" x="330" y="364" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">save — 기준선</text>
+
+<line x1="230" y1="104" x2="258" y2="104" class="arr" marker-end="url(#arrow)"/>
+<line x1="230" y1="234" x2="258" y2="234" class="arr" marker-end="url(#arrow)"/>
+<line x1="230" y1="364" x2="258" y2="364" class="arr" marker-end="url(#arrow)"/>
+
+<!-- 레포 -->
+<rect class="teal" x="430" y="76" width="210" height="56" rx="8"/>
+<text class="th" x="535" y="95" text-anchor="middle" dominant-baseline="central" fill="#085041">work/ 작업 기록</text>
+<text class="ts" x="535" y="115" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">사건 · 불변 · 원천</text>
+
+<rect class="white" x="430" y="148" width="210" height="44" rx="8"/>
+<text class="th" x="535" y="163" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">대기열</text>
+<text class="ts" x="535" y="181" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">판정 안 된 기록 · 오래된 순 · 계산</text>
+
+<rect class="teal" x="430" y="212" width="210" height="180" rx="8"/>
+<text class="th" x="535" y="232" text-anchor="middle" dominant-baseline="central" fill="#085041">docs/ 관리 문서</text>
+<rect class="white" x="446" y="250" width="178" height="36" rx="6"/>
+<text class="ts" x="535" y="268" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">정본 서술 — 현재형 · 큐레이터</text>
+<rect class="white" x="446" y="294" width="178" height="36" rx="6"/>
+<text class="ts" x="535" y="312" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">기준선 블록 — 생성기만</text>
+<rect class="white" x="446" y="338" width="178" height="36" rx="6"/>
+<text class="ts" x="535" y="356" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">경과 — 반영한 기록 한 줄씩</text>
+
+<line x1="398" y1="104" x2="426" y2="104" class="arr" marker-end="url(#arrow)"/>
+<line x1="398" y1="234" x2="414" y2="234" class="arr"/>
+<path d="M414 234 V268 H442" class="arr" marker-end="url(#arrow)"/>
+<line x1="398" y1="364" x2="414" y2="364" class="arr"/>
+<path d="M414 364 V312 H442" class="arr" marker-end="url(#arrow)"/>
+
+<line x1="535" y1="132" x2="535" y2="144" class="arr" marker-end="url(#arrow)"/>
+<path d="M430 170 L238 214" class="dash" marker-end="url(#arrow)"/>
+<text class="ts" x="330" y="172" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">판정 재료</text>
+
+<!-- 읽는 쪽 -->
+<line x1="535" y1="392" x2="535" y2="436" class="arr" marker-end="url(#arrow)"/>
+<text class="ts" x="527" y="414" text-anchor="end" dominant-baseline="central" fill="#5F5E5A">section · 화면 — 섹션 + 기준선 + 미반영 기록</text>
+<rect class="gray" x="430" y="438" width="210" height="52" rx="8"/>
+<text class="th" x="535" y="456" text-anchor="middle" dominant-baseline="central" fill="#2C2C2A">읽는 사람 · 에이전트</text>
+<text class="ts" x="535" y="474" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">viewer · writer · 큐레이터</text>
+
+<text class="ts" x="40" y="456" dominant-baseline="central" fill="#5F5E5A">미반영은 상태다 — 섹션을 내보내는 모든 자리가</text>
+<text class="ts" x="40" y="474" dominant-baseline="central" fill="#5F5E5A">그 섹션의 미반영 기록을 같이 낸다. 늦은 반영은</text>
+<text class="ts" x="40" y="492" dominant-baseline="central" fill="#5F5E5A">정보를 잃지 않는다.</text>
+</svg>
