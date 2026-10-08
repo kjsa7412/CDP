@@ -1,12 +1,10 @@
 // 라우터 — 손으로 짠 것. 의존성 0(제품관리서비스 검토 D12).
 //
 // **주소가 상태다**(§6.6.2) — 사이트(`/` · `/manual`) · 콘솔(`/console`) · 레포(`/r/<레포>/` · `/graph` ·
-// `/manage/<탭>`) · 로컬(`/` · `/graph` · `/manage/<탭>`) 전부. 새로고침 · 북마크 · 남에게 링크로 보내기 ·
-// 뒤로 가기가 된다.
+// `/manage/<탭>`) 전부. 새로고침 · 북마크 · 남에게 링크로 보내기 · 뒤로 가기가 된다.
 //
 // 얼굴을 넘는 이동도 `pushState` 다 — `Shell` 이 매 렌더 `modeOf(path)` 로 얼굴을 고른다(화면 · 권한 검토 v0.1 R7).
-// 전에는 `main.jsx` 가 첫 렌더에서 얼굴을 한 번 고정해 얼굴 사이가 전부 문서 교체였다. 로컬의 `?t=` 토큰은
-// `api.js` 의 `readToken()` 이 모듈 로드에서 지운다 — 여기서 읽기 전이다.
+// 전에는 `main.jsx` 가 첫 렌더에서 얼굴을 한 번 고정해 얼굴 사이가 전부 문서 교체였다.
 //
 // 라우트 전환은 `startTransition` — 새 화면의 첫 렌더가 끝날 때까지 이전 화면이 남는다(React 18 · R8).
 
@@ -60,17 +58,15 @@ export function useRoute() {
   return loc
 }
 
-// 얼굴 — **주소가 말해 준다.** 한 번들이 셋에서 돈다(MCP 설계서 §6.8).
+// 얼굴 — **주소가 말해 준다.** 한 번들이 셋에서 돈다(MCP 설계서 §6.8). 화면은 늘 서버가 낸다(v1.0 — 로컬 얼굴 없음).
 //
-//   로컬   /                 face: local   (window.__CDP_SERVER__ 없음)
-//   레포   /r/<repo>/…       face: repo    rest = 그 뒤 조각(d/<문서> · graph · manage/<탭>)
-//   사이트 / · /manual · /login · /setup · /r      face: site    ┐ 서버가 index.html 에 심은
-//   콘솔   /console/…                              face: console ┘ window.__CDP_SERVER__ 로 안다
+//   레포   /r/<repo>/…       face: repo     rest = 그 뒤 조각(d/<문서> · w · graph · manage/<탭>)
+//   콘솔   /console/…        face: console
+//   사이트 그 밖 전부         face: site     / · /manual · /login · /setup · /r
 //
-// `/r/` 밖에서는 경로만으로 로컬과 서버를 가를 수 없다(둘 다 `/`). 그래서 서버가 `index.html` 을 낼 때
-// 한 줄을 심는다 — 왕복 없이 갈린다. 판정은 `shell/routes.js` 의 `faceOf` 하나(시험이 부른다).
+// 판정은 `shell/routes.js` 의 `faceOf` 하나(시험이 부른다).
 export function modeOf(path = location.pathname) {
-  return faceOf(path, typeof window !== 'undefined' && !!window.__CDP_SERVER__)
+  return faceOf(path)
 }
 
 // 같은 번들 안의 링크 — 얼굴 안이든 밖이든. 새 탭(⌘/Ctrl 클릭)은 브라우저에 맡긴다.

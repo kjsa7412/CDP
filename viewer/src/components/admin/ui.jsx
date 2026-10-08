@@ -8,6 +8,7 @@ import { useState } from 'react'
 import Icon from '../Icon.jsx'
 import { copyText } from '../../lib/clip.js'
 import { serverNow } from '../../lib/clock.js'
+import { SHELLS } from '../../lib/install.js'
 
 export function Card({ title, hint, children, actions, id }) {
   return (
@@ -80,26 +81,16 @@ export function Cmd({ children }) {
   )
 }
 
-// 경로 — 길다. 줄바꿈시키고, 누르면 복사된다.
-export function PathText({ children }) {
-  const [done, setDone] = useState(false)
-  const text = String(children || '')
-  if (!text) return <span className="amuted">(없음)</span>
+// 셸 고르기 — 설치 한 줄의 터미널 셋(`lib/install.js`). 작업 레포 · 일괄 갱신 · 큐레이터 폴더가 같은 탭을 쓴다
+export function ShellTabs({ shell, setShell }) {
   return (
-    <button
-      className="apath"
-      title="경로 복사"
-      onClick={() => {
-        copyText(text).then((ok) => {
-          if (!ok) return
-          setDone(true)
-          setTimeout(() => setDone(false), 1400)
-        })
-      }}
-    >
-      {text}
-      <Icon name={done ? 'check' : 'copy'} size={12} />
-    </button>
+    <div className="howto-tabs" role="tablist" aria-label="터미널">
+      {SHELLS.map((s) => (
+        <button key={s.key} role="tab" aria-selected={shell === s.key} className={shell === s.key ? 'on' : ''} onClick={() => setShell(s.key)}>
+          {s.label}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -128,9 +119,4 @@ export function when(iso, { now = serverNow() } = {}) {
   const d = new Date(iso)
   const p = (n) => String(n).padStart(2, '0')
   return `${rel} · ${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
-
-export function secs(ms) {
-  if (ms == null) return ''
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }

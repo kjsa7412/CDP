@@ -4,19 +4,19 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { docHref, docOfRoute, canonDocId, docTitle, tabsOpen, tabsClose, tabsPin, recentPush, TAB_MAX } from '../viewer/src/lib/doclink.js'
 
-// 라우터(`modeOf`)가 하는 것과 같게 — 주소 → rest(조각마다 디코드 · 서버형은 /r/<레포> 뒤) · query
+// 라우터(`modeOf`)가 하는 것과 같게 — 주소 → rest(조각마다 디코드 · /r/<레포> 뒤) · query
 const parse = (href) => {
   const u = new URL(href, 'http://x')
   const seg = u.pathname.split('/').filter(Boolean).map(decodeURIComponent)
   return { rest: seg[0] === 'r' ? seg.slice(2) : seg, query: u.searchParams }
 }
 
-test('docHref ↔ docOfRoute — 로컬 · 서버형 · 한글 · 경로 · 섹션', () => {
+test('docHref ↔ docOfRoute — 레포 주소 · 한글 · 경로 · 섹션', () => {
   const cases = [
-    ['/', '2026-0917-PLC-CIMON-SCADA-구조', null],
-    ['/', 'docs/테이블정의서.md', null],
-    ['/', 'docs/테이블정의서.md', 'table:rp_plnd_mst'],
-    ['/r/gdi/', 'MANUAL.md', null],
+    ['/r/alpha/', '2026-0917-PLC-CIMON-SCADA-구조', null],
+    ['/r/alpha/', 'docs/테이블정의서.md', null],
+    ['/r/alpha/', 'docs/테이블정의서.md', 'table:rp_plnd_mst'],
+    ['/r/gdi/', 'README.md', null],
     ['/r/' + encodeURIComponent('dpms wiki') + '/', 'docs/화면 설계서.md', 'screen:SYB030 #1'],
   ]
   for (const [base, id, at] of cases) {
@@ -33,7 +33,7 @@ test('docHref ↔ docOfRoute — 로컬 · 서버형 · 한글 · 경로 · 섹�
     assert.deepEqual(docOfRoute(rest, query), { id: 'docs/인터페이스정의서.md', at, v }, href)
   }
   // 경로의 / 는 그대로 — 서버 폴백 · 사람 눈에
-  assert.equal(docHref('/', 'docs/a.md'), '/d/docs/a.md')
+  assert.equal(docHref('/r/alpha/', 'docs/a.md'), '/r/alpha/d/docs/a.md')
 })
 
 test('docOfRoute — 문서 주소가 아니면 null', () => {

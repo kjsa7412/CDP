@@ -1,28 +1,27 @@
 // 검증 뷰 — 설계서 §24.1.
 //
-// 출처를 맨 위에 명시한다. 내장 검사를 정본처럼 보여주면 뷰어와 훅이 어긋났을
-// 때 사용자가 훅을 의심하지 않는다. 뷰어는 편의, ctx check 가 보증이다(§12).
+// 출처를 맨 위에 명시한다 — 이 화면의 결과는 `save` 가 커밋 전에 보는 것과 **같은 계산**이다(§12). 어느 쪽 결과를
+// 보고 있는지 숨기지 않는다.
 //
 // 미등재 좌표에 후보를 제시하는 것이 이 화면의 실질적 가치다 — 프로토콜 §9.6 은
-// 커밋 시점에 막는 이유를 "작성자가 맥락을 쥐고 있어 1초면 고친다"로 설명했다.
-// 훅이 안 걸린 PC 에서는 이 화면이 그 1초를 대신한다.
+// 쓰는 시점에 막는 이유를 "작성자가 맥락을 쥐고 있어 1초면 고친다"로 설명했다.
 
 import { useState } from 'react'
-import { api, currentRepo, isServer } from '../lib/api.js'
+import { api, currentRepo } from '../lib/api.js'
 import { useResource } from '../lib/cache.js'
 import Icon from './Icon.jsx'
 import { copyText } from '../lib/clip.js'
 import { plainDetail } from '../lib/format.js'
 
 const SEV = {
-  error: { icon: 'block', label: '커밋이 거부될 것' },
+  error: { icon: 'block', label: '오류 — 새로 만드는 save 는 거절된다' },
   warn: { icon: 'warn', label: '확인 필요' },
   info: { icon: 'info', label: '안내' },
 }
 
 export default function CheckView({ onOpen }) {
   // 결과는 캐시(화면 · 권한 검토 v0.1 R8) — 오버레이를 다시 열면 지난 결과를 즉시 그리고 뒤에서 다시 돈다
-  const { data, refresh } = useResource('api:' + (currentRepo() || 'local') + '/check', api.check, { ttl: 0 })
+  const { data, refresh } = useResource('api:' + currentRepo() + '/check', api.check, { ttl: 0 })
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState('')
 
@@ -51,32 +50,20 @@ export default function CheckView({ onOpen }) {
       <div className="docwrap">
         <h1 style={{ fontSize: 22, margin: '24px 0 8px' }}>검증</h1>
 
-        {/* 출처 — 어느 쪽 결과를 보고 있는지 숨기지 않는다(§12).
-            **전에는 거짓말을 하고 있었다.** `bin/ctx 가 없거나 --json 을
-            지원하지 않습니다` 를 늘 띄웠는데, 앱은 `bin/ctx` 를 부르려고
-            시도한 적이 없다. 그리고 부를 필요도 없다 --
+        {/* 출처 — 어느 쪽 결과를 보고 있는지 숨기지 않는다(§12). 화면 · save · `ctx check` 가 같은 함수다 —
 
-              앱     store.check()  → runBuiltinCheck (core/check.js)
-              ctx    cmdCheck()     → runBuiltinCheck (같은 파일을 번들)
+              화면   store.check()  → runBuiltinCheck (core/check.js)
+              save   전 · 후 검사   → runBuiltinCheck — **그 save 가 새로 만든 오류**만 막는다(v1.0 V21)
+              ctx    cmdCheck()     → runBuiltinCheck
 
-            **같은 함수다.** 결과가 갈릴 수 있는 경우는 하나뿐이고, 그것은
-            그 레포의 `bin/ctx.mjs` 번들이 낡았을 때다. 그건 앱이 틀린 것이
-            아니라 번들이 낡은 것이므로, 그렇게 말한다. */}
+            git 훅은 없다(v1.0 — 레포는 서버가 쓰고 커밋은 save 가 한다). */}
         <div className="checkhead">
           <span>출처:</span>
           <code>core/check.js</code>
           <span className="src"><Icon name="check" size={12} /> ctx check 와 같은 코드</span>
-          {isServer() ? (
-            // 서버형 — 훅이 아니라 save 가 이 계산으로 커밋 전에 막는다. 오류가 하나라도 있으면 그 레포의 save 가 전부 거절된다(F7)
-            <span style={{ color: 'var(--text-2)' }}>
-              — 서버형은 <code>save</code> 가 이 계산으로 커밋 전에 막는다. 오류가 하나라도 있으면 이 레포의 save 가 전부 거절된다
-            </span>
-          ) : (
-            <span style={{ color: 'var(--text-2)' }}>
-              — 커밋을 막는 것은 git 훅의 <code>bin/ctx check</code> 다. 그 레포의
-              번들이 낡았으면 결과가 다를 수 있다 (<code>ctx version</code>)
-            </span>
-          )}
+          <span style={{ color: 'var(--text-2)' }}>
+            — <code>save</code> 가 이 계산으로 커밋 전에 막는다. 그 save 가 <b>새로 만든</b> 오류만 막고, 레포에 원래 있던 오류는 경고로 싣는다
+          </span>
           <span className="topbar__spacer" />
           <button style={{ color: 'var(--accent)' }} onClick={run} disabled={busy}>
             {busy ? '실행 중…' : '재실행'}
@@ -103,11 +90,6 @@ export default function CheckView({ onOpen }) {
                 <div className="finding__head">
                   <Icon name={SEV[sev].icon} size={14} />
                   <span>{f.label}</span>
-                  {/* 뷰어만 하는 검사에는 꼬리표를 붙인다 — 어느 것이 훅에서
-                      걸릴지 사용자가 구분해야 한다(§12) */}
-                  {['no-why', 'no-next', 'index-stale'].includes(f.kind) && (
-                    <span className="badge badge--quiet">뷰어 자체 검사</span>
-                  )}
                   <span className="count num">{f.items.length}건</span>
                 </div>
                 {/* 누가 무엇으로 치우는가 — 경고를 받은 사람이 다음 할 일을 안다(등록부 사본 검토 X30) */}

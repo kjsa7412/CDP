@@ -1,7 +1,7 @@
 // 관리 문서 — 목록 · 사용 현황 · 안 쓰는 문서 지우기. 관리문서 정리 검토 v0.1 §4.9.
 //
-// 옛 레포는 패키지가 40종을 부어 한 프로젝트가 다 쓰지 않는다. 여기서 문서마다 「쓰는가」(작업 기록이 쓴 섹션 · 닿은 작업 기록 ·
-// 들어오는 참조 · 필수 제출 · 마지막 변경)를 보고, 그 레포의 큐레이터는 고른 문서를 지운다.
+// 옛 레포는 문서 40종을 한꺼번에 부어 세웠고 한 프로젝트가 다 쓰지 않는다. 여기서 문서마다 「쓰는가」(작업 기록이 쓴 섹션 ·
+// 닿은 작업 기록 · 들어오는 참조 · 필수 제출 · 마지막 변경)를 보고, 그 레포의 큐레이터는 고른 문서를 지운다.
 //
 // **화면은 계획을 세우지 않는다.** 미리보기도 지우기도 서버의 `save`(managed drop)를 부른다 — 미리보기는 `dryRun` 이고
 // 고칠 줄(refs)과 그 초안(edit)도 서버가 준다. 화면은 줄마다 「행 지우기 · 링크만 풀기 · 알고 둔다」 를 고르게 할 뿐이다.
@@ -10,7 +10,7 @@
 // 보기는 누구나 · 지우기 단추는 그 레포의 큐레이터에게만(v1.0 — 관리 문서는 큐레이터만 바꾼다 · admin 은 모든 레포의 큐레이터).
 
 import { useMemo, useState } from 'react'
-import { api, isServer, currentRepo } from '../../lib/api.js'
+import { api, currentRepo } from '../../lib/api.js'
 import { can } from '../../lib/roles.js'
 import { useResource } from '../../lib/cache.js'
 import { Card, Note, Btn } from './ui.jsx'
@@ -26,11 +26,10 @@ const CHOICE = { 'drop-row': '행 지우기', unlink: '링크만 풀기', review
 const groupOf = (no) => (no && /\d{2,}$/.test(no) ? no.slice(0, -1) : null)
 
 export default function Docs({ me = null, say, onChanged = null }) {
-  const server = isServer()
-  const canDrop = server && can(me, 'curate', currentRepo())
+  const rk = currentRepo()
+  const canDrop = can(me, 'curate', rk)
   // 목록은 캐시(화면 · 권한 검토 v0.1 R8) — 전에는 마운트마다 처음부터 읽어 메뉴로 오갈 때마다 「읽는 중…」 이 섰다(실측 55/59 프레임).
   // 지운 뒤에는 refresh 로 새로 읽는다
-  const rk = currentRepo() || 'local'
   const list = useResource('api:' + rk + '/managed-docs', api.managedDocs, { ttl: 30_000 })
   const data = list.data || null
   const error = list.error ? list.error.message || String(list.error) : null
@@ -127,7 +126,7 @@ export default function Docs({ me = null, say, onChanged = null }) {
       >
         <Note>
           「서식 그대로」 는 작업 기록이 쓴 섹션도 · 닿은 작업 기록도 없는 문서다 — <b>아직 안 쓴 것</b>일 수도 <b>안 쓸 것</b>일 수도 있다.
-          지울지는 사람이 정한다. 작업 기록이 쓴 문서는 고를 수 없다(합치거나 등록부에서 떼는 것은 에이전트의 「구조 정리」).
+          지울지는 사람이 정한다. 작업 기록이 쓴 문서는 고를 수 없다(합치거나 등록부에서 떼는 것은 큐레이터의 에이전트 — <code>cdp-registry</code>).
         </Note>
         <div className="adocs__bar">
           <div className="adocs__seg" role="tablist" aria-label="거르기">
@@ -209,7 +208,7 @@ export default function Docs({ me = null, say, onChanged = null }) {
             </Btn>
           </div>
         )}
-        {server && !canDrop && <Note>지우기는 그 레포의 큐레이터가 한다 — 지울 문서를 골라 큐레이터에게 요청한다.</Note>}
+        {!canDrop && <Note>지우기는 그 레포의 큐레이터가 한다 — 지울 문서를 골라 큐레이터에게 요청한다.</Note>}
       </Card>
 
       {preview && <Preview preview={preview} setPreview={setPreview} reason={reason} setReason={setReason} busy={busy} onDrop={runDrop} onCancel={() => setPreview(null)} />}
@@ -292,7 +291,7 @@ function Preview({ preview, setPreview, reason, setReason, busy, onDrop, onCance
       </div>
       {d.vocabRemoved?.length > 0 && (
         <div className="arow">
-          <span className="arow__label">예시 좌표</span>
+          <span className="arow__label">같이 지울 어휘 좌표</span>
           <span className="arow__value amono">{d.vocabRemoved.join(' · ')}</span>
         </div>
       )}

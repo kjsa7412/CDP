@@ -310,23 +310,6 @@
   overflow-wrap: anywhere;
 }
 
-.docchanged {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin: var(--sp-3) 0 0;
-  padding: var(--sp-2) var(--sp-3);
-  font-size: 12px;
-  color: var(--text);
-  background: var(--accent-bg);
-  border-radius: var(--r-badge);
-}
-.docchanged button {
-  margin-left: auto;
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .readmark {
   position: absolute;
   top: var(--sp-2);

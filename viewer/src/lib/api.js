@@ -3,51 +3,23 @@
 // **한 번들이 세 얼굴에서 돈다**(MCP 설계서 §6.8 · 제품관리서비스 검토 §4.1). 빌드를
 // 나누면 유지비가 배고, 같은 화면이 갈라지면 한쪽만 고쳐진다.
 //
-// 얼굴은 **주소가 말해 준다**(`router.jsx` 의 `modeOf`).
+// 얼굴은 **주소가 말해 준다**(`router.jsx` 의 `modeOf`). 화면은 늘 서버(`ctx serve` · 개인 서버 `--personal`)가 낸다 —
+// 로컬 얼굴(PC 의 뷰어 · `?t=` 토큰 헤더 · SSE · 하트비트 · git 라우트)은 v1.0 에 없앴다(개편안 §5.6).
 //
-//   로컬   /                → /api/…             세션 토큰 헤더 · SSE · 하트비트        face: local
-//   레포   /r/<repo>/       → /api/<repo>/…      세션 쿠키 · SSE 없음 · 하트비트 없음  face: repo
-//   사이트 / · /manual · /login · /setup · /r      face: site    ┐ 서버가 index.html 에 심은
-//   콘솔   /console/…                              face: console ┘ window.__CDP_SERVER__ 로 안다
+//   레포   /r/<repo>/       → /api/<repo>/…      세션 쿠키           face: repo
+//   콘솔   /console/…       → /admin/…           세션 쿠키 · 재인증   face: console
+//   사이트 / · /manual · /login · /setup · /r     → /site/…            face: site
 //
-// **모드 · 레포는 함수다** — `getMode()` · `isServer()` · `currentRepo()`. 전에는 모듈 상수(`mode · BASE · LS`)라
-// 다른 레포 · 다른 얼굴로 가려면 모듈을 다시 실행하는 수밖에 없었고, 그래서 얼굴을 넘거나 레포를 바꾸는 전환
-// 31곳이 전부 문서 교체였다(화면 · 권한 검토 v0.1 P7 · R7). 지금은 `req()` 가 **부르는 시점**의 레포로 주소를 만든다.
-//
-// 세션 토큰은 URL 의 ?t= 로 한 번 받아 sessionStorage 에 넣고 이후 헤더로
-// 보낸다. 외부 페이지는 sessionStorage 를 읽을 수 없다(설계서 §7.2).
-// 받은 뒤 URL 에서 지운다 — 주소창과 히스토리에 토큰을 남기지 않는다. 라우터가 주소를 읽기 전(모듈 로드)이다.
+// **레포는 함수다** — `currentRepo()`. 전에는 모듈 상수(`mode · BASE · LS`)라 다른 레포 · 다른 얼굴로 가려면 모듈을
+// 다시 실행하는 수밖에 없었고, 그래서 얼굴을 넘거나 레포를 바꾸는 전환 31곳이 전부 문서 교체였다(화면 · 권한 검토 v0.1
+// P7 · R7). 지금은 `req()` 가 **부르는 시점**의 레포로 주소를 만든다.
 
 import { navigate, modeOf } from './router.jsx'
 import { noteServerDate } from './clock.js'
 
-const KEY = 'cdp.token'
+// ── 레포 — 매번 주소를 본다 ────────────────────────────────────────────
 
-function readToken() {
-  const url = new URL(location.href)
-  const t = url.searchParams.get('t')
-  if (t) {
-    try {
-      sessionStorage.setItem(KEY, t)
-    } catch {}
-    url.searchParams.delete('t')
-    history.replaceState(null, '', url.pathname + url.search + url.hash)
-    return t
-  }
-  try {
-    return sessionStorage.getItem(KEY) || ''
-  } catch {
-    return ''
-  }
-}
-
-export const token = readToken()
-
-// ── 모드 · 얼굴 — 매번 주소를 본다 ────────────────────────────────────────────
-
-export const getMode = () => modeOf(location.pathname)
-export const isServer = () => getMode().server
-export const currentRepo = () => getMode().repo
+export const currentRepo = () => modeOf(location.pathname).repo
 const base = () => {
   const r = currentRepo()
   return r ? `/api/${encodeURIComponent(r)}` : '/api'
@@ -143,23 +115,25 @@ export async function logout() {
   } catch {}
 }
 
-// 서버 모드의 화면 상태는 **브라우저에 둔다**(§6.8). 서버 저장 0 —
-// 사람마다 다르고 잃어도 그만인 값이라 명부·설치 대장 옆에 둘 것이 아니다.
-const lsKey = () => 'cdp.state.' + (currentRepo() || 'local')
+// 화면 상태(읽기 설정 · 탭 · 최근 · 읽음 · 폭)는 **브라우저에 둔다**(§6.8). 서버 저장 0 —
+// 사람마다 다르고 잃어도 그만인 값이라 명부·설치 대장 옆에 둘 것이 아니다. 레포마다 키 하나.
+// 키 이름(`cdp.state.<레포>`)은 그대로 둔다 — 바꾸면 사람마다 쌓인 탭 · 읽음이 사라진다.
+const lsKey = () => 'cdp.state.' + (currentRepo() || '')
 // 테마만은 레포별이 아니다 — alpha 에서 밝게 고정했는데 gamma · 콘솔 · 소개가 어둡던 것(검토 P12).
-function localState() {
+function readState() {
   let st = {}
   try {
     st = JSON.parse(localStorage.getItem(lsKey()) || '{}')
   } catch {}
   return { ...st, theme: getTheme() }
 }
-// 지금 상태를 동기로 — 서버 모드는 브라우저에 있으니 첫 렌더부터 있다(App 의 「불러오는 중…」 을 줄인다 · R8). 로컬은 null
-export const stateNow = () => (isServer() ? localState() : null)
-function saveLocalState(patch) {
+// 지금 상태를 동기로 — 브라우저에 있으니 첫 렌더부터 있다(App 의 「불러오는 중…」 을 줄인다 · R8)
+export const stateNow = () => readState()
+// 고친 것만 받아 합쳐 쓴다 — 테마는 레포와 무관한 키(`cdp.theme`)로
+export function saveState(patch) {
   if ('theme' in patch) setTheme(patch.theme)
   const { theme, ...rest } = patch
-  const next = { ...localState(), ...rest }
+  const next = { ...readState(), ...rest }
   try {
     localStorage.setItem(lsKey(), JSON.stringify(next))
   } catch {}
@@ -168,24 +142,20 @@ function saveLocalState(patch) {
 
 // `allowStatus` — **실패가 결과인 호출이 있다.**
 //
-// ff 불가·원격 안 닿음·로그인 실패는 HTTP 오류가 아니라 **읽어야 하는 답**이다. 전에는
-// 그것도 예외로 던져서, 서버가 보낸 "원격이 3건 앞서 있고 로컬에도 2건이
-// 있습니다 — 터미널에서 git pull --rebase" 가 화면에서는 `HTTP 409` 로만
-// 보였다. 본문을 그대로 돌려준다.
+// origin 과 갈림 · push 거절 · 판정 거절 · 로그인 실패는 HTTP 오류가 아니라 **읽어야 하는 답**이다. 전에는
+// 그것도 예외로 던져서, 서버가 보낸 사유 문장이 화면에서는 `HTTP 409` 로만 보였다. 본문을 그대로 돌려준다.
 //
 // 401 은 둘로 갈린다 — `E_REAUTH`(콘솔 쓰기에 관리자 확인이 필요하다)는 **던진다**
 // 부르는 쪽이 확인 모달을 띄우고 다시 시도한다. 나머지 401 은 세션이 끊긴 것이라
 // 보던 곳을 들고 로그인으로 간다(§6.6.1) — pushState 로. 그 뒤 던지는 오류는 화면이 그리지 않는다(`cache.js`).
 async function req(path, opts = {}) {
   const { allowStatus = [], absolute = false, ...init } = opts
-  const server = isServer()
   const at = location.pathname
   const res = await fetch((absolute ? '' : base()) + path, {
     ...init,
+    // 세션은 쿠키다 — 브라우저는 `Authorization` 을 스스로 달 수 없다(§6.4)
     headers: {
       ...(init.body ? { 'content-type': 'application/json' } : {}),
-      // 서버 모드는 쿠키다 — 브라우저는 `Authorization` 을 스스로 달 수 없다(§6.4).
-      ...(token && !server ? { authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
   })
@@ -199,11 +169,8 @@ async function req(path, opts = {}) {
     } catch {}
     if (j?.error?.code === 'E_REAUTH') throw new ApiError(j.error.message, 401, 'E_REAUTH')
     // 보내던 자리를 떠났거나(로그아웃 뒤 늦게 온 답) 이미 로그인 화면이면 옮기지 않는다 — `next` 가 겹치지 않게
-    if (server) {
-      if (location.pathname === at && !/^\/login(\/|$)/.test(at)) navigate('/login?next=' + encodeURIComponent(location.pathname + location.search))
-      throw new ApiError('로그인이 필요합니다', 401, 'E_AUTH')
-    }
-    throw new ApiError('토큰이 없거나 만료되었습니다. 앱을 다시 실행하세요.', 401)
+    if (location.pathname === at && !/^\/login(\/|$)/.test(at)) navigate('/login?next=' + encodeURIComponent(location.pathname + location.search))
+    throw new ApiError('로그인이 필요합니다', 401, 'E_AUTH')
   }
   if (!res.ok) {
     let detail = ''
@@ -229,12 +196,6 @@ export class ApiError extends Error {
 
 export const api = {
   repo: () => req('/repo'),
-  probe: (p) => req(`/repo/probe?path=${encodeURIComponent(p)}`),
-  // 작업 레포 세팅. `apply` 없이 부르면 **무엇을 쓸지만** 돌려준다.
-  setup: (p, apply = false) =>
-    req('/setup', { method: 'POST', body: JSON.stringify({ path: p, apply }) }),
-  // 경로 지정 — 설정 저장과 스캔 대상 변경을 한 번에 한다
-  setRepo: (p) => req('/repo', { method: 'POST', body: JSON.stringify({ path: p }) }),
   docs: () => req('/docs'),
   doc: (id) => req(`/docs/${encodeURIComponent(id)}`),
   vocab: () => req('/vocab'),
@@ -245,51 +206,30 @@ export const api = {
   check: () => req('/check'),
   status: () => req('/status'),
   managed: () => req('/managed'),
-  // 관리 문서 목록 · 사용 현황 · 지우기(관리문서 정리 검토 §4.9). 지우기는 서버형 admin — 거절은 detail 째 받는다(refs)
+  // 관리 문서 목록 · 사용 현황 · 지우기(관리문서 정리 검토 §4.9). 지우기는 그 레포의 큐레이터 — 거절은 detail 째 받는다(refs)
   managedDocs: () => req('/managed-docs'),
   docsDrop: (body) => req('/docs-drop', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 403, 404, 409] }),
   coord: (c) => req(`/coord?coord=${encodeURIComponent(c)}`),
-  state: () => (isServer() ? Promise.resolve(localState()) : req('/state')),
-  saveState: (patch) =>
-    isServer() ? Promise.resolve(saveLocalState(patch)) : req('/state', { method: 'POST', body: JSON.stringify(patch) }),
-  // 누구인가 · 무엇을 볼 수 있는가 · 역할. 서버 모드에만 있다. `probe` 면 비로그인(401)을 null 로 — 로그인으로 보내지 않는다
-  me: ({ probe = false } = {}) =>
-    isServer()
-      ? req('/me', { absolute: true, allowStatus: probe ? [401] : [] }).then((j) => (j && !j.error ? j : null))
-      : Promise.resolve(null),
+  // 화면 상태 — 브라우저(localStorage)에 있다. 부르는 쪽 모양(Promise)은 그대로 둔다
+  state: () => Promise.resolve(readState()),
+  saveState: (patch) => Promise.resolve(saveState(patch)),
+  // 누구인가 · 무엇을 볼 수 있는가 · 역할. `probe` 면 비로그인(401)을 null 로 — 로그인으로 보내지 않는다
+  me: ({ probe = false } = {}) => req('/me', { absolute: true, allowStatus: probe ? [401] : [] }).then((j) => (j && !j.error ? j : null)),
 
-  // ── 설치 대장 (§6.7.2) — 서버 모드 전용. 로컬의 `/workrepos` 와 **다른
-  // 것**이다: 로컬은 이 PC 에 깐 곳을, 서버는 등록과 추적을 든다(§6.2).
+  // ── 설치 대장 (§6.7.2) — 등록과 추적. 레포 관리 › 연결된 작업 레포가 이 레포의 행만 그린다
   registry: () => req('/workrepos', { absolute: true }),
-  // ── 지식 레포 (서버판 · 검토 §3.5) — 목록 · 패키지. 세우기(`POST /repos`)는 없앴다 — 콘솔 `admin.repoNew` 만(화면 · 권한 검토 v0.1 R1)
+  // ── 지식 레포 — 볼 수 있는 것의 목록(미러 상태 · 수). 세우기(`POST /repos`)는 없앴다 — 콘솔 `admin.repoNew` 만(화면 · 권한 검토 v0.1 R1)
   repos: () => req('/repos', { absolute: true }),
-  packages: () => req('/packages', { absolute: true }),
   registryAdd: (body) => req('/workrepos', { absolute: true, method: 'POST', body: JSON.stringify(body) }),
   registryDel: (id) => req('/workrepos/' + encodeURIComponent(id), { absolute: true, method: 'DELETE' }),
   // 설치 꾸러미. **토큰은 들어 있지 않다**(§6.7.3) — 브라우저가 그냥 받는다.
   // 레포는 그 등록의 것 — 지금 보는 레포와 다르면 서버가 409 로 막는다(실서버 종합 시험 F1)
   kitUrl: (id, repo = currentRepo()) => `/kit/${encodeURIComponent(repo)}?workrepo=${encodeURIComponent(id)}`,
-  // git — GET 은 읽기만. pull/push 는 사람이 누른 것이어야 하므로 POST. **로컬만** — 서버에는 `/git` 이 없다(R4)
-  git: (doFetch) => req('/git' + (doFetch ? '?fetch=1' : '')),
-  gitPull: () => req('/git/pull', { method: 'POST', body: '{}', allowStatus: [409] }),
-  gitPush: () => req('/git/push', { method: 'POST', body: '{}', allowStatus: [409] }),
-  // git 설정 — 읽기. 쓰는 것은 훅 한 줄뿐이다
-  gitConfig: () => req('/git/config'),
-  gitHooks: () => req('/git/hooks', { method: 'POST', body: '{}', allowStatus: [409] }),
-  // 동기화 — 순서는 서버가 갖는다. 진행은 SSE 로 온다
-  sync: () => req('/sync'),
-  runSync: (pull = true) =>
-    req('/sync', { method: 'POST', body: JSON.stringify({ pull }), allowStatus: [409] }),
-  // 작업 레포 — 설치 상태를 한 번에
-  workRepos: () => req('/workrepos'),
-  diag: () => req('/diag'),
-  rescan: () => req('/rescan', { method: 'POST' }),
-  fileUrl: (p) =>
-    `${base()}/file?path=${encodeURIComponent(p)}` + (isServer() ? '' : `&t=${encodeURIComponent(token)}`),
-  // 내려받기 — 문서 하나(`download=1` → 새 탭 대신 파일) · 묶음(zip · `managed` 관리 문서 · `work` 작업 문서). 읽기 권한이면 된다
+  // 레포 안의 파일 하나 — 쿠키로 받는다(새 탭 · <img> 도 같은 출처라 세션이 실린다)
+  fileUrl: (p) => `${base()}/file?path=${encodeURIComponent(p)}`,
+  // 내려받기 — 문서 하나(`download=1` → 새 탭 대신 파일) · 묶음(zip · `managed` 관리 문서 · `work` 작업 기록). 읽기 권한이면 된다
   downloadUrl: (p) => api.fileUrl(p) + '&download=1',
-  archiveUrl: (layer) =>
-    `${base()}/archive?layer=${encodeURIComponent(layer)}` + (isServer() ? '' : `&t=${encodeURIComponent(token)}`),
+  archiveUrl: (layer) => `${base()}/archive?layer=${encodeURIComponent(layer)}`,
   // ── 큐레이션 · 서식집(개편안 §5.4 · TODO §1.3 — v0.27) ─────────────────────────────────────────────
   // 옛 서버에는 없다(404) — 화면이 「이 서버는 아직 … 내지 않는다」 를 말한다. 막는 것은 서버다: 판정 재료 · 판정은 curate 만
   queue: () => req('/queue'),
@@ -300,9 +240,6 @@ export const api = {
   form: (p) => req('/forms/' + String(p).split('/').map(encodeURIComponent).join('/')),
   // 글을 안 쓰는 판정(기록으로 둠) — 서버가 큐레이션 기록을 지어 같은 save 를 탄다. 거절(400 · 409)도 읽어야 하는 답이다
   curate: (body) => req('/curate', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 409] }),
-  probeExternal: (p) => req(`/probe-external?path=${encodeURIComponent(p)}`),
-  open: (p) => req('/open', { method: 'POST', body: JSON.stringify({ path: p }) }),
-  heartbeat: () => req('/heartbeat', { method: 'POST' }).catch(() => {}),
 }
 
 // ── 레포를 이름으로 — 주소의 레포가 아니라(개편안 §7.1 「api.base() 가 주소의 레포에 묶임」) ─────────
@@ -342,8 +279,6 @@ export const admin = {
   repoSync: (name) => A(`/repos/${encodeURIComponent(name)}/sync`, { ...J('POST', {}), allowStatus: [409] }),
   repoPush: (name) => A(`/repos/${encodeURIComponent(name)}/push`, { ...J('POST', {}), allowStatus: [409] }),
   repoRestore: (name) => A(`/repos/${encodeURIComponent(name)}/restore`, { ...J('POST', {}), allowStatus: [409] }),
-  // 에이전트 세팅(도구 층)을 이 서버 판으로 — 건너뜀(409 · 더러움 · origin 앞섬 · 훅)도 답이다
-  repoKit: (name) => A(`/repos/${encodeURIComponent(name)}/kit`, { ...J('POST', {}), allowStatus: [409] }),
   // 원격에 잇는다 — 세울 때 빠뜨린 origin. push 거절(409)도 답이다(사유 · 문장). 강제 push 는 없다
   repoOrigin: (name, url) => A(`/repos/${encodeURIComponent(name)}/origin`, { ...J('POST', { url }), allowStatus: [409] }),
   // 치운다 — 휴지통(<data>/trash)으로 옮긴다. 확인 이름이 레포 이름과 같아야 한다
@@ -363,29 +298,5 @@ export const admin = {
   sudo: (tok) => A('/sudo', { ...J('POST', { token: tok }), allowStatus: [401, 429] }),
 }
 
-// SSE — 파일 변경·스캔 진행. 감시가 살아 있으면 새로고침 버튼이 필요 없다(§23.1).
-export function subscribe(onEvent, onOpen) {
-  // 서버 모드에는 SSE 가 없다. 감시를 켜지 않으므로(§6.1) 보낼 이벤트도 없고,
-  // 상주 서버에 탭마다 연결을 물릴 이유도 없다.
-  if (isServer()) return () => {}
-  const es = new EventSource(`/api/events?t=${encodeURIComponent(token)}`)
-  es.onmessage = (e) => {
-    try {
-      onEvent(JSON.parse(e.data))
-    } catch {}
-  }
-  // 연결이 붙기 전에 지나간 이벤트는 못 받는다. 붙는 순간 상태를 한 번
-  // 다시 읽어 맞춘다 — 특히 감시 ready 는 기동 직후에 오므로 놓치기 쉽다.
-  es.onopen = () => onOpen?.()
-  return () => es.close()
-}
-
-// 하트비트 — 탭이 닫히면 서버도 종료된다(§5.2 ⑥)
-export function startHeartbeat() {
-  // 하트비트는 **탭이 닫히면 서버를 끄는** 장치다(§5.2 ⑥). 상주 서버에서
-  // 그것을 보내면 남의 화면까지 끄는 셈이 된다.
-  if (isServer()) return () => {}
-  const id = setInterval(() => api.heartbeat(), 30_000)
-  api.heartbeat()
-  return () => clearInterval(id)
-}
+// 알림 · SSE · 하트비트는 없다 — 서버가 유일한 작성자이고 save 뒤 스스로 다시 읽는다. 화면은 마운트 · 초점 · 쓰기 뒤에 다시
+// 읽는다(`cache.js`). 전에는 로컬 뷰어가 파일 감시를 SSE 로 보내고, 탭이 닫히면 하트비트가 끊겨 뷰어가 꺼졌다.

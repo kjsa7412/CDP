@@ -6,136 +6,76 @@
 // 바뀌었다 — 관리 문서는 큐레이션으로만 바뀌고(I6) 늦은 반영은 막는 오류가 아니라 **상태**다(I7). 서버가 값을 안 내면 카드가 없다.
 // 깨진 섹션 · 미등재는 `/api/status` 그대로 「문서 상태」 에 남는다.
 // 내려받기(zip)는 문서 화면의 빈 상태로 갔다 — 읽는 사람의 일이라 레포 관리에 둘 것이 아니었다.
+// 감시 · 스캔 시각 · 동기화(받을 것 · 보낼 것) 카드는 없다 — 서버가 유일한 작성자이고 save 뒤 스스로 다시 읽는다.
+// 없는 상태를 그리지 않는다(불변조건 7 · v1.0 로컬 얼굴 지움).
 //
 // **알림을 만들지 않는다**(설계서 제4부). 이 화면은 사람이 열었을 때 말한다.
 
-import { useEffect } from 'react'
-import { api, isServer, currentRepo } from '../../lib/api.js'
+import { api, currentRepo } from '../../lib/api.js'
 import { navigate } from '../../lib/router.jsx'
 import { repoBase } from '../../shell/nav.js'
 import { useResource } from '../../lib/cache.js'
 import { can } from '../../lib/roles.js'
-import Icon from '../Icon.jsx'
-import { Card, Row, Mark, Mono, Note, Btn, when } from './ui.jsx'
+import { Card, Row, Mono, Note, Btn } from './ui.jsx'
 
-// 큐레이션이 이만큼 밀리면 경고(개편안 §5.2 curation-stale)
+// 큐레이션 대기가 이만큼 오래되면 경고(개편안 §5.2 curation-stale)
 const STALE_DAYS = 14
 
-// 서버형의 미러 상태 다섯 — 사실만(동시 기록 검토 v0.1 §5.7). 고치는 것은 콘솔.
-const MIRROR = { ok: [null, '최신 — origin 과 같다'], lag: ['warn', '밀림'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 이 앞서 있다'], off: [null, '원격 없음'] }
+// 미러 상태 다섯 — 사실만(동시 기록 검토 v0.1 §5.7). 고치는 것은 서버 › 지식 레포.
+const MIRROR = { ok: [null, '최신 — origin 과 같다'], lag: ['warn', 'origin 에 못 보냄'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 이 앞서 있다'], off: [null, '원격 없음'] }
 
-export default function Overview({ repo, sync, diag, me = null, onCheck, onSync }) {
+export default function Overview({ repo, me = null, onCheck }) {
   // 전부 캐시(화면 · 권한 검토 v0.1 R8) — 탭을 오가도 「읽는 중…」 이 다시 뜨지 않는다. 키는 레포 + 경로.
-  // 서버형 — 이 레포의 미러 상태는 `/repos` 의 자기 행(사유 포함 · 상태바와 **같은 키** — 요청 하나). `/api/<레포>/git` 은 로컬형 문법이다.
-  // 작업 레포는 **대장**(`/workrepos`)의 이 레포 것 — 관리 › 작업 레포와 같은 키.
-  const server = isServer()
-  const rk = currentRepo() || 'local'
+  // 이 레포의 미러 상태는 `/repos` 의 자기 행(사유 포함 · 상태바와 **같은 키** — 요청 하나).
+  // 작업 레포는 **대장**(`/workrepos`)의 이 레포 것 — 연결된 작업 레포 화면과 같은 키.
+  const rk = currentRepo()
   const st = useResource('api:' + rk + '/status', api.status)
-  const rows = useResource('/repos', api.repos, { enabled: server, ttl: 15_000 })
-  const reg = useResource('/workrepos', api.registry, { enabled: server })
-  const gitR = useResource('api:local/git', () => api.git(false), { enabled: !server })
-  const wrL = useResource('api:local/workrepos', api.workRepos, { enabled: !server })
-  // 로컬 — 동기화가 끝나면 받을 것 · 설치 상태가 바뀐다
-  useEffect(() => {
-    if (server || !sync?.phase || sync.phase !== 'idle') return
-    gitR.refresh().catch(() => {})
-    wrL.refresh().catch(() => {})
-    st.refresh().catch(() => {})
-  }, [sync?.phase])
+  const rows = useResource('/repos', api.repos, { ttl: 15_000 })
+  const reg = useResource('/workrepos', api.registry)
   const status = st.data || null
-  const git = gitR.data || null
-  const mine = server ? (rows.data || []).find((r) => r.name === rk) || null : null
-  const work = server
-    ? reg.data
-      ? { repos: (reg.data.repos || []).filter((r) => r.knowledge === rk), server: true }
-      : reg.error
-        ? { repos: [], server: true, failed: true }
-        : null
-    : wrL.data || null
+  const mine = (rows.data || []).find((r) => r.name === rk) || null
+  const work = reg.data ? { repos: (reg.data.repos || []).filter((r) => r.knowledge === rk) } : reg.error ? { repos: [], failed: true } : null
 
   const c = repo?.checkCounts || { error: 0, warn: 0, info: 0 }
-  const running = sync && sync.phase && sync.phase !== 'idle'
-  const last = sync?.last
   const repos = work?.repos || []
   const cnt = (s) => repos.filter((r) => r.state === s).length
 
   return (
     <>
       <div className="agrid">
-        <Card
-          title="지식 레포"
-          // 「자세히」 는 로컬만 — 서버형에는 고를 경로가 없다(지식 레포 탭이 없어 누르면 현황으로 돌아왔다)
-          actions={!isServer() ? <Btn onClick={() => navigate(repoBase(null) + 'manage/repo')}>자세히</Btn> : null}
-        >
+        <Card title="지식 레포">
           <Row label="보고 있는 곳">
             <Mono>{(repo?.root || '').split(/[\\/]/).filter(Boolean).pop()}</Mono>
           </Row>
           <Row label="담긴 것">
             작업 기록 <b className="num">{repo?.docs ?? 0}</b> · 좌표 <b className="num">{repo?.coords ?? 0}</b>
           </Row>
-          {/* 서버형에는 감시도 스캔 시각도 없다(`save` 뒤 재스캔) — 없는 상태를 그리지 않는다(불변조건 7) */}
-          {!isServer() && (
-            <Row label="마지막 스캔" mark={repo?.watchEnabled && !repo?.watchAlive ? 'warn' : null}>
-              <span className="amuted">
-                {diag?.scannedAt ? when(diag.scannedAt) : '–'} ·{' '}
-                {repo?.watchEnabled ? (repo?.watchAlive ? '감시 중' : '감시 끊김') : '감시 꺼짐'}
-              </span>
+        </Card>
+
+        {/* **단추가 없다.** 미는 것은 서버 자신이다(§4.5) — 여기서 보는 것은 상태 한 값과 사유다(동시 기록 검토 v0.1 D3).
+            고치는 단추는 서버 › 지식 레포(관리자 · 재인증). */}
+        <Card title="미러">
+          <Row label="상태" mark={mine ? (mine.dirty > 0 ? 'bad' : (MIRROR[mine.mirror] || MIRROR.off)[0]) : null}>
+            {mine ? (MIRROR[mine.mirror] || MIRROR.off)[1] : <span className="amuted">–</span>}
+            {mine && (mine.mirror === 'lag' || mine.mirror === 'diverged') ? <> · 보낼 것 <b className="num">{mine.ahead}</b> 건</> : null}
+            {mine && mine.mirror === 'behind' ? <> · 받을 것 <b className="num">{mine.behind}</b> 건</> : null}
+            {mine?.dirty > 0 ? <> · 트리 더러움 <b className="num">{mine.dirty}</b> 건</> : null}
+          </Row>
+          {mine?.note && (
+            <Row label="사유">
+              <span className="awarn">{mine.note}</span>
             </Row>
           )}
+          {/* 못 들어가는 곳을 안내하지 않는다 — writer · viewer 에게는 「관리자에게」(화면 · 권한 검토 v0.1 P6 · R4) */}
+          <Note>
+            커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 못 보냄 · 갈림 · 더러움을 푸는 단추는{' '}
+            {me?.admin ? <><b>서버 › 지식 레포</b>에 있습니다.</> : <><b>관리자</b>에게 있습니다(서버 › 지식 레포).</>}
+          </Note>
         </Card>
 
-        {/* **서버 모드는 버튼이 없다.** 미는 것은 서버 자신이다(§4.5) —
-            여기서 보는 것은 상태 한 값과 사유다(동시 기록 검토 v0.1 D3). 고치는 단추는 콘솔(관리자 · 재인증). */}
-        {isServer() ? (
-          <Card title="미러">
-            <Row label="상태" mark={mine ? (mine.dirty > 0 ? 'bad' : (MIRROR[mine.mirror] || MIRROR.off)[0]) : null}>
-              {mine ? (MIRROR[mine.mirror] || MIRROR.off)[1] : <span className="amuted">–</span>}
-              {mine && (mine.mirror === 'lag' || mine.mirror === 'diverged') ? <> · 보낼 것 <b className="num">{mine.ahead}</b> 건</> : null}
-              {mine && mine.mirror === 'behind' ? <> · 받을 것 <b className="num">{mine.behind}</b> 건</> : null}
-              {mine?.dirty > 0 ? <> · 트리 더러움 <b className="num">{mine.dirty}</b> 건</> : null}
-            </Row>
-            {mine?.note && (
-              <Row label="사유">
-                <span className="awarn">{mine.note}</span>
-              </Row>
-            )}
-            {/* 못 들어가는 곳을 안내하지 않는다 — writer · viewer 에게는 「관리자에게」(화면 · 권한 검토 v0.1 P6 · R4) */}
-            <Note>
-              커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 밀림 · 갈림 · 더러움을 푸는 단추는{' '}
-              {me?.admin ? <><b>서버 › 지식 레포</b>에 있습니다.</> : <><b>관리자</b>에게 있습니다(서버 › 지식 레포).</>}
-            </Note>
-          </Card>
-        ) : (
-        <Card
-          title="동기화"
-          actions={
-            <Btn kind="accent" onClick={onSync} disabled={!!running}>
-              <Icon name="sync" size={13} /> {running ? '도는 중…' : '지금 받기'}
-            </Btn>
-          }
-        >
-          <Row label="받을 것" mark={git?.behind > 0 ? 'warn' : null}>
-            <b className="num">{git?.behind ?? '–'}</b> 건
-          </Row>
-          <Row label="보낼 것" mark={git?.ahead > 0 ? 'warn' : null}>
-            <b className="num">{git?.ahead ?? '–'}</b> 건
-          </Row>
-          <Row label="직전 결과" mark={last && !last.ok ? 'bad' : null}>
-            {running ? (
-              <span>도는 중…</span>
-            ) : last ? (
-              <span className={last.ok ? 'amuted' : 'awarn'}>
-                {last.line} · {when(last.at)}
-              </span>
-            ) : (
-              <span className="amuted">이번 실행에서는 아직</span>
-            )}
-          </Row>
-        </Card>
-        )}
-
-        <Card title="검증" actions={<Btn onClick={onCheck}>검사 결과</Btn>}>
-          <Row label="커밋을 막는 것" mark={c.error > 0 ? 'bad' : null}>
+        {/* save 는 **그 save 가 새로 만든 오류**로만 막힌다 — 레포에 원래 있던 오류는 경고로 싣는다(v1.0 V21) */}
+        <Card title="검증" hint="오류를 새로 만드는 save 는 거절된다" actions={<Btn onClick={onCheck}>검사 결과</Btn>}>
+          <Row label="오류" mark={c.error > 0 ? 'bad' : null}>
             <b className="num">{c.error}</b> 건
           </Row>
           <Row label="경고" mark={c.warn > 0 ? 'warn' : null}>
@@ -143,7 +83,7 @@ export default function Overview({ repo, sync, diag, me = null, onCheck, onSync 
           </Row>
           {c.error === 0 && c.warn === 0 && (
             <Row label="지금">
-              <span className="amuted">통과 — 커밋할 수 있습니다</span>
+              <span className="amuted">통과</span>
             </Row>
           )}
         </Card>
@@ -161,26 +101,19 @@ export default function Overview({ repo, sync, diag, me = null, onCheck, onSync 
         </Card>
       </div>
 
-      <Card title="연결된 작업 레포" actions={<Btn onClick={() => navigate(repoBase(isServer() ? currentRepo() : null) + 'manage/work')}>자세히</Btn>}>
+      <Card title="연결된 작업 레포" actions={<Btn onClick={() => navigate(repoBase(rk) + 'manage/work')}>자세히</Btn>}>
         {!work ? (
           <span className="amuted">읽는 중…</span>
         ) : work.failed ? (
-          <span className="amuted">대장을 읽지 못했습니다 — 작업 레포 메뉴에서 다시 봅니다.</span>
+          <span className="amuted">대장을 읽지 못했습니다 — 연결된 작업 레포 메뉴에서 다시 봅니다.</span>
         ) : repos.length === 0 ? (
-          <span className="amuted">등록된 작업 레포가 없습니다 — 코드 레포에 규약과 skill 을 넣으려면 등록하세요.</span>
-        ) : work.server ? (
-          // 서버형 대장의 상태 이름 셋 — 최신 · 낡음 · 미설치(§6.7.2)
+          <span className="amuted">등록된 작업 레포가 없습니다 — 코드 레포에 에이전트 세팅(스킬 · CLAUDE 블록 · MCP 연결)을 넣으려면 등록하세요.</span>
+        ) : (
+          // 대장의 상태 이름 셋 — 최신 · 낡음 · 미설치(§6.7.2)
           <Row label="설치 상태" mark={cnt('낡음') || cnt('미설치') ? 'warn' : null}>
             등록 <b className="num">{repos.length}</b>곳 · 최신 <b className="num">{cnt('최신')}</b>
             {cnt('낡음') > 0 && <> · 낡음 <b className="num">{cnt('낡음')}</b></>}
             {cnt('미설치') > 0 && <> · 미설치 <b className="num">{cnt('미설치')}</b></>}
-          </Row>
-        ) : (
-          <Row label="설치 상태" mark={cnt('update') || cnt('none') || cnt('error') ? 'warn' : null}>
-            등록 <b className="num">{repos.length}</b>곳 · 최신 <b className="num">{cnt('ok')}</b>
-            {cnt('update') > 0 && <> · 갱신 필요 <b className="num">{cnt('update')}</b></>}
-            {cnt('none') > 0 && <> · 미설치 <b className="num">{cnt('none')}</b></>}
-            {cnt('error') > 0 && <> · 오류 <b className="num">{cnt('error')}</b></>}
           </Row>
         )}
       </Card>

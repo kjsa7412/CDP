@@ -1,13 +1,15 @@
 // 껍데기 하나 — **라우트가 얼굴을 고르고, 메뉴는 한 겹이다.** 화면 · 권한 검토 v0.1 R7 · R8 · 좌측 메뉴 셸 설계 v0.1 · 개편안 §7.2.
 //
 //   사이트(소개 · 설명서 · 로그인 · 처음 설정)   상단 바(TopBar) 그대로 · 메뉴 없음 — 로그인 전에도 보는 공개 화면이다(셸 설계 §5)
-//   레포 · 콘솔 · 로컬                          왼쪽 메뉴(SideNav) + 본문(AppBar + 얼굴). 메뉴는 얼굴 사이에 살아남는다
+//   레포 · 콘솔                                 왼쪽 메뉴(SideNav) + 본문(AppBar + 얼굴). 메뉴는 얼굴 사이에 살아남는다
 //
 //   화면    `shell/routes.js` 의 screenOf — 주소 하나를 메뉴 · 빵부스러기 · 탭 제목 · 없는/권한 밖 주소 · App · 관리 · 콘솔이
 //           **같이** 읽는다(ScreenCtx). 없는 주소 · 권한 밖 주소는 그리지 않고 바꿔 쓴다(replace · D4)
 //   세션    `SessionProvider` 가 `/site/info` · `/me` 를 한 번 읽어 내린다. `ready` 전에는 아무것도 그리지 않는다
 //   알림 · 재인증  셸에 하나씩(ToastProvider · SudoProvider) — 얼굴을 넘어도 떠 있던 것이 살아남는다
 //   레포    `<App key={repo}>` — 레포마다 상태를 새로(§6.6.2)
+//
+// 로컬 얼굴(PC 의 뷰어 — `/` 가 레포였다)은 v1.0 에 없앴다(개편안 §5.6) — 얼굴은 레포 · 콘솔 · 사이트 셋이다.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { useRoute, modeOf, navigate } from './lib/router.jsx'
@@ -55,17 +57,10 @@ function Frame({ m, route }) {
   const s = useSession()
   // 포털 자리 둘 — App 이 렌더될 때 이미 있어야 하므로 여기서 만든다. AppBar 가 마운트되며 자기 안에 붙인다
   const slots = useMemo(() => ({ center: mk('topbar__center'), right: mk('topbar__right') }), [])
-  // 로컬 — 보는 레포 경로를 바꾸면 App 을 새로 세운다(`cdp:remount`). 전에는 `location.reload()` 였다(화면 · 권한 검토 v0.1 부록 A #5)
-  const [gen, setGen] = useState(0)
-  useEffect(() => {
-    const f = () => setGen((g) => g + 1)
-    window.addEventListener('cdp:remount', f)
-    return () => window.removeEventListener('cdp:remount', f)
-  }, [])
 
   // 지금 주소의 화면 — 히스토리 항목의 `cdp`(왼쪽 목록)까지 본다. 주소가 바뀔 때마다 route 가 새것이다
-  const scr = useMemo(() => screenOf({ path: route.path, query: route.query, server: m.server, hist: history.state?.cdp || null }), [route, m.server])
-  const app = m.face === 'repo' || m.face === 'local' || m.face === 'console'
+  const scr = useMemo(() => screenOf({ path: route.path, query: route.query, hist: history.state?.cdp || null }), [route])
+  const app = m.face === 'repo' || m.face === 'console'
 
   // 왼쪽 메뉴 — 접힘은 <html data-nav>(첫 페인트 전 인라인 스크립트) · 덮개(≤760px)는 이 화면의 일시 상태(기억하지 않는다)
   const [rail, setRailState] = useState(readRail)
@@ -124,7 +119,7 @@ function Frame({ m, route }) {
   let body = null
   if (!to) {
     if (m.face === 'console') body = <Console />
-    else body = <App key={(m.repo || 'local') + ':' + gen} />
+    else body = <App key={m.repo} />
   }
 
   return (

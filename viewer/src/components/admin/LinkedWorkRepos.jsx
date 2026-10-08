@@ -1,22 +1,21 @@
-// 레포 관리 › 연결된 작업 레포 — 서버판. MCP 설계서 §6.7.3. 서버 전부의 설치 대장(서버 › 작업 레포 대장)과 다른 것이다.
-//
-// **로컬의 같은 이름 화면과 다른 것이다.** 로컬은 이 PC 에 규약과 skill 을
-// 깔고, 여기는 **등록하고 꾸러미를 내주고 결과를 추적한다**(§6.7.1).
+// 레포 관리 › 연결된 작업 레포 — 이 지식 레포를 쓰는 코드 레포. MCP 설계서 §6.7.3. 서버 전부의 설치 대장(서버 › 작업 레포 대장)과
+// 다른 것이다 — 여기는 **이 레포의 것을 등록하고 설치 한 줄을 내주고 결과를 추적한다**(§6.7.1).
 //
 // 브라우저는 사용자 PC 에 파일을 쓸 수 없다. 그 제약을 우회하지 않고, 대신
-// 사람이 자기 PC 에서 할 일을 zip 하나 푸는 것으로 줄였다.
+// 사람이 자기 PC 에서 할 일을 한 줄(설치기가 묻고 · 병합하고 · 대장에 보고한다)로 줄였다.
 
 import { useState } from 'react'
 import { api, currentRepo } from '../../lib/api.js'
 import { useResource } from '../../lib/cache.js'
+import { installCommand, guessShell } from '../../lib/install.js'
 import Icon from '../Icon.jsx'
-import { Card, Row, Mono, Note, Btn, Cmd } from './ui.jsx'
+import { Card, Row, Mono, Note, Btn, Cmd, ShellTabs } from './ui.jsx'
 import { Confirm } from '../../console/ui.jsx'
 
 // 표시 세 가지. **정상은 조용하다** — `ui.jsx` 의 규칙 그대로다.
 const MARK = { 최신: 'ok', 낡음: 'warn', 미설치: 'none' }
 
-export default function WorkReposServer({ say }) {
+export default function LinkedWorkRepos({ say }) {
   // 대장은 캐시(화면 · 권한 검토 v0.1 R8) — 관리 현황의 작업 레포 카드와 같은 키. 등록 · 삭제 뒤 refresh 가 둘 다 갱신한다
   const { data, error, refresh: load } = useResource('/workrepos', api.registry)
   const [open, setOpen] = useState(null)
@@ -143,7 +142,7 @@ export default function WorkReposServer({ say }) {
 }
 
 // **토큰을 보여 주지 않는다**(§6.7.3). 화면도 명령도 원문을 들지 않는다 — 사람이 관리자에게 받아
-// 설치기가 물을 때 붙여넣는다(설치 한 줄 TODO I3). 명령에 원문을 채우면 클립보드 · 셸 이력에 남는다.
+// 설치기가 물을 때 붙여넣는다(설치 한 줄 TODO I3). 명령은 `lib/install.js` 한 곳에서 짓는다.
 //
 // **한 줄이 기본이다**(I1 · I6). 전에는 zip 을 받아 풀고 그 폴더로 가서 경로를 적고, 토큰은 따로
 // `setx` 로 넣었다. 지금은 작업 레포 폴더에서 붙여넣는 한 줄이 설치기를 받고, 설치기가 토큰을 묻고
@@ -152,39 +151,10 @@ export default function WorkReposServer({ say }) {
 //
 // **사람이 하는 일만 적는다.** 병합이 무엇을 지키는지(`CLAUDE.md` 블록 · `.mcp.json` 의 다른 서버)는
 // 설치기가 바뀔 것을 보여 주며 말한다 — 화면은 한 줄로 줄인다.
-const SHELLS = [
-  { key: 'ps', label: 'PowerShell' },
-  { key: 'cmd', label: '명령 프롬프트' },
-  { key: 'sh', label: 'macOS · Linux' },
-]
 
-// 받은 파일은 **임시 폴더에** — 작업 레포에 남지 않는다. 작업 레포 경로는 `.`(그 폴더에서 붙여넣는다)
-export function installCommand(shell, { origin, repo, id, update = false }) {
-  const url = `${origin}/install.mjs`
-  // 일괄 — 레포 · 등록 id 는 그 PC 의 설치 목록에 있다(에이전트 세팅 갱신 T9). 어느 폴더에서 붙여넣어도 같다
-  const args = update ? '--update' : `--repo ${repo} --workrepo ${id} .`
-  if (shell === 'ps') return `curl.exe -fsSLo "$env:TEMP\\cdp-install.mjs" ${url}; if ($?) { node "$env:TEMP\\cdp-install.mjs" ${args} }`
-  if (shell === 'cmd') return `curl -fsSLo "%TEMP%\\cdp-install.mjs" ${url} && node "%TEMP%\\cdp-install.mjs" ${args}`
-  return `curl -fsSLo /tmp/cdp-install.mjs ${url} && node /tmp/cdp-install.mjs ${args}`
-}
-
-const guessShell = () => (/Win/i.test(navigator.platform || navigator.userAgent || '') ? 'ps' : 'sh')
-
-function ShellTabs({ shell, setShell }) {
-  return (
-    <div className="howto-tabs" role="tablist" aria-label="터미널">
-      {SHELLS.map((s) => (
-        <button key={s.key} role="tab" aria-selected={shell === s.key} className={shell === s.key ? 'on' : ''} onClick={() => setShell(s.key)}>
-          {s.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// 에이전트 세팅이 바뀌었다 — 지식 레포의 스킬이 새 판이 되면(upgrade 의 kit-refresh · 콘솔의 「에이전트 세팅 갱신」)
-// 대장의 kit 해시와 달라져 행이 「낡음」 이 된다. **서버는 PC 에 못 쓴다**(§6.7.1) — 담당자가 자기 PC 에서 한 줄을
-// 돌리면 설치기가 그 PC 에 이 서버로 설치한 작업 레포를 전부 돈다(설치 목록 · 에이전트 세팅 갱신 T9 · T10).
+// 에이전트 세팅이 바뀌었다 — 서버 판이 오르면(upgrade 가 번들 kit/ 을 간다) 대장의 kit 해시와 달라져 행이 「낡음」 이 된다.
+// **서버는 PC 에 못 쓴다**(§6.7.1) — 담당자가 자기 PC 에서 한 줄을 돌리면 설치기가 그 PC 에 이 서버로 설치한 작업 레포를
+// 전부 돈다(설치 목록 · 에이전트 세팅 갱신 T9 · T10).
 function UpdateAll({ rows }) {
   const [shell, setShell] = useState(guessShell)
   const owners = new Map()
@@ -278,9 +248,6 @@ function HowTo({ row }) {
         <Note>
           아무 데나 풀고 그 안에서 <code>node install.mjs &lt;작업 레포 경로&gt;</code> — 위 한 줄과 같은 일을 합니다. Node 가
           없으면 꾸러미 안 <code>설치.md</code> 의 「Node 가 없으면」 대로 손으로 옮깁니다.
-          <br />
-          <code>bin/ctx</code> 가 있으면 <Mono>{`ctx setup --server … --workrepo ${row.id}`}</Mono> 도 됩니다 — 같은 함수를
-          부릅니다.
         </Note>
       </details>
     </div>

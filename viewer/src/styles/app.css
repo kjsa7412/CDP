@@ -181,12 +181,12 @@
   letter-spacing: 0.06em;
 }
 
-/* 읽기 모드는 상태바까지 접는다(§27.5). 그런데 감시가 끊기면 화면이 낡았을
- * 수 있고, 그때 조용한 화면으로 읽고 있으면 안 되므로 되살린다(§23.3). */
-.app[data-mode='focus'][data-force-status='0'] {
+/* 읽기 모드는 상태바까지 접는다(§27.5). 감시가 끊기면 되살리던 갈래(data-force-status)는 지웠다 —
+ * 감시가 없다(서버가 유일한 작성자 · save 뒤 스스로 다시 읽는다 · v1.0 로컬 얼굴 지움). */
+.app[data-mode='focus'] {
   grid-template-rows: 1fr 0;
 }
-.app[data-mode='focus'][data-force-status='0'] .statusbar {
+.app[data-mode='focus'] .statusbar {
   display: none;
 }
 
@@ -296,18 +296,6 @@
   color: var(--accent);
 }
 
-.hostwarn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px var(--sp-2);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--danger);
-  background: var(--danger-bg);
-  border-radius: var(--r-pill);
-}
-
 /* ── L0 화면 — 문서 | 그래프 ──────────────────────────────────────────
    **떠 있는 칸 하나가 움직인다.** 전에는 고른 칸을 파랑으로 채웠는데,
    파랑은 이 화면에서 "누를 수 있는 것"을 뜻하므로 채워 버리면 나머지 칸이
@@ -368,17 +356,7 @@
 }
 .pill--warn:hover, .pill--error:hover { background: var(--surface-3); }
 
-/* 동기화 — 상단바의 유일한 **받기** 버튼. 정상일 때는 검증과 같은 무게로
-   조용히 앉아 있고, 도는 동안에만 단계와 경과 초로 자란다 */
-.pill--sync[disabled] {
-  color: var(--accent);
-  background: var(--accent-bg);
-  cursor: default;
-}
-.pill--sync .num { color: var(--text-3); font-variant-numeric: tabular-nums; }
-.pill--sync[disabled] .num { color: inherit; opacity: 0.75; }
-/* 도는 중 — **움직이는 것이 하나는 있어야 한다.** 20초 동안 정지 화면이면
-   숫자가 올라가도 멎은 것으로 읽힌다 */
+/* 도는 중 — **움직이는 것이 하나는 있어야 한다.** 몇 초 동안 정지 화면이면 멎은 것으로 읽힌다(서버 › 다시 검사 등) */
 .spin { animation: spin 1.1s linear infinite; }
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -1456,9 +1434,7 @@
 .gr__btn--go { color: var(--accent); border-color: var(--accent); font-weight: 600; }
 .gr__btn--go:hover { background: var(--accent-bg); }
 
-/* ── 관리 서비스 (모드 B) — MCP 설계서 §6.6.2 · §6.6.3 ──────────────────
-   로컬 뷰어에는 이 클래스가 붙지 않는다. 같은 번들이 두 모드에서 도므로
-   (§6.8) 스타일도 한 파일에 두고, 쓰는 쪽이 갈린다. */
+/* ── 레포 고르기 — MCP 설계서 §6.6.2 · §6.6.3 ─────────────────────────── */
 
 /* 레포 메뉴 — 왼쪽 메뉴의 레포 고르기 아래(shell/SideNav.jsx · 자리는 shell.css). */
 .repomenu {
