@@ -101,10 +101,8 @@ export async function planSetup(knowledgeRoot, workRoot, { server = null, repo =
   if (!(await isDir(wk))) return bad(`폴더가 없습니다 — ${wk}`)
   if (kn === wk) return bad('지식 레포 자신에는 설치하지 않습니다. 코드가 있는 레포를 지정하세요.')
 
-  // **git 레포일 때만.** 아무 폴더에나 쓰지 않는다 -- 경로를 잘못 누르면
-  // 남의 폴더에 파일이 생기고, 그것은 되돌리기 어렵다.
+  // git 레포가 아니어도 설치한다 — 막지 않고 경고만 남긴다(.git 없는 작업 폴더도 있다).
   const isGit = (await isDir(path.join(wk, '.git'))) || (await read(path.join(wk, '.git'))) != null
-  if (!isGit) return bad(`git 레포가 아닙니다 — ${wk}\n작업 레포(코드가 있고 .git 이 있는 곳)를 지정하세요.`)
 
   const sSrc = path.join(kn, '.claude', 'skills')
   if (!(await isDir(sSrc))) return bad(`${sSrc} 가 없습니다. 지식 레포에 배포본을 부었는지 확인하세요.`)
@@ -115,6 +113,7 @@ export async function planSetup(knowledgeRoot, workRoot, { server = null, repo =
 
   const actions = []
   const warnings = []
+  if (!isGit) warnings.push(`git 레포가 아닙니다 — ${wk}\n그대로 설치합니다. 세팅 파일(.claude · CLAUDE.md · .mcp.json)은 이 PC 에만 남고 팀과 나눠지지 않습니다.`)
 
   // ── skill — **cdp- 로 시작하는 것만 건드린다** ─────────────────────
   //
