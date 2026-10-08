@@ -8,6 +8,8 @@ import { useState } from 'react'
 import { api, currentRepo } from '../../lib/api.js'
 import { useResource } from '../../lib/cache.js'
 import { installCommand, guessShell } from '../../lib/install.js'
+import { can } from '../../lib/roles.js'
+import CuratorFolder from './CuratorFolder.jsx'
 import Icon from '../Icon.jsx'
 import { Card, Row, Mono, Note, Btn, Cmd, ShellTabs } from './ui.jsx'
 import { Confirm } from '../../console/ui.jsx'
@@ -15,7 +17,7 @@ import { Confirm } from '../../console/ui.jsx'
 // 표시 세 가지. **정상은 조용하다** — `ui.jsx` 의 규칙 그대로다.
 const MARK = { 최신: 'ok', 낡음: 'warn', 미설치: 'none' }
 
-export default function LinkedWorkRepos({ say }) {
+export default function LinkedWorkRepos({ me = null, say }) {
   // 대장은 캐시(화면 · 권한 검토 v0.1 R8) — 관리 현황의 작업 레포 카드와 같은 키. 등록 · 삭제 뒤 refresh 가 둘 다 갱신한다
   const { data, error, refresh: load } = useResource('/workrepos', api.registry)
   const [open, setOpen] = useState(null)
@@ -91,8 +93,10 @@ export default function LinkedWorkRepos({ say }) {
           </Row>
         ))}
 
-        {open && <HowTo row={repos.find((r) => r.id === open)} />}
+        {open && <HowTo row={repos.find((r) => r.id === open)} curator={can(me, 'curate', currentRepo())} />}
       </Card>
+      {/* 설치는 역할에 따라 둘이다 — 작업 레포(writer kit · 스킬 셋 · 팀이 커밋) · 큐레이터 폴더(큐레이터 kit · 스킬 다섯 · 이 PC 에만) */}
+      {can(me, 'curate', currentRepo()) && <CuratorFolder repo={currentRepo()} folded={false} />}
       {removing && (
         <Confirm
           title={`${removing.name} — 대장에서 지우기`}
@@ -199,7 +203,7 @@ function UpdateAll({ rows }) {
   )
 }
 
-function HowTo({ row }) {
+function HowTo({ row, curator = false }) {
   const [shell, setShell] = useState(guessShell)
   if (!row) return null
   // 레포는 **행의 것**이다 — 지금 보는 레포가 아니다(F1). 서버 `/kit` 도 둘이 다르면 409 로 막는다
@@ -214,6 +218,15 @@ function HowTo({ row }) {
           <Note>
             설치기를 임시 폴더에 받아 돌립니다 — 작업 레포에는 CDP 파일만 들어갑니다. 무엇이 바뀔지 먼저 보여 주고
             묻습니다. 여러 번 돌려도 됩니다 — 두 번째부터는 <b>이미 최신입니다</b>. Node 20 이상이 있어야 합니다.
+          </Note>
+          <Note>
+            작업 레포에는 누가 설치하든 <b>기록하는 스킬 셋</b>(<code>cdp-work</code> · <code>cdp-save</code> · <code>cdp-push</code>)이 깔립니다 — 팀이 같이
+            커밋하는 자리라서입니다.{' '}
+            {curator ? (
+              <>큐레이션 스킬(<code>cdp-curate</code> · <code>cdp-registry</code>)은 아래 <b>큐레이터 폴더</b> 한 줄로 따로 받습니다.</>
+            ) : (
+              <>큐레이션 스킬은 이 레포의 큐레이터가 큐레이터 폴더에서 받습니다.</>
+            )}
           </Note>
         </li>
         <li>

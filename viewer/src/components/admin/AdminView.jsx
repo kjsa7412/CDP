@@ -41,7 +41,7 @@ export default function AdminView({
           {cur === 'forms' && <FormLibrary form={scr?.form || null} tab={scr?.formTab || 'stamp'} />}
           {cur === 'overview' && <Overview repo={repo} me={me} onCheck={onCheck} />}
           {cur === 'docs' && <Docs me={me} say={say} onChanged={onChanged} />}
-          {cur === 'work' && <LinkedWorkRepos say={say} />}
+          {cur === 'work' && <LinkedWorkRepos me={me} say={say} />}
         </div>
       </div>
     </div>

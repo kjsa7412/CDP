@@ -13,7 +13,8 @@
 
 import { useMemo, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
-import { Card, Note, Btn, Cmd, ShellTabs } from '../../components/admin/ui.jsx'
+import { Card, Note, Btn } from '../../components/admin/ui.jsx'
+import CuratorFolder from '../../components/admin/CuratorFolder.jsx'
 import { Prompt } from '../../console/ui.jsx'
 import { api, currentRepo } from '../../lib/api.js'
 import { invalidate, useResource } from '../../lib/cache.js'
@@ -21,7 +22,6 @@ import { copyText } from '../../lib/clip.js'
 import { Link } from '../../lib/router.jsx'
 import { docHref } from '../../lib/doclink.js'
 import { coordCounts, curateCommand, formPath } from '../../lib/curation.js'
-import { installCommand, guessShell } from '../../lib/install.js'
 import { can } from '../../lib/roles.js'
 import { repoBase } from '../../shell/nav.js'
 import { useSudo, CANCELLED } from '../../shell/sudo.jsx'
@@ -193,30 +193,6 @@ export default function Queue({ repo, me = null, say, onChanged }) {
         </Prompt>
       )}
     </>
-  )
-}
-
-// 큐레이터 폴더 — 에이전트 지시를 붙일 Claude Code 가 도는 자리. **처음 한 번** 세운다(작업의 성격 — 매일 여는 대기열 아래에 접어 둔다).
-// 작업 레포 설치 한 줄과 같은 설치기 · 같은 명령 짓기(`lib/install.js`) — `--curator` 라 git 도 대장 등록도 없고, 서버가 그 토큰이
-// 이 레포의 큐레이터일 때만 큐레이터 kit(스킬 다섯 · 큐레이터 블록)을 준다(`/kit/<레포>?as=json` · 아니면 설치기가 거절한다).
-function CuratorFolder({ repo }) {
-  const [shell, setShell] = useState(guessShell)
-  const cmd = installCommand(shell, { origin: window.location.origin, repo, curator: true })
-  return (
-    <Card title="큐레이터 폴더" hint="처음 한 번 · 자기 PC 에서">
-      <details className="howto-more">
-        <summary>큐레이션은 코드가 없는 아무 폴더에서 한다 · 이 한 줄을 그 폴더에서</summary>
-        <div className="howto">
-          <ShellTabs shell={shell} setShell={setShell} />
-          <Cmd>{cmd}</Cmd>
-          <Note>
-            설치기를 임시 폴더에 받아 돌립니다 — 그 폴더에는 <code>.mcp.json</code> · <code>.claude/</code> · <code>CLAUDE.md</code>(큐레이터 블록)만 들어갑니다.
-            git 레포가 아니어도 되고 작업 레포 대장에 오르지 않습니다. 토큰을 물으면 <b>이 레포의 큐레이터</b> 토큰을 붙여넣습니다(이 PC 에서 처음일 때만) —
-            큐레이터가 아니면 설치기가 거절합니다. 끝나면 그 폴더에서 Claude Code 를 다시 켜고, 위 「에이전트 지시 복사」 를 붙입니다.
-          </Note>
-        </div>
-      </details>
-    </Card>
   )
 }
 
