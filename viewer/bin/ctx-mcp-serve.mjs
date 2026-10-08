@@ -120,7 +120,7 @@ export function makeStore(root, log, { only = null, formsOpt = null } = {}) {
   const caches = new Map()
   // 화면용 `Store` — 관리 서비스의 읽기 API 가 쓴다(§6.3).
   //
-  // **감시를 켜지 않는다.** 로컬 뷰어는 chokidar 로 파일을 지켜보지만 서버는
+  // **감시를 켜지 않는다.** 옛 로컬 뷰어는 chokidar 로 파일을 지켜봤지만 서버는
   // 레포가 N 개고 유일한 작성자가 자기 자신이다 — `save` 가 끝나면 그때
   // 재스캔하면 된다. 감시자 N 개를 살려 둘 이유가 없다.
   const views = new Map()
@@ -1125,10 +1125,10 @@ export async function runServe(opt = {}) {
             const alerts = []
             if (!admins.length) alerts.push({ level: 'bad', text: '관리자가 없다 — 셸에서 ctx serve user set --name <이름> --role admin', to: 'users' })
             if (soon.length) alerts.push({ level: 'warn', text: `7일 안에 만료되는 토큰 ${soon.length} — ${soon.map((t) => `${t.user}(${t.id} · ${t.daysLeft}일)`).join(' · ')}`, to: 'tokens' })
-            // 미러 · 트리 경고 — 사실만 · 갈라짐과 더러움은 bad(save 가 막히거나 origin 이 못 받는다) · 밀림은 사유와 함께
+            // 미러 · 트리 경고 — 사실만 · 갈라짐과 더러움은 bad(save 가 막히거나 origin 이 못 받는다) · 못 보냄은 사유와 함께
             if (dirty.length) alerts.push({ level: 'bad', text: `트리에 커밋 안 된 변경이 있는 레포 ${dirty.length} — ${dirty.map((d) => `${d.name} ${d.dirty}건`).join(' · ')} · save 가 거절된다 → 「트리 되돌리기」`, to: 'repos' })
             if (diverged.length) alerts.push({ level: 'bad', text: `origin 과 갈라진 레포 ${diverged.length} — ${diverged.map((d) => `${d.name}(서버 ${d.ahead} · origin ${d.behind ?? '?'})`).join(' · ')} · 기계는 합치지 않는다 → 셸에서 rebase 뒤 「다시 보내기」`, to: 'repos' })
-            if (lag.length) alerts.push({ level: 'warn', text: `미러가 밀린 레포 ${lag.length} — ${lag.map((l) => `${l.name} ${l.ahead ?? '?'}건${l.reason ? ' · ' + (mirror.REASON_TEXT[l.reason] || l.reason) : ''}`).join(' · ')}`, to: 'repos' })
+            if (lag.length) alerts.push({ level: 'warn', text: `origin 에 못 보낸 레포 ${lag.length} — ${lag.map((l) => `${l.name} ${l.ahead ?? '?'}건${l.reason ? ' · ' + (mirror.REASON_TEXT[l.reason] || l.reason) : ''}`).join(' · ')}`, to: 'repos' })
             if (behind.length) alerts.push({ level: 'warn', text: `origin 이 앞선 레포 ${behind.length} — ${behind.map((b) => `${b.name} ${b.behind}건`).join(' · ')} · 누군가 서버 밖에서 썼다 → 「origin 과 맞추기」`, to: 'repos' })
             if (byState.낡음) alerts.push({ level: 'warn', text: `에이전트 세팅이 낡은 작업 레포 ${byState.낡음} — 담당자가 자기 PC 에서 「일괄 갱신」 한 줄(관리 › 작업 레포)`, to: 'repos' })
             if (doctorCache.res?.fails) alerts.push({ level: 'bad', text: `진단 fail ${doctorCache.res.fails} — ${doctorCache.res.rows.filter((r) => r.state === 'fail').map((r) => r.what).join(' · ')}`, to: 'server' })
@@ -1583,7 +1583,7 @@ export async function runServe(opt = {}) {
 
       // GET /api/<repo>/… — 관리 서비스의 읽기 API (§6.2 · §6.3).
       //
-      // **로컬 뷰어와 같은 함수를 쓴다**(`handleRead`). 이 PC 를 만지는
+      // **화면 API 는 이 함수 하나**(`handleRead`). 이 PC 를 만지는
       // 라우트(`/setup` · `/open` · `/quit` · `/git/pull` …)는 여기 없다 —
       // 없는 것이지 막은 것이 아니다.
       const apiM = /^\/api\/([^/]+)(\/.*)?$/.exec(url.pathname)
@@ -1800,7 +1800,7 @@ export async function runServe(opt = {}) {
         log.req({ ip, user: a.user, repo: name, method: req.method, tool: sub, ms: Date.now() - t0, status: done ? 200 : 404 })
         if (done) return
         // 로컬 전용 라우트다. **막은 것이 아니라 없는 것**이다(§6.2).
-        return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '관리 서비스에 없는 경로다 — 로컬 뷰어의 것' } })
+        return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '없는 경로다 — v1.0 서버에는 git · 동기화 · 진단 같은 옛 로컬 뷰어의 길이 없다' } })
       }
 
       // GET /kit/<name> — 그 레포의 kit(스킬 · CLAUDE 블록) (§4.3). 서버 번들의 `kit/` 에서 역할별로 싼다(v1.0 W5).

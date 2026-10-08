@@ -88,13 +88,13 @@ export async function main(argv) {
 
   // 일괄 — 이 PC 의 설치 목록을 돈다. 레포 · 등록 id 는 목록에 있다
   if (flags.update) {
-    if (!net) return bail('--update 는 한 줄 설치기로 돈다 — 관리 › 작업 레포 의 「일괄 갱신」 한 줄을 쓰세요.')
+    if (!net) return bail('--update 는 한 줄 설치기로 돈다 — 레포 관리 › 연결된 작업 레포 의 「일괄 갱신」 한 줄을 쓰세요.')
     return updateAll({ server, paths: pos, dry, yes, commit: flags.commit, noSave: flags.noSave })
   }
 
   // 큐레이터 폴더(v1.0 §6.3) — git 레포가 아니어도 되고 대장에 오르지 않는다. 큐레이터 kit(스킬 다섯 · 큐레이터 블록)을 받는다
   if (flags.curator) {
-    if (!net) return bail('--curator 는 한 줄 설치기로 돈다 — 관리 화면의 큐레이터 한 줄을 쓰세요.')
+    if (!net) return bail('--curator 는 한 줄 설치기로 돈다 — 큐레이션 › 대기열 아래 「큐레이터 폴더」 의 한 줄을 쓰세요.')
     const dir = pos[0] || '.'
     if (!repo) return bail('사용법 — node cdp-install.mjs --curator --repo <레포> [<폴더>] [--dry] [--yes]')
     return installCurator({ server, repo, dir, dry, yes, noSave: flags.noSave })
@@ -358,7 +358,7 @@ async function updateAll({ server, paths, dry, yes, commit, noSave }) {
     if (miss.length) {
       return bail(
         `이 PC 의 설치 목록에 없는 경로입니다 — ${miss.map((p) => path.resolve(p)).join(' · ')}${NL}` +
-          '관리 › 작업 레포 에서 그 행의 [설치 방법] 한 줄로 한 번 설치하면 목록에 들어갑니다.'
+          '레포 관리 › 연결된 작업 레포 에서 그 행의 [설치 방법] 한 줄로 한 번 설치하면 목록에 들어갑니다.'
       )
     }
     rows = rows.filter((r) => paths.some((p) => samePath(r.path, p)))
@@ -368,7 +368,7 @@ async function updateAll({ server, paths, dry, yes, commit, noSave }) {
   if (!rows.length) {
     out('')
     out('이 PC 에 이 서버로 설치한 작업 레포가 없습니다.')
-    out('관리 › 작업 레포 에서 행마다 [설치 방법] 의 한 줄로 한 번 설치하면 목록에 들어갑니다 — 그 뒤부터 이 한 줄이 전부를 돕니다.')
+    out('레포 관리 › 연결된 작업 레포 에서 행마다 [설치 방법] 의 한 줄로 한 번 설치하면 목록에 들어갑니다 — 그 뒤부터 이 한 줄이 전부를 돕니다.')
     return 1
   }
 

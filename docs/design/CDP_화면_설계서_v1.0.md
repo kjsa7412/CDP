@@ -24,9 +24,8 @@
 | **사이트** | `/` · `/manual/*` · `/login` · `/setup` · `/r`(빈 상태) · 없는 주소 | 없다 — 상단 바(`TopBar`) | 로그인 전에도 보는 공개 화면 — 소개 · 설명서 · 로그인 · 처음 설정 |
 | **레포** | `/r/<레포>/…` | 왼쪽 메뉴 | 레포 하나 — 지식 · 큐레이션 · 레포 관리(+ admin 이면 서버 묶음) |
 | **콘솔** | `/console/…` | 왼쪽 메뉴 — 같은 메뉴 | 서버 전부(admin). 레포 고르기는 마지막으로 본 레포를 보인다 |
-| (로컬) | 서버 표식 없이 `/` | 왼쪽 메뉴 | 로컬 뷰어의 얼굴 — **그 서버는 걷혔다**(§12) |
 
-- `/r/` 밖에서는 경로만으로 로컬과 서버를 가를 수 없어, 서버가 `index.html` 의 `<head>` 첫 줄에 `window.__CDP_SERVER__=true` 를 심는다. 인라인 스크립트가 그것으로 첫 페인트 전에 `<html data-face>` 를 붙인다.
+- 얼굴은 **주소 하나로** 가린다 — `/r/<레포>/` 레포 · `/console` 콘솔 · 나머지 사이트(vite 개발 서버의 `/` 도 소개). 화면은 서버 표식(`window.__CDP_SERVER__`)을 더 읽지 않는다(4ab6acc · 서버는 아직 심는다 — 하네스 79 · 89 · 102 가 본다). 인라인 스크립트가 첫 페인트 전에 `<html data-face>` 를 붙인다.
 - 서버는 `/r/<레포>/` 아래 **아무 주소에나** 같은 `index.html` 을 낸다 — 새 화면 주소에 서버를 고칠 것이 없다. 볼 수 없는 레포는 서버가 `/r?from=<이름>` 으로 보내고(없는 레포와 같은 길 · D4), 화면이 「없거나 할당되지 않았다」 한 문장과 볼 수 있는 레포를 낸다(`NoRepo`).
 
 ---
@@ -74,7 +73,7 @@
 
 ## 3. 메뉴 표 — `shell/nav.js`
 
-항목 하나 = `{ key, group, label, icon, need, scope, to(repo), match(rest, ctx), tab?, page?, badge?, server?, local? }`. SideNav · 빵부스러기 · 없는 주소 · 권한 밖 주소 · 탭 제목이 전부 이 표 하나를 본다.
+항목 하나 = `{ key, group, label, icon, need, scope, to(repo), match(rest, ctx), tab?, page?, badge? }`. SideNav · 빵부스러기 · 없는 주소 · 권한 밖 주소 · 탭 제목이 전부 이 표 하나를 본다.
 
 | 묶음 | 항목 | need | 주소 | 그리는 것 |
 |---|---|:--:|---|---|
@@ -89,7 +88,7 @@
 | | 연결된 작업 레포 | read | `/r/<레포>/manage/work` | `WorkReposServer` — 등록 · 삭제 단추는 write |
 | **서버** | 현황 · 지식 레포 · 작업 레포 대장 · 사용자 · 토큰 · 감사 · 서버 설정 | admin | `/console` · `/console/<page>` — `repos` · `workrepos` · `users` · `tokens` · `audit` · `server` | `console/*` |
 
-- 큐레이션 셋은 `server: true`(서버 얼굴만)이고, 표에는 `local: true` 인 로컬 항목 셋(지식 레포 · 동기화 · 진단 · 정보)이 더 있다 — 서버 얼굴에는 나오지 않는다(§12).
+- 로컬 항목(지식 레포 · 동기화 · 진단 · 정보)과 `server` · `local` 표지는 걷었다(4ab6acc). 옛 주소 `/r/<레포>/manage/{sync,repo,diag,info}` 는 현황으로 바꿔 연다.
 - **묶음은 보이는 항목이 하나라도 있을 때만** 제목째 그린다. 권한 밖 묶음을 회색으로 보이지 않는다(D4). 묶음 제목 옆 작은 표시는 전부 admin 항목이면 「admin」 · 전부 curate 면 「큐레이터」 다.
 - **배지**(`badge: 'queue'`) — 레포 얼굴은 `/api/<레포>/repo` 의 `curation.queue`(App 이 읽는 것과 같은 캐시 키), 콘솔은 `/admin/repos` 의 그 레포 행. 창 초점이 돌아오고 60초가 지났으면 다시 읽는다. **값이 없으면 그리지 않는다**(옛 서버).
 - 이름은 v1.0 에서 고쳤다 — 관리 › 작업 레포 → **레포 관리 › 연결된 작업 레포** · 콘솔 › 작업 레포 → **서버 › 작업 레포 대장** · 콘솔 › 서버 → **서버 › 서버 설정** · 「콘솔」 은 묶음 「서버」(주소는 `/console/…` 그대로 · L2) · 작업문서 → 작업 기록(cb23d1e).
@@ -315,10 +314,10 @@ cdp-curate dpms_wiki
 
 | 개편안 | 적은 것 | 코드 |
 |---|---|---|
-| §7.2 · V1 | 로컬 얼굴은 없다 | 얼굴은 남았다 — `faceOf` 의 `local` · `nav.js` 의 로컬 항목 셋(지식 레포 · 동기화 · 진단 · 정보) · `SideNav` · `api.js` 의 로컬 갈래(`setup` · `git*` · `sync` · `diag` · `open` · `heartbeat` · SSE) · 관리 화면의 `Repo` · `Sync` · `WorkRepos` · `Diag`. 그 화면을 내던 로컬 뷰어 서버는 걷혔다(c2f7858) — 서버 표식이 없는 `/`(예: vite 개발 서버의 뿌리)에서만 닿는다 |
-| §7.4 폴더 | `src/features/{repo, docs, graph, search, curation, forms, repo-admin, server-admin, site}` · `src/ui/` · 순서 「표 → 셸 → App 쪼개기 → 큐레이션」 | 표 · 셸 · 큐레이션까지 왔다. `features/` 는 `curation` · `forms` 둘 · `components/` · `console/` 는 그대로 · **App 쪼개기는 안 했다**(`App.jsx` 1,283줄) · `app.css` 1,751줄 |
-| §6.3 큐레이터 자리 | 설치 한 줄 `--curator <레포>` | 화면에 큐레이터 한 줄이 없다 — 설치기의 거절 문장(「관리 화면의 큐레이터 한 줄을 쓰세요」)이 가리키는 자리가 없다. 개인 서버만 시작할 때 찍는다 |
-| W1 · W2 | 콘솔의 「에이전트 세팅 갱신」 · `/packages` 를 지운다 | 서버 라우트는 지웠고 화면에 부르는 코드가 남았다 — `admin.repoKit` · `api.packages` · 서버 › 지식 레포의 `kit` 단추(서버가 `kit` 값을 안 내 그려지지 않는다) |
+| §7.2 · V1 | 로컬 얼굴은 없다 | 얼굴은 남았다 — `faceOf` 의 `local` · `nav.js` 의 로컬 항목 셋(지식 레포 · 동기화 · 진단 · 정보) · `SideNav` · `api.js` 의 로컬 갈래(`setup` · `git*` · `sync` · `diag` · `open` · `heartbeat` · SSE) · 관리 화면의 `Repo` · `Sync` · `WorkRepos` · `Diag`. 그 화면을 내던 로컬 뷰어 서버는 걷혔다(c2f7858) — 서버 표식이 없는 `/`(예: vite 개발 서버의 뿌리)에서만 닿는다 → **고침** — 로컬 전용 화면 넷 · 메뉴 항목 셋 · `isServer` 39곳 · SSE · 하트비트 · 감시 표시를 걷고 얼굴은 주소 하나로(4ab6acc) |
+| §7.4 폴더 | `src/features/{repo, docs, graph, search, curation, forms, repo-admin, server-admin, site}` · `src/ui/` · 순서 「표 → 셸 → App 쪼개기 → 큐레이션」 | 표 · 셸 · 큐레이션까지 왔다. `features/` 는 `curation` · `forms` 둘 · `components/` · `console/` 는 그대로 · **App 쪼개기는 안 했다**(`App.jsx` 1,283줄) · `app.css` 1,751줄 → 일부 — `App.jsx` 1,283 → 1,040줄(로컬 갈래를 걷었다) · 쪼개기는 아직 |
+| §6.3 큐레이터 자리 | 설치 한 줄 `--curator <레포>` | 화면에 큐레이터 한 줄이 없다 — 설치기의 거절 문장(「관리 화면의 큐레이터 한 줄을 쓰세요」)이 가리키는 자리가 없다. 개인 서버만 시작할 때 찍는다 → **고침** — 큐레이션 › 대기열 아래 접힌 「큐레이터 폴더」 카드(큐레이터에게만 · `lib/install.js` 한 곳에서 짓는다 · 1aa7653) |
+| W1 · W2 | 콘솔의 「에이전트 세팅 갱신」 · `/packages` 를 지운다 | 서버 라우트는 지웠고 화면에 부르는 코드가 남았다 — `admin.repoKit` · `api.packages` · 서버 › 지식 레포의 `kit` 단추(서버가 `kit` 값을 안 내 그려지지 않는다) → **고침** — `admin.repoKit` · `api.packages` · kit 칩 · 「에이전트 세팅 갱신」 단추 · 패키지 줄을 걷었다(43bc751) |
 | TODO §1.3 | `/me` · `/site/info` 에 `curate` | `/me` 에만 — 화면은 `/me` 를 쓰므로 판정에는 문제가 없다 → **고침** — `/site/info` 에도(8d92edf) |
 
 ---

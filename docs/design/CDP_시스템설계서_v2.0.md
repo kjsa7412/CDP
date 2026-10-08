@@ -287,7 +287,7 @@ tags: [curate]
 | `viewer/src/` | 화면(React) — [화면 설계서 v1.0](CDP_화면_설계서_v1.0.md) |
 | `agent/skills/` · `agent/CLAUDE-프로젝트레포.md` · `agent/CLAUDE-큐레이터.md` | kit 의 원본 — 스킬 다섯(`cdp-work` · `cdp-save` · `cdp-curate` · `cdp-registry` · `cdp-push`)과 CLAUDE 블록 둘. 서버 산출물의 `kit/` 이 된다(`ops/lib/bundle-files.mjs` `copyKit`) |
 | `agent/forms/` | 서식집 — 묶음 넷 · 서식 79([서식집 규약](CDP_서식집_규약_v1.0.md)) |
-| `manual/` | 설명서 원천 — 지금 셋(사용자 · 관리자 · 개발자). 큐레이터 책은 W9 에서 쓴다 |
+| `manual/` | 설명서 원천 — 넷(사용자 · 큐레이터 · 서버 관리자 · 개발자). 서버가 `/manual` 로 낸다 |
 | `ops/lib/` · `ops/deploy/` · `ops/verify/run.mjs` | 빌드 · 산출물 · 설치 스크립트 · 하네스 |
 | `test/` | 단위 시험 — `node --test test/*.test.mjs` |
 | `site/` | 공식 사이트(정적 SPA) |

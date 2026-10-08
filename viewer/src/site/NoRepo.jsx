@@ -89,7 +89,7 @@ export default function NoRepo({ from = null }) {
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                 <Link className="btn btn--accent btn--sm" to="/console/repos">서버 › 지식 레포 →</Link>
-                <Link className="btn btn--sm" to="/manual/관리자_설명서">설명서 › 관리자 3.4</Link>
+                <Link className="btn btn--sm" to="/manual/관리자_설명서">설명서 › 서버 관리자 5장</Link>
               </div>
             </>
           ) : (

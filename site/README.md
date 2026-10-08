@@ -7,7 +7,7 @@
 
 ```
 src/            페이지 일곱 · 라우터(base 를 안다) · 재생기 · 스크린숏
-  data/         screens.js(14장 설명) · examples/*.json(녹화 — 손으로 고치지 않는다) · facts.js(도구 13 · 스킬 7)
+  data/         screens.js(14장 설명) · examples/*.json(녹화 — 손으로 고치지 않는다) · facts.js(도구 12 · 스킬 5)
 public/shots/   실사용 화면 14장 × 라이트 · 다크 (site:demo 가 찍는다 · 커밋한다)
 demo/           데모 레포 내용(content.mjs) · 세우기 · 녹화 · 캡처(run.mjs) · 줄인 설명서
 tools/          prerender · 누출 검사(leaks.mjs · leak-names.txt) · 판 이력 · Vercel 흉내 미리보기

@@ -330,7 +330,7 @@ export class Store {
       const news = this.correctors(d.id).map((c) => c.doc)
       if (news.length) groups.push({ label: '이 기록을 정정한', items: news.map(work).sort(byDate) })
       if (olds.length) groups.push({ label: '이 기록이 정정한', items: olds.map(work).sort(byDate) })
-      if (applied.length) groups.push({ label: '관리문서', items: byDoc(applied).sort(bySection) })
+      if (applied.length) groups.push({ label: '관리 문서', items: byDoc(applied).sort(bySection) })
       groups.push({ label: '좌표', items: d.touches.map(coordNode).sort(byCoord) })
       return { node: work(d), groups }
     }
@@ -347,9 +347,9 @@ export class Store {
       // 등록부에 없는 좌표는 결함이 아니다 — 관리 문서는 **자주 쓰는 내용**을
       // 모아 둔 것이고 모든 것이 거기 녹지는 않는다. 그때는 그 지식공유문서가
       // 원천이다 (수행 v1.0 §3.2).
-      if (rows.length) groups.push({ label: '관리문서', items: byDoc(rows).sort(bySection) })
+      if (rows.length) groups.push({ label: '관리 문서', items: byDoc(rows).sort(bySection) })
       const list = this.coords.byCoord.get(key) || []
-      if (list.length) groups.push({ label: '작업문서', items: list.map(work).sort(byDate) })
+      if (list.length) groups.push({ label: '작업 기록', items: list.map(work).sort(byDate) })
       return { node: coordNode(key), groups }
     }
 

@@ -1,4 +1,4 @@
-// 읽기 API — 로컬 뷰어와 관리 서비스가 **같은 것을 쓴다.** MCP 설계서 §6.2.
+// 읽기 API — 서버(`ctx serve` · 개인 서버 포함)의 화면용 읽기. MCP 설계서 §6.2.
 //
 // 왜 뽑았나 — §6.2 는 라우트를 셋으로 갈랐다: 레포를 읽는다 · 이 PC 를 만진다 ·
 // 뜻이 갈린다. 첫 줄은 두 서버가 똑같이 내야 하는데, 두 곳에 각자 쓰면
@@ -203,7 +203,7 @@ export async function handleRead({ p, method, url, res, send, store }) {
     return true
   }
 
-  // git(`/git` · `/git/config`)은 **여기 없다** — 로컬 뷰어(`http.js`)의 것이다. 받을 것 · 보낼 것 · pull/push 는
+  // git(`/git` · `/git/config`)은 **여기 없다** — 옛 로컬 뷰어의 것이었고 v1.0 에서 걷었다. 받을 것 · 보낼 것 · pull/push 는
   // 로컬형 문법이고 서버 화면은 어디서도 안 쓴다(동기화 메뉴가 `local: true`). 허용 레포의 viewer 에게 origin 호스트 ·
   // 커밋 신원 · hooksPath 가 나가던 것을 「없는 것」 으로(화면 · 권한 검토 v0.1 P5 · R4 · Q7).
 
@@ -267,7 +267,7 @@ export async function handleRead({ p, method, url, res, send, store }) {
 // 원본은 관리 문서가 아니다), 작업 문서는 첨부(`work/assets/`)까지 — 기록이 가리키는 것이 같이 가야 읽힌다.
 const ARCHIVE = {
   managed: { dir: 'docs', label: '관리문서', keep: (rel) => /\.md$/i.test(rel) },
-  work: { dir: 'work', label: '작업문서', keep: (rel) => !/(^|\/)\.gitkeep$/.test(rel) },
+  work: { dir: 'work', label: '작업기록', keep: (rel) => !/(^|\/)\.gitkeep$/.test(rel) },
 }
 
 // 폴더 아래 파일 전부 — 숨김(.git 등)은 건너뛴다. 심볼릭 링크는 따라가지 않는다(레포 밖으로 나갈 수 있다).

@@ -173,7 +173,7 @@ export async function doctorRows(opt) {
             if (originAhead && r.ahead > 0) fail(`레포 ${r.name} origin`, `갈라졌다 — 서버 ${r.ahead}건 · origin 이 앞섬. 기계는 합치지 않는다: 셸에서 sudo -u cdp -H git -C ${r.path} pull --rebase 뒤 콘솔 「다시 보내기」`)
             else if (originAhead) warn(`레포 ${r.name} origin`, `origin 이 앞서 있다 — 누군가 서버 밖에서 썼다. 콘솔 > 지식 레포 > 「origin 과 맞추기」(ff-only)`)
             const dry = await git(r.path, ['push', '--dry-run', 'origin', 'HEAD'], 15000)
-            if (dry.ok) ok(`레포 ${r.name}`, `head ${r.head} · ${r.upstream} · push 자격 있음${r.ahead ? ' · 미러 밀림 ' + r.ahead + '건' : ''}`)
+            if (dry.ok) ok(`레포 ${r.name}`, `head ${r.head} · ${r.upstream} · push 자격 있음${r.ahead ? ' · origin 에 못 보냄 ' + r.ahead + '건' : ''}`)
             else {
               const c = classifyPushError(dry.err || dry.out)
               fail(`레포 ${r.name} push`, `${REASON_TEXT[c.reason] || c.reason}${c.line ? ' — ' + c.line : ''}`)
