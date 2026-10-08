@@ -1,4 +1,5 @@
 # CDP 제품화 검토 v1.0
+> **v1.0 이후** — 산출물은 둘(서버 tar · 사이트 zip)이고 설치 길은 셋이다 — [`CDP_시스템설계서_v2.0.md`](CDP_시스템설계서_v2.0.md) §9. exe · win zip · `knowledge-repo-*` · 패키지는 없다.
 
 2026-09-22 · 대상 v0.8.0 (`da4f13a`) · 후속 [`docs/dev/제품화_TODO.md`](../dev/제품화_TODO.md)
 

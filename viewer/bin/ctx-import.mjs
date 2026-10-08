@@ -76,9 +76,8 @@ export async function runImportDir(opt) {
     out(`들였다: 작업 기록 ${r.works} · 자산 ${r.assets}  (ctx check 통과${r.warnings.length ? ' · 경고 ' + r.warnings.join(' · ') : ''})`)
     out('')
     out('다음 —')
-    out('  1. git add work && git commit   ← 훅이 같은 검사를 한 번 더 한다')
-    out('  2. 좌표는 하나도 붙지 않았다. touches 를 채우는 것은 사람 · LLM(cdp-import)의 P2 다')
-    out('  3. ctx index 로 INDEX 를 만든다 (훅이 커밋 때 같이 한다)')
+    out('  1. git add work && git commit — 서버가 쓰는 레포에 직접 하지 않는다(서버의 save 뮤텍스 밖이다): 로컬 사본에서 커밋해 origin 에 올리고 콘솔 「origin 과 맞추기」')
+    out('  2. 좌표는 하나도 붙지 않았다. 들인 기록은 큐레이션 대기열에 선다 — 좌표 · 반영은 큐레이터가(cdp-curate)')
     if (opt.json) out(JSON.stringify(r))
     return 0
   } catch (e) {

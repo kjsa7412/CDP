@@ -1,4 +1,5 @@
 # CDP MCP 설계서 v1.1
+> **v1.0 이후** — [`CDP_MCP_설계서_v2.0.md`](CDP_MCP_설계서_v2.0.md) 가 대신한다(도구 12 · 역할별 등록 · kit 은 서버 번들에서). 모드 A(stdio) · `ctx setup` · 패키지 · kit-refresh 는 v1.0 에 없다.
 
 2026-09-21 개정 · 현재 v0.8.0 · 근거 문서 [`개념정리_MCP`](개념정리_MCP.md) ·
 검토 경위 [`docs/dev/MCP_적용검토_설계서_v0.1`](../dev/MCP_적용검토_설계서_v0.1.md)

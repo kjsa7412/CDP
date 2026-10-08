@@ -209,32 +209,6 @@ export async function lastFetchAt(root) {
   return s ? new Date(s.mtimeMs).toISOString() : null
 }
 
-// **앱이 git 설정을 쓰는 유일한 자리다.**
-//
-// 훅 미설정은 조용한 실패다 — 커밋은 통과하고 검사는 안 돈다. 그 하나만
-// 고친다. 여는 폭은 최소로 둔다 —
-//   · 키는 `core.hooksPath` 하나뿐 (인자로 키를 받지 않는다)
-//   · 값은 레포 안의 `.githooks` 하나뿐 (임의 경로를 못 넣는다)
-//   · **`--global` 을 쓰지 않는다.** 이 레포의 로컬 설정만 바뀐다
-export const HOOKS_DIR = '.githooks'
-
-export async function setHooksPath(root) {
-  if (!(await isRepo(root))) return { ok: false, reason: 'not-a-repo' }
-  const has = await fs
-    .access(path.join(root, HOOKS_DIR))
-    .then(() => true)
-    .catch(() => false)
-  if (!has) {
-    return {
-      ok: false,
-      reason: 'no-hooks-dir',
-      message: `${HOOKS_DIR}/ 가 레포에 없습니다. 배포본을 부으면 들어옵니다.`,
-    }
-  }
-  const r = await run(root, ['config', 'core.hooksPath', HOOKS_DIR])
-  return r.ok ? { ok: true, hooksPath: HOOKS_DIR } : { ok: false, reason: 'failed', message: firstLine(r.err) }
-}
-
 // 자격 증명이 새어 나갈 수 있는 유일한 문자열이 원격 주소다.
 // ssh 의 계정(`ssh://git@…`)은 비밀이 아니라 남긴다 — 가리면 화면에 `ssh://***@` 가 떠서 주소를 못 알아본다.
 // http 는 계정 자리에 PAT 를 넣기도 해서 통째로 가린다. 문장 속 주소(오류 줄)도 전부.

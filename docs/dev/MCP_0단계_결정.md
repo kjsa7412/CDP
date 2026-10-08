@@ -1,4 +1,5 @@
 # MCP 0단계 — 전제 확정
+> **v1.0 이후** — [`CDP_MCP_설계서_v2.0.md`](../design/CDP_MCP_설계서_v2.0.md) 가 대신한다 — 전송은 HTTP 하나 · 도구 12 · 역할별 등록.
 
 2026-09-21 · [`구현 TODO`](MCP_구현_TODO.md) 0단계의 답 · 설계 [`v1.1`](../design/CDP_MCP_설계서_v1.0.md)
 

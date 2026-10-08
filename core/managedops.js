@@ -201,6 +201,7 @@ export async function planManaged({ ops, registryText, docPaths, read, workId, f
       let doc = pathOf(op.doc)
       const form = op.form ? forms?.get(op.form) : null
       if (op.form && !form) throw bad(i, 'form', `서식 ${op.form} 이 서식집에 없다 — forms 로 찾아 id 를 그대로 쓴다`, { form: op.form })
+      if (form?.problems?.length) throw bad(i, 'form', `서식 ${op.form} 에 문제가 있다 — ${form.problems[0]}${form.problems.length > 1 ? ` 외 ${form.problems.length - 1}건` : ''} · 서버 관리자가 ctx forms check 로 본다`, { form: op.form, problems: form.problems })
       if (!doc) {
         doc = op.doc
         const stem = doc.split('/').pop().replace(/\.md$/i, '')

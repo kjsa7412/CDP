@@ -122,68 +122,7 @@ export function isImage(ext) {
   return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif'].includes(ext)
 }
 
-// 경로 지정 화면의 구조 검증 — 설계서 §26.1.
-// "경로가 맞는지는 폴더 이름이 아니라 이 다섯 줄로 판단된다."
-export async function probe(root) {
-  const rows = []
-  const stat = async (p) => {
-    try {
-      return await fs.stat(path.join(root, p))
-    } catch {
-      return null
-    }
-  }
-
-  const exists = await stat('.')
-  if (!exists) return { ok: false, rows: [{ mark: 'x', name: root, note: '경로를 찾을 수 없습니다' }] }
-
-  // knowledge/
-  const kdir = await stat('knowledge')
-  let mdCount = 0
-  if (kdir?.isDirectory()) {
-    const names = await fs.readdir(path.join(root, 'knowledge')).catch(() => [])
-    mdCount = names.filter((n) => n.toLowerCase().endsWith('.md')).length
-    rows.push({ mark: mdCount ? 'ok' : 'warn', name: 'knowledge/', note: `.md ${mdCount}건` })
-  } else {
-    rows.push({ mark: 'warn', name: 'knowledge/', note: '없음 — 루트의 .md 를 대신 읽습니다' })
-  }
-
-  // _vocab.md
-  const vfile = await stat('_vocab.md')
-  if (vfile) {
-    const { parseVocab } = await import('./vocab.js')
-    const v = parseVocab(readText(await fs.readFile(path.join(root, '_vocab.md'), 'utf8').catch(() => '')))
-    rows.push({ mark: 'ok', name: '_vocab.md', note: `좌표 ${v.coords.size}개 · 타입 ${v.types.length}종` })
-  } else {
-    rows.push({ mark: 'none', name: '_vocab.md', note: '없음 — 좌표 트리를 만들 수 없습니다' })
-  }
-
-  // INDEX.md — 읽지 않지만 불일치는 경고한다 (설계서 §10.4)
-  const ifile = await stat('INDEX.md')
-  if (ifile) {
-    const text = readText(await fs.readFile(path.join(root, 'INDEX.md'), 'utf8').catch(() => ''))
-    const rowCount = countIndexRows(text)
-    const diff = mdCount - rowCount
-    rows.push({
-      mark: diff === 0 ? 'ok' : 'warn',
-      name: 'INDEX.md',
-      note: diff === 0 ? `${rowCount}행 — 집계 일치` : `${rowCount}행 — 실제 집계와 ${Math.abs(diff)}건 차이`,
-    })
-  } else {
-    rows.push({ mark: 'none', name: 'INDEX.md', note: '없음 — 뷰어가 직접 집계합니다' })
-  }
-
-  // bin/ctx
-  const ctx = (await stat('bin/ctx')) || (await stat('bin/ctx.js')) || (await stat('bin/ctx.cmd'))
-  rows.push(
-    ctx
-      ? { mark: 'ok', name: 'bin/ctx', note: '검증 위임 가능 — 최초 실행 시 확인' }
-      : { mark: 'none', name: 'bin/ctx', note: '없음 — 검증은 뷰어 내장 검사로' }
-  )
-
-  return { ok: true, root, rows, mdCount }
-}
-
+// 옛 레포의 INDEX.md 행 수 — v1.0 은 만들지 않는다. 남은 파일이 있으면 repo.js 가 센다(정보용)
 export function countIndexRows(text) {
   return text
     .split('\n')

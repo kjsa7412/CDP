@@ -1,47 +1,29 @@
-// 등록부 사본(머리 표 칸 · 생성 블록) · edits 의 순수 함수 — 등록부 사본 검토 v0.1 X1~X3 · X15~X18.
+// 옛 등록부 사본의 자리 찾기(머리 표 칸 · 생성 블록) · edits 의 순수 함수 — 등록부 사본 검토 v0.1 X15~X18.
+// v1.0 은 사본을 만들지 않는다 — 옛 레포에 남은 줄을 본문 · 산문으로 잘못 읽지 않는지만 본다.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fixHead, readCell, renderCell, fixBlock, BLOCK_OPEN, BLOCK_CLOSE } from '../core/regen.js'
+import { headRow, preambleEnd, blockRange, BLOCK_OPEN, BLOCK_CLOSE } from '../core/regen.js'
 import { planEdits, checkEditsShape } from '../core/edits.js'
 import { parseRegistry } from '../core/managed.js'
 import { parseVocab } from '../core/vocab.js'
 
-const REG = parseRegistry(['| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|', '| `t:*` | `docs/t.md` | `## {값}` |', '| `u:*` | `docs/t.md` | `## {값}` |', '| `n:*` | `docs/n.md` | `—` |'].join('\n'))
-const rules = (doc) => REG.rules.filter((r) => r.doc === doc)
+const REG = parseRegistry(['| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|', '| `t:*` | `docs/t.md` | `## {값}` |'].join('\n'))
 const doc = (cell, nl = '\n') => ['# 문서', '', '| | |', '|---|---|', '| 관리번호 | `X` |', `| 등록부 | ${cell} |`, '', '## a — 에이', '본문'].join(nl)
 
-test('머리 표 — 뜻이 같으면 안 고친다 · 비대상 사유는 남는다 · 글씨만 다른 옛 칸도 뜻으로', () => {
-  assert.equal(fixHead(doc('`t:*` → `## {값}` · `u:*` → `## {값}`'), rules('docs/t.md')), null)
-  assert.equal(fixHead(doc('`u:*` → `## {값}` · `t:*` → `## {값}`'), rules('docs/t.md')), null, '순서는 뜻이 아니다')
-  assert.equal(fixHead(doc('**비대상** — 날짜축이다'), []), null)
-  assert.equal(fixHead(doc('`t:*` · `u:*`'), rules('docs/t.md')), null, '앵커 없는 옛 칸')
-  assert.equal(fixHead(doc('`n:*` → —'), rules('docs/n.md')), null)
-  const f = fixHead(doc('**비대상** — 날짜축이다'), rules('docs/t.md'))
-  assert.equal(f.line, 6)
-  assert.match(f.text, /\| 등록부 \| `t:\*` → `## \{값\}` · `u:\*` → `## \{값\}` \|/)
-  assert.match(fixHead(doc('`t:*` → `## {값}`'), []).text, /\| 등록부 \| \*\*비대상\*\* \|/)
-  assert.equal(fixHead('# 머리 표 없음\n\n## a\n', rules('docs/t.md')), null)
-  assert.equal(readCell('**비대상** — `테이블정의서:` 은 `테이블정의서` 가 갖는다').off, true)
-  assert.equal(renderCell([]), '**비대상**')
+test('옛 머리 표 칸 — 머리말 안에서만 · CRLF 도 · 첫 ## 뒤의 표는 머리 표가 아니다', () => {
+  assert.deepEqual(headRow(doc('**비대상**').split('\n')), { line: 5, cell: '**비대상**' })
+  assert.deepEqual(headRow(doc('`t:*` → `## {값}`', '\r\n').split('\n')), { line: 5, cell: '`t:*` → `## {값}`' })
+  assert.equal(headRow('# d\n\n## a\n\n| 등록부 | **비대상** |\n'.split('\n')), null)
+  assert.equal(preambleEnd(doc('x').split('\n')), 7)
+  assert.equal(preambleEnd(['# 제목', '```', '## 펜스 안', '```', '본문']), 5, '펜스 안의 ## 는 세지 않는다')
 })
 
-test('머리 표 — CRLF 문서는 CRLF 로 · 첫 ## 뒤의 표는 머리 표가 아니다', () => {
-  const f = fixHead(doc('**비대상**', '\r\n'), rules('docs/t.md'))
-  assert.ok(f.text.includes('`u:*` → `## {값}` |\r\n'))
-  assert.equal(f.text.split('\r\n').length, doc('**비대상**', '\r\n').split('\r\n').length)
-  assert.equal(fixHead('# d\n\n## a\n\n| 등록부 | **비대상** |\n', rules('docs/t.md')), null)
-})
-
-test('생성 블록 — 표식이 있을 때만 · 같으면 null · 등록부에 없는 타입 줄', () => {
-  const vocab = parseVocab('## t\n\n- `t:a` — 에이\n\n## 업무영역\n\n- `업무영역:x` — 엑스\n')
-  assert.equal(fixBlock('# 어휘\n', REG, vocab), null)
-  const f = fixBlock(`# 어휘\n\n${BLOCK_OPEN}\n낡은 줄\n${BLOCK_CLOSE}\n`, REG, vocab)
-  assert.match(f.text, /\| `t` \| `t:\*` \| `docs\/t\.md` \| `## \{값\}` \|/)
-  assert.match(f.text, /\| `n` \| `n:\*` \| `docs\/n\.md` \| — \|/)
-  assert.match(f.text, /등록부에 없는 타입\*\* — `업무영역`/)
-  assert.equal(fixBlock(f.text, REG, vocab), null)
-  assert.equal(parseVocab(f.text).coords.size, 0, '블록은 어휘 항목이 아니다')
+test('옛 생성 블록 — 자리를 찾고 · 블록 안은 어휘 항목이 아니다', () => {
+  const text = `# 어휘\n\n## t\n\n- \`t:a\` — 에이\n\n${BLOCK_OPEN}\n| 타입 | 좌표 패턴 |\n|---|---|\n| \`t\` | \`t:*\` |\n${BLOCK_CLOSE}\n`
+  assert.deepEqual(blockRange(text.split('\n')), { open: 6, close: 10 })
+  assert.equal(blockRange('# 어휘\n'.split('\n')), null)
+  assert.deepEqual([...parseVocab(text).coords.keys()], ['t:a'])
 })
 
 test('edits — CRLF 파일에 LF 로 보낸 old · new 가 맞고 줄끝은 그대로 · 모양 검사', async () => {

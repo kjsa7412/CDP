@@ -1,4 +1,4 @@
-// save — 모드 B 의 유일한 쓰기 도구. 설계서 §4.5 · v1.0 개편안 §5.2.
+// save — 유일한 쓰기 도구(I2). 설계서 §4.5 · v1.0 개편안 §5.2.
 //
 // 단위는 **작업 기록 1건 + (큐레이터면) 관리 문서 섹션 · 등록부 + 어휘 등재**이고 한 커밋이다(§0).
 //
@@ -6,8 +6,7 @@
 // 큐레이션으로만 바뀐다(I6). 섹션 · 등록부 · 섹션 밖 손질 · 서식 예시 정리 · 큐레이션 판정(`work.curates`)은
 // 그 레포의 큐레이터(`curate`)만. 기록만 쓴 save 는 파생 때문에 막히지 않는다 — 기록은 대기열에 서고, 섹션을
 // 읽는 모든 자리가 그 미반영 기록을 같이 낸다(I7).
-// 모드 A 에서는 스킬이 Edit/Write 로 하고 커밋 훅이 검사하던 것을, 여기서는
-// 서버가 한 번에 한다 — 클라이언트에 작업 트리가 없기 때문이다(§4.2).
+// 검사 · 커밋 · 미러를 서버가 한 번에 한다 — 클라이언트에 작업 트리가 없다(§4.2). 커밋은 훅을 타지 않는다(V5).
 //
 // **전부 되거나 전부 안 된 것이어야 한다.** 검사에서 걸리면 만지기 전으로
 // 되돌린다. 반쯤 쓰인 트리는 다음 요청에게 거짓말을 하고, 그 다음 `save` 는
@@ -47,7 +46,7 @@ const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
 export const MIRROR_WAIT_MS = 1500
 // E_CONFLICT 에 싣는 지금 본문의 상한 — 응답 크기를 지킨다. 넘으면 `truncated` 이고 그때만 `section` 을 다시 부른다.
 export const CONFLICT_CONTENT_MAX = 8000
-// 커밋(훅이 `bin/ctx check` · `ctx index` 를 돈다)의 상한 — git 기본 20초는 부하 걸린 기계에서 모자란다.
+// 커밋의 상한 — git 기본 20초는 부하 걸린 기계에서 모자란다(훅은 타지 않는다 · V5).
 // 넘어도 판정은 index.lock · HEAD 로 한다(10단계). 뮤텍스 안이라 그동안 다른 save 는 줄을 선다.
 export const COMMIT_TIMEOUT_MS = 120000
 // 남이 쥔 index.lock 때문에 커밋이 시작도 못 했을 때 다시 하는 횟수 — 잠금이 풀린 뒤에(10단계)
@@ -562,7 +561,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
   // 3.7 좌표 0개 — **사유 없이는 받지 않는다.** 0개도 정상이지만(일정만 정한 작업), 좌표가 없는 기록은
   // `match` · `where` 어디로도 닿지 않는다. 도메인 지식 문서를 편입하면서 정의한 용어를 전부 "설명" 으로
   // 떨어뜨려 `touches: []` 가 경고 없이 커밋됐다(실측 · 좌표 누락 TODO C). 0개임을 확인했다는
-  // 선언을 `touchesEmpty` 로 받고, 받았어도 경고로 한 번 더 말한다. 모드 A 의 검사는 그대로다 — 기존
+  // 선언을 `touchesEmpty` 로 받고, 받았어도 경고로 한 번 더 말한다. 레포 검사는 그대로다 — 이미 있는
   // `touches: []` 기록을 오류로 만들지 않는다.
   if (!(w.touches || []).length) {
     if (!w.touchesEmpty) {
@@ -617,9 +616,15 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       if (recordKind(d) !== 'work') throw new CtxError('E_INPUT', `work.curates — ${j.id} 는 큐레이션 · 기준선 · 옛 기계 기록이다 — 사람의 작업 기록만 다룬다`, { field: 'work.curates', id: j.id })
     }
     // 섹션의 applied — 반영(into)한 기록 중 그 좌표를 건드린 **가장 늦은 기록**(v1.0 §4.4 · H3). 판정이 없으면 이 기록
+    // **applied 는 뒤로 가지 않는다** — 원문 날짜를 단 옛 기록(편입)만 반영해도 지금 applied 가 더 늦은 작업 기록이면 그것을 둔다.
+    // 뒤로 가면 이미 반영한 늦은 기록이 그 섹션의 미반영(`later`)으로 되살아난다
     const appliedFor = (coord) => {
       const hits = (curates || []).filter((j) => j.verdict !== 'keep' && j.into.includes(coord)).map((j) => r0.byId.get(j.id)).filter(Boolean)
-      return hits.length ? hits.sort(cmpDateDesc)[0].id : w.id
+      if (!hits.length) return w.id
+      const cur = r0.sections.find((x) => x.coord === coord)?.applied
+      const curDoc = cur ? r0.byId.get(cur) : null
+      if (curDoc && recordKind(curDoc) === 'work' && !hits.includes(curDoc)) hits.push(curDoc)
+      return hits.sort(cmpDateDesc)[0].id
     }
     const known = new Set(r0.vocab.coords.keys())
     for (const v of vocabAdds) known.add(v.coord)
@@ -871,7 +876,8 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     }
     const old = res.findings.filter((f) => f.sev === 'error')
     if (old.length) warnings.push(`레포에 원래 있던 오류 ${old.reduce((a, f) => a + f.items.length, 0)}건 — 이 save 와 무관해 막지 않았다(${old.map((f) => f.label).join(' · ')}). check 로 보고 고칠 사람이 고친다`)
-    for (const f of res.findings.filter((x) => x.sev === 'warn')) warnings.push(`${f.label} ${f.items.length}건`)
+    // 큐레이션 대기가 오래됐다는 경고는 큐레이터의 일이다 — writer 의 응답에 실으면 할 수 없는 일을 말하는 소음이다
+    for (const f of res.findings.filter((x) => x.sev === 'warn' && (curate || x.kind !== 'curation-stale'))) warnings.push(`${f.label} ${f.items.length}건`)
 
     return {
       snap,

@@ -684,7 +684,8 @@ export async function runServe(opt = {}) {
         formsOpt: { explicit: opt.forms || null, dataDir },
         // `save` 는 토큰의 사용자로 author 를 채운다. 클라이언트가 보내면
         // 거절한다 — 보낼 수 있으면 남의 이름으로 기록이 남는다(§4.5).
-        saver: async (name, input) => {
+        // viewer 에게는 등록하지 않는다 — 역할에 없는 도구는 보이지도 않는다(v1.0 §5.3)
+        saver: !(a.write || a.admin) ? null : async (name, input) => {
           const r = repos.find((x) => x.name === name)
           // 결과를 요청 맥락에 남긴다 — MCP 의 도구 오류는 HTTP 200 이라 로그 줄이 결과를 몰랐고,
           // `ms` 는 핸들러가 스트림을 연 시각이라 도구 시간이 아니었다(동시 기록 검토 v0.1 B9).
@@ -813,6 +814,8 @@ export async function runServe(opt = {}) {
           user: who.ok ? who.user : null,
           role: who.ok ? who.role : null,
           admin: who.ok ? !!who.admin : false,
+          // 큐레이션할 수 있는 레포(v1.0 · 계약 1.3) — admin 은 ['*']
+          curate: who.ok ? who.curateRepos || [] : [],
         })
       }
       // 설명서 원문 — `manual/` 의 책 · 설치절차 · 그림만. 목록 밖은 **없는 것**이다(경로 순회가 여기서 끝난다).
@@ -1799,10 +1802,7 @@ export async function runServe(opt = {}) {
         return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '관리 서비스에 없는 경로다 — 로컬 뷰어의 것' } })
       }
 
-      // GET /kit/<name> — 그 레포의 kit(스킬 · CLAUDE 블록) zip (§4.3).
-      //
-      // **지식 레포 안의 `.claude/` 가 정본이다.** 서버가 따로 들고 있지 않고
-      // 레포에서 그때그때 싼다 — 레포를 갱신하면 다음 요청부터 새 kit 이다.
+      // GET /kit/<name> — 그 레포의 kit(스킬 · CLAUDE 블록) (§4.3). 서버 번들의 `kit/` 에서 역할별로 싼다(v1.0 W5).
       const kitM = /^\/kit\/([^/]+)\/?$/.exec(url.pathname)
       if (kitM && req.method === 'GET') {
         const name = decodeURIComponent(kitM[1])
@@ -1813,8 +1813,12 @@ export async function runServe(opt = {}) {
           log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name, ms: Date.now() - t0, status: 404 })
           return json(res, 404, { error: { code: 'E_NOT_FOUND', message: '그런 레포가 없다' } })
         }
-        // **번들에서 · 역할별로**(v1.0 W5) — 큐레이터면 다섯 스킬과 큐레이터 블록, 아니면 기록하는 스킬 셋
-        const role = (a.curate ? a.curate(name) : !!a.admin) && url.searchParams.get('role') !== 'writer' ? 'curator' : 'writer'
+        // **번들에서 · 역할별로**(v1.0 W5) — 큐레이터면 다섯 스킬과 큐레이터 블록, 아니면 기록하는 스킬 셋.
+        // 단 **등록된 작업 레포(`?workrepo=`)는 늘 writer kit** 이다 — 팀이 같이 쓰고 커밋하는 자리라 설치한 사람의 역할을
+        // 따르면 큐레이터 스킬이 그 레포에 커밋되고, 대장은 writer kit 해시와 견주어 늘 「낡음」 이 된다. 큐레이터 kit 은
+        // 큐레이터 폴더(`install.mjs --curator` — workrepo 없이)에만 간다
+        const wid = url.searchParams.get('workrepo')
+        const role = !wid && (a.curate ? a.curate(name) : !!a.admin) && url.searchParams.get('role') !== 'writer' ? 'curator' : 'writer'
         const bundle = await kitFiles({ role, explicit: opt.kit || null })
         const files = bundle.files
         if (!files.length) {
@@ -1828,7 +1832,6 @@ export async function runServe(opt = {}) {
         // **토큰은 넣지 않는다.** 꾸러미는 파일로 남고 사람 손을 거친다 —
         // 여기에 원문을 넣으면 §4.4.1 의 "발급 엔드포인트는 없다" 를 뒷문으로
         // 깨는 셈이 된다.
-        const wid = url.searchParams.get('workrepo')
         let entries = files
         // 큐레이터 폴더 — 등록 없이 받는다(v1.0 §6.3 · `install.mjs --curator`). git 레포가 아니어도 되고 대장에 오르지 않는다
         if (!wid && url.searchParams.get('as') === 'json') {
@@ -2329,32 +2332,6 @@ async function preparePersonal(opt) {
   }
   await auth.store(authFile, db)
   return { repo, name, data, auth: authFile, token: raw }
-}
-
-async function collectKit(root) {
-  const out = []
-  const base = path.join(root, '.claude')
-
-  const skills = path.join(base, 'skills')
-  for (const e of await fs.readdir(skills, { withFileTypes: true }).catch(() => [])) {
-    if (!e.isDirectory() || !e.name.startsWith('cdp-')) continue
-    await walk(path.join(skills, e.name), '.claude/skills/' + e.name, out)
-  }
-
-  const claude = path.join(base, 'work-repo', 'CLAUDE.md')
-  const body = await fs.readFile(claude).catch(() => null)
-  if (body) out.push({ name: '.claude/work-repo/CLAUDE.md', data: body })
-
-  return out.sort((a, b) => a.name.localeCompare(b.name))
-}
-
-async function walk(dir, rel, out) {
-  for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
-    const abs = path.join(dir, e.name)
-    const r = rel + '/' + e.name
-    if (e.isDirectory()) await walk(abs, r, out)
-    else out.push({ name: r, data: await fs.readFile(abs) })
-  }
 }
 
 // 로그인 뒤 돌아갈 곳. **밖으로 보내지 않는다** — `//evil.example` 같은 값이
