@@ -97,7 +97,9 @@ test('dpms_wiki 사례 — 새 타입 term:PLC + 용어집 문서 + term:* 행 +
     const rules = parseRegistry(regText).rules
     assert.deepEqual(rules.map((x) => x.pattern), ['table:*', 'view:*', 'note:*', 'term:*'])
     assert.equal(addedBy(rules[3]), '2026-0930-PLC-CIMON-SCADA')
-    assert.equal(regText.split(NL).slice(0, 7).join(NL), MANAGED.split(NL).slice(0, 7).join(NL), '기존 행 그대로')
+    // 규칙 행은 그대로 · 머리는 넷째 칸(비고)까지 넓힌다 — 서버가 더한 행의 「서버 추가 · id」 가 그려지게
+    assert.deepEqual(regText.split(NL).slice(4, 7), MANAGED.split(NL).slice(4, 7), '기존 규칙 행 그대로')
+    assert.deepEqual(regText.split(NL).slice(2, 4), ['| 좌표 패턴 | 관리 문서 | 섹션 | 비고 |', '|---|---|---|---|'], '머리를 넓혔다')
 
     // 문서 — 제목 + 섹션 둘 · applied 는 이 기록
     const doc = await read(R.r, 'docs/용어집.md')

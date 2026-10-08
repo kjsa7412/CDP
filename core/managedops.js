@@ -28,7 +28,11 @@ const KEYS = {
 
 const NL = '\n'
 const lc = (s) => String(s).toLowerCase()
-const EMPTY_REGISTRY = ['# 관리 문서 등록부', '', '좌표가 어느 관리 문서의 어느 섹션에 대응하는지 **여기에만** 적는다.', '매핑이 두 곳에 있으면 반드시 어긋난다.', '', '| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|']
+// 머리는 넷째 칸(비고)까지 — 서버가 더한 행은 넷째 칸에 「서버 추가 · <기록 id>」 를 적고, GFM 은 머리 칸 수만큼만 그린다
+const EMPTY_REGISTRY = ['# 관리 문서 등록부', '', '좌표가 어느 관리 문서의 어느 섹션에 대응하는지 **여기에만** 적는다.', '매핑이 두 곳에 있으면 반드시 어긋난다.', '', '| 좌표 패턴 | 관리 문서 | 섹션 | 비고 |', '|---|---|---|---|']
+// 등록부 표의 머리행 · 구분행 — 규칙이 아직 없는 빈 틀의 표를 찾고, 넷째 칸이 없는 옛 머리를 넓힐 때 본다
+const RE_REG_HEAD = /^\s*\|\s*좌표 패턴\s*\|/
+const RE_REG_SEP = /^\s*\|[\s:|-]+\|\s*$/
 
 // 입력의 모양만 본다(필드 조합 · 길이 · 키). 내용(경로 · 패턴)은 계획에서 — 앞 동작의 결과를 봐야 알 수 있다.
 export function checkManagedShape(list) {
@@ -82,19 +86,46 @@ function badPath(at, field, p) {
 
 // ── `_managed.md` 줄 고치기 — 줄 번호는 `parseRegistry` 의 `line`(1부터) 그대로다 ────────────────────────
 
-// 마지막 규칙 행 바로 뒤에 넣는다 — 같은 표 안이고 우선순위가 가장 낮다. 규칙이 없으면 표째 끝에 만든다.
+// 마지막 규칙 행 바로 뒤에 넣는다 — 같은 표 안이고 우선순위가 가장 낮다. 규칙이 없으면 **이미 있는 빈 표**(빈 틀의
+// 「| 좌표 패턴 | 관리 문서 | 섹션 |」)의 구분행 바로 뒤에, 그 표도 없을 때만 표째 끝에 만든다 — 전에는 빈 틀에 첫 행을
+// 더하면 파일 끝(「등록부에 없는 좌표는 정상이다」 절 아래)에 표가 하나 더 생겼다(사이트 데모 실측).
 function insertRow(text, row) {
   if (!text || !text.trim()) return [...EMPTY_REGISTRY, row, ''].join(NL)
   const reg = parseRegistry(text)
   const lines = text.split(NL)
-  if (reg.rules.length) {
-    const at = Math.max(...reg.rules.map((r) => r.line)) // 1부터 → 그 줄 다음의 인덱스가 같은 수
-    const cr = lines[at - 1].endsWith('\r') ? '\r' : ''
-    lines.splice(at, 0, row + cr)
-    return lines.join(NL)
+  let at = null // 넣을 인덱스(0부터)
+  if (reg.rules.length) at = Math.max(...reg.rules.map((r) => r.line)) // 1부터 → 그 줄 다음의 인덱스가 같은 수
+  else {
+    for (const [i, l] of outsideFences(lines)) {
+      if (RE_REG_HEAD.test(l) && RE_REG_SEP.test(lines[i + 1] || '')) {
+        at = i + 2
+        break
+      }
+    }
   }
-  while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
-  return [...lines, '', ...EMPTY_REGISTRY.slice(5), row, ''].join(NL)
+  if (at == null) {
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
+    return [...lines, '', ...EMPTY_REGISTRY.slice(5), row, ''].join(NL)
+  }
+  const cr = lines[at - 1].endsWith('\r') ? '\r' : ''
+  lines.splice(at, 0, row + cr)
+  widenHead(lines, at)
+  return lines.join(NL)
+}
+
+// 그 행이 든 표의 머리가 행보다 칸이 적으면 넓힌다 — 옛 레포의 머리는 셋째 칸(섹션)까지라 서버가 더한 행의
+// 넷째 칸(「서버 추가 · <id>」)이 그려지지 않았다. 머리 · 구분행만 고친다(규칙 행은 그대로)
+function widenHead(lines, at) {
+  let top = at
+  while (top > 0 && /^\s*\|/.test(lines[top - 1])) top--
+  const head = lines[top] || ''
+  const sep = lines[top + 1] || ''
+  if (!RE_REG_HEAD.test(head) || !RE_REG_SEP.test(sep)) return
+  const cells = (l) => l.replace(/\r$/, '').trim().split('|').length - 2
+  if (cells(head) !== 3 || cells(lines[at]) < 4) return
+  const cr = (l) => (l.endsWith('\r') ? '\r' : '')
+  lines[top] = head.replace(/\r$/, '').replace(/\s*$/, '') + ' 비고 |' + cr(head)
+  lines[top + 1] = sep.replace(/\r$/, '').replace(/\s*$/, '') + '---|' + cr(sep)
 }
 
 function removeRow(text, line) {

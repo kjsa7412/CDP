@@ -207,7 +207,7 @@
 | `E_AUTH` | 토큰 없음 · 무효 · 만료 · 고아 · 사용 중지(HTTP 401) | — |
 | `E_FORBIDDEN` | 쓰기 권한이 없다 · **큐레이터 입력 · 도구**(`need: 'curate'` · `fields`) · 볼 수 있는 레포가 없다 | `need` · `fields` · `user` |
 | `E_EXISTS` | `work/<id>.md` 가 이미 있다 · 첨부 자리가 차 있다 · rename 대상이 있다 | `id` · `path` · `doc` |
-| `E_CONFLICT` | 섹션 `applied` 가 읽은 뒤 바뀌었다 · 같은 패턴이 다른 자리에 있다 · `edits` 의 `old` 가 없다 | 섹션 — `{ coord, expected, current, currentWork, content, truncated }` · 등록부 — `{ kind: 'managed', pattern, current }` |
+| `E_CONFLICT` | 섹션 `applied` 가 읽은 뒤 바뀌었다 · 같은 패턴이 다른 자리에 있다 · `edits` 의 `old` 가 없다 | 섹션 — `{ coord, expected, current, currentWork, currentCuration, content, truncated }`(`currentCuration` — 그 applied 를 반영해 섹션을 고친 큐레이션 기록 · 문장의 「누가」 도 그 큐레이터) · 등록부 — `{ kind: 'managed', pattern, current }` |
 | `E_CHECK` | **이 save 가 만든** 검사 오류(V21) | `findings` · `hint?` |
 | `E_GIT` | 더러운 트리 · 커밋 실패 · 시간 초과 · 잠금 | `{ reason: 'dirty' \| 'locked' \| 'timeout' \| 'commit' \| 'add', paths?, message }` |
 

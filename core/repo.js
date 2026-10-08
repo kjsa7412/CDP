@@ -92,10 +92,14 @@ export function repoStatus(r, { today = new Date() } = {}) {
   // 일**이고, 등록부가 없는 자리를 가리키는 섹션은 **깨진 것**이다. 이름이
   // 그 둘을 구별해야 화면과 CLI 가 같은 말을 한다.
   //
-  //   pendingDerive   applied 뒤 후속이 있다 · applied 가 아예 없다 → 파생 남음
-  //   brokenSections  섹션/문서가 없다 · applied 가 유령을 가리킨다
+  //   pendingDerive   applied 뒤 후속이 있다 · applied 가 아예 없다 → 파생 남음(v0.x 의 이름 · `--json` 이 아직 낸다)
+  //   brokenSections  등록부 행의 문서가 없다 · applied 가 유령을 가리킨다
   //   (empty)         작업 기록이 아직 없는 섹션 → 낼 것이 없다. 정상이다
-  const broken = new Set(['orphan', 'anchor-missing', 'doc-missing'])
+  //
+  // **등록부 행은 있는데 섹션이 없는 좌표(`anchor-missing`)는 깨진 것이 아니다**(v1.0 H1 · 시스템 설계서 §3.5) —
+  // 대기열의 「등록부 있음 · 섹션 없음」 이고 큐레이터가 섹션을 세운다. 깨진 섹션으로 세면 기록이 새 좌표를
+  // 건드릴 때마다 현황이 적으로 운다(사이트 데모 실측 — 검사는 오류 0 인데 「깨진 섹션 2」).
+  const broken = new Set(['orphan', 'doc-missing'])
   const pendingDerive = r.sections.filter((x) => x.state === 'stale' || x.state === 'unwritten')
   const brokenSections = r.sections.filter((x) => broken.has(x.state))
   const days = (d) => (d ? Math.max(0, Math.round((today - new Date(d)) / 86400000)) : null)

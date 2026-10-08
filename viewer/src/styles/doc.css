@@ -810,6 +810,16 @@
 .finding__item code {
   font: 11.5px var(--font-mono);
 }
+/* 좌표 글씨는 등급의 색 — 색 예산(화면 설계서 §10 · V19): 적은 무효(오류)만 · 경고는 앰버 · 미반영(행동 대기)은 보라 · 다른 안내는 무채색 */
+.finding.sev-error .finding__item code {
+  color: var(--danger);
+}
+.finding.sev-warn .finding__item code {
+  color: var(--warn);
+}
+.finding.kind-curation-pending .finding__item code {
+  color: var(--pending);
+}
 .finding__suggest {
   margin-left: var(--sp-4);
   font-size: 11.5px;

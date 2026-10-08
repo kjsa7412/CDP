@@ -86,7 +86,7 @@ export default function CheckView({ onOpen }) {
           data.findings
             .filter((f) => f.sev === sev)
             .map((f) => (
-              <section className={`finding sev-${sev}`} key={f.kind}>
+              <section className={`finding sev-${sev} kind-${f.kind}`} key={f.kind}>
                 <div className="finding__head">
                   <Icon name={SEV[sev].icon} size={14} />
                   <span>{f.label}</span>
@@ -101,7 +101,8 @@ export default function CheckView({ onOpen }) {
 
                 {f.items.map((it, i) => (
                   <div className="finding__item" key={i}>
-                    {it.coord && <code style={{ color: 'var(--danger)' }}>{it.coord}</code>}
+                    {/* 좌표 글씨의 색은 등급이 정한다(doc.css) — 적은 무효만 · 미반영은 보라 · 안내는 무채색(색 예산 V19) */}
+                    {it.coord && <code>{it.coord}</code>}
                     {it.id && (
                       <button style={{ color: 'var(--accent)' }} onClick={() => onOpen(it.id)}>
                         {it.id}

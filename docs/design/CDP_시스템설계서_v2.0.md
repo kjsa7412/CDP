@@ -211,7 +211,7 @@ tags: [curate]
 
 ### 3.5 등록부 · 어휘
 
-- **`_managed.md`** — `` | `<패턴>` | `<문서>` | `## {값}` 또는 — | `` 한 줄이 규칙 하나다(넷째 칸은 note). 위에서부터 먼저 걸리는 행이 이긴다 · glob 은 `*` 만. 서버가 더한 행의 note 는 `서버 추가 · <work.id>`. drop 은 끝의 「지운 관리 문서」 표(첫 칸에 콜론이 없어 규칙이 아니다)에 한 줄을 남긴다.
+- **`_managed.md`** — `` | `<패턴>` | `<문서>` | `## {값}` 또는 — | `` 한 줄이 규칙 하나다(넷째 칸은 note). 위에서부터 먼저 걸리는 행이 이긴다 · glob 은 `*` 만. 서버가 더한 행의 note 는 `서버 추가 · <work.id>` — 표의 머리는 넷째 칸 「비고」 까지다(빈 틀의 빈 표에 첫 행이 들어가고, 머리가 셋째 칸까지인 옛 레포는 행을 더할 때 머리를 넓힌다). drop 은 끝의 「지운 관리 문서」 표(첫 칸에 콜론이 없어 규칙이 아니다)에 한 줄을 남긴다.
 - **등록부에 없는 좌표는 정상이다** — 그 작업 기록이 원천이다(v1.0 §1.2 그대로). v1.0 은 하나를 더했다 — **등록부 행은 있는데 섹션이 없는 좌표도 오류가 아니다.** 대기열의 「등록부 있음 · 섹션 없음」 이고, `section` 은 섹션 대신 그 좌표의 대기 기록을 낸다(개편안 H1 · 0a5e2c6).
 - **`_vocab.md`** — `## <타입>`(공백 없는 머리글) 아래 `` - `타입:값` — 설명 `` · `aliases:` · `deprecated:` · `supersededBy:` · 타입 절 아래 `excluded:`. 타입 절 순서가 카테고리 순서다. save 의 `vocab[]` 는 추가만 하고, 타입 절이 없으면 파일 끝에 만들고 경고한다. 삭제는 없다(`deprecated` 표기).
 
@@ -339,7 +339,7 @@ writer 가 큐레이터만 받는 입력(위 표에서 writer 칸이 — 인 줄
 5.6  지우기        drop — 작업 기록이 쓴 섹션 · touches 이력이 있는 문서 거절 ·
                    가리키는 줄은 edits 로 고쳤거나 reviewed 에                              E_INPUT { realSections | touchedBy | refs }
 6    섹션          새 등록부로 자리 · 본문에 섹션 레벨 이하 헤딩 금지 · 지금 기준선 블록은 그대로 다시 붙인다 ·
-                   보낸 applied ≠ 지금 applied                                           E_CONFLICT { coord, expected, current, currentWork, content, truncated }
+                   보낸 applied ≠ 지금 applied                                           E_CONFLICT { coord, expected, current, currentWork, currentCuration, content, truncated }
 6.2  기준선        블록만 통째로 — 섹션이 없으면 블록만 든 섹션(applied: null) · 문서 전체(—) 좌표는 안 받는다
 6.5  첨부          work/assets/<id>/<name> 에 새 파일로(있으면 E_EXISTS)
 6.7  그림 경고      본문이 가리키는 그림이 레포에 없다 · 어느 본문도 안 가리키는 첨부

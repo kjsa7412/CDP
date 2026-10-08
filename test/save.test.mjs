@@ -596,6 +596,37 @@ test('save v1.0 — 큐레이션 기록: 판정이 프론트매터에 남고 · 
   }
 })
 
+test('save v1.0 — 큐레이터 둘의 E_CONFLICT: 「누가」 는 섹션을 고친 큐레이터다(applied 기록의 작성자가 아니다) · detail.currentCuration', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const R = await repo()
+  try {
+    await save(R.r, { work: { ...work('2026-1002-dev-a', 'table:a'), date: '2026-10-02 09:00' } }, { user: 'dev.a', write: true })
+    const cur = (id, date, sections) => ({ work: { id, title: id, date, touches: [], body: '큐레이션 — 판정표.', curates: [{ id: '2026-1002-dev-a', verdict: 'reflect', into: ['table:a'] }] }, sections })
+    await save(R.r, cur('2026-1007-lead', '2026-10-07 10:00', [{ coord: 'table:a', applied: null, body: 'lead 가 반영한 본문.' }]), opt('lead'))
+    // doc.c 는 lead 전에 읽었다(applied null) — 같은 기록을 반영하려다 부딪친다
+    const e = await save(R.r, cur('2026-1007-docc', '2026-10-07 10:05', [{ coord: 'table:a', applied: null, body: 'doc.c 의 본문.' }]), opt('doc.c')).then(
+      () => assert.fail('E_CONFLICT 여야 한다'),
+      (x) => x
+    )
+    assert.equal(e.code, 'E_CONFLICT')
+    assert.equal(e.detail.current, '2026-1002-dev-a', 'applied 는 반영된 기록')
+    assert.equal(e.detail.currentWork.author, 'dev.a')
+    assert.deepEqual(e.detail.currentCuration, { id: '2026-1007-lead', author: 'lead', date: '2026-10-07 10:00' })
+    assert.match(e.message, /lead 가 2026-10-07 10:00 에 큐레이션 2026-1007-lead 로 갱신했다\(applied 는 반영한 기록 2026-1002-dev-a\)/)
+    assert.doesNotMatch(e.message, /dev\.a 가/)
+    // 큐레이션 없이 쓴 섹션(applied = 그 save 의 기록)은 전처럼 그 작성자
+    const s0 = toolSection(await loadRepo(R.r), { coord: 'table:b' }).applied
+    await save(R.r, { work: work('2026-1007-b1', 'table:b', { date: '2026-10-07 11:00' }), sections: [{ coord: 'table:b', applied: s0, body: 'b 본문.' }] }, opt('hong'))
+    const e2 = await save(R.r, { work: work('2026-1007-b2', 'table:b', { date: '2026-10-07 11:05' }), sections: [{ coord: 'table:b', applied: s0, body: 'b 다른 본문.' }] }, opt('lee')).then(
+      () => assert.fail('E_CONFLICT 여야 한다'),
+      (x) => x
+    )
+    assert.equal(e2.detail.currentCuration, null)
+    assert.match(e2.message, /hong 가 2026-10-07 11:00 에 2026-1007-b1 로 갱신했다/)
+  } finally {
+    await R.rm()
+  }
+})
+
 test('save v1.0 — 기준선 블록: 기준선 save 는 블록만 갈아 끼우고 · 큐레이터의 글은 블록을 지키고 · section 은 블록을 따로 낸다', { skip: !hasGit && 'git 이 없다' }, async () => {
   const { splitBaseline, joinBaseline } = await import('../core/baseline.js')
   // 순수 — 가르고 붙이기

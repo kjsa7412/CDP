@@ -20,6 +20,7 @@ import { lastChanges } from '../../../core/git.js'
 import { dropBlockers } from '../../../core/docusage.js'
 import { droppedDocs } from '../../../core/docrefs.js'
 import { materialsOf } from '../../../core/curation.js'
+import { addedBy } from '../../../core/managed.js'
 import { cmpDateDesc } from '../../../core/validity.js'
 import { formsLib, formRow, formDetail, searchForms } from '../../../core/formslib.js'
 import { formIdOfText } from '../../../core/tools.js'
@@ -98,24 +99,24 @@ export async function handleRead({ p, method, url, res, send, store }) {
   }
 
   if (p === '/curations' && method === 'GET') {
+    // 새 문서 — 그 큐레이션 save 가 **세운** 관리 문서. 등록부 행의 넷째 칸(「서버 추가 · <기록 id>」)이 그 save 의 기록 id 이고
+    // 그 문서를 가리키는 **첫 행**일 때다(뒤 행이면 이미 있던 문서에 패턴만 더한 것). 전에는 판정 `new` 의 into 좌표가 가는
+    // 문서를 다 셌다 — into 에 이미 있던 문서의 좌표가 섞이면(cdp-curate 의 예시가 그렇다) 그 문서까지 새 문서로 떴다
+    const firstRow = new Map()
+    for (const rule of store.registry?.rules || []) if (!firstRow.has(rule.doc)) firstRow.set(rule.doc, rule)
+    const createdBy = new Map()
+    for (const [doc, rule] of firstRow) {
+      const by = addedBy(rule)
+      if (by) createdBy.set(by, [...(createdBy.get(by) || []), doc])
+    }
     const items = (store.works || [])
       .filter((d) => d.curates)
       .slice()
       .sort(cmpDateDesc)
       .map((d) => {
         const into = new Set()
-        const newDocs = new Set()
-        for (const j of d.curates) {
-          for (const c of j.into || []) {
-            into.add(c)
-            // 새 문서(new) — 그 좌표가 가는 관리 문서. 큐레이션 save 가 같은 커밋에 세웠다
-            if (j.verdict === 'new') {
-              const hit = store.managedIndex?.find(c)
-              if (hit?.doc) newDocs.add(hit.doc)
-            }
-          }
-        }
-        return { id: d.id, title: d.title, date: d.date, author: d.author, judgments: d.curates, sections: into.size, newDocs: [...newDocs] }
+        for (const j of d.curates) for (const c of j.into || []) into.add(c)
+        return { id: d.id, title: d.title, date: d.date, author: d.author, judgments: d.curates, sections: into.size, newDocs: createdBy.get(d.id) || [] }
       })
     send(res, 200, { items, total: items.length })
     return true

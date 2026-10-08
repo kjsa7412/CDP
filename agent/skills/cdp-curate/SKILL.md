@@ -174,7 +174,7 @@ save({
 
 | 응답 | 할 일 |
 |---|---|
-| `E_CONFLICT` (섹션) | 읽은 뒤 누가 그 섹션을 바꿨다 — `detail.current`(지금 applied) · `detail.currentWork`(그 applied 가 가리키는 기록 — 제목 · 작성자 · 날짜) · `detail.content`(지금 본문). **`content` 위에 다시 만들고 `applied` 에 `current` 를 넣어** dryRun 부터 다시. 옛 본문을 그대로 다시 보내면 그 사람의 반영이 사라진다. `truncated: true` 일 때만 `section` 을 다시 읽는다. 다른 큐레이터였으면 `work({ id })` 의 `curation` 으로 내 묶음의 기록이 이미 판정됐는지 보고, 됐으면 빼거나 알고 다시 다룬다 |
+| `E_CONFLICT` (섹션) | 읽은 뒤 누가 그 섹션을 바꿨다 — `detail.current`(지금 applied) · `detail.currentWork`(그 applied 가 가리키는 기록 — 제목 · 작성자 · 날짜) · `detail.currentCuration`(그 기록을 반영해 섹션을 고친 큐레이션 기록 — 작성자 · 날짜, 있을 때) · `detail.content`(지금 본문). **`content` 위에 다시 만들고 `applied` 에 `current` 를 넣어** dryRun 부터 다시. 옛 본문을 그대로 다시 보내면 그 사람의 반영이 사라진다. `truncated: true` 일 때만 `section` 을 다시 읽는다. 다른 큐레이터였으면 `work({ id })` 의 `curation` 으로 내 묶음의 기록이 이미 판정됐는지 보고, 됐으면 빼거나 알고 다시 다룬다 |
 | `E_CONFLICT` (`edits`) | `old` 가 원문에 없다 — 읽은 뒤 바뀌었다. `docs({ repo, doc })` 로 다시 읽고 `old` 를 다시 뗀다 |
 | `E_CONFLICT` `detail.kind: managed` | 같은 패턴이 다른 문서에 이미 있다 — cdp-registry 「행 더하기」 |
 | `E_INPUT` 「into … 가 이 save 의 sections 에 없다」 | 반영한 섹션을 같이 보낸다(바뀐 게 없으면 `content` 그대로 + 경과) · 반영하지 않을 기록이면 `keep` |

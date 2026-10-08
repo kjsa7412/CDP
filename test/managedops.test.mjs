@@ -170,6 +170,32 @@ test('planManaged add — 등록부 파일이 없거나 규칙이 없으면 표�
   const ls = p.registryText.split(NL)
   assert.ok(ls.every((l, i) => i === ls.length - 1 || l.endsWith('\r')), '모든 줄이 CRLF')
   assert.equal(parseRegistry(p.registryText).rules.length, 3)
+  assert.equal(ls[2], '| 좌표 패턴 | 관리 문서 | 섹션 | 비고 |\r', 'CRLF 머리도 넓힌다')
+  assert.equal(ls[3], '|---|---|---|---|\r')
+})
+
+test('planManaged add — 빈 틀의 빈 표에 첫 행을 넣는다(표를 하나 더 만들지 않는다) · 머리는 비고까지', async () => {
+  const { skeletonFiles } = await import('../core/skeleton.js')
+  const sk = skeletonFiles({ name: 'library', title: '도서관' })['_managed.md']
+  const p = await plan([{ pattern: 'term:*', doc: 'docs/g.md' }], { registryText: sk })
+  const ls = p.registryText.split(NL)
+  assert.equal(ls.filter((l) => l.startsWith('| 좌표 패턴')).length, 1, '표는 하나')
+  const head = ls.findIndex((l) => l.startsWith('| 좌표 패턴'))
+  assert.equal(ls[head], '| 좌표 패턴 | 관리 문서 | 섹션 | 비고 |')
+  assert.ok(ls[head + 2].startsWith('| `term:*` | `docs/g.md` |') && ls[head + 2].endsWith('| 서버 추가 · 2026-0930-시험 |'), '구분행 바로 뒤')
+  assert.ok(head + 2 < ls.findIndex((l) => l.startsWith('## 등록부에 없는 좌표는 정상이다')), '설명 절 위')
+  // 둘째 행은 첫 행 뒤 — 같은 표
+  const p2 = await plan([{ pattern: 'api:*', doc: 'docs/a.md' }], { registryText: p.registryText })
+  const ls2 = p2.registryText.split(NL)
+  assert.deepEqual(parseRegistry(p2.registryText).rules.map((r) => r.pattern), ['term:*', 'api:*'])
+  assert.equal(ls2.filter((l) => l.startsWith('| 좌표 패턴')).length, 1)
+  // 펜스 안의 예시 표는 건드리지 않는다
+  const fenced = ['# 등록부', '', '```', '| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|', '```', '', '| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|', ''].join(NL)
+  const p3 = await plan([{ pattern: 'term:*', doc: 'docs/g.md' }], { registryText: fenced })
+  const ls3 = p3.registryText.split(NL)
+  assert.equal(ls3[3], '| 좌표 패턴 | 관리 문서 | 섹션 |', '펜스 안은 그대로')
+  assert.equal(ls3[7], '| 좌표 패턴 | 관리 문서 | 섹션 | 비고 |')
+  assert.ok(ls3[9].startsWith('| `term:*`'))
 })
 
 test('planManaged add — 이미 있는 문서는 덮지 않고 붙는다 · 대소문자만 다른 경로도 같은 문서', async () => {

@@ -778,12 +778,22 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
         const cw = res.current ? r0.byId.get(res.current) : null
         const cut = sliceSection(r0, s.coord)
         const content = cut && !cut.missing ? String(cut.content ?? '') : null
-        const who = cw ? `${cw.author || '(작성자 없음)'} 가 ${cw.date || '(날짜 없음)'} 에 ${cw.id} 로 갱신했다` : res.current ? `${res.current} 로 갱신됐다` : '섹션이 만들어졌다'
+        // 누가 고쳤나 — v1.0 의 applied 는 **반영된 기록**이라 그 작성자가 섹션을 고친 사람이 아닐 수 있다(큐레이터가 남의
+        // 기록을 반영한다). 이 좌표를 반영한 큐레이션 기록 중 applied 기록보다 늦은 것이 있으면 그 큐레이터가 고친 것이다
+        const cc = cw ? lastCurationOf(r0, s.coord, cw) : null
+        const who = cc
+          ? `${cc.author || '(작성자 없음)'} 가 ${cc.date || '(날짜 없음)'} 에 큐레이션 ${cc.id} 로 갱신했다(applied 는 반영한 기록 ${cw.id})`
+          : cw
+            ? `${cw.author || '(작성자 없음)'} 가 ${cw.date || '(날짜 없음)'} 에 ${cw.id} 로 갱신했다`
+            : res.current
+              ? `${res.current} 로 갱신됐다`
+              : '섹션이 만들어졌다'
         throw new CtxError('E_CONFLICT', `섹션이 읽은 뒤 바뀌었다 — ${who}. detail.content(지금 본문) 위에 다시 만들어 applied 에 current 를 넣어 보낸다`, {
           coord: s.coord,
           expected: sent,
           current: res.current,
           currentWork: cw ? { id: cw.id, title: cw.title, author: cw.author ?? null, date: cw.date ?? null } : null,
+          currentCuration: cc ? { id: cc.id, author: cc.author ?? null, date: cc.date ?? null } : null,
           content: content == null ? null : content.slice(0, CONFLICT_CONTENT_MAX),
           truncated: content != null && content.length > CONFLICT_CONTENT_MAX,
         })
@@ -898,6 +908,20 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     await snap.restore()
     throw e
   }
+}
+
+// 이 좌표를 반영한 가장 늦은 큐레이션 기록 — applied 기록(cw)보다 앞선 날의 것은 뺀다(같은 날이면 큐레이션이 뒤다 —
+// 기록이 있어야 반영한다). E_CONFLICT 의 「누가 고쳤나」 가 읽는다
+function lastCurationOf(r, coord, cw) {
+  const day = (d) => String(d.date || '').slice(0, 10)
+  let best = null
+  for (const d of r.works) {
+    if (d.id === cw.id || recordKind(d) !== 'curation') continue
+    if (!(d.curates || []).some((j) => j.verdict !== 'keep' && (j.into || []).includes(coord))) continue
+    if (day(d) < day(cw)) continue
+    if (!best || cmpDateDesc(d, best) < 0) best = d
+  }
+  return best
 }
 
 // 검사 한 번 — save 의 쓰기 전 · 쓴 뒤가 같은 인자로 같은 함수를 부른다

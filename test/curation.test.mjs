@@ -59,6 +59,23 @@ test('excerptOf — 헤딩 · 표 · 주석을 건너뛴 첫 문단', () => {
   assert.equal(excerptOf('# 제목\n\n| a | b |\n\n<!-- x -->\n첫 줄이다.\n둘째 줄.\n\n다음 문단'), '첫 줄이다. 둘째 줄.')
   assert.equal(excerptOf('```\n코드\n```\n본문'), '본문')
   assert.ok(excerptOf('가'.repeat(400)).length <= 160)
+  // 마크다운 표시는 벗긴다 — 발췌는 글자 그대로 그려진다. 식별자의 밑줄 · 홑 별표는 둔다
+  assert.equal(excerptOf('**정의** `table:bk_book_mst` 의 [한도](http://x) · __굵게__ · a__b__c · 2*3'), '정의 table:bk_book_mst 의 한도 · 굵게 · a__b__c · 2*3')
+})
+
+test('repoStatus — 등록부 있음 · 섹션 없음은 깨진 섹션이 아니다(대기열의 일 · H1) · 문서 없는 행 · 유령 applied 만 깨졌다', async () => {
+  const { repoStatus } = await import('../core/repo.js')
+  const root = await repo({
+    '_managed.md': MANAGED.trimEnd() + '\n| `term:*` | `docs/없는문서.md` | `## {값}` |\n',
+    'docs/테이블.md': DOC([['a', '2026-0901-a', 'A'], ['c', '2026-0801-유령', 'C']]),
+    'work/2026-0901-a.md': work({ id: '2026-0901-a', date: '2026-09-01 10:00', touches: ['table:a'] }),
+    'work/2026-0902-b.md': work({ id: '2026-0902-b', date: '2026-09-02 10:00', touches: ['table:b', 'term:x'] }),
+  })
+  const r = await loadRepo(root)
+  const st = repoStatus(r)
+  assert.deepEqual(st.brokenSections.map((x) => [x.coord, x.state]).sort(), [['table:c', 'orphan'], ['term:x', 'doc-missing']])
+  assert.ok(!st.brokenSections.some((x) => x.coord === 'table:b'), 'table:b(섹션 없음)는 대기열의 일이다')
+  assert.deepEqual(r.curation.queue.find((q) => q.id === '2026-0902-b').coords.find((c) => c.coord === 'table:b'), { coord: 'table:b', cls: 'anchor' })
 })
 
 test('암묵 전환 — 큐레이션 기록이 없으면 옛 판정(applied 뒤 후속)이 남긴 기록만 대기다', async () => {
@@ -200,10 +217,14 @@ test('새 레포 · 다시 세운 레포(섹션 없음) — 큐레이션 기록�
 test('읽기 API — 판정 재료에 등록부 없는 타입의 비슷한 서식 · canonical · 이력의 새 문서(계약 1.3)', async () => {
   const { handleRead } = await import('../viewer/server/adapter/read-api.js')
   const { fileURLToPath } = await import('node:url')
+  // 새 문서는 그 큐레이션 save 가 **세운** 문서만 — 등록부 첫 행의 넷째 칸이 그 기록 id. 판정 new 의 into 에 이미 있던
+  // 문서(테이블)의 좌표가 섞여도 그 문서는 새 문서가 아니다(사이트 데모 실측)
   const root = await repo({
+    '_managed.md': MANAGED.trimEnd() + '\n| `term:*` | `docs/용어.md` | `## {값}` | 서버 추가 · 2026-0907-cur |\n',
     'docs/테이블.md': DOC([['a', '2026-0905-a5', 'A']]),
-    'work/2026-0905-a5.md': work({ id: '2026-0905-a5', date: '2026-09-05 10:00', touches: ['table:a'] }),
-    'work/2026-0907-cur.md': work({ id: '2026-0907-cur', date: '2026-09-07 10:00', extra: ['touchesEmpty: 큐레이션', 'curates:', '  - { id: 2026-0905-a5, verdict: new, into: [table:a] }'] }),
+    'docs/용어.md': ['# 용어', '', '## x — 엑스', '<!-- applied: 2026-0905-a5 -->', '', 'X', ''].join('\n'),
+    'work/2026-0905-a5.md': work({ id: '2026-0905-a5', date: '2026-09-05 10:00', touches: ['table:a', 'term:x'] }),
+    'work/2026-0907-cur.md': work({ id: '2026-0907-cur', date: '2026-09-07 10:00', extra: ['touchesEmpty: 큐레이션', 'curates:', '  - { id: 2026-0905-a5, verdict: new, into: [table:a, term:x] }'] }),
     'work/2026-0908-m.md': work({ id: '2026-0908-m', date: '2026-09-08 10:00', touches: ['회의록:2026-09-08', 'table:a'] }),
     'work/2026-0909-q.md': work({ id: '2026-0909-q', date: '2026-09-09 10:00', touches: ['table:a'] }),
   })
@@ -220,8 +241,8 @@ test('읽기 API — 판정 재료에 등록부 없는 타입의 비슷한 서�
   assert.ok(t.forms.some((f) => f.number === 'BM_411'), '회의록 → 서식 BM_411')
   assert.deepEqual(m.body.canonical, [{ coord: 'table:a', also: ['2026-0909-q'] }])
   const log = await get('/curations')
-  assert.deepEqual(log.body.items[0].newDocs, ['docs/테이블.md'])
-  assert.equal(log.body.items[0].sections, 1)
+  assert.deepEqual(log.body.items[0].newDocs, ['docs/용어.md'], '이미 있던 테이블은 새 문서가 아니다')
+  assert.equal(log.body.items[0].sections, 2)
 })
 
 test('미반영(개편안 §4.4) — applied 뒤에 그 좌표를 건드렸는데 다른 좌표로만 반영된 기록도 미반영 · 기록으로 둠은 빠진다', async () => {

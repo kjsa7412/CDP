@@ -60,11 +60,22 @@ export function excerptOf(body, max = EXCERPT_MAX) {
       if (out.length) break
       continue
     }
-    out.push(l.replace(/^[-*]\s+/, ''))
+    out.push(plainInline(l.replace(/^[-*]\s+/, '')))
     if (out.join(' ').length >= max) break
   }
   const t = out.join(' ').replace(/\s+/g, ' ').trim()
   return t.length > max ? t.slice(0, max - 1) + '…' : t
+}
+
+// 글 줄의 마크다운 표시를 벗긴다 — 발췌는 화면 · 도구가 글자 그대로 그린다(「**정의**」 가 별표째 보였다 · 사이트 데모 실측).
+// 굵게(`**` · 낱말 밖의 `__`) · 코드 백틱 · 링크 · 그림만. 홑 `*` · `_` 는 둔다 — 식별자(`bk_book_mst`)와 곱셈을 깨지 않게
+function plainInline(s) {
+  return s
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/(^|[^\w])__(.+?)__(?!\w)/g, '$1$2')
+    .replace(/`([^`]+)`/g, '$1')
 }
 
 // 좌표 하나가 등록부에서 어디로 가나 — 대기열이 기록마다 좌표를 이 셋으로 나눠 보인다
