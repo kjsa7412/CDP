@@ -112,6 +112,19 @@ test('사이트 소스 · 데모 내용에 누출 패턴이 없다', () => {
   for (const f of files) for (const l of findLeaks(rd(f))) assert.fail(`${f}:${l.line} ${l.kind} 「${l.hit}」`)
 })
 
+// 서버 산출물에 실려 토큰 없이 읽히는 글(소개 · /manual) — 설명서 넷 · 배포 문서 · 그림. 사이트가 쓰는 그림도 여기서 온다.
+// 공식 사이트와 같은 누출 규칙을 쓴다(release-server.mjs 가 manual/ · ops/deploy/ · docs/그림 을 싣는다)
+test('산출물의 설명서 · 배포 문서 · 그림에 누출 패턴이 없다', () => {
+  const files = []
+  for (const d of ['manual', 'ops/deploy', 'docs/그림']) {
+    for (const e of fs.readdirSync(path.join(ROOT, d), { withFileTypes: true })) {
+      if (e.isFile() && /\.(md|sh|service|yml|svg)$|^Dockerfile$/.test(e.name)) files.push(d + '/' + e.name)
+    }
+  }
+  assert.ok(files.some((f) => f.startsWith('manual/')) && files.some((f) => f.startsWith('ops/deploy/')), `훑을 것이 없다: ${files.join(', ')}`)
+  for (const f of files) for (const l of findLeaks(rd(f))) assert.fail(`${f}:${l.line} ${l.kind} 「${l.hit}」`)
+})
+
 test('판 이력 — 맨 위가 지금 판이고 본문 없이 머리만', () => {
   const r = releasesOf(rd('CHANGELOG.md'))
   assert.equal(r[0].v, pkg.version)

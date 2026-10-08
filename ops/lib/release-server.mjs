@@ -75,7 +75,7 @@ need('ops/deploy/README.md', 'deploy/README.md')
 need('ops/deploy/설치절차.md', 'deploy/설치절차.md')
 // 설명서 — 서버가 `/manual` 로 낸다(제품관리서비스 검토 §4.5). 그림 셋은 소개 페이지의 것.
 need('manual', 'manual')
-for (const f of ['1_세_레포_구조.svg', '2_설치_5단계.svg', '7_MCP_두_모드.svg']) need(`docs/그림/${f}`, `manual/그림/${f}`)
+for (const f of ['1_세_레포_구조.svg', '2_설치_세_길.svg', '9_MCP_한_길.svg']) need(`docs/그림/${f}`, `manual/그림/${f}`)
 
 // 서식집 · kit — 서버가 새 문서를 찍고(managed.add { form }) 작업 레포에 스킬을 내는 자리(v1.0 §8)
 need('agent/forms', 'forms')

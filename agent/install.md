@@ -1,243 +1,90 @@
-# CDP 설치 시나리오
+# 에이전트 세팅 — 받는 사람에게 가는 길
 
-**설치는 네 자리에서 벌어진다.** 한 자리만 보면 반드시 빠뜨린다.
+v1.0 의 설치 · 갱신 길은 셋이다 — ① **서버**(`install.sh` · `upgrade.sh` — 서버 관리자 설명서) ② **지식 레포**(콘솔 「새 지식 레포」 ·
+clone — 레포에는 지식만) ③ **에이전트 세팅** — 이 문서. 이 폴더(`agent/`)의 스킬과 CLAUDE 블록이 작업 레포 · 큐레이터 폴더에 닿는 길이다.
 
 ```
-① 개발 PC      배포본을 만든다              도구 개발자 · 버전마다
-② 반입         폐쇄망이면 파일을 옮긴다      관리자 · 버전마다
-③ 지식 레포    C:\cdp 를 세운다              관리자 · 프로젝트당 1회
-④ 작업 레포    C:\work\alpha 에 세팅을 넣는다 관리자 · 레포당 1회
-⑤ 팀원 PC     clone 하고 두 가지를 더 한다   팀원 · 사람마다
+agent/ ──release:server──▶ 서버 번들 kit/ ──GET /kit/<레포>(토큰의 역할)──▶ install.mjs ──병합──▶ 작업 레포 · 큐레이터 폴더
 ```
 
-자세한 판단(어휘 · 등록부 · 관리 문서)은 `MANUAL-관리자.md` 2장이다.
-이 문서는 **순서와 빠지는 것**만 다룬다.
+사람이 따라 하는 순서는 [사용자 설명서](../manual/사용자_설명서.md) 2장(작업 레포) · [큐레이터 설명서](../manual/큐레이터_설명서.md)
+1장(큐레이터 폴더)이다. 이 문서는 **무엇이 어디로 가고 무엇을 지키나**만 다룬다.
 
 ---
 
-## 경로 — 어디든 된다. 지식 레포가 **하나**인 것만 중요하다
+## 자리 넷
 
-| | 무엇 |
-|---|---|
-| 지식 레포 | `_vocab.md` 가 있는 곳. **하나** |
-| 작업 레포 | 코드가 있는 곳. **여럿이어도 된다** |
-| 실행기 | `<지식 레포>/tools/cdp.exe` |
+| 자리 | 누가 | 명령 | 받는 kit |
+|---|---|---|---|
+| 작업 레포 | writer · 담당자 | 레포 관리 › 연결된 작업 레포 › [설치 방법] 한 줄 — `--repo <레포> --workrepo <id> .` | writer — 스킬 셋 · 프로젝트레포 블록 |
+| 작업 레포 갱신 | 담당자 | 같은 화면 맨 위 카드의 한 줄 — `--update [--commit] [--dry]` | 그 PC 에 이 서버로 설치한 작업 레포 전부 |
+| 큐레이터 폴더 | 큐레이터 | `--curator --repo <레포> .` — 등록 없이 폴더 하나 | 큐레이터 — 스킬 다섯 · 큐레이터 블록 |
+| Node 가 없는 망 | 누구나 | [설치 방법] 의 꾸러미 zip → 풀고 `node install.mjs <폴더>` | 한 줄과 같다 |
 
-사람마다 다른 자리에 두어도 된다. 지식 레포 경로는 **커밋되지 않는**
-포인터 파일에 들어가기 때문이다.
+한 줄의 모양(PowerShell) —
 
 ```
-<작업 레포>/CLAUDE.md            커밋. 규약만. 경로 없음
-<작업 레포>/.claude/cdp.json     **커밋 안 함.** { "knowledgeRepo": "…" }
+curl.exe -fsSLo "$env:TEMP\cdp-install.mjs" http://<서버>:7374/install.mjs; if ($?) { node "$env:TEMP\cdp-install.mjs" <인자> }
 ```
 
-이 문서는 `C:\cdp`(지식) · `C:\work\alpha`(작업)를 예로 쓴다. **예일 뿐이다.**
+명령 프롬프트 · macOS/Linux 모양은 화면이 탭으로 준다. 설치기는 임시 폴더에 받는다 — 작업 레포에는 CDP 파일만 들어간다.
 
 ---
 
-## ① 개발 PC — 배포본 만들기
+## 한 줄이 하는 일
 
-```
-ops\release.cmd 0.2.5
-```
+1. **설치기** — 공개 `GET /install.mjs`. 서버 주소만 박혀 있다 — 레포 이름 · 사람 · kit · 토큰은 없다.
+2. **토큰** — `CDP_TOKEN` 이 있으면 서버에 확인하고, 없거나 안 통하면 숨김 입력으로 묻는다. 확인되면 이 PC 에 둘지 묻는다
+   (Windows 사용자 환경변수 · macOS/Linux `~/.config/cdp/token` 600 + rc 한 줄). **명령 · 설치기 · 꾸러미 어디에도 원문은 없다.**
+3. **kit** — 그 토큰으로 `GET /kit/<레포>?workrepo=<id>&as=json` — 등록된 작업 레포는 **토큰의 역할과 무관하게 writer kit** 이다.
+   큐레이터 폴더는 `?as=json&role=curator`(등록 없이 · 토큰이 그 레포의 큐레이터가 아니면 멈춘다). 다른 레포의 등록 id 면 409 ·
+   권한 밖 레포는 404.
+4. **병합** — `core/setup.js` 한 벌. 바뀔 것을 보여 주고 묻는다(`--dry` 는 보기만 · `--yes` 는 묻지 않는다).
 
-화면 → `ctx` 번들 → exe → 묶기까지 한 번에 돈다. 결과는
-`ops/release/v0.2.5/` 하나다.
+   ```
+   .mcp.json             cdp 항목만 — 서버 /mcp/<레포> · Authorization: Bearer ${CDP_TOKEN}. 다른 MCP 서버는 그대로
+   .claude/cdp.json      { "server": …, "repo": … }
+   .claude/skills/cdp-*  cdp- 로 시작하는 것만 간다 — kit 에서 사라진 cdp- 스킬은 치운다 · 남의 스킬은 둔다
+   CLAUDE.md             <!-- cdp:begin --> … <!-- cdp:end --> 블록만 · 첫 줄 <!-- cdp:kit <해시> --> · 나머지는 그대로
+   ```
 
-```
-cdp.exe                 앱 + ctx 한 파일 (~68MB). **패키지가 여럿이어도 하나** — 복사한 레포의 tools/ 에 넣는다
-knowledge-repo-<이름>/   **복사하면 그게 지식 레포다.** 패키지마다 하나씩 (exe 는 없다)
-설치.md            이 문서
-README.md          요약 (번들 시각 · 패키지 표)
-```
+5. **보고** — 작업 레포면 대장에(`POST /workrepos/<id>/applied` — 행이 `최신`) · 이 PC 의 설치 목록에(`--update` 가 이것을 돈다).
+   큐레이터 폴더는 대장 · 설치 목록에 오르지 않는다.
 
-**설계서는 안 들어간다.** CDP 를 고칠 사람의 것이고 서비스와 무관하다 —
-소스 레포의 `docs/design/` 에 있다.
-
-**끝나면 태그를 단다.**
-
-```
-git tag -a v0.2.5 -m "..."
-```
-
-태그와 `package-lock.json` 둘 다 있어야 그 버전을 다시 만들 수 있다.
-하나라도 없으면 그 배포본은 **지우는 순간 끝이다** — `release.cmd` 가
-버전 폴더가 쌓였을 때 태그 없는 것을 따로 알려 주는 이유가 그것이다.
+**git 레포일 때만** 쓴다(작업 레포). 큐레이터 폴더는 git 이 아니어도 된다.
 
 ---
 
-## ② 반입
+## `.gitignore` 를 본다
 
-폐쇄망이면 파일 두 개다.
-
-```
-① ops/release/v0.2.5/ 폴더째        (또는 cdp.exe + knowledge-repo-<고른 것>/ 둘만)
-② git bundle create knowledge.bundle --all      ← 지식 레포가 이미 있다면
-```
-
-CDN·인터넷을 타는 것이 하나도 없다. 화면의 폰트까지 base64 로 들어 있다.
-
----
-
-## ③ 지식 레포 — 관리자, 프로젝트당 1회
-
-**폴더 하나와 exe 를 복사한다.** 배포본에 `knowledge-repo-*` 가 여럿이면 프로젝트에 맞는
-**하나만** — 어느 패키지가 무엇인지는 배포본 루트 `README.md` 의 패키지 표에 있다.
-
-```
-xcopy /E /I <배포본>\knowledge-repo-<고른 것> C:\cdp
-copy <배포본>\cdp.exe C:\cdp\tools\
-cd /d C:\cdp
-git init && git config core.hooksPath .githooks
-```
-
-**네 줄이다.** 전에는 `repo-kit\` 과 `packages\<고른 것>\` 을 차례로 부어야 했다.
-**그 이름은 만든 쪽 개념이지 받는 쪽의 것이 아니다** — 무엇이 무엇인지 알아야 순서를
-맞출 수 있었다. 지금은 배포본에 완성된 채로 들어 있다. exe 는 배포본 루트에 **하나**다 —
-한때 폴더마다 넣었는데 패키지가 늘자 배포본이 그 수만큼(68MB×N) 커져서 되돌렸다(2026-09-23).
-
-| 폴더 안에 이미 있는 것 | 빠지면 |
-|---|---|
-| `_vocab.md` — 좌표 타입과 순서 | 좌표가 하나도 안 잡힌다 |
-| `_managed.md` — 좌표 패턴 → 정본 문서·섹션 | 파생 검사가 아무것도 안 한다 |
-| `docs/` — 관리 문서 골격 | 등록부가 가리키는 섹션이 없다 |
-| `.gitattributes` — 줄바꿈 고정 | **훅이 조용히 죽는다** |
-| `bin/` · `.githooks/` · `.claude/skills` | 검사도 절차도 없다 |
-| `tools/cdp.exe` — **배포본 루트의 `cdp.exe` 를 복사해 넣는다** | Node 없는 PC 에서 훅이 검사를 건너뛴다 · 더블클릭할 것이 없다 |
-
-마지막에서 둘째가 무섭다. CRLF 로 체크아웃되면 `pre-commit` 의 셔뱅 뒤에
-캐리지리턴이 붙어 실행되지 않는다. **커밋은 통과하고 검사만 사라진다.**
-전에는 그 파일이 배포본에 아예 없었다 — 이 표가 준다고 적어 두고서.
-
-**복사한 순간 지식 레포다** — `ctx` 는 `_vocab.md` 로 알아본다. 바로
-`bin\ctx check` 가 돌고, 작업 기록이 아직 없으면 `이상 없음` 이다.
-
-**첫날 할 일이 있다** — 안 쓰는 문서를 지우고 `_managed.md` 에서 그 패턴도
-함께 지운다. 문서 없이 패턴만 남으면 **커밋이 막힌다**(앵커 없음). 그 폴더의
-`README.md` 에 다섯 줄로 적혀 있다.
-
-패키지 없이 손으로 세우려면 `MANUAL-관리자.md` 2장이 그 판단을 다룬다.
-
----
-
-## ④ 작업 레포 — 관리자, 레포당 1회
-
-**`_vocab.md` 를 만든 뒤에 한다.** `ctx setup` 은 그 파일로 지식 레포를
-알아본다 — 없으면 `지식 레포를 찾을 수 없습니다` 로 멈춘다(exit 2).
-
-```
-<지식 레포>\tools\cdp.exe ctx setup <작업 레포>
-```
-
-앱에서도 된다 — **설정 → 작업 레포 → [에이전트 설치]**. 무엇을 쓸지 먼저
-보여 주고 누르면 쓴다. 둘은 같은 함수를 부른다.
-
-```
-ctx setup: C:\work\alpha
-  .claude\skills\   cdp-work · cdp-save · cdp-push
-                    cdp-curate · cdp-registry   (큐레이터)
-  CLAUDE.md         지식 레포 = C:\cdp
-```
-
-### 왜 작업 레포에도 넣나
-
-**하네스는 프로젝트 루트의 `.claude/skills/` 만 읽는다.** 지식 레포에만
-두면 코드 레포에서 클로드를 열었을 때 `cdp-work` 가 목록에 아예 없다 —
-절차 층이 통째로 빠진다.
-
-### `.gitignore` 를 본다
-
-많은 프로젝트가 `.claude/*` 를 통째로 막아 둔다. 그대로 두면 skill 이
-**설치한 사람 PC 에만** 남고 팀은 받지 못한다. 그리고 설치한 사람은
-되니까 됐다고 생각한다.
+작업 레포의 세팅은 **커밋한다** — `git add .mcp.json .claude CLAUDE.md`. 팀원은 pull 뒤 같은 한 줄을 한 번(토큰 · 보고만).
+많은 프로젝트가 `.claude/*` 를 통째로 막아 둔다 — 그대로면 스킬이 설치한 사람 PC 에만 남고 팀은 받지 못한다.
 
 ```
 .claude/*
 !.claude/skills/     ← 이 줄
 ```
 
-`ctx setup` 이 이 경우를 알려 주지만, 고치는 것은 사람이 한다.
+설치기가 이 경우를 알려 주지만 고치는 것은 사람이다. `.claude/cdp.json` 을 막아 둔 것도 알려 준다 — 서버 주소 · 레포는 PC 와 무관해 커밋한다.
 
 ---
 
-## ⑤ 팀원 PC — 사람마다
+## 갱신 — 판이 오르면
 
-```
-git clone <지식레포>  C:\cdp
-git clone <코드레포>  C:\work\alpha
-```
+kit 은 **서버 번들**에서 나간다. `upgrade.sh` 가 `kit/` 을 갈면 그 순간부터 모든 레포의 kit 이 새 판이고, 작업 레포 대장의 행이
+`낡음` 이 된다(kit 해시가 다르다) → 담당자가 `--update` 한 줄 → 팀원은 그 커밋을 pull. 큐레이터 폴더는 같은 `--curator` 한 줄을 다시.
+새 스킬은 Claude Code 를 다시 켜야 읽힌다.
 
-**clone 이 실어 오지 않는 것이 둘 있다.**
-
-```
-cd C:\cdp
-git config core.hooksPath .githooks     ← 훅은 clone 을 따라오지 않는다
-copy <배포본>\cdp.exe tools\           ← 68MB. .gitignore 로 빠져 있다
-```
-
-따라오는 것 —
-
-```
-.claude/skills · .claude/work-repo · .githooks/pre-commit
-bin/ctx · bin/ctx.cmd · bin/ctx.mjs · CLAUDE.md · MANUAL 2종
-```
-
-작업 레포 쪽 skill 과 `CLAUDE.md` 는 ④ 에서 커밋해 두었으면 clone 으로
-따라온다. 다만 `.claude/cdp.json` 은 커밋되지 않으므로 **각자 한 번씩
-`ctx setup` 을 돌린다** — 앱 설정에서 버튼 하나다.
+v0.x 에서 올라온 작업 레포는 `--update` 한 번에 옛 스킬(cdp-load · cdp-import · cdp-edit · cdp-managed)이 치워지고 셋이 남는다.
 
 ---
 
-## ⑥ 확인 — 세 곳이 같아야 한다
+## 확인
 
-```
-C:\cdp\tools\cdp.exe ctx version
-C:\cdp\bin\ctx version
-<배포본>\cdp.exe ctx version
-```
-
-다르면 **그 레포만 옛 답을 낸다.** 그리고 틀렸다는 말은 어디에도 안 나온다.
-
-```
-cd C:\cdp && bin\ctx check      → 이상 없음
-```
-
-훅이 실제로 도는지도 한 번 본다. 미등재 좌표를 하나 넣은 기록을 만들어
-커밋을 시도하고, **막히는 것을 눈으로 확인한다.** 막히지 않으면 ③ 의
-`core.hooksPath` 나 `.gitattributes` 를 다시 본다.
-
----
-
-## 갱신 — 새 버전이 나왔을 때
-
-지식 레포를 다시 세우지 않는다. **덮어쓰는 것은 도구뿐이다.**
-
-```
-copy <새 배포본>\knowledge-repo-<패키지>\bin\*         C:\cdp\bin\        ← 도구 층은 패키지마다 같다 — 어느 폴더여도 된다
-copy <새 배포본>\cdp.exe                             C:\cdp\tools\
-copy <새 배포본>\knowledge-repo-<패키지>\MANUAL*.md    C:\cdp\
-copy <새 배포본>\knowledge-repo-<패키지>\.gitattributes C:\cdp\     ← 도구 파일이다 (*.cmd eol=crlf · 2026-09-23)
-C:\cdp\tools\cdp.exe ctx setup C:\work\alpha   ← skill 도 같이 갱신된다
-```
-
-`_vocab.md` · `_managed.md` · `docs/` · `work/` 는 **건드리지 않는다.**
-그것이 지식이고, 도구는 그 위에서 도는 것뿐이다.
-
----
-
-## 점검표
-
-| | | |
-|---|---|---|
-| ☐ | ① | `ops/release/v<버전>/` 생성 · **태그를 달았다** |
-| ☐ | ③ | `core.hooksPath` = `.githooks` |
-| ☐ | ③ | `.gitattributes` 에 `eol=lf` |
-| ☐ | ③ | `_vocab.md` · `_managed.md` · `docs/` |
-| ☐ | ③ | `tools\cdp.exe` 가 있다 |
-| ☐ | ④ | `ctx setup` 을 **`_vocab.md` 뒤에** 돌렸다 |
-| ☐ | ④ | 작업 레포 `.gitignore` 에 `!.claude/skills/` |
-| ☐ | ⑥ | `ctx version` 세 곳 일치 |
-| ☐ | ⑥ | `ctx check` 이상 없음 |
-| ☐ | ⑥ | **일부러 틀린 기록으로 커밋이 막히는 것을 봤다** |
-
-마지막 줄이 이 점검표의 목적이다. 나머지는 그것을 위한 준비다.
+| ☐ | |
+|---|---|
+| ☐ | Claude Code 를 다시 켠 뒤 `/mcp` 에 `cdp` connected — 도구 10(작업 레포 · writer) · 12(큐레이터 폴더) |
+| ☐ | 작업 레포 대장의 행이 `최신` |
+| ☐ | `.claude/skills/` 가 커밋됐고 `.gitignore` 에 막히지 않았다 |
+| ☐ | 새 터미널에서 `CDP_TOKEN` 이 보인다 |
+| ☐ | 큐레이터 폴더 — 화면에 「큐레이션」 메뉴 · 에이전트가 `queue` 로 대기열을 낸다 |

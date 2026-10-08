@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="380" viewBox="0 0 680 380" role="img">
+<title>CDP 설치 · 갱신 세 길</title>
+<desc>서버는 install.sh 와 upgrade.sh 로 세우고 갈며 레포를 건드리지 않는다. 지식 레포는 서버 화면의 새 지식 레포에서 빈 틀로 세우거나 옛 레포의 기록만 옮겨 오거나 clone 하고, 세운 뒤 큐레이터를 맡긴다. 에이전트 세팅은 작업 레포의 설치 한 줄과 --update, 큐레이터 폴더의 --curator 가 토큰의 역할로 받는다.</desc>
+<style>
+text{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif}
+.th{font-size:14px;font-weight:500}
+.ts{font-size:12px;font-weight:400}
+.tm{font-size:12px;font-weight:400;font-family:ui-monospace,'Cascadia Mono',Consolas,monospace}
+</style>
+<rect width="680" height="380" fill="#FFFFFF"/>
+
+<rect x="40" y="30" width="600" height="84" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th" x="60" y="56" fill="#444441">① 서버</text>
+<text class="ts" x="60" y="76" fill="#5F5E5A">서버 관리자 · 판마다</text>
+<text class="ts" x="60" y="94" fill="#5F5E5A">셸에서 한 명령</text>
+<text class="tm" x="240" y="56" fill="#444441">sudo bash deploy/install.sh --bind &lt;IP&gt;</text>
+<text class="tm" x="240" y="76" fill="#444441">sudo bash /opt/cdp/deploy/upgrade.sh &lt;tar.gz&gt;</text>
+<text class="ts" x="240" y="96" fill="#5F5E5A">레포는 갈지 않는다 — 화면 · kit · 서식집만 간다</text>
+
+<rect x="40" y="130" width="600" height="84" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="th" x="60" y="156" fill="#085041">② 지식 레포</text>
+<text class="ts" x="60" y="176" fill="#0F6E56">admin · 프로젝트당 한 번</text>
+<text class="ts" x="60" y="194" fill="#0F6E56">서버 화면에서</text>
+<text class="ts" x="240" y="156" fill="#085041">서버 › 지식 레포 › 「새 지식 레포」 — 빈 틀 하나</text>
+<text class="ts" x="240" y="176" fill="#085041">옛 레포면 「기록만 옮겨 오기」 · 있으면 clone</text>
+<text class="ts" x="240" y="196" fill="#0F6E56">세운 뒤 origin 연결 · 레포 × 큐레이터를 맡긴다</text>
+
+<rect x="40" y="230" width="600" height="84" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="th" x="60" y="256" fill="#3C3489">③ 에이전트 세팅</text>
+<text class="ts" x="60" y="276" fill="#534AB7">사람마다 · 폴더마다</text>
+<text class="ts" x="60" y="294" fill="#534AB7">설치 한 줄</text>
+<text class="ts" x="240" y="256" fill="#3C3489">작업 레포 — [설치 방법] 한 줄 · 판이 오르면 --update</text>
+<text class="ts" x="240" y="276" fill="#3C3489">큐레이터 폴더 — --curator --repo &lt;레포&gt;</text>
+<text class="ts" x="240" y="296" fill="#534AB7">토큰은 숨김 입력 · 서버에 확인 · 역할로 kit</text>
+
+<rect x="40" y="340" width="12" height="12" rx="3" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="ts" x="58" y="346" dominant-baseline="central" fill="#5F5E5A">서버(/opt/cdp)</text>
+<rect x="190" y="340" width="12" height="12" rx="3" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="ts" x="208" y="346" dominant-baseline="central" fill="#5F5E5A">지식 레포 — 지식만</text>
+<rect x="360" y="340" width="12" height="12" rx="3" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="ts" x="378" y="346" dominant-baseline="central" fill="#5F5E5A">작업 레포 · 큐레이터 폴더</text>
+</svg>
