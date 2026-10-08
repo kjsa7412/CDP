@@ -6,8 +6,10 @@ import { useEffect, useState } from 'react'
 import Icon from '../../../viewer/src/components/Icon.jsx'
 import Code from './Code.jsx'
 
+// 데모 레포(library)에서의 역할 — 명부는 site/demo/content.mjs. admin 은 모든 레포의 큐레이터다
 export const WHO = {
-  lead: { label: 'lead', role: 'admin', desc: '설계 리드' },
+  lead: { label: 'lead', role: 'admin', desc: '설계 리드 · 큐레이터' },
+  'doc.c': { label: 'doc.c', role: '큐레이터', desc: '문서 담당' },
   'dev.a': { label: 'dev.a', role: 'writer', desc: '개발 담당' },
   'dev.b': { label: 'dev.b', role: 'viewer', desc: '품질 담당' },
 }

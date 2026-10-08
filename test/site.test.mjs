@@ -33,31 +33,52 @@ test('주소 일곱 — 라우트 표 · 페이지 · 상단 바가 같다', () 
   assert.equal(new Set(ROUTES.map((r) => r.path)).size, ROUTES.length, '주소 중복')
 })
 
-test('화면 14장 — 라이트 · 다크 PNG 가 둘 다 있다 · 묶음이 있다 · 찍은 판이 적혀 있다', (t) => {
+test('화면 17장 — 라이트 · 다크 PNG 가 둘 다 있다 · 묶음이 있다 · 찍은 판이 적혀 있다 · 남은 그림이 없다', (t) => {
   const shotsMeta = JSON.parse(rd('site/src/data/shots.json'))
   assert.match(shotsMeta.version, /^\d+\.\d+\.\d+$/)
   if (shotsMeta.version !== pkg.version) t.diagnostic(`화면은 v${shotsMeta.version} 에서 찍었다 — 지금 v${pkg.version}. 화면이 바뀌었으면 npm run site:demo`)
-  assert.equal(SHOTS.length, 14)
+  assert.equal(SHOTS.length, 17)
+  assert.equal(new Set(SHOTS.map((s) => s.id)).size, SHOTS.length, '그림 id 중복')
   const keys = new Set(GROUPS.map((g) => g.key))
+  for (const g of GROUPS) assert.ok(SHOTS.some((s) => s.group === g.key), `빈 묶음 ${g.key}`)
   for (const s of SHOTS) {
     assert.ok(keys.has(s.group), `${s.id} 묶음 ${s.group}`)
     for (const t of ['light', 'dark']) {
       const f = path.join(ROOT, 'site/public/shots', `${s.id}-${t}.png`)
-      assert.ok(fs.existsSync(f), `없는 그림 ${path.basename(f)} — node site/demo/run.mjs shots`)
+      assert.ok(fs.existsSync(f), `없는 그림 ${path.basename(f)} — node site/demo/run.mjs`)
       assert.ok(fs.statSync(f).size > 20_000, `${path.basename(f)} 가 너무 작다(빈 화면?)`)
     }
   }
+  // 판이 바뀌며 빠진 장의 그림이 남아 사이트 산출물에 실리지 않게 — capture.mjs 가 치우지만 손으로 돌린 --only 뒤에 남을 수 있다
+  const want = new Set(SHOTS.flatMap((s) => [`${s.id}-light.png`, `${s.id}-dark.png`]))
+  for (const f of fs.readdirSync(path.join(ROOT, 'site/public/shots'))) assert.ok(want.has(f), `screens.js 에 없는 그림 ${f}`)
+  // 홈 · og:image 가 이 장을 직접 부른다
+  assert.ok(SHOTS.some((s) => s.id === '01-repo-doc'), '01-repo-doc')
 })
 
-test('예제 다섯 — 녹화의 끝이 시나리오대로다', (t) => {
+// v1.0 의 뜻(개편안 §3.3) — writer 는 작업 기록만 남기고 섹션은 그 레포의 큐레이터가 판정해 반영한다. 반영 전의 기록은 섹션과 같이 온다
+test('예제 다섯 — 녹화의 끝이 시나리오대로다(v1.0 — writer 는 기록만 · 큐레이터가 반영 · 미반영이 같이 온다)', (t) => {
   assert.equal(examples.length, 5)
+  assert.deepEqual(examples.map((e) => e.slug), ['find', 'save', 'pending', 'conflict', 'supersede'])
   const by = Object.fromEntries(examples.map((e) => [e.slug, e]))
   const codes = (e) => e.steps.map((s) => s.res?.error?.code || (s.res?.commit ? 'commit' : s.kind === 'cli' ? 'exit' + s.exit : 'ok'))
+  const saves = (e) => e.steps.filter((s) => s.tool === 'save')
+  const args = (s) => s.req.params.arguments
   assert.ok(codes(by.find).every((c) => c === 'ok'), '① 은 읽기만')
+  assert.ok(by.find.steps.some((s) => s.tool === 'section' && s.res.state === 'pending' && s.res.pendingRecords?.length), '① section 이 미반영 기록을 같이 낸다')
   assert.deepEqual(codes(by.save).filter((c) => c !== 'ok'), ['commit'], '② 는 커밋 하나')
-  assert.deepEqual(codes(by.blocked).filter((c) => c !== 'ok'), ['E_CHECK', 'exit1', 'commit'], '③ 거절 → 로컬 exit 1 → 통과')
+  assert.ok(saves(by.save).every((s) => !args(s).sections), '② writer 는 섹션을 보내지 않는다')
+  assert.ok(by.save.steps.some((s) => s.tool === 'work' && s.res.curation?.state === 'queued'), '② 기록이 대기열에 선다')
+  assert.deepEqual(codes(by.pending).filter((c) => c !== 'ok'), ['E_FORBIDDEN', 'E_INPUT', 'commit'], '③ 섹션은 거절 → 미등재 좌표 거절 → 기록만 통과')
+  assert.equal(by.pending.steps.find((s) => s.res?.error?.code === 'E_FORBIDDEN').res.error.detail.need, 'curate', '③ 섹션은 큐레이터의 몫')
+  assert.ok(by.pending.steps.some((s) => s.tool === 'section' && s.res.state === 'missing' && s.res.pendingRecords?.length), '③ 섹션 없는 새 좌표도 대기 기록이 근거로 온다')
   assert.deepEqual(codes(by.conflict).filter((c) => c !== 'ok'), ['commit', 'E_CONFLICT', 'commit'], '④ 먼저 · 충돌 · 합쳐서')
-  assert.ok(by.supersede.steps.some((s) => s.tool === 'save' && s.req.params.arguments.work.supersedes), '⑤ supersedes 를 보냈다')
+  assert.ok(saves(by.conflict).every((s) => args(s).work.curates?.length && args(s).sections?.length && ['lead', 'doc.c'].includes(s.who)), '④ 섹션을 쓰는 것은 큐레이터의 큐레이션 save')
+  assert.ok(saves(by.supersede).some((s) => args(s).work.supersedes && !args(s).sections && s.res.commit), '⑤ 정정 기록은 기록만')
+  assert.ok(by.supersede.steps.some((s) => s.tool === 'queue' && s.who === 'doc.c'), '⑤ 큐레이터의 판정 재료(queue)')
+  assert.ok(saves(by.supersede).some((s) => args(s).work.curates?.some((j) => j.verdict === 'reflect') && s.res.commit), '⑤ 큐레이터가 반영한다')
+  // writer(dev.a)의 커밋된 save 에 섹션이 없다 — 데모 레포에서 dev.a 는 library 의 큐레이터가 아니다
+  for (const e of examples) for (const s of saves(e)) if (s.who === 'dev.a' && s.res.commit) assert.ok(!args(s).sections, `${e.slug} — dev.a 의 save 에 섹션`)
   for (const e of examples) {
     for (const s of e.steps) assert.ok(s.note, `${e.slug} 걸음마다 해설`)
     assert.ok(e.files.length, `${e.slug} 레포에 남은 파일`)
@@ -92,7 +113,7 @@ test('누출 규칙 — 사내 흔적은 잡고 제품 이름은 놓는다', () 
   for (const s of ['http://10.10.20.188:7374', 'author: kjsa', 'C:\\Users\\someone\\x', 'soln1/cdp.git', 'rp_pre_rview_mst', 'Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCD']) {
     assert.ok(findLeaks(s).length, `못 잡았다: ${s}`)
   }
-  for (const s of ['패키지 public-si · 공공 SI 산출물', '테이블정의서:bk_loan_mst', 'http://<서버>:7374', 'phone', 'lead · dev.a · dev.b']) {
+  for (const s of ['패키지 public-si · 공공 SI 산출물', '테이블정의서:bk_loan_mst', 'http://<서버>:7374', 'phone', 'lead · dev.a · dev.b', 'lead · doc.c · dev.a · dev.b']) {
     assert.deepEqual(findLeaks(s), [], `잘못 잡았다: ${s}`)
   }
 })

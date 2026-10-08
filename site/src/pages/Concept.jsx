@@ -1,5 +1,6 @@
 // 개념 — 시스템 설계서 v2.0 제0 · 1부를 설치 전 사람의 말로. 작업 기록은 데모 레포에서 녹화한 파일이고(예제 JSON 의 files),
-// 섹션 · 큐레이션 기록 · 기준선은 v1.0 모양으로 손으로 적은 예시다 — 녹화는 판 v0.19 라 섹션에 옛 표기(`**변경**`)가 남아 있다.
+// 섹션 · 큐레이션 기록 · 기준선은 손으로 적은 예시다 — 데모 레포의 다음 걸음(대기 중인 기록을 큐레이터가 반영하면)을 그렸다.
+// 데모의 기록 id · 날짜와 맞춘다(site/demo/content.mjs · record.mjs) — 데모를 다시 짜면 같이 고친다.
 
 import { Link } from '../router.jsx'
 import Code from '../components/Code.jsx'
@@ -33,8 +34,8 @@ const VOCAB = `## 화면설계서
   aliases: 연체현황, 연체 목록, 연체자 조회`
 
 // 큐레이터가 기록을 반영한 섹션 — 정본 서술(현재형) · 끝의 경과 한 줄씩. applied 는 서버가 쓴다
-const SECTION = `## 연체일수 — 연체 일수
-<!-- applied: 2026-0922-연체일수-기준-확정 -->
+const SECTION = `## 연체일수
+<!-- applied: 2026-1005-연체일수-기준-확정 -->
 
 | | |
 |---|---|
@@ -47,51 +48,58 @@ const SECTION = `## 연체일수 — 연체 일수
 
 **경과**
 - 2026-05-12 [\`연체이력-분리\`](../work/2026-0512-연체이력-분리.md) 반납일 − 반납예정일
-- 2026-09-22 [\`연체일수-기준-확정\`](../work/2026-0922-연체일수-기준-확정.md) 다음날부터 센다`
+- 2026-10-05 [\`연체일수-기준-확정\`](../work/2026-1005-연체일수-기준-확정.md) 다음날부터 센다`
 
 // 큐레이션 기록 — 판정이 데이터다(curates). 좌표를 갖지 않는다(touchesEmpty · 태그 curate 는 서버가 붙인다)
 const CURATION = `---
-id: 2026-0923-큐레이션-연체일수
-title: 큐레이션 — 연체일수 기준 기록 2건
-date: 2026-09-23 10:20
-author: lead
+id: 2026-1008-큐레이션-연체일수-기준
+title: 큐레이션 — 연체일수 기준 · 범위 회의
+date: 2026-10-08 10:20
+author: doc.c
 touches: []
 touchesEmpty: 큐레이션
 curates:
-  - { id: "2026-0922-연체일수-기준-확정", verdict: reflect, into: ["도메인용어:연체일수", "이슈:LIB-ISS-01"] }
-  - { id: "2026-0922-연체-회의-메모", verdict: keep, reason: "회의 경위 — 결론은 기준 확정 기록이 원천" }
+  - { id: "2026-1005-연체일수-기준-확정", verdict: reflect, into: ["도메인용어:연체일수", "배치:OverdueNoticeJob", "이슈:LIB-ISS-01"] }
+  - { id: "2026-1001-2차사업-범위", verdict: keep, reason: "범위 회의 — 이번 사업에서 바꾼 대상이 없다 · 기록이 원천" }
 tags: [curate]
 ---
 
+판정표 — 기록 2건 · 섹션 3
+
 | 기록 | 판정 | 어디로 · 사유 |
 |---|---|---|
-| 2026-0922-연체일수-기준-확정 | 반영 | 도메인용어:연체일수(정본) · 이슈:LIB-ISS-01(결론 한 줄) |
-| 2026-0922-연체-회의-메모 | 기록으로 둠 | 회의 경위 — 결론은 기준 확정 기록이 원천 |`
+| 2026-1005-연체일수-기준-확정 | 반영 | 도메인용어:연체일수 · 배치:OverdueNoticeJob · 이슈:LIB-ISS-01 |
+| 2026-1001-2차사업-범위 | 기록으로 둠 | 범위 회의 — 이번 사업에서 바꾼 대상이 없다 · 기록이 원천 |
 
-// 섹션을 읽는 자리(화면 · section 도구)가 미반영 기록을 같이 낸다
-const PENDING = `## LN030 — 연체 현황                                  [미반영 1]
-<!-- applied: 2026-0702-연체현황-화면 -->
+**정본** — 연체일수를 세는 기준은 도메인용어:연체일수 한 곳. 배치는 대상 조건 한 줄, 이슈는 결론 한 줄과 좌표.`
 
-조회 조건 — 기준일(기본 오늘) · 연체일수 이상 …
+// 섹션을 읽는 자리(화면 · section 도구)가 미반영 기록을 같이 낸다 — 화면 그림 01 과 같은 자리
+const PENDING = `## bk_loan_mst — 대출마스터                           [미반영 1]
+<!-- applied: 2026-0901-반납-연장 -->
 
-┄ 이 섹션 뒤에 반영 안 된 기록 1건 · 큐레이션 대기 ┄
-2026-09-24 14:10  연체 현황 — 엑셀 내려받기
-                  dev.a · 목록 위에 「엑셀」 단추. 지금 목록 그대로 …   기록 열기 ›`
+┄ 이 섹션 뒤에 반영 안 된 기록 1건 · 섹션은 2026-09-01 까지의 기록을 담았다 · 큐레이션 대기 ┄
+2026-09-28 15:20  대출 이력 조회 화면 — 회원별 · 기간별
+                  dev.a · 창구에서 「지난달에 뭘 빌렸지」 를 묻는 회원이 많다 …   기록 열기 ›
+
+| 컬럼 | 타입 | NULL | 키 | 기본값 | 설명 |
+| LOAN_ID | VARCHAR(20) | N | PK | | 대출ID | …`
 
 const BASELINE = `## bk_loan_mst — 대출마스터
-<!-- applied: 2026-0410-대출등록-화면 -->
+<!-- applied: 2026-0901-반납-연장 -->
 
-대출 한 건. 반납하면 반납일이 채워지고 연체는 이력으로 남는다 …
+대출 한 권이 한 행이다. 반납하면 반납일이 채워지고, 연체는 이력(테이블정의서:bk_ovd_hist)으로 남는다 …
 
 <!-- cdp:baseline src="개발 DB pg_catalog" asof="2026-10-04" -->
 | 컬럼 | 타입 | NULL | 키 | 설명 |
 |---|---|---|---|---|
-| loan_id | BIGINT | N | PK | 대출 번호 |
-| rtn_due_dt | DATE | N | | 반납예정일 |
+| loan_id | varchar(20) | N | PK | 대출ID |
+| rtn_due_dt | date | N | | 반납예정일 |
+| extn_cnt | numeric(1) | N | | 연장횟수 |
 <!-- /cdp:baseline -->
 
 **경과**
-- 2026-04-10 [\`대출등록-화면\`](../work/2026-0410-대출등록-화면.md) 테이블 신설`
+- 2026-04-06 [\`대출-도서-테이블-설계\`](../work/2026-0406-대출-도서-테이블-설계.md) 대출마스터 신설 — 한 권 한 행
+- 2026-09-01 [\`반납-연장\`](../work/2026-0901-반납-연장.md) 연장 1회`
 
 export default function Concept() {
   const save = exampleBySlug.save
@@ -144,8 +152,8 @@ export default function Concept() {
           <Code title="docs/DB도메인용어정의서.md § 도메인용어:연체일수" tag="v1.0 예시" value={SECTION} lang="text" max={420} />
         </div>
         <p className="st-cap">
-          왼쪽이 작업 기록, 오른쪽이 큐레이터가 그 기록을 반영한 관리 문서 섹션이다. 섹션 머리의 <code>applied</code> 가 「이 섹션은 어느 기록까지 실었나」 이고(서버가
-          쓴다), 끝의 <b>경과</b> 목록이 한 줄씩 기록으로 이어진다.
+          왼쪽은 데모 레포에 녹화한 작업 기록(<Link to="/examples?ex=save">예제 ②</Link> — 아직 큐레이션 대기), 오른쪽은 큐레이터가 그것을 반영한 뒤의 관리 문서 섹션이다(예시). 섹션 머리의{' '}
+          <code>applied</code> 가 「이 섹션은 어느 기록까지 실었나」 이고(서버가 쓴다), 끝의 <b>경과</b> 목록이 한 줄씩 기록으로 이어진다.
         </p>
       </section>
 
@@ -195,7 +203,7 @@ export default function Concept() {
             <figcaption>원천 셋 — 작업 기록 · 큐레이터의 판단 · 기준선. 쓰는 길은 save 하나</figcaption>
           </figure>
         </div>
-        <Code title="work/2026-0923-큐레이션-연체일수.md — 큐레이션 기록" tag="v1.0 예시" value={CURATION} lang="text" max={420} />
+        <Code title="work/2026-1008-큐레이션-연체일수-기준.md — 큐레이션 기록" tag="v1.0 예시" value={CURATION} lang="text" max={420} />
         <p className="st-cap">
           판정은 데이터다(<code>curates</code>) — 화면의 큐레이션 이력과 기록마다의 「반영됨 → 좌표」 · 「기록으로 둠(사유)」 이 이것을 읽는다. 큐레이션 기록 자신은 좌표를 갖지 않는다.
         </p>
@@ -231,7 +239,7 @@ export default function Concept() {
         </p>
         {sup && <Code title={sup.files[0].path} tag="데모 레포" value={sup.files[0].text} lang="text" max={320} />}
         <p className="st-cap">
-          녹화한 예제는 v0.19 의 것이다 — 그때는 정정 기록과 섹션을 한 번에 고쳤다. <Link to="/examples?ex=supersede">예제 ⑤</Link>
+          데모 레포에 녹화한 정정 기록이다 — 작성자(lead)가 기록만 내고, 큐레이터(doc.c)가 대기열에서 판정해 정본 섹션을 고쳤다. <Link to="/examples?ex=supersede">예제 ⑤</Link>
         </p>
       </section>
 

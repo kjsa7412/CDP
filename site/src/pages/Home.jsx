@@ -110,8 +110,8 @@ export default function Home() {
           <h2 className="sec__cap">더 보기</h2>
           <div className="cards3 st-more-cards">
             <More to="/concept" icon="section" title="개념" text="두 층 · 좌표 · 어휘와 등록부 · 큐레이션과 미반영 · 기준선 · 정정. 쓰는 길은 save 하나." />
-            <More to="/screens" icon="image" title="화면 14장" text="레포 · 서버 · 사이트 · 설명서. 판 v0.19 를 데모 레포로 찍었다 — v1.0 화면은 다시 찍는다." />
-            <More to="/examples" icon="work" title="예제 다섯" text="찾기 · 기록 · 거절 · 충돌 · 정정 — 녹화한 요청과 응답, 그리고 v1.0 에서 달라진 점." />
+            <More to="/screens" icon="image" title="화면 17장" text="레포 · 큐레이션 · 서버 · 사이트 · 설명서. 가상 데모 레포를 붙인 진짜 서버를 찍었다." />
+            <More to="/examples" icon="work" title="예제 다섯" text="찾기 · 기록 · 미반영 · 큐레이터 둘의 충돌 · 정정 — 녹화한 MCP 요청과 응답." />
             <More to="/agent" icon="plug" title="에이전트" text="역할이 가르는 도구 12 · 스킬 5 · MCP 가 도는 길 열두 걸음." />
             <More to="/deploy" icon="server" title="배치 · 설치" text="팀 서버 · 개인 서버 · 설치 세 길 · 무엇이 PC 를 떠나나." />
             <More to="/releases" icon="list" title="판 이력" text="v0.2 부터 판마다 무엇이 바뀌었나." />
