@@ -173,11 +173,10 @@ export async function capture({ base, st, out }) {
       })
 
       // ── 레포 관리 ──
-      // 운영 레포로 찍는다 — library 에는 「섹션 없음」 좌표(대기열의 등록부 있음 · 섹션 없음)가 둘 있는데, 현황의 「문서 상태」 카드가
-      // 그것을 「깨진 섹션」(적)으로 센다(core/repo.js 의 statusOf 가 anchor-missing 을 broken 에 넣는다 — v1.0 H1 과 어긋남 · 보고함).
-      // 고쳐지면 library 로 되돌린다
+      // library 에는 「섹션 없음」 좌표(대기열의 등록부 있음 · 섹션 없음)가 둘 있다 — 깨진 섹션이 아니라 큐레이터의 일이다(v1.0 H1 ·
+      // 현황의 「깨진 섹션」 은 문서 없는 행 · 유령 applied 만 센다)
       await shoot('07-repo-admin', 'lead', async (p) => {
-        await open(p, '/r/library-ops/manage/overview')
+        await open(p, '/r/library/manage/overview')
         await p.waitForSelector('.agrid')
         await idle(p)
         await p.waitForLoadState('networkidle')
