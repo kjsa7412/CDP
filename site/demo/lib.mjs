@@ -1,25 +1,35 @@
-// 데모 레포 도구 — ctx · 서버 · MCP 부르기 · 패키지 예시 걷기.
+// 데모 도구 — ctx · 서버 · MCP 부르기 · 줄거리의 save 두 가지(기록 · 큐레이션).
 //
-// 검증 하네스(`ops/verify/run.mjs`)와 같은 길로 부른다 — 소스의 `ctx-cli.mjs` 를 node 로. 번들을 따로 만들지 않는다.
+// 서버는 빌드한 번들(`ops/out/ctx/ctx.mjs`)로 띄운다 — 소스로 띄우면 화면에 「빌드 __CTX_BUILT__」 자리표시가 그대로 찍힌다.
+// 쓰기는 전부 진짜 MCP `save` 다(서버가 검사 · 커밋 · author 를 채운다). 레포 파일을 손으로 고치지 않는다.
 
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
-import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const run = promisify(execFile)
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const NL = String.fromCharCode(10)
-// 빌드된 번들로 돈다 — 소스로 띄우면 화면에 「빌드 __CTX_BUILT__」 자리표시가 그대로 찍힌다. run.mjs 가 먼저 build:ctx 를 부른다
 export const CLI = path.join(ROOT, 'ops/out/ctx/ctx.mjs')
+// 서식집 · kit 은 소스 자리를 명시한다 — 번들이 `ops/out/ctx/` 에 있어 「번들 옆」 · 「소스」 자리를 스스로 못 찾는다
+export const FORMS = path.join(ROOT, 'agent', 'forms')
+export const KIT = path.join(ROOT, 'agent')
 
-export const ctx = (...args) => run(process.execPath, [CLI, ...args], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64e6 })
-export const git = (dir, ...args) => run('git', ['-C', dir, '-c', 'core.quotepath=false', ...args], { encoding: 'utf8', maxBuffer: 64e6 })
+// 자식 프로세스에 이 PC 의 CDP 설정을 물려주지 않는다 — 설치 한 줄을 쓴 PC 에는 진짜 서버의 CDP_TOKEN 이 있고,
+// CDP_KIT · CDP_FORMS · CDP_REPO 가 있으면 서버가 엉뚱한 자리를 읽는다(검증 하네스와 같은 규칙)
+export const ENV = (() => {
+  const e = { ...process.env }
+  for (const k of ['CDP_TOKEN', 'CDP_KIT', 'CDP_FORMS', 'CDP_REPO', 'CDP_CONFIG_DIR']) delete e[k]
+  return e
+})()
+
+export const ctx = (...args) => run(process.execPath, [CLI, ...args], { cwd: ROOT, env: ENV, encoding: 'utf8', maxBuffer: 64e6 })
+export const git = (dir, ...args) => run('git', ['-C', dir, '-c', 'core.quotepath=false', ...args], { env: ENV, encoding: 'utf8', maxBuffer: 64e6 })
 export const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
 export function serve(args) {
-  const p = spawn(process.execPath, [CLI, 'serve', ...args], { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] })
+  const p = spawn(process.execPath, [CLI, 'serve', ...args], { cwd: ROOT, env: ENV, stdio: ['ignore', 'ignore', 'pipe'] })
   let err = ''
   p.stderr.on('data', (d) => (err += d.toString('utf8')))
   return { p, err: () => err, kill: () => p.kill() }
@@ -55,80 +65,27 @@ export async function call(base, repo, token, name, args) {
   return { req, res: out, status: r.status }
 }
 
-// ── 패키지 예시 걷기 ────────────────────────────────────────────────────────
-//
-// 패키지는 값이 `(예시)` 로 채워져 나간다(`_vocab.md` 「값이 예시로 채워져 있다 — 지우고 시작한다」). 사람이 첫날
-// 하는 일을 여기서 한다 — 예시 어휘 · 예시 섹션을 걷고, 그 자리에 이 프로젝트의 초안을 넣는다.
+// ── 큐레이션의 글 ────────────────────────────────────────────────────────────
 
-const isExampleHeading = (l) => /^#{2,3}\s/.test(l) && (/\(예시\)/.test(l) || /^#{2,3}\s+예시/.test(l))
-const headLevel = (l) => /^(#{1,6})\s/.exec(l)?.[1].length || 0
-const isCategory = (l) => /^<!--\s*[^:>]+-->\s*$/.test(l.trim()) && !/applied/.test(l)
+const VERDICT = { reflect: '반영', new: '새 문서', keep: '기록으로 둠' }
 
-export function stripDoc(text, block) {
-  const lines = text.split(NL)
-  const ex = lines.map((l, i) => (isExampleHeading(l) ? i : -1)).filter((i) => i >= 0)
-  if (!ex.length) return { text, removed: 0 }
-  let start = ex[0]
-  // 바로 위의 분류 주석 · 빈 줄도 걷는다
-  for (let i = start - 1; i >= 0 && (!lines[i].trim() || isCategory(lines[i])); i--) if (isCategory(lines[i])) start = i
-  const last = ex[ex.length - 1]
-  const lv = headLevel(lines[last])
-  let end = lines.length
-  for (let i = last + 1; i < lines.length; i++) {
-    const h = headLevel(lines[i])
-    if (h && h <= lv) {
-      end = i
-      break
-    }
-  }
-  // 섹션과 작성지침 사이의 `---` 는 문서의 것이다 — 남긴다
-  while (end > last + 1 && (!lines[end - 1].trim() || lines[end - 1].trim() === '---')) end--
-  const between = lines.slice(start, end).filter((l) => headLevel(l) >= 2 && !isExampleHeading(l) && headLevel(l) >= lv)
-  const out = [...lines.slice(0, start), ...(block ? block.split(NL) : []), ...lines.slice(end)]
-  return { text: out.join(NL).replace(/\n{3,}/g, '\n\n'), removed: ex.length, between }
-}
+// 경과 한 줄 — `- 날짜 [`<id 의 주제>`](../work/<id>.md) 무엇이`(cdp-curate ⑤ · 서식 작성지침). 문서가 `docs/` 바로 아래라 `../work/`
+export const progressLine = (w, what) => `- ${w.date.slice(0, 10)} [\`${w.id.slice(10)}\`](../work/${w.id}.md) ${what}`
 
-export function renderBlock(items) {
-  const out = []
-  for (const it of items) {
-    if (typeof it === 'string') out.push(it, '')
-    else out.push(it[0], '<!-- applied: null -->', '', it[1], '')
-  }
-  return out.join(NL)
-}
+// 섹션 본문 = 지금(현재형) + 끝의 경과 목록
+export const withProgress = (body, lines) => body + NL + NL + '**경과**' + NL + lines.join(NL)
 
-// 어휘 — `example:` 를 단 항목을 걷고, 타입 섹션 끝에 이 프로젝트의 것을 붙인다.
-export function stripVocab(text, add) {
-  const lines = text.split(NL)
-  const out = []
-  for (let i = 0; i < lines.length; ) {
-    if (/^- `[^`]+`/.test(lines[i])) {
-      let j = i + 1
-      while (j < lines.length && /^\s{2,}\S/.test(lines[j])) j++
-      const entry = lines.slice(i, j)
-      if (!entry.some((l) => /^\s+example:/.test(l))) out.push(...entry)
-      i = j
-    } else out.push(lines[i++])
-  }
-  for (const [type, rows] of Object.entries(add)) {
-    const head = out.findIndex((l) => l.trim() === '## ' + type)
-    if (head < 0) throw new Error(`어휘에 ## ${type} 가 없다`)
-    let end = out.length
-    for (let i = head + 1; i < out.length; i++) if (/^##\s/.test(out[i])) { end = i; break }
-    while (end > head + 1 && !out[end - 1].trim()) end--
-    const ins = rows.flatMap(([c, label, al]) => ['- `' + c + '` — ' + label, ...(al ? ['  aliases: ' + al] : [])])
-    // 타입 머리 바로 밑이 설명 문단이면(업무영역) 그 뒤에 붙는다 — 끝에 붙이는 것과 같다
-    out.splice(end, 0, ...(out[end - 1]?.trim() === '## ' + type ? [''] : []), ...ins)
-  }
-  return out.join(NL).replace(/\n{3,}/g, '\n\n')
-}
-
-export async function walk(dir, rel = '') {
-  const out = []
-  for (const e of await fs.readdir(path.join(dir, rel), { withFileTypes: true })) {
-    const r = path.join(rel, e.name)
-    if (e.isDirectory()) out.push(...(await walk(dir, r)))
-    else if (e.name.endsWith('.md')) out.push(r.split(path.sep).join('/'))
-  }
-  return out
+// 큐레이션 기록의 본문은 판정표다 — 좌표는 백틱 없이(큐레이션 기록은 touches 가 없다 · cdp-curate ⑦)
+export function judgmentTable(c, { sections = 0, newDocs = [] } = {}) {
+  const rows = c.judgments.map((j) => `| [${j.id}](${j.id}.md) | ${VERDICT[j.verdict]} | ${j.into?.length ? j.into.join(' · ') : j.reason || ''} |`)
+  const head = `판정표 — 기록 ${c.judgments.length}건 · 섹션 ${sections}${newDocs.length ? ' · 새 문서 ' + newDocs.length : ''}`
+  return [
+    head,
+    '',
+    '| 기록 | 판정 | 어디로 · 사유 |',
+    '|---|---|---|',
+    ...rows,
+    ...(c.canon ? ['', `**정본** — ${c.canon}`] : []),
+    ...(newDocs.length ? ['', `**새 문서** — ${newDocs.join(' · ')}`] : []),
+  ].join(NL)
 }
