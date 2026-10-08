@@ -8,6 +8,7 @@ import { useState } from 'react'
 import Icon from '../Icon.jsx'
 import { copyText } from '../../lib/clip.js'
 import { serverNow } from '../../lib/clock.js'
+import { SHELLS } from '../../lib/install.js'
 
 export function Card({ title, hint, children, actions, id }) {
   return (
@@ -77,6 +78,19 @@ export function Cmd({ children }) {
       <code>{text}</code>
       <Icon name={done ? 'check' : 'copy'} size={13} />
     </button>
+  )
+}
+
+// 셸 고르기 — 설치 한 줄의 터미널 셋(`lib/install.js`). 작업 레포 · 일괄 갱신 · 큐레이터 폴더가 같은 탭을 쓴다
+export function ShellTabs({ shell, setShell }) {
+  return (
+    <div className="howto-tabs" role="tablist" aria-label="터미널">
+      {SHELLS.map((s) => (
+        <button key={s.key} role="tab" aria-selected={shell === s.key} className={shell === s.key ? 'on' : ''} onClick={() => setShell(s.key)}>
+          {s.label}
+        </button>
+      ))}
+    </div>
   )
 }
 

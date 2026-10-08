@@ -3,15 +3,17 @@
 //   위      대기 · 가장 오래된 · 미반영 섹션 · 마지막 큐레이션(`/api/<레포>/repo` 의 curation — App 이 이미 읽은 값)
 //   왼쪽    대기열 — 오래된 순(서버가 정렬). 기록마다 걸린 좌표를 넷으로 — 섹션 있음 · 섹션 없음(등록부만) · 등록부 없음 · 좌표 0
 //   오른쪽  고른 기록 하나의 판정 재료(`/queue/<id>` — curate 만) — 반영 후보 · 새 문서 후보 · 비슷한 서식 · 정본 후보 · 본문에만 있는 좌표
-//   아래    [기록으로 둠…] · [에이전트 지시 복사]
+//   아래    [기록으로 둠…] · [에이전트 지시 복사] · 큐레이터 폴더(처음 한 번 — 설치 한 줄)
 //
 // **화면이 직접 하는 판정은 「기록으로 둠」 하나다.** 반영 · 새 문서는 글을 쓰는 일이라 큐레이터의 에이전트 세션(`cdp-curate`)이
 // 판정표 + diff 를 보이고 승인 뒤 save 한다 — 그래서 단추는 그 세션에 붙일 지시를 복사한다(서버는 LLM 을 부르지 않는다 · I11).
+// 그 세션이 도는 자리가 큐레이터 폴더다 — 코드가 없는 아무 폴더 · 설치 한 줄 `--curator`(v1.0 §6.3). 설치기의 거절 문장이
+// 「관리 화면의 큐레이터 한 줄」 을 가리키는 곳이 여기다.
 // 막는 것은 서버다(재료 · 판정은 curate) — 이 화면은 메뉴가 큐레이터에게만 보인다.
 
 import { useMemo, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
-import { Card, Note, Btn } from '../../components/admin/ui.jsx'
+import { Card, Note, Btn, Cmd, ShellTabs } from '../../components/admin/ui.jsx'
 import { Prompt } from '../../console/ui.jsx'
 import { api, currentRepo } from '../../lib/api.js'
 import { invalidate, useResource } from '../../lib/cache.js'
@@ -19,13 +21,15 @@ import { copyText } from '../../lib/clip.js'
 import { Link } from '../../lib/router.jsx'
 import { docHref } from '../../lib/doclink.js'
 import { coordCounts, curateCommand, formPath } from '../../lib/curation.js'
+import { installCommand, guessShell } from '../../lib/install.js'
+import { can } from '../../lib/roles.js'
 import { repoBase } from '../../shell/nav.js'
 import { useSudo, CANCELLED } from '../../shell/sudo.jsx'
 import { ServerAbsent, isAbsent } from './marks.jsx'
 
 const STALE_DAYS = 14
 
-export default function Queue({ repo, say, onChanged }) {
+export default function Queue({ repo, me = null, say, onChanged }) {
   const rk = currentRepo()
   const base = repoBase(rk)
   const withSudo = useSudo()
@@ -167,6 +171,8 @@ export default function Queue({ repo, say, onChanged }) {
         diff 를 보이고, 승인하면 save 한다. 화면이 직접 하는 것은 <b>기록으로 둠</b> 하나다(서버는 LLM 을 부르지 않는다).
       </Note>
 
+      {can(me, 'curate', rk) && <CuratorFolder repo={rk} />}
+
       {keeping && (
         <Prompt
           title={`기록 ${ids.length}건 — 기록으로 둠`}
@@ -187,6 +193,30 @@ export default function Queue({ repo, say, onChanged }) {
         </Prompt>
       )}
     </>
+  )
+}
+
+// 큐레이터 폴더 — 에이전트 지시를 붙일 Claude Code 가 도는 자리. **처음 한 번** 세운다(작업의 성격 — 매일 여는 대기열 아래에 접어 둔다).
+// 작업 레포 설치 한 줄과 같은 설치기 · 같은 명령 짓기(`lib/install.js`) — `--curator` 라 git 도 대장 등록도 없고, 서버가 그 토큰이
+// 이 레포의 큐레이터일 때만 큐레이터 kit(스킬 다섯 · 큐레이터 블록)을 준다(`/kit/<레포>?as=json` · 아니면 설치기가 거절한다).
+function CuratorFolder({ repo }) {
+  const [shell, setShell] = useState(guessShell)
+  const cmd = installCommand(shell, { origin: window.location.origin, repo, curator: true })
+  return (
+    <Card title="큐레이터 폴더" hint="처음 한 번 · 자기 PC 에서">
+      <details className="howto-more">
+        <summary>큐레이션은 코드가 없는 아무 폴더에서 한다 · 이 한 줄을 그 폴더에서</summary>
+        <div className="howto">
+          <ShellTabs shell={shell} setShell={setShell} />
+          <Cmd>{cmd}</Cmd>
+          <Note>
+            설치기를 임시 폴더에 받아 돌립니다 — 그 폴더에는 <code>.mcp.json</code> · <code>.claude/</code> · <code>CLAUDE.md</code>(큐레이터 블록)만 들어갑니다.
+            git 레포가 아니어도 되고 작업 레포 대장에 오르지 않습니다. 토큰을 물으면 <b>이 레포의 큐레이터</b> 토큰을 붙여넣습니다(이 PC 에서 처음일 때만) —
+            큐레이터가 아니면 설치기가 거절합니다. 끝나면 그 폴더에서 Claude Code 를 다시 켜고, 위 「에이전트 지시 복사」 를 붙입니다.
+          </Note>
+        </div>
+      </details>
+    </Card>
   )
 }
 

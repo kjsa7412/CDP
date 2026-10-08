@@ -20,7 +20,7 @@ import Overview from './Overview.jsx'
 import Repo from './Repo.jsx'
 import Sync from './Sync.jsx'
 import WorkRepos from './WorkRepos.jsx'
-import WorkReposServer from './WorkReposServer.jsx'
+import LinkedWorkRepos from './LinkedWorkRepos.jsx'
 import Diag from './Diag.jsx'
 import Docs from './Docs.jsx'
 
@@ -57,14 +57,14 @@ export default function AdminView({
     <div className="admin">
       <div className="admin__body">
         <div className={cur === 'curation' || cur === 'forms' ? 'admin__wrap admin__wrap--wide' : 'admin__wrap'}>
-          {cur === 'curation' && server && <Queue repo={repo} say={say} onChanged={onChanged} />}
+          {cur === 'curation' && server && <Queue repo={repo} me={me} say={say} onChanged={onChanged} />}
           {cur === 'curation-log' && server && <Log logId={scr?.logId || null} />}
           {cur === 'forms' && server && <FormLibrary form={scr?.form || null} tab={scr?.formTab || 'stamp'} />}
           {cur === 'overview' && <Overview repo={repo} sync={sync} diag={diag} me={me} onCheck={onCheck} onSync={onSync} />}
           {cur === 'repo' && !server && <Repo state={state} repo={repo} diag={diag} firstRun={firstRun} onOpened={onOpened} say={say} />}
           {cur === 'docs' && <Docs me={me} say={say} onChanged={onChanged} />}
           {cur === 'sync' && !server && <Sync sync={sync} onSync={onSync} say={say} />}
-          {cur === 'work' && (server ? <WorkReposServer say={say} /> : <WorkRepos state={state} patch={patch} say={say} />)}
+          {cur === 'work' && (server ? <LinkedWorkRepos say={say} /> : <WorkRepos state={state} patch={patch} say={say} />)}
           {cur === 'diag' && !server && <Diag diag={diag} repo={repo} say={say} />}
         </div>
       </div>
