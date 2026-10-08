@@ -1,78 +1,49 @@
-# ops — 명령
-
-**사람이 실행하는 것은 여기 있고, 그것이 부르는 구현은 `lib/` 에 있다.**
-
-전에는 둘이 섞여 있었다. 한 폴더를 열면 `build-exe.mjs`(스크립트가 부른다)와
-`release.cmd`(사람이 더블클릭한다)가 나란히 있어서, **무엇을 직접 실행해도
-되는지**를 파일을 열어 봐야 알았다.
+# ops — 명령 · 구현 · 배포 · 검증
 
 ```
 ops/
   setup.cmd      최초 1회 — 의존성 설치
-  dev.cmd        개발 서버 (화면 + API)
-  start.cmd      앱 실행 (빌드된 화면 · viewer/fixture)
-  check.cmd      지식 레포 검사
-  seed.cmd       viewer/fixture 재생성
-  release.cmd    **배포본 만들기** → ops/release/v<버전>/
+  dev.cmd        개발 — 개인 서버(7373 · viewer/fixture) + 화면(vite 5173)
+  start.cmd      개인 서버로 띄운다(빌드된 화면). 인자로 레포 경로 — 없으면 viewer/fixture
+  check.cmd      지식 레포 검사(ctx check)
+  seed.cmd       viewer/fixture 재생성(지식만)
+  release.cmd    **서버 산출물** → ops/out/server/cdp-server-v<버전>.tar.gz
   lib/           위 명령이 부르는 구현 (직접 실행하지 않는다)
-    assemble.mjs        지식 레포 폴더를 **조립하는 함수 하나** — release 와 release-server 가 같이 쓴다
-    release.mjs         팀원 PC 배포본 (exe 포함)
-    release-server.mjs  서버 산출물 tar.gz (bin · web · packages · deploy)
-    seed-kit.mjs        fixture 의 .claude/ 를 agent/ 에서 (Python 없이)
+    build-ctx.mjs       ctx 번들(ops/out/ctx/ctx.mjs) — 서버 본체 하나
+    release-server.mjs  서버 산출물 — bin · web · forms · kit · manual · deploy
+    bundle-files.mjs    산출물에 담는 파일 — LF 복사 · kit(스킬 다섯 · CLAUDE 블록 둘) · 번들 시각
+    seed.mjs · seed_repo.py   표본 레포 재생성
   deploy/        서버 — install.sh · upgrade.sh · cdp-serve.service · Dockerfile · 설치절차.md
   verify/        검증 하네스 — npm run verify
 ```
 
-`npm test` · `npm run verify` · `npm run check:packages` · `npm run release:server` 는
-`.cmd` 껍데기가 없다 — 개발자와 CI 가 부르는 것이고 npm 을 안다.
+`npm test` · `npm run verify` · `npm run release:server` 는 `.cmd` 껍데기와 같은 것을 한다 — `.cmd` 는 **npm 을 모르는 사람도 쓸 수 있게** 둔 껍데기다(CP949 · CRLF — cmd.exe 가 읽는다).
 
 ## 더블클릭해도 되고 인자를 줘도 된다
 
 ```
 ops\release.cmd            package.json 의 version 으로
-ops\release.cmd 0.3.0      버전 지정
-ops\check.cmd C:\cdp       그 레포를 검사
-ops\start.cmd C:\cdp       그 레포로 앱 실행
+ops\release.cmd 1.0.0      버전 지정
+ops\check.cmd C:\repos\x   그 레포를 검사
+ops\start.cmd C:\repos\x   그 레포로 개인 서버
 ```
-
-`npm run <이름>` 도 같은 것을 한다 — `.cmd` 는 **npm 을 모르는 사람도 쓸 수
-있게** 둔 껍데기다.
 
 ## 산출물은 어디로
 
 ```
-out/web/    화면 (vite)          ← 여기, 즉 ops/out/
-out/ctx/    ctx 번들
-out/exe/    cdp.exe
-out/server/ cdp-server-v<버전>/ 와 그 tar.gz   ← 서버에 올리는 것
-release/v<버전>/   배포본 — **이 폴더를 통째로 옮기면 CDP 를 쓸 수 있다**
+out/web/      화면 (vite)
+out/ctx/      ctx 번들 — 서버 본체(bin/ctx.mjs)
+out/server/   cdp-server-v<버전>/ 와 그 tar.gz   ← 서버에 올리는 것
+out/site/     공식 사이트(build:site)
 ```
 
-셋 다 추적하지 않는다. `out/` 은 중간 산출물이고 `release/` 는 결과다.
+추적하지 않는다. v1.0 의 산출물은 **서버 tar 와 사이트 zip 둘**이다 — v0.x 의 win 폴더(exe + 지식 레포 폴더)는 없다. 새 지식 레포는 서버가 빈 틀로 세우고, 작업 레포의 스킬은 서버의 `kit/` 에서 나간다.
 
-**둘 다 `ops/` 아래에 있다.** 만드는 쪽이 여기다 — 루트에 두면 추적도 안
-되는 부산물이 상위 폴더 행세를 한다.
+## 판과 태그
 
-## 버전은 몇 개나 들고 있나
-
-버전 폴더 하나가 약 68MB 인데 **사실상 `cdp.exe` 하나가 그만큼**이다.
-쌓이면 exe 만 쌓인다.
-
-`release.cmd` 는 최근 2개를 넘으면 알려만 준다. **지우지는 않는다** —
-배포본을 프로그램이 말없이 지우면 안 된다. 대신 되살릴 수 있는 것과
-없는 것을 갈라서 말한다.
+배포한 판에는 반드시 태그를 단다 — 태그가 소스를, `package-lock.json` 이 의존성을 고정한다. 태그 `v*` 를 push 하면 Actions 가 서버 tar · 사이트 zip · `SHA256SUMS` 를 Release 에 붙인다(태그와 `package.json` 판이 다르면 실패).
 
 ```
-v0.1.0  68MB  태그 있음 -- 지워도 다시 만들 수 있습니다
-v0.0.1  68MB  **태그 없음 -- 지우면 되살릴 수 없습니다**
+git tag -a v1.0.0 -m "..."
+git checkout v1.0.0 && npm ci && ops\release.cmd 1.0.0
 ```
-
-되살아나는 근거는 태그와 `package-lock.json` 둘 다다. 태그가 소스를
-고정하고 lock 이 의존성을 고정한다. 하나라도 없으면 그 버전은 다시
-만들 수 없다 — 그래서 **배포한 버전에는 반드시 태그를 단다.**
-
-```
-git tag -a v0.2.0 -m "..."
-git checkout v0.2.0 && npm ci && ops\release.cmd 0.2.0
-```
-
