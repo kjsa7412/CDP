@@ -3,6 +3,32 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v1.0.0
+
+**큐레이터 모델 · 쓰는 길 하나 · 레포에는 지식만** — 메이저다. 계획 `docs/design/CDP_v1.0_개편안.md` · 정본 `docs/design/CDP_시스템설계서_v2.0.md` · 절차와 결정 `docs/dev/v1.0_개편_TODO.md` §5 · 실서버 이행 `docs/dev/v1.0_실서버_이행_절차.md`. **올리기 전에 아래 「올릴 때」 를 본다.**
+
+- **사용자는 작업 기록만 쌓고 관리 문서는 큐레이터가 반영한다** — writer 의 `save` 는 `work` · `vocab` · `assets` 만. 섹션 · 등록부 · 섹션 밖 손질 · 서식 예시 · 기준선은 **레포별 큐레이터**(명부 `users[].curate` · 서버 › 사용자 › 「레포 × 큐레이터」 · admin 은 어디서나)만 — 아니면 파일을 만지기 전에 `E_FORBIDDEN {need:'curate'}`
+- **큐레이션 기록** — `work.curates: [{ id, verdict: reflect | new | keep, into, reason }]` 이 다룬 기록과 판정(반영 · 새 문서 · 기록으로 둠)을 남긴다. 반영한 좌표는 같은 save 의 섹션이어야 하고, 섹션의 `applied` 는 반영한 기록 중 그 좌표의 가장 늦은 것이며 뒤로 가지 않는다
+- **대기열 · 미반영은 계산값** — 판정 없는 기록이 대기열, `later(applied)`(기록으로 둠 빼고) ∪ (대기열 ∩ 좌표) 가 그 섹션의 미반영. 늦은 반영은 막지 않고 `section` · MCP 리소스 · 프롬프트 · 화면이 미반영 기록을 섹션과 함께 낸다(섹션 제목의 「미반영 n」 · 작업 기록의 큐레이션 상태 · 상태줄 「대기 n」)
+- **큐레이션 화면** — 큐레이션 › 대기열(판정 재료 · 비슷한 서식 · 「에이전트 지시 복사」 · 「기록으로 둠」 · 큐레이터 폴더 한 줄) · 이력 · 서식집. 판정과 섹션 쓰기는 큐레이터 자신의 Claude Code 세션(`cdp-curate`)이 한다 — 서버는 LLM 을 부르지 않는다
+- **서식집** — 패키지 다섯을 걷고 `forms/` 묶음 넷 · 79종(+ 팀 서식 `<data>/forms`). 새 관리 문서는 제목 · 서식 표지 · 첫 문단만 찍는다(예시 · 작성지침은 서식에 남는다). 읽을 때 lint — 문제 있는 서식으로는 문서를 세우지 않는다 · `ctx forms list | show | check` · 큐레이터 도구 `forms`
+- **기준선 블록** — 코드 · DB 에서 기계로 뽑은 사실은 섹션 안 `<!-- cdp:baseline -->` 블록에만. `ctx baseline extract | push` · `POST /api/<레포>/baseline`(큐레이터). 큐레이터의 save 는 블록을 지킨다
+- **save** — 그 save 가 **새로 만든 오류**로만 막힌다(원래 있던 오류는 경고) · 커밋에 훅을 태우지 않는다 · writer 응답에서 큐레이터의 일(대기 오래됨)을 뺀다
+- **MCP 도구 14 → 12** — derive · apply · sync · version 을 지우고 `queue` · `forms`(큐레이터만)를 더했다. 역할에 없는 도구는 보이지 않는다(viewer 9 · writer 10 · 큐레이터 12). `brief` 가 미러 · 역할별 kit 해시 · 번들 판을 낸다 · 레포 캐시가 HEAD 를 본다
+- **스킬 7 → 5** — cdp-work · cdp-save(writer) · cdp-curate · cdp-registry(큐레이터) · cdp-push. SKILL.md 3,837 → ≈880줄 · writer 한 작업의 맥락 ≈51.8k → ≈16.3k자. kit 은 서버 번들에서 역할별로 나간다 — 등록된 작업 레포는 늘 writer kit · 큐레이터 폴더는 설치 한 줄 `--curator`(git · 대장 등록 없이)
+- **모드 A 끝** — stdio MCP · 로컬 뷰어 · exe · 트레이 · `ctx setup` · CLI 쓰기 명령(index · docs drop · examples · derive · apply · sync · package · serve kit-refresh)을 걷었다(부르면 무엇으로 바뀌었는지 한 줄 · exit 2). 서버 없는 팀 · 한 사람은 **개인 서버** `ctx serve --personal <레포>`(127.0.0.1 · 명부를 스스로 만들고 첫 접속 주소로 로그인) — 개발 서버도 이것이다
+- **레포에는 지식만** — 도구 층(bin · 훅 · 스킬 사본 · CLAUDE.md · MANUAL · TEMPLATE) · INDEX · 등록부 사본 · 서식 예시를 만들지 않는다. 새 레포는 **빈 틀**(README · `_vocab.md` · `_managed.md` · `docs/` · `work/` · `.gitattributes` · `.gitignore`) · 다시 세우기 `ctx repo new --records-from <옛 레포>`(기록 · 첨부 · 그 기록의 어휘만) · 제자리 이행 `ctx migrate <레포>`(전환 기록 하나 · 서식 예시 · 도구 층 걷기). 진단이 옛 도구 층을 알린다
+- **화면** — 상단 바의 얼굴 스위처 · 레포 세그를 접히는 왼쪽 메뉴 하나로(지식 · 큐레이션 · 레포 관리 · 서버 · 설명서) · 역할 × 얼굴의 메뉴 표 · 얼굴은 주소 하나로 · 로컬 전용 화면 넷 걷음 · 색 예산 · 미러 lag 의 이름은 「origin 에 못 보냄」
+- **산출물 둘** — 서버 tar(bin · web · forms · kit · manual · deploy · 3.0MB · 압축 0.8MB · 전 ≈14MB) · 사이트 zip. win zip · exe 는 없다. install · upgrade 가 forms · kit 을 web 처럼 갈아 끼우고 레포마다 도구 층을 갈던 단계는 없다. 배포 문서의 사내 값을 자리표시로
+- **설명서 넷** — 사용자 · **큐레이터**(새 책) · 서버 관리자(부록 개인 서버) · 개발자. 설계 문서 v2 세트(시스템 설계서 v2.0 · MCP 설계서 v2.0 · 서식집 규약 v1.0 · 화면 설계서 v1.0) · 용어 v1.0 · 옛 문서 47개의 머리에 「v1.0 이후」 한 줄
+- 시험 — 단위 365 · 하네스 ✓117 ✗0 skip 11(v1.0 항목 118~138 — 역할별 도구 · writer 경계 · 큐레이션 save · 기준선 · 역할별 kit · 빈 틀 · 다시 세우기 · migrate · 개인 서버 · 없앤 명령 · 팀 서식)
+
+**올릴 때**
+1. 서버 — `upgrade.sh` → `doctor` 의 「레포 … 도구 층」 warn 이 v0.x 레포다. 레포마다 **제자리 이행**(서버를 멈추고 `ctx migrate <레포> --dry` → `--dry` 없이 · 뒤에 콘솔 「다시 보내기」) 또는 **다시 세우기**(옛 레포 이름을 바꿔 두고 콘솔 「새 지식 레포」 · 「기록만 옮겨 오기」). 설치절차 10장 · `docs/dev/v1.0_실서버_이행_절차.md`
+2. 서버 › 사용자 › 「레포 × 큐레이터」 — 레포마다 큐레이터를 맡긴다
+3. 작업 레포마다 설치 한 줄 `--update`(writer 스킬 셋으로 바뀐다) · 큐레이터는 자기 폴더에서 `--curator`
+4. `/opt/cdp/packages` 는 더 쓰지 않는다
+
 ## v0.25.0
 
 **HTML 시각 자료를 지식 레포에** — `docs/design/CDP_HTML시각자료_검토_v0.1.md` · `docs/dev/HTML시각자료_TODO.md`

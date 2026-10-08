@@ -1,7 +1,7 @@
 {
   "name": "cdp",
   "private": true,
-  "version": "0.25.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "CDP — 지식 레포 서버(MCP · 화면 · ctx) · 작업 기록과 큐레이션",
   "scripts": {
