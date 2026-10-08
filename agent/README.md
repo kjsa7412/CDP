@@ -37,8 +37,9 @@ agent/forms/<묶음>/           →  forms/<묶음>/              →  (레포�
 사본은 레포를 떠났다 — 설명서는 서버의 `/manual`(원천은 소스 레포 루트 [`manual/`](../manual)), 작업 기록의 모양은 `cdp-save` 의
 「필드 — work」 표, 검사는 서버 `save` 다.
 
-> 이 폴더에 남은 `CLAUDE-지식레포.md` · `hooks/` · `gitattributes` · `gitignore` 는 v1.0 산출물에 들어가지 않는다 — 옛 표본을 만드는
-> `ops/lib/seed_repo.py` 만 읽는다. 정리는 하네스 갈래의 일이다.
+> 옛 판의 도구 층 원본(`CLAUDE-지식레포.md` · `hooks/` · `gitattributes` · `gitignore`)과 그것을 표본에 심던 `ops/lib/seed-kit.mjs` 는
+> v1.0 에서 지웠다(W2 · W6). 새 지식 레포의 `.gitattributes` · `.gitignore` 는 빈 틀(`core/skeleton.js`)이 쓰고, 옛 레포에 남은 도구 층은
+> `ctx migrate` 가 걷는다.
 
 ## CLAUDE 블록이 왜 둘인가
 
