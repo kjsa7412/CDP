@@ -15,8 +15,10 @@ ctx self-update cdp-server-v<판>.tar.gz
 ctx up ~/cdp/library --update`
 
 const TEAM = `# 팀 서버 — 서버 산출물 폴더에서 한 줄 (멱등 · --dry 로 미리보기 · root 없이 --prefix ~/…)
-sudo bash deploy/install.sh --bind <서버IP> --admin <id> --repo <이름> --origin <git url> --ssh
-#   → serve.json · 서비스 · 첫 관리자 토큰(원문은 여기서 한 번) · 첫 레포와 push · doctor — 끝에는 남은 일만
+echo "$PAT" | sudo bash deploy/install.sh --bind <서버IP> --admin <id> --repo <이름> --origin <git url> \
+     --pat-stdin --git-host <GitLab> --git-user <계정>
+#   → serve.json · 서비스 · 첫 관리자 토큰(원문은 여기서 한 번) · git 자격 · 첫 레포와 push · doctor — 끝에는 남은 일만
+#   → SSH 배포 키면 --ssh — 공개 키를 GitLab 에 넣은 뒤 origin 을 잇는 한 줄이 끝에 남는다
 cdp serve doctor            # 설정은 serve.json 이 준다 — 플래그 없이
 
 # 새 판 — 화면 · 서식집 · kit 을 갈고 레포는 건드리지 않는다

@@ -19,7 +19,7 @@
 | ⑤ 한 줄 — `install.mjs` 연결 · 갱신 | **완료** — d8dfae9 · D3 headersHelper 는 실측 항목으로 남음 · D5 는 brief 로 갈음 |
 | ⑥ 화면 22 → 16 | **완료** — 6614db1 |
 | ⑦ 안내 글 | **완료** — a4fbdef · a0da4fd(kit 안 글) |
-| ⑨ 설명서 · 사이트 | 진행 — 아래 ⑨ |
+| ⑨ 설명서 · 사이트 | **완료** — bef66bf(사용자 776→401 · 큐레이터 740→411) · 743044a(관리자 741→326 · 설치절차 543→191) · d7c2119(개발자 · README) · 5f21296(사이트 · 데모 · 그림 34장 다시) |
 | ⑧ 설계서 · 판 · 검증 | **완료** — a0da4fd · 판 1.2.0 · CHANGELOG · 하네스 139 |
 
 끝났다고 보는 기준(검토 §7) — **빈 macOS 사용자 폴더에서 `ctx up ~/cdp/team --install ~/code/a ~/code/b` 한 줄 + Claude Code 재시작 한 번으로 writer · curator 가 일하고, 판 올림은 `ctx self-update <tar>` + `install.mjs --update` 두 줄.** 팀은 `install.sh --admin …` 한 줄 뒤 콘솔 「시작하기」 만 따라가면 된다. ⑧ 의 원큐 시나리오가 이것을 명령으로 확인한다.
@@ -157,11 +157,11 @@
 원칙 — **화면 「시작하기」 · CLI 끝 출력이 말하는 것은 책에서 줄인다.** 책은 「한 줄 → 무엇이 일어났나 → 막히면」 순서로 핵심만.
 절 제목은 `core/nextsteps.js` `HELP_TOPICS` 가 맞히는 말을 지킨다(화면 `?` 링크 · `test/nextsteps.test.mjs`).
 
-- [ ] 사용자 설명서 — 처음 한 번은 `ctx up --install` · 연결된 작업 레포 한 줄 · `--connect` · `--update` · 토큰 파일 · 화면 이름(읽기 · 시작하기) · 줄인다
-- [ ] 큐레이터 설명서 — 큐레이터 폴더(`ctx up --curator` · 한 줄) · 대기열 › 이력 탭 · 관리 문서 › 서식집 탭 · 시작하기 · 줄인다
-- [ ] 관리자 설명서 · 설치절차 — `install.sh --admin --repo --origin --ssh` 한 줄 · serve.json · `cdp` · Docker(볼륨 · touch 없음) · 개인 서버 `ctx up` · `self-update` · 콘솔 넷(현황 · 지식 레포 · 사람 · 서버) · 줄인다
-- [ ] 개발자 설명서 · README — `core/tar.js` · `nextsteps` · `/next` · `ctx up` · `serve.json` · 하네스 139
-- [ ] 공식 사이트(cdp-about) — 시작 · 배포 페이지의 한 줄 셋 · 화면 소개(16 · 시작하기) · facts · 줄인 설명서 넷 · 판 이력 · 데모 다시 찍기(`site:demo`) · `build:site` 누출 0
+- [x] 사용자 설명서 — 처음 한 번은 `ctx up --install` · 연결된 작업 레포 한 줄 · `--connect` · `--update` · 토큰 파일 · 화면 이름(읽기 · 시작하기) · 줄인다
+- [x] 큐레이터 설명서 — 큐레이터 폴더(`ctx up --curator` · 한 줄) · 대기열 › 이력 탭 · 관리 문서 › 서식집 탭 · 시작하기 · 줄인다
+- [x] 관리자 설명서 · 설치절차 — `install.sh --admin --repo --origin --ssh` 한 줄 · serve.json · `cdp` · Docker(볼륨 · touch 없음) · 개인 서버 `ctx up` · `self-update` · 콘솔 넷(현황 · 지식 레포 · 사람 · 서버) · 줄인다
+- [x] 개발자 설명서 · README — `core/tar.js` · `nextsteps` · `/next` · `ctx up` · `serve.json` · 하네스 139
+- [x] 공식 사이트(cdp-about) — 시작 · 배포 페이지의 한 줄 셋 · 화면 소개(16 · 시작하기) · facts · 줄인 설명서 넷 · 판 이력 · 데모 다시 찍기(`site:demo`) · `build:site` 누출 0
 
 ---
 
@@ -179,4 +179,5 @@
 | ② brief 첫 줄 | 넣지 않았다 — `brief.lines` 가 이미 대기 · 미반영 · 어긋남 줄을 낸다. 같은 사실을 두 번 싣지 않는다 |
 | 남은 실기 | Linux systemd 에서 `install.sh` root 모드(계정 · `/usr/local/bin/cdp` · 유닛 `--config`) · `ctx up --service`(launchd 실제 등록) · Docker 이미지 빌드 · 재생성 뒤 명부 · 자격 유지 — 이 Mac 에서 시스템 서비스를 등록하지 않으려고 미뤘다 |
 | 이력 | ③~⑤ 커밋에 화면 쪽이 미리 스테이징한 파일 삭제 둘이 섞여 그 사이 HEAD 의 화면 빌드가 깨졌다 — push 전에 다시 지었다(삭제를 6614db1 로 옮김 · 최종 트리는 같다 · 중간 56c7e6e 빌드 확인 · 옛 끝은 `backup/pre-rewrite-e41d518` 가지) |
-| 다음 단계 | 설명서 네 권 · cdp-about 사이트 · 데모 다시 찍기(D8). 설명서 관리자 2.6 의 Docker 절차(`touch auth.json`)가 지금 코드와 다르다 — 그 단계에서 고친다 |
+| ⑨ 에서 고친 코드 | 설명서가 찾은 것 — 장 번호 주석 · `install.sh --ssh --origin` 은 레포만 세우고 키를 넣은 뒤 이을 한 줄(첫 push 가 반드시 실패했다) · 설치기 안내의 옛 화면 자리 · 「큐레이션 › 서식집」 · `ctx up --install a b` · baseline · rebuild 의 토큰 파일 · 개발 프록시 `/next` · ctx 도움말 |
+| 남은 것 | Linux systemd · launchd `--service` · Docker 실기 · headersHelper 실측(D3) · 사이트 push(Vercel 배포)는 사람이 |
