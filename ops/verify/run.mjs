@@ -77,6 +77,8 @@ const NL = String.fromCharCode(10)
 const BASE_ENV = (() => {
   const e = { ...process.env }
   for (const k of ['CDP_TOKEN', 'CDP_KIT', 'CDP_FORMS', 'CDP_REPO', 'CDP_CONFIG_DIR']) delete e[k]
+  // 설치기의 --commit 은 그 PC 의 git 신원으로 커밋한다 — CI 러너에는 user.name 이 없어 108 이 거절됐다. 시험용 신원을 준다
+  for (const [k, v] of [['GIT_AUTHOR_NAME', 'harness'], ['GIT_AUTHOR_EMAIL', 'h@x'], ['GIT_COMMITTER_NAME', 'harness'], ['GIT_COMMITTER_EMAIL', 'h@x']]) e[k] = e[k] || v
   return e
 })()
 
