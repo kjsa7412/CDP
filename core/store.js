@@ -11,7 +11,7 @@ import { buildBacklinks, cmpDateDesc } from './validity.js'
 import { buildIndex, fullText, prepQuery, matchName, bestName } from './search.js'
 import { runBuiltinCheck } from './check.js'
 import { visualRefs, visualTitle } from './visuals.js'
-import { formIdOfText } from './tools.js'
+import { formIdOfText, driftOf } from './tools.js'
 import { nfc } from './frontmatter.js'
 
 // 검색이 한 갈래에 내는 최대 줄 수. 그 아래는 사람이 안 읽는다 — 개수는
@@ -539,7 +539,7 @@ export class Store {
       // 소음이고, 정작 그것이 말하는 것(밀렸나)은 계산해야 나온다.
       sectionStates:
         d.layer === 'managed'
-          ? this.sections
+          ? this.sectionsWithDrift(d.path)
               .filter((r) => r.doc === d.path)
               .map((r) => ({
                 value: r.anchor ? r.anchor.replace(/^#+\s*/, '') : '',
@@ -557,6 +557,8 @@ export class Store {
                 // v1.0 — 섹션 상태 셋(ok · pending · missing)과 미반영 기록(발췌 포함). 화면의 「미반영 n」 칩이 이것을 그린다
                 cstate: this.curation ? this.curation.stateOf(r.coord, r) : null,
                 pending: this.curation ? this.curation.pendingOf(r.coord) : [],
+                // 어긋남(리빌딩 검토 §5.1) — 화면은 큐레이터에게만 칩으로 그린다. 신호가 없으면 null
+                drift: r.drift || null,
               }))
           : null,
       // 관리 문서의 서식 표지(`<!-- cdp:form … -->`) — 화면이 칩으로 그린다
@@ -814,6 +816,22 @@ export class Store {
       curation: this.curation,
       vocabText: this.vocabText ?? null,
       managedText: this.managedText ?? null,
+    })
+  }
+
+  // 이 문서의 섹션 행 + 어긋남 신호(같은 `driftOf` — 화면 「진단」 · MCP `drift` 와 한 계산 · I1)
+  sectionsWithDrift(docPath) {
+    const rows = this.sections.filter((r) => r.doc === docPath)
+    let by = null
+    try {
+      by = new Map(driftOf(this).sections.map((x) => [x.coord, x]))
+    } catch {
+      by = new Map()
+    }
+    return rows.map((r) => {
+      const x = by.get(r.coord)
+      if (!x) return r
+      return { ...r, drift: { unsourced: x.unsourced, linked: x.linked || null, duplicated: x.duplicated.length, pairs: x.duplicated.slice(0, 10), oversize: x.oversize, diary: x.diary } }
     })
   }
 

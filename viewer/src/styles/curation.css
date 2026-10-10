@@ -440,3 +440,82 @@ a.fd__chip:hover {
   font-size: 12px;
   color: var(--text-2);
 }
+
+/* 진단(리빌딩 검토 §5.1) — 신호 카드는 거르는 단추다 */
+button.kpi {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.kpi:hover {
+  border-color: var(--border-strong, var(--border));
+}
+.kpi--on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.dtable td {
+  vertical-align: top;
+}
+.dsig {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.drow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.dcmd {
+  margin: 0;
+  padding: 8px 10px;
+  font: 12px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+  color: var(--text-2);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 6px);
+}
+.dlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+.dlist li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dlist li:last-child {
+  border-bottom: 0;
+}
+.dlist .chip {
+  margin-left: 6px;
+}
+
+/* 섹션 제목의 어긋남 칩 — 미반영 칩(색)보다 한 단계 조용하게: 상태가 아니라 손볼 거리다(색 예산 V19) */
+.dchip-host {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+.dchip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  font: 500 10.5px/1.7 var(--font-sans);
+  letter-spacing: 0;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-pill);
+  text-decoration: none;
+}
+a.dchip:hover {
+  color: var(--text);
+  border-style: solid;
+}

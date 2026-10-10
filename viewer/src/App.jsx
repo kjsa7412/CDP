@@ -25,6 +25,7 @@ import { useSession } from './lib/session.jsx'
 import { useSlots, useScreen } from './lib/slots.js'
 import { useToast } from './shell/toast.jsx'
 import { repoBase } from './shell/nav.js'
+import { can } from './lib/roles.js'
 import { load, peek } from './lib/cache.js'
 import { buildCoordIndex } from './lib/markdown.js'
 import { summaryText } from './lib/format.js'
@@ -843,6 +844,8 @@ export default function App() {
                 onToggleToc={() => patch({ panes: { toc: state.panes?.toc === false } })}
                 visual={routeDoc?.id === docId ? routeDoc.v : null}
                 onVisual={openVisual}
+                curator={can(me, 'curate', currentRepo())}
+                driftHref={repoBase(currentRepo()) + 'manage/drift'}
               />
             ) : (
               <Landing repo={repo} docs={docs} managed={managedList.length} onOpen={openDoc} />

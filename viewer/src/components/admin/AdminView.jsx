@@ -3,7 +3,7 @@
 // **메뉴는 왼쪽 메뉴다**(좌측 메뉴 셸 설계 v0.1 · 개편안 §7.2) — 안쪽 메뉴(`admin__menu`)를 지웠고 탭은 주소로만 고른다
 // (`shell/nav.js` 의 tab). 묶음은 작업의 성격으로 갈린다 —
 //
-//   큐레이션     대기열 · 이력 · 서식집 — 매일 바꾼다(큐레이터)
+//   큐레이션     대기열 · 이력 · 진단 · 서식집 — 매일 바꾼다(큐레이터)
 //   레포 관리    현황 · 관리 문서 · 연결된 작업 레포 — 보고 · 가끔 바꾼다(읽기면 보인다 · 쓰는 단추만 write · 지우기는 curate)
 //
 // 로컬 전용 탭(지식 레포 경로 · 동기화 · 진단)은 v1.0 에 없앴다 — 화면은 늘 서버가 내고, 서버에는 고를 경로도 사람이 누를
@@ -14,6 +14,7 @@
 import { useScreen } from '../../lib/slots.js'
 import Queue from '../../features/curation/Queue.jsx'
 import Log from '../../features/curation/Log.jsx'
+import Drift from '../../features/curation/Drift.jsx'
 import FormLibrary from '../../features/forms/FormLibrary.jsx'
 import Overview from './Overview.jsx'
 import LinkedWorkRepos from './LinkedWorkRepos.jsx'
@@ -35,9 +36,10 @@ export default function AdminView({
   return (
     <div className="admin">
       <div className="admin__body">
-        <div className={cur === 'curation' || cur === 'forms' ? 'admin__wrap admin__wrap--wide' : 'admin__wrap'}>
+        <div className={cur === 'curation' || cur === 'forms' || cur === 'drift' ? 'admin__wrap admin__wrap--wide' : 'admin__wrap'}>
           {cur === 'curation' && <Queue repo={repo} me={me} say={say} onChanged={onChanged} />}
           {cur === 'curation-log' && <Log logId={scr?.logId || null} />}
+          {cur === 'drift' && <Drift say={say} onChanged={onChanged} />}
           {cur === 'forms' && <FormLibrary form={scr?.form || null} tab={scr?.formTab || 'stamp'} />}
           {cur === 'overview' && <Overview repo={repo} me={me} onCheck={onCheck} />}
           {cur === 'docs' && <Docs me={me} say={say} onChanged={onChanged} />}

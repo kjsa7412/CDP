@@ -240,6 +240,9 @@ export const api = {
   form: (p) => req('/forms/' + String(p).split('/').map(encodeURIComponent).join('/')),
   // 글을 안 쓰는 판정(기록으로 둠) — 서버가 큐레이션 기록을 지어 같은 save 를 탄다. 거절(400 · 409)도 읽어야 하는 답이다
   curate: (body) => req('/curate', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 409] }),
+  // ── 리빌딩(리빌딩 검토 §5.1 · §5.2) — 어긋남 진단 · 정본 스냅샷. 둘 다 그 레포의 큐레이터(서버가 막는다)
+  drift: (doc = null) => req('/drift' + (doc ? '?doc=' + encodeURIComponent(doc) : '')),
+  snapshot: (body) => req('/snapshot', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 409] }),
 }
 
 // ── 레포를 이름으로 — 주소의 레포가 아니라(개편안 §7.1 「api.base() 가 주소의 레포에 묶임」) ─────────

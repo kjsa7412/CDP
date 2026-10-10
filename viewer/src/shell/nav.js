@@ -67,6 +67,12 @@ export const NAV = [
     to: (r) => repoBase(r) + 'manage/curation/log',
     match: (rest) => rest[0] === 'manage' && rest[1] === 'curation' && rest[2] === 'log' && rest.length <= 4,
   },
+  // 진단 — 반영된 뒤 어긋난 정본(리빌딩 검토 §5.1). 미반영(대기열)과 다르다
+  {
+    key: 'drift', group: 'curation', label: '진단', icon: 'warn', need: 'curate', scope: R, tab: 'drift',
+    to: (r) => repoBase(r) + 'manage/drift',
+    match: (rest) => manage(rest, 'drift'),
+  },
   {
     key: 'forms', group: 'curation', label: '서식집', icon: 'grid', need: 'curate', scope: R, tab: 'forms',
     to: (r) => repoBase(r) + 'manage/forms',

@@ -130,3 +130,26 @@ export function PendingBlock({ sec, onOpen }) {
     </div>
   )
 }
+
+// 섹션 제목의 어긋남 칩(리빌딩 검토 §5.1) — 큐레이터에게만. 미반영(「미반영 n」)과 다르다: 반영된 뒤 생긴 어긋남이다
+export function DriftChips({ d, to = null }) {
+  if (!d) return null
+  const chips = []
+  if (d.unsourced) chips.push(['근거 없음' + (d.linked ? ' · 인용' : ''), d.linked ? `근거 기록이 없다 — 본문이 인용한 ${d.linked.join(' · ')} 의 좌표정정` : '그 좌표를 건드린 기록 · 스냅샷 · 기준선이 없다 — 스냅샷을 뜬다'])
+  if (d.duplicated) chips.push([`복제 ${d.duplicated}`, '같은 산문 줄이 있는 섹션 — ' + (d.pairs || []).join(' · ')])
+  if (d.oversize) chips.push([`비대 ${d.oversize.lines}줄`, `경과 앞 본문 ${d.oversize.lines}줄 · 문턱 ${d.oversize.limit}`])
+  if (d.diary) chips.push([`일지형 ${d.diary}`, '날짜별로 덧붙인 줄'])
+  if (!chips.length) return null
+  return chips.map(([l, title]) =>
+    to ? (
+      <a key={l} className="dchip" href={to} title={title + ' · 진단에서 보기'}>
+        {l}
+      </a>
+    ) : (
+      <span key={l} className="dchip" title={title}>
+        {l}
+      </span>
+    )
+  )
+}
+

@@ -36,6 +36,15 @@ export function curateCommand(repo, ids = []) {
   return `cdp-curate ${repo}\n${target}\n${CURATE_RULE}`
 }
 
+// 진단 › [에이전트 지시 복사] — 큐레이터의 Claude Code(`cdp-rebuild`)에 붙인다(리빌딩 검토 §5.3). 대상은 좌표 · 한 줄에 하나
+export const REBUILD_RULE = '원천부터(근거 없음 → 좌표정정 · 스냅샷) · 사라지는 사실이 있으면 다시 쓰지 않는다 · 판정표를 보이고 승인 뒤 save.'
+export function rebuildCommand(repo, coords = []) {
+  const list = [...new Set(coords.filter(Boolean))]
+  const pad = ' '.repeat(6)
+  const target = list.length ? '대상: ' + list.join('\n' + pad) : '대상: (레포 전체 — drift() 가 신호가 있는 섹션을 준다)'
+  return `cdp-rebuild ${repo}\n${target}\n${REBUILD_RULE}`
+}
+
 // 대기열 행의 좌표 넷 분류를 센다 — section(섹션 있음) · anchor(등록부 있음 · 섹션 없음) · unregistered(등록부 없음)
 export function coordCounts(coords = []) {
   const n = { section: 0, anchor: 0, unregistered: 0 }

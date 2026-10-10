@@ -44,7 +44,7 @@ test('can — 판정 하나 · 모르는 값은 거짓', () => {
 test('보이는 묶음 — 역할 × 레포 얼굴(V18 · 묶음은 보이는 항목이 있을 때만)', () => {
   const know = '지식:문서·작업 기록·좌표 · 그래프'
   const repo = '레포 관리:현황·관리 문서·연결된 작업 레포'
-  const cur = '큐레이션:대기열·이력·서식집'
+  const cur = '큐레이션:대기열·이력·진단·서식집'
   const srv = '서버:현황·지식 레포·작업 레포 대장·사용자·토큰·감사·서버 설정'
   assert.deepEqual(groups({ face: 'repo', me: VIEWER, repo: 'alpha' }), [know, repo], 'viewer — 큐레이션 · 서버 묶음은 제목째 없다')
   assert.deepEqual(groups({ face: 'repo', me: WRITER, repo: 'alpha' }), [know, repo], 'writer — 같다')
@@ -152,6 +152,7 @@ test('왼쪽 목록 — 주소가 정한다(범위 칩을 지웠다)', () => {
 test('없는 주소 · 권한 밖 주소 — 그리지 않고 바꿔 쓴다(D4)', () => {
   const at = (path) => screenOf({ path })
   assert.equal(redirectOf(at('/r/alpha/manage/curation'), WRITER), '/r/alpha/', 'writer 가 대기열 주소 → 문서')
+  assert.equal(redirectOf(at('/r/alpha/manage/drift'), WRITER), '/r/alpha/', 'writer 가 진단 주소 → 문서(어긋남 진단은 큐레이터의 것)')
   assert.equal(redirectOf(at('/r/alpha/manage/forms/public-si/DE_431'), VIEWER), '/r/alpha/')
   assert.equal(redirectOf(at('/r/alpha/manage/curation'), CURATOR), null, '큐레이터는 그대로')
   assert.equal(redirectOf(at('/r/gamma/manage/curation'), CURATOR), '/r/gamma/', '다른 레포의 큐레이터는 아니다')

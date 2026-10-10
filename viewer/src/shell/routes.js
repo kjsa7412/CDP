@@ -8,6 +8,7 @@
 //              /r/<레포>/graph                                   좌표 · 그래프
 //              /r/<레포>/manage[/overview|docs|work]             레포 관리
 //              /r/<레포>/manage/curation[/log[/<id>]]            큐레이션 › 대기열 · 이력
+//              /r/<레포>/manage/drift                           큐레이션 › 진단(리빌딩)
 //              /r/<레포>/manage/forms[/<묶음>/<id>][?tab=]       큐레이션 › 서식집
 //   콘솔       /console[/<page>]                                 서버 묶음
 //   사이트     그 밖 전부(/ · /manual · /login · /setup · /r)    소개 · 설명서 · 로그인 · 마법사 · 레포 고르기
