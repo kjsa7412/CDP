@@ -179,3 +179,24 @@ test('리빌딩 실측에서 다듬은 셋 — 날짜 뒤 글이 있는 경과 �
   const r = await loadRepo(await repo({ '_vocab.md': VOCAB3, '_managed.md': MANAGED3, 'docs/테이블.md': DOC3, 'work/2026-0901-t.md': work({ id: '2026-0901-t', date: '2026-09-01 10:00', touches: ['table:t'] }) }))
   assert.equal(buildDrift(r, { sliceSection }).totals.oversize, 0)
 })
+
+test('일지형 — 앞 줄에 이어 쓴 줄이 날짜로 시작해도 일지가 아니다 · 목록 · 문단의 시작만', async () => {
+  const VOCAB4 = ['# 어휘', '', '## table', '', '- `table:w` — 더블유', ''].join('\n')
+  const MANAGED4 = ['# 등록부', '', '| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|', '| `table:*` | `docs/테이블.md` | `## {값}` |', ''].join('\n')
+  const DOC4 = ['# 테이블', '', '## w — 더블유', '', '**함정** 이 값은 마지막으로 검증한 날이', '2026-09-03 이고 그때 컬럼을 추가했다 — 이어 쓴 줄이다.', '', '- 2026-09-05 에 인덱스를 추가했다', ''].join('\n')
+  const r = await loadRepo(await repo({ '_vocab.md': VOCAB4, '_managed.md': MANAGED4, 'docs/테이블.md': DOC4, 'work/2026-0901-w.md': work({ id: '2026-0901-w', date: '2026-09-01 10:00', touches: ['table:w'] }) }))
+  assert.equal(buildDrift(r, { sliceSection }).sections.find((x) => x.coord === 'table:w').diary, 1, '목록 줄 하나만')
+})
+
+test('어휘 좌표 모양 — 공백 든 좌표는 check 경고(save 의 checkCoord 와 같은 RE_COORD)', async () => {
+  const { toolCheck, checkCoord } = await import('../core/tools.js')
+  const { isCoordShape } = await import('../core/vocab.js')
+  assert.equal(isCoordShape('term:이벤트 도메인'), false)
+  assert.equal(isCoordShape('term:이벤트-도메인'), true)
+  assert.throws(() => checkCoord('term:The Open Canvas'), (e) => e.code === 'E_COORD')
+  const VOCAB5 = ['# 어휘', '', '## term', '', '- `term:The Open Canvas` — 디자인 언어', '- `term:정상` — 정상', ''].join('\n')
+  const r = await loadRepo(await repo({ '_vocab.md': VOCAB5, '_managed.md': '# 등록부\n', 'work/2026-0901-v.md': work({ id: '2026-0901-v', date: '2026-09-01 10:00', touches: ['term:정상'] }) }))
+  const f = toolCheck(r).findings.find((x) => x.kind === 'vocab-coord-format')
+  assert.equal(f?.sev, 'warn')
+  assert.deepEqual(f.items.map((x) => x.coord), ['term:The Open Canvas'])
+})

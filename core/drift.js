@@ -91,8 +91,16 @@ export function buildDrift(r, { sliceSection, oversizeLines = OVERSIZE_LINES } =
       if (linked.length) row.linked = linked
     }
     if (prose.length > oversizeLines) row.oversize = { lines: prose.length, limit: oversizeLines }
+    // 일지형은 문단 · 목록의 **시작**만 본다 — 앞 줄에 이어 쓴 줄(줄바꿈된 문장)이 날짜로 시작한 것은 일지가 아니다
+    // (ezipez_cdp 리빌딩 — 일지형 신호의 다수가 이것이었다)
+    for (let k = 0; k < lines.length; k++) {
+      const t = lines[k].trim()
+      if (!t) continue
+      const prev = k > 0 ? lines[k - 1].trim() : ''
+      const starts = !prev || /^([-*·]|\d+[.)])\s/.test(t) || /^[-*·]\s*\(?20\d\d-/.test(t)
+      if (starts && isDiary(t)) row.diary++
+    }
     for (const l of text) {
-      if (isDiary(l.trim())) row.diary++
       const k = dupKey(l)
       if (!k) continue
       if (!keyOwners.has(k)) keyOwners.set(k, new Set())

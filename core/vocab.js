@@ -22,6 +22,11 @@ const COORD = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*:\S+$/
 // 좌표의 앞자리만. `## <타입>` 머리글이 타입인지 가르는 데 쓴다.
 const TYPE = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*$/
 
+// 좌표의 모양 — `타입:값`. 값에 공백 · 제어문자가 없다. save 의 `checkCoord` 와 어휘 검사(`check` 의 vocab-coord-format)가
+// 이 하나를 쓴다 — 둘이 갈라지면 어휘에는 있는데 save 가 거절하는 좌표가 생긴다(ezipez_cdp 리빌딩 — `term:이벤트 도메인`)
+export const RE_COORD = /^(?:[a-z][a-z0-9_-]*|[가-힣][A-Za-z0-9가-힣_-]*):[^\s\x00-\x1f]{1,200}$/
+export const isCoordShape = (c) => RE_COORD.test(String(c ?? '')) && !String(c).includes('..')
+
 export function parseVocab(text) {
   if (!text)
     return { types: [], excludedTypes: [], coords: new Map(), counted: new Map(), aliasIndex: new Map(), errors: [] }

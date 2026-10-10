@@ -16,7 +16,7 @@ import { repoStatus } from './repo.js'
 import { runBuiltinCheck } from './check.js'
 import { buildDrift, driftLine } from './drift.js'
 import { buildIndex, fullText, tokenize } from './search.js'
-import { reconcile } from './vocab.js'
+import { reconcile, RE_COORD } from './vocab.js'
 import { resolveCoord } from './managed.js'
 import { docNo } from './docrefs.js'
 import { docUsage } from './docusage.js'
@@ -45,7 +45,6 @@ export { CtxError, toError } from './errors.js'
 // E_COORD 로 거절했다 — 제품화 TODO 5.4 하네스에서 잡았다.
 // ASCII 타입은 소문자만이다 — `C:/abs/path` 같은 절대경로가 좌표로 통과하면 안 된다
 // (하네스 2번). 한글 타입은 첫 글자가 한글이면 나머지에 영문 · 숫자가 와도 된다.
-const RE_COORD = /^(?:[a-z][a-z0-9_-]*|[가-힣][A-Za-z0-9가-힣_-]*):[^\s\x00-\x1f]{1,200}$/
 const RE_ID = /^\d{4}-\d{4}-[^/\\\x00-\x1f]{1,120}$/
 
 export function checkCoord(coord) {

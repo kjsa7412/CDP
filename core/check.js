@@ -20,6 +20,7 @@
 // 남는 값이 없으므로 규칙은 "값이 있으면 오류" 하나다. 다만 미결·제안은
 // 갈 곳을 알려 줘야 하므로 메시지를 따로 낸다.
 import { normValue, lintRegistry, docEscapes } from './managed.js'
+import { isCoordShape } from './vocab.js'
 import { danglingRefs } from './docrefs.js'
 
 const AGENDA = new Set(['미결', '제안'])
@@ -123,6 +124,15 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
     }
   }
   push('warn', 'deprecated-coord', 'deprecated 좌표 사용', deprecatedUse)
+
+  // 어휘에 있는데 좌표 모양이 아니다(공백 · 제어문자) — save 가 `E_COORD` 로 거절하므로 아무 기록도 이 좌표를 달 수 없다.
+  // 어휘 쪽 이름을 고친다(공백 → `-` · 옛 이름은 aliases 로)
+  push(
+    'warn',
+    'vocab-coord-format',
+    '어휘의 좌표 모양이 아니다(save 가 거절한다)',
+    [...vocab.coords.keys()].filter((k) => !isCoordShape(k)).map((k) => ({ coord: k, detail: `「${k.replace(/\s+/g, '-')}」 처럼 공백 없이 — 옛 이름은 aliases 에` }))
+  )
 
   // **`미결` · `제안` 은 이관 대상이다** (정정_판정모델_v2 §2).
   //
