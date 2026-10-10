@@ -55,7 +55,7 @@ test('제품화 2 S2 — loadToken: CDP_CONFIG_DIR · ~/.config/cdp/token · 없
   assert.equal(await loadToken({ platform: 'linux', home, env: {} }), null)
   await saveTokenPosix('abc123', { home, shell: '/bin/zsh' })
   assert.equal((await loadToken({ platform: 'linux', home, env: {} })).token, 'abc123')
-  assert.equal((await fsp.stat(p.join(home, '.config', 'cdp'))).mode & 0o777, 0o700)
+  if (process.platform !== 'win32') assert.equal((await fsp.stat(p.join(home, '.config', 'cdp'))).mode & 0o777, 0o700)
   const cfg = p.join(home, 'cfg')
   await fsp.mkdir(cfg)
   assert.equal(await loadToken({ platform: 'linux', home, env: { CDP_CONFIG_DIR: cfg } }), null)

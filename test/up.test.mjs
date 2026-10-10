@@ -35,7 +35,7 @@ test('writeShim — ~/.cdp/bin/ctx 가 current 를 부른다 · PATH 에 없으�
   assert.equal(a.added, true)
   assert.equal(a.onPath, false)
   assert.match(a.pathLine, /\.zshrc/)
-  assert.match(await fs.readFile(a.file, 'utf8'), /server\/current\/bin\/ctx\.mjs/)
+  assert.match(await fs.readFile(a.file, 'utf8'), /server[\\/]current[\\/]bin[\\/]ctx\.mjs/)
   const b = await writeShim({ home, platform: 'linux', env: { PATH: '/usr/bin:' + path.join(home, '.cdp', 'bin') } })
   assert.equal(b.added, false)
   assert.equal(b.onPath, true)

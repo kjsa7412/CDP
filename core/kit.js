@@ -69,6 +69,7 @@ export async function kitFiles({ role = 'writer', explicit = null } = {}) {
 // kit 해시 — 파일 이름 · 내용으로. 작업 레포 CLAUDE.md 의 `cdp:kit` 과 대 보아 낡았는지 안다
 export function hashOf(files) {
   const h = crypto.createHash('sha256')
-  for (const f of files) h.update(f.name + '\0' + Buffer.from(f.data).toString('utf8') + '\0')
+  // 줄끝은 LF 로 센다 — Windows 에서 받은 소스(autocrlf)는 CRLF 라 같은 kit 이 다른 해시가 됐다(CI windows · 대장이 늘 「낡음」)
+  for (const f of files) h.update(f.name + '\0' + Buffer.from(f.data).toString('utf8').replace(/\r\n/g, '\n') + '\0')
   return h.digest('hex').slice(0, 6)
 }

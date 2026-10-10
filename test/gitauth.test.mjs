@@ -30,9 +30,12 @@ test('parseRemote — ssh:// · scp 꼴 · http · 경로', () => {
 })
 
 test('sshCommand — 앞 빗금 · 모르는 호스트 · 프롬프트에서 멈추지 않는다', () => {
-  const c = ga.sshCommand('C:\\data')
-  assert.match(c, /-i "C:\/data\/ssh\/id_ed25519"/)
-  assert.match(c, /UserKnownHostsFile="C:\/data\/ssh\/known_hosts"/)
+  // 그 OS 의 절대 경로로 — POSIX 에서 'C:\\data' 는 절대 경로가 아니라 cwd 아래로 풀린다(CI ubuntu · macOS 에서 늘 깨졌다)
+  const win = process.platform === 'win32'
+  const c = ga.sshCommand(win ? 'C:\\data' : '/data')
+  const base = win ? 'C:\\/data' : '\\/data'
+  assert.match(c, new RegExp(`-i "${base}\\/ssh\\/id_ed25519"`))
+  assert.match(c, new RegExp(`UserKnownHostsFile="${base}\\/ssh\\/known_hosts"`))
   assert.match(c, /StrictHostKeyChecking=yes/)
   assert.match(c, /BatchMode=yes/)
   assert.match(c, /IdentitiesOnly=yes/)
