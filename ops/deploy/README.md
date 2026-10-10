@@ -1,6 +1,6 @@
 # deploy — CDP 서버를 올리는 것
 
-설계 [`CDP_MCP_설계서 v1.1 §9.4`](../../docs/design/CDP_MCP_설계서_v1.0.md) ·
+설계 [시스템 설계서 v2.0 §9](../../docs/design/CDP_시스템설계서_v2.0.md#9-배포) · [MCP 설계서 v2.0 §11](../../docs/design/CDP_MCP_설계서_v2.0.md#11-kit-과-설치) ·
 확정값 [`MCP_0단계_결정`](../../docs/dev/MCP_0단계_결정.md) ·
 근거 [`제품화 검토 §3.3`](../../docs/design/CDP_제품화_검토_v1.0.md)
 
@@ -8,8 +8,9 @@
 > 여기 있는 파일이 각각 무엇을 하고 **무엇을 하지 않는지**다.
 
 ```
-cdp-serve.service   systemd 유닛 — install.sh 가 node 경로 · bind · port 를 박아 /etc/systemd/system 에 둔다
-install.sh          설치 — 설치절차 0 · 2 · 6장.  멱등.  방화벽은 안내만
+cdp-serve.service   systemd 유닛 — serve --config <prefix>/serve.json 한 줄. install.sh 가 node 경로 · prefix 를 박는다
+install.sh          설치 한 줄 — 배치 · serve.json · /usr/local/bin/cdp · 유닛 · (--admin) 첫 관리자 · (--ssh|--pat-stdin) git 자격
+                    · (--repo [--origin]) 첫 레포 · doctor · 남은 일만.  멱등.  방화벽은 안내만.  root 없이 --prefix ~/… 도
 upgrade.sh          갱신 — 설치절차 10장 ①②③.  백업 · 교체 · 재시작 · 대조 · 실패면 되돌림
 Dockerfile          선택지 — systemd 없이 컨테이너로.  CI 확인용으로도
 docker-compose.yml  그 compose

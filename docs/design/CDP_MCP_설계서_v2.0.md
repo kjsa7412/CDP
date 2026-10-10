@@ -263,7 +263,7 @@
 
 | | writer kit | 큐레이터 kit |
 |---|---|---|
-| 스킬 | `cdp-work` · `cdp-save` · `cdp-push` | 다섯 전부 — + `cdp-curate` · `cdp-registry` |
+| 스킬 | `cdp-work` · `cdp-save` · `cdp-push` | 여섯 전부 — + `cdp-curate` · `cdp-registry` · `cdp-rebuild` |
 | CLAUDE 블록 | `CLAUDE-프로젝트레포.md` — 도구 이름 · 스킬 셋 · 「관리 문서는 큐레이터가 반영한다 — 여기서는 기록만」 | `CLAUDE-큐레이터.md` — 큐레이션 자리 · `queue` · `forms` · 승인 게이트(dryRun) · 기준선 블록은 손대지 않는다 |
 | 자리 | `.claude/skills/cdp-*` · `.claude/work-repo/CLAUDE.md`(→ 작업 레포 `CLAUDE.md` 의 블록) | 같다 |
 
@@ -278,24 +278,34 @@
 | `GET /kit/<레포>` | 쿠키 · Bearer | kit zip. 역할은 그 레포의 큐레이터면 큐레이터 · 아니면 writer(`?role=writer` 면 writer) |
 | `GET /kit/<레포>?workrepo=<id>` | 같다 | **설치 꾸러미** zip — `설치.md` · `install.mjs`(설정 한 줄을 박은 설치기) · `kit/`(한 단 내림 — 푸는 것만으로는 아무것도 안 덮인다 · `.mcp.json` · `.claude/cdp.json` · `CLAUDE.md` 포함). 등록의 지식 레포가 주소의 레포와 다르면 409 |
 | `…?workrepo=<id>&as=json` | 같다 | 같은 kit 을 JSON(base64)으로 — 설치 한 줄이 토큰으로 받는다 |
-| `GET /kit/<레포>?as=json`(workrepo 없이) | 같다 | 큐레이터 폴더용 — kit + `.mcp.json` + `.claude/cdp.json` + `CLAUDE.md`. 대장에 오르지 않는다 |
+| `GET /kit/<레포>?as=json`(workrepo 없이) | 같다 | 큐레이터 폴더 · 스킬 폴더용 — kit(안쪽 원본 `.claude/work-repo/` 은 빼고) + `.mcp.json` + `.claude/cdp.json` + `CLAUDE.md`. 대장에 오르지 않는다 — 큐레이터 kit 이면 **누가 · 어느 레포 · 어느 kit** 만 `<data>/curatorkits.json` 에 적는다(「시작하기」 의 큐레이터 폴더 줄) |
+| `POST /workrepos` `{ repos: [...] }` | write | 여러 등록을 한 번에(설치기 `--connect`) — 하나라도 틀리면 아무것도 안 쓴다 |
+| `GET /next[?repo=]` | 쿠키 · Bearer | 다음 할 일(`core/nextsteps.js`) — 화면 「시작하기」 · `ctx up` 끝 출력과 같은 계산 |
 
 **토큰은 꾸러미 · 명령 · 설치기 어디에도 없다** — 사람이 관리자에게 받아 붙여넣는 것뿐이다.
 
-### 11.3 설치기 — 길 셋
+### 11.3 설치기 — 길
 
 ```
 node install.mjs <작업 레포>                                              꾸러미(zip 안)
 node cdp-install.mjs --repo <레포> --workrepo <id> <작업 레포> [--dry] [--yes] [--no-save]     설치 한 줄
-node cdp-install.mjs --update [<작업 레포>…] [--dry] [--yes] [--commit]                        일괄 갱신
+node cdp-install.mjs --connect --repo <레포> <코드 레포들이 있는 폴더> [--commit]              여럿을 한 번에(등록까지)
+node cdp-install.mjs --update [<경로>…] [--dry] [--yes] [--commit]                             일괄 갱신
 node cdp-install.mjs --curator --repo <레포> [<폴더>] [--dry] [--yes]                          큐레이터 폴더
+node cdp-install.mjs --folder --repo <레포> <skills 폴더>                                      스킬 폴더(워크스페이스 사본)
+공통  --fix-gitignore(막는 .gitignore 에 ! 줄) · --brief(여럿을 붙이는 쪽 — ctx up — 이 안내를 한 번만 낸다)
 ```
+
+개인 서버는 `ctx up <레포> --install … --curator … --skills …` 가 같은 설치기를 personal 토큰으로 부른다(토큰 복사 0 · 제품화 2 ③).
+**토큰 자리** — `CDP_TOKEN` → `~/.config/cdp/token`(`CDP_CONFIG_DIR` 이면 그 폴더 · Windows 는 사용자 환경변수). rc 를 안 읽는 셸 · cron 에서도 `--update --yes` 가 돈다.
+**설치 목록**(`core/localreg.js`)의 행은 `kind` — `work` · `curator` · `folder` — 셋 다 `--update` 가 돈다. 서버 주소의 루프백 별칭(localhost · 127.0.0.1 · [::1])은 하나로 본다.
+**`.mcp.json` 의 토큰 전달** — 지금은 `${CDP_TOKEN}` 헤더(시작할 때 환경변수로만 채워진다 → 설치 뒤 Claude Code 재시작). Claude Code 가 문서화한 `headersHelper`(연결마다 명령의 stdout JSON 을 헤더로 · `/mcp` 재연결로 새 토큰)로 바꾸면 rc 줄과 재시작이 빠진다 — 프로젝트 신뢰 승인이 있어야 돌고 Windows 동작은 문서에 없어 **실측 뒤** 바꾼다(제품화 2 D3).
 
 | 길 | 하는 것 |
 |---|---|
 | 설치 | 토큰 — `CDP_TOKEN` 이 있으면 서버에 확인하고, 없거나 안 통하면 **보이지 않게 묻는다** → 이 PC 에 둘지 묻는다(Windows 사용자 환경변수 · 그 밖 `~/.config/cdp/token`) · kit 을 받아 **바뀔 것을 먼저 보이고 묻는다** · `core/setup.js` 의 `planSetup` · `applySetup` — `.mcp.json` 은 `cdp` 항목만 더한다(다른 서버는 그대로) · `CLAUDE.md` 는 블록만 · `cdp-` 아닌 스킬은 건드리지 않는다 · 끝에 `POST /workrepos/<id>/applied { kit }` 보고 · 이 PC 의 설치 목록(`core/localreg.js`)에 경로를 적는다 |
-| `--update` | 이 PC 에 **이 서버로** 설치한 작업 레포 전부를 한 번에 — 계획 → 한 번 묻고 → 적용 → 레포마다 보고. `--commit` 이면 바꾼 경로만 커밋하고, 그 경로에 원래 커밋 안 된 변경이 있던 레포는 커밋하지 않는다 |
-| `--curator` | git · 대장 등록 없이 폴더 하나에 큐레이터 kit 을 쓴다 — 그 토큰이 그 레포의 큐레이터가 아니면 멈춘다. 전용 폴더를 전제한다(블록 병합 없이 파일을 쓴다) |
+| `--update` | 이 PC 에 **이 서버로** 설치한 작업 레포 · 큐레이터 폴더 · 스킬 폴더 전부를 한 번에 — 계획 → 한 번 묻고 → 적용 → 작업 레포마다 보고. `--commit` 이면 바꾼 경로만 커밋하고, 그 경로에 원래 커밋 안 된 변경이 있던 레포 · `.gitignore` 에 막힌 레포는 커밋하지 않고(스테이징도 되돌린다) **대장에 「최신」 으로 보고하지 않는다** |
+| `--curator` | git · 대장 등록 없이 폴더 하나에 큐레이터 kit 을 쓴다 — 그 토큰이 그 레포의 큐레이터가 아니면 멈춘다. 있는 `CLAUDE.md` · `.mcp.json` 은 병합한다(`mergeCuratorFile`) · 설치 목록에 `curator` 로 남는다 |
 
 `.mcp.json` 의 항목 —
 
@@ -310,7 +320,8 @@ node cdp-install.mjs --curator --repo <레포> [<폴더>] [--dry] [--yes]       
 | 어디 | 어떻게 |
 |---|---|
 | 작업 레포 대장(`<data>/workrepos.json`) | 등록 `{ id, name, knowledge, owner, note, applied: { at, by, kit } }`. `applied.kit` ≠ 서버의 **writer kit 해시** → 「낡음」 · 보고 없음 → 「미설치」. 보고의 `by` · `at` 은 서버가 채운다(보내면 `E_INPUT`). 보고는 추적용이지 관문이 아니다 |
-| 에이전트 | `brief` 의 `sync.kit.hash` ≠ 작업 레포 `CLAUDE.md` 의 `cdp:kit` → 스킬이 답에 적는다 · 고치는 것은 `--update` |
+| 에이전트 | `brief` 의 `sync.kit.hash` ≠ 작업 레포 `CLAUDE.md` 의 `cdp:kit` → 스킬이 답에 적는다 · 고치는 것은 `--update`. 세션마다 이것이 돌므로 SessionStart 훅을 따로 두지 않는다(제품화 2 — D5 를 이것으로 갈음) |
+| 화면 「시작하기」 | `GET /next` 의 「에이전트 세팅이 바뀌었다 · n곳」 — 그 레포의 낡은 작업 레포 수 + 내 큐레이터 폴더가 낡았으면 1 |
 | 콘솔 현황 | 낡은 작업 레포 수를 경고한다 — 담당자가 자기 PC 에서 「일괄 갱신」 한 줄 |
 
 대장 등록 · 삭제는 write(그 레포를 볼 수 있어야 지운다 · 레포가 휴지통으로 간 고아 등록은 admin) · 조회 · 보고는 그 레포를 볼 수 있으면 된다. 담당자 후보는 그 레포를 볼 수 있는 사람이다.

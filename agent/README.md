@@ -29,7 +29,7 @@ agent/forms/<묶음>/           →  forms/<묶음>/              →  (레포�
 ```
 
 **역할별 kit** — 서버(`GET /kit/<레포>`)가 고른다(`core/kit.js`). writer 는 스킬 셋(cdp-work · cdp-save · cdp-push) + 프로젝트레포
-블록, 큐레이터는 다섯 + 큐레이터 블록. **등록된 작업 레포는 누가 깔아도 writer kit** 이다(팀이 같이 커밋하는 자리) — 큐레이터 kit 은
+블록, 큐레이터는 여섯 전부 + 큐레이터 블록. **등록된 작업 레포는 누가 깔아도 writer kit** 이다(팀이 같이 커밋하는 자리) — 큐레이터 kit 은
 큐레이터 폴더(`--curator`)에만 간다. kit 의 해시가 작업 레포 `CLAUDE.md` 첫 줄의 `<!-- cdp:kit <해시> -->` 이고, 작업 레포
 대장의 「낡음」 이 이것으로 갈린다. 판을 올리면 모든 레포의 kit 이 같이 바뀐다 — 레포마다 다르지 않다.
 
@@ -50,7 +50,7 @@ agent/forms/<묶음>/           →  forms/<묶음>/              →  (레포�
 ## 블록으로 들어간다
 
 작업 레포에는 이미 그 프로젝트의 `CLAUDE.md` 가 있을 수 있다. 통째로 덮지 않고 `<!-- cdp:begin -->` … `<!-- cdp:end -->` 사이만
-갈아 끼운다. `core/setup.js` 가 그 일을 하고, 설치기(`viewer/bin/cdp-install.mjs`)의 모든 모양 — 한 줄 · `--update` · `--curator` ·
+갈아 끼운다. `core/setup.js` 가 그 일을 하고, 설치기(`viewer/bin/cdp-install.mjs`)의 모든 모양 — 한 줄 · `--connect` · `--update` · `--curator` ·
 꾸러미 zip — 이 같은 함수를 부른다. **절차는 블록에 적지 않는다** — 스킬 안에 있다. 두 곳에 적으면 한쪽만 고쳐진다.
 
 ## 고칠 때

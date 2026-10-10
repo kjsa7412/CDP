@@ -17,8 +17,11 @@ agent/ ──release:server──▶ 서버 번들 kit/ ──GET /kit/<레포>(
 | 자리 | 누가 | 명령 | 받는 kit |
 |---|---|---|---|
 | 작업 레포 | writer · 담당자 | 레포 관리 › 연결된 작업 레포 › [설치 방법] 한 줄 — `--repo <레포> --workrepo <id> .` | writer — 스킬 셋 · 프로젝트레포 블록 |
-| 작업 레포 갱신 | 담당자 | 같은 화면 맨 위 카드의 한 줄 — `--update [--commit] [--dry]` | 그 PC 에 이 서버로 설치한 작업 레포 전부 |
+| 작업 레포 여럿 | writer · 담당자 | `--connect --repo <레포> <코드 레포들이 있는 폴더> [--commit]` — 한 번에 등록 · 설치 | writer — 레포마다 같다 |
+| 갱신 | 누구나 | `--update [--commit] [--dry]` — 화면 「시작하기」 의 「에이전트 세팅이 바뀌었다」 줄 | 그 PC 에 이 서버로 설치한 작업 레포 · 큐레이터 폴더 · 스킬 폴더 전부 |
 | 큐레이터 폴더 | 큐레이터 | `--curator --repo <레포> .` — 등록 없이 폴더 하나 | 큐레이터 — 스킬 여섯 · 큐레이터 블록 |
+| 스킬 폴더 | 누구나 | `--folder --repo <레포> <skills 폴더>` — 워크스페이스가 함께 읽는 스킬 사본 | writer 스킬 셋만(`cdp-*/`) |
+| 개인 서버 | 혼자 | `ctx up <레포> --install <코드 폴더> --curator <폴더> --skills <폴더>` — 위 넷을 토큰 복사 없이 | 위와 같다 |
 | Node 가 없는 망 | 누구나 | [설치 방법] 의 꾸러미 zip → 풀고 `node install.mjs <폴더>` | 한 줄과 같다 |
 
 한 줄의 모양(PowerShell) —
@@ -28,6 +31,8 @@ curl.exe -fsSLo "$env:TEMP\cdp-install.mjs" http://<서버>:7374/install.mjs; if
 ```
 
 명령 프롬프트 · macOS/Linux 모양은 화면이 탭으로 준다. 설치기는 임시 폴더에 받는다 — 작업 레포에는 CDP 파일만 들어간다.
+토큰은 `CDP_TOKEN` → 이 PC 에 둔 `~/.config/cdp/token`(Windows 는 사용자 환경변수) 순으로 찾는다 — rc 를 안 읽는 셸에서도 `--update --yes` 가 돈다.
+`.gitignore` 가 CDP 파일을 막으면 커밋하지 않고 넣을 `!` 줄을 보인다(`--fix-gitignore` 면 더한다).
 
 ---
 
@@ -83,7 +88,7 @@ v0.x 에서 올라온 작업 레포는 `--update` 한 번에 옛 스킬(cdp-load
 
 | ☐ | |
 |---|---|
-| ☐ | Claude Code 를 다시 켠 뒤 `/mcp` 에 `cdp` connected — 도구 10(작업 레포 · writer) · 12(큐레이터 폴더) |
+| ☐ | Claude Code 를 다시 켠 뒤 `/mcp` 에 `cdp` connected — 도구 10(작업 레포 · writer) · 13(큐레이터 폴더) |
 | ☐ | 작업 레포 대장의 행이 `최신` |
 | ☐ | `.claude/skills/` 가 커밋됐고 `.gitignore` 에 막히지 않았다 |
 | ☐ | 새 터미널에서 `CDP_TOKEN` 이 보인다 |

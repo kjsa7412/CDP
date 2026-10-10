@@ -560,11 +560,21 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 
 `SHA256SUMS` 가 같이 붙는다. **없앤 것** — win zip · exe(SEA) · `knowledge-repo-<묶음>` · 서버 산출물의 `packages/`(1403331).
 
-### 9.2 설치 · 갱신 길 셋
+### 9.2 설치 · 갱신 길
+
+**한 줄 셋**(제품화 2 — [검토 v2.0](CDP_제품화_검토_v2.0.md) §5) —
+
+| 한 줄 | 무엇 |
+|---|---|
+| `ctx up <폴더> [--install <코드 폴더>]… [--curator <폴더>] [--skills <폴더>] [--service]` | 개인 서버 — 빈 틀(없으면) · 빈 포트(7400~) · 이미 떠 있으면 그 주소 · 토큰(`~/.config/cdp/token` — 다른 서버 토큰이 있으면 덮지 않는다) · 설치기를 personal 토큰으로 · 브라우저(자동 로그인 주소는 `<data>/login.url` 600 — stdout 에 원문 없음) · 끝 출력은 다음 할 일. `--service` 는 launchd / systemd --user. 판 올림은 `ctx self-update <tar|url>`(`~/.cdp/server/v<판>` · `current` 링크 · `~/.cdp/bin/ctx` · SHA256SUMS 대조 · 서비스 다시 띄움) |
+| `sudo bash deploy/install.sh --bind <IP> --admin <id> [--repo <이름> [--origin <url>]] [--ssh \| --pat-stdin …]` | 팀 서버 — 설치 · 첫 관리자(토큰은 그때 한 번) · git 자격 · 첫 레포(origin 이면 push) · doctor · 남은 일만. `<prefix>/serve.json` 한 장(root · auth · data · web · bind · port · mirror)을 유닛(`serve --config`)과 셸이 같이 읽고, `/usr/local/bin/cdp` 가 서비스 계정으로 부른다(`cdp serve doctor` 를 플래그 없이). root 가 아니면 사용자 모드(`--prefix ~/…` · 계정 · 유닛 없이) |
+| `node install.mjs --connect --repo <레포> <폴더>` · `--update` | 연결 · 갱신 — [MCP 설계서 §11](CDP_MCP_설계서_v2.0.md#11-kit-과-설치) |
+
+설정 자리 — `--config` → `CDP_SERVE_CONFIG` → 번들 옆 `<bin>/../serve.json`. **명령줄이 이기고** 빈 칸만 채운다. `repo new <이름>`(경로가 아닌 이름)은 그 root 아래로.
 
 | 길 | 무엇 |
 |---|---|
-| ① 서버 | `sudo bash deploy/install.sh --bind <IP>` → 끝에 찍힌 부트스트랩 코드로 브라우저 `/setup` 에서 첫 관리자. 갱신은 `sudo bash deploy/upgrade.sh <tar>` — `bin/ctx.mjs` 를 갈고 `web/` · `forms/` · `kit/` · `manual/` 을 **비우고** 넣는다(`.bak` 한 세대 · `/healthz` 의 `built` 와 자산 해시로 확인 · 다르면 되돌림). 명부 · 대장 · 레포 · git 자격은 안 건드린다 |
+| ① 서버 | 위 `install.sh`. `--admin` 없이 돌리면 끝에 찍힌 부트스트랩 코드로 브라우저 `/setup` 에서 첫 관리자. 갱신은 `sudo bash deploy/upgrade.sh <tar>` — `bin/ctx.mjs` 를 갈고 `web/` · `forms/` · `kit/` · `manual/` 을 **비우고** 넣는다(`.bak` 한 세대 · `/healthz` 의 `built` 와 자산 해시로 확인 · 다르면 되돌림). 명부 · 대장 · 레포 · git 자격은 안 건드린다 |
 | ② 지식 레포 | 콘솔 「새 지식 레포」(빈 틀 · 기록만 옮겨 오기 · origin 에서 clone) 또는 `ctx repo new` |
 | ③ 에이전트 | 설치 한 줄(서버의 `/install.mjs`) · `--update`(이 PC 에 이 서버로 깐 작업 레포 전부) · `--curator`(큐레이터 폴더) — [MCP 설계서 §11](CDP_MCP_설계서_v2.0.md#11-kit-과-설치) |
 
@@ -575,6 +585,9 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 | 서식집 | `--forms` → `CDP_FORMS` → 번들 옆 `forms/` → 소스 `agent/forms`. 그리고 **팀 서식** `<data>/forms/`(upgrade 가 덮지 않는다 · 같은 id 면 팀 서식이 이긴다) |
 | kit | `--kit` → `CDP_KIT` → 번들 옆 `kit/` → 소스 `agent/` |
 | 설명서 | `--manual` → 번들 옆 `manual/` → 소스 `manual/`(`*_설명서.md` 가 있는 곳) |
+| 화면 | `--web` → 번들 옆 `web/` → 소스 `ops/out/web`(제품화 2 F1 — 전에는 소스 자리만 봐서 산출물에서 `--web` 이 필수였다) |
+
+산출물의 한글 파일명은 **NFC** 다 — 서버 tar 를 시스템 tar 가 아니라 `core/tar.js` 로 싼다(macOS bsdtar 는 NFD 로 쌌다 · 제품화 2 S1). 읽는 쪽(설명서 색인 · kit 블록)도 NFC 로 견준다.
 
 `ctx serve doctor` 가 kit(없으면 fail) · 서식집(없으면 warn)을 본다.
 
