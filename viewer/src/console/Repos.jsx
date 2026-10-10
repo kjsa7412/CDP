@@ -6,9 +6,12 @@
 // **세우는 자리는 여기 하나다** — 레포 화면의 관리 › 지식 레포(`POST /repos` · writer)는 없앴다(화면 · 권한 검토 v0.1 R1).
 // 세운 뒤의 둘도 여기다 — 「origin 연결」(세울 때 빠뜨린 원격 · 강제 push 없음) · 「삭제」(휴지통으로 옮김 · 이름을 쳐야 열림).
 // 표에는 레포마다 큐레이션 대기 · 가장 오래된(개편안 S7) — 서버가 값을 낼 때만 열이 선다. 연결 · 삭제 · 내려받기 TODO K1~K7.
+// **작업 레포 대장은 펼침 열이다**(제품화 2 ⑥ · 옛 「작업 레포 대장」 페이지) — 레포마다 등록 수 · 낡음, 누르면 그 레포의 등록이 펼쳐진다.
+// `?wr=1`(옛 `/console/workrepos`)이면 전부 편다. 지식 레포가 없어진 등록(고아)은 표 아래 한 절 — 지울 자리가 여기뿐이다(F5).
 
 import { useCallback, useEffect, useState } from 'react'
-import { admin } from '../lib/api.js'
+import { admin, api } from '../lib/api.js'
+import HelpLink from '../components/HelpLink.jsx'
 import { Link, navigate } from '../lib/router.jsx'
 import { invalidate, put, useResource } from '../lib/cache.js'
 import { josa } from '../lib/format.js'
@@ -16,7 +19,7 @@ import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from '../shell/sudo.jsx'
 import { useSession } from '../lib/session.jsx'
 import { missingFor } from './GitAuth.jsx'
-import { PageHead, Note, Modal, Field, Chip, Mono, Confirm } from './ui.jsx'
+import { PageHead, Note, Modal, Field, Chip, Mono, Confirm, Card, Row } from './ui.jsx'
 
 // 원격 주소 두 모양 — 창의 예시. 어느 쪽이 되는지는 서버의 자격(PAT · 키)이 정한다
 const ORIGIN_EX = ['http://<gitlab>/<그룹>/<프로젝트>.git', 'ssh://git@<gitlab>:<포트>/<그룹>/<프로젝트>.git']
@@ -35,7 +38,10 @@ const MIRROR = { ok: [null, '최신'], lag: ['warn', '못 보냄'], diverged: ['
 // 사유 — 서버의 `core/mirror.REASON_TEXT` 와 같은 말. 칩에는 짧게, 문장은 `title` 로.
 const REASON = { 'non-ff': 'non-ff', auth: '인증 실패', net: '원격 불통', protected: '보호 브랜치', locked: 'ref 잠김', 'no-upstream': 'upstream 없음', unknown: '원인 미상' }
 
-export default function Repos({ say }) {
+// 작업 레포 상태 칩 — 최신은 조용하다
+const WR_STATE = { 최신: null, 낡음: 'warn', 미설치: 'off' }
+
+export default function Repos({ say, route }) {
   const withSudo = useSudo()
   // 치운 뒤 — 상단 「레포 ▾」 · /me 의 볼 수 있는 레포 목록이 사라진 이름을 들고 있지 않게
   const session = useSession()
@@ -61,6 +67,35 @@ export default function Repos({ say }) {
   const [gone, setGone] = useState(null)
   // `--mirror` 가 꺼져 있으면 이어도 save 뒤 자동 push 는 없다 — 창이 그 한 줄을 낸다
   const { data: srv } = useResource('/admin/server', admin.server)
+  // 작업 레포 대장 — 서버 전부. 레포 행의 펼침 열과 표 아래 고아 절이 같은 값을 본다
+  const { data: wrData, refresh: refreshWr } = useResource('/admin/workrepos', admin.workrepos)
+  const wrAll = route?.query?.get?.('wr') === '1'
+  const [wrOpen, setWrOpen] = useState(() => new Set())
+  const [orphanDel, setOrphanDel] = useState(null)
+  const wrOf = (name) => (wrData?.repos || []).filter((w) => w.knowledge === name && !w.orphan)
+  const orphans = (wrData?.repos || []).filter((w) => w.orphan)
+  const toggleWr = (name) =>
+    setWrOpen((cur) => {
+      const n = new Set(cur)
+      n.has(name) ? n.delete(name) : n.add(name)
+      return n
+    })
+  const removeOrphan = async () => {
+    const r = orphanDel
+    setActing('wr:' + r.id)
+    try {
+      await api.registryDel(r.id)
+      setOrphanDel(null)
+      invalidate('/admin/')
+      invalidate('/workrepos')
+      await refreshWr()
+      say(`${r.name} — 대장에서 지웠다`)
+    } catch (e) {
+      say(e.message, 6000)
+    } finally {
+      setActing(null)
+    }
+  }
 
   // 진단의 레포 줄 — 서버는 fetch 를 안 하므로 "origin 이 앞서 있나" 는 doctor(ls-remote · 60초 캐시)만 안다.
   // 표를 먼저 그리고 뒤따라 채운다 — 레포마다 origin 에 닿는 검사라 몇 초 걸린다.
@@ -89,6 +124,7 @@ export default function Repos({ say }) {
       else say(`${josa(r.name, '을/를')} ${r.cloned ? '받아 왔다' : '세웠다'}${moved != null ? ` · ${body.recordsFrom} 의 기록 ${moved}건을 옮겼다` : ''}`)
       setAdding(false)
       invalidate('/admin/')
+      invalidate('/next')
       await load()
     } catch (e) {
       if (e.message !== CANCELLED) say(e.message, 8000)
@@ -108,6 +144,7 @@ export default function Repos({ say }) {
       else if (kind === 'push') say(r.ok ? `${name} — origin 에 보냈다` : `${name} — 보내지 못했다: ${r.message || r.reason || ''}`, r.ok ? 4000 : 10000)
       else say(r.ok ? `${name} — 트리를 되돌렸다 · 버린 것 ${r.discarded.length}` : r.message || '되돌리지 못했다', r.ok ? 5000 : 10000)
       invalidate('/admin/')
+      invalidate('/next')
       await load()
       // 진단 줄은 60초 캐시라 방금 고친 것이 남아 보인다 — 한 번은 새로 (레포마다 origin 에 닿으니 뒤따라 채운다)
       admin
@@ -131,6 +168,7 @@ export default function Repos({ say }) {
         setLinking(null)
       } else say(`${name} — 원격은 적었지만 push 가 안 됐다: ${r.reasonText || r.reason || ''}${r.message ? ' — ' + r.message : ''}`, 14000)
       invalidate('/admin/')
+      invalidate('/next')
       await load()
     } catch (e) {
       if (e.message !== CANCELLED) say(e.message, 8000)
@@ -162,7 +200,7 @@ export default function Repos({ say }) {
   const cur = data.repos.some((r) => r.curation && typeof r.curation === 'object')
   return (
     <>
-      <PageHead title="지식 레포" sub="이 서버가 든 레포 전부 — 등록은 폴더를 두는 것이고, 두는 길이 둘이다">
+      <PageHead title="지식 레포" sub="이 서버가 든 레포 전부 · 레포마다 연결된 작업 레포">
         <button className="btn btn--accent btn--sm" onClick={() => setAdding(true)}>
           <Icon name="plus" size={13} /> 새 레포
         </button>
@@ -180,6 +218,7 @@ export default function Repos({ say }) {
                 <th className="ar">좌표</th>
                 {cur && <th className="ar" title="큐레이션 대기 — 섹션에 아직 반영 안 된 작업 기록">큐레이션 대기</th>}
                 {cur && <th title={`가장 오래 기다린 기록 — ${STALE_DAYS}일을 넘으면 경고`}>가장 오래된</th>}
+                <th title="이 레포에 등록된 작업 레포(서버 전부의 대장) — 누르면 펼친다">작업 레포</th>
                 <th>볼 수 있는 사람</th>
                 <th></th>
               </tr>
@@ -187,7 +226,7 @@ export default function Repos({ say }) {
             <tbody>
               {data.repos.length === 0 && (
                 <tr>
-                  <td colSpan={cur ? 9 : 7} className="dim">{loading ? '읽는 중…' : '레포가 없다 — [새 레포] 로 빈 레포를 세우거나 origin 에서 받아 온다'}</td>
+                  <td colSpan={cur ? 10 : 8} className="dim">{loading ? '읽는 중…' : '레포가 없다 — [새 레포] 로 빈 레포를 세우거나 origin 에서 받아 온다'}</td>
                 </tr>
               )}
               {data.repos.map((r) => {
@@ -195,7 +234,10 @@ export default function Repos({ say }) {
                 const notes = docOf(r.name)
                 // origin 이 앞선 것을 서버 상태(fetch 없음)는 모르고 진단은 안다 — 그때도 「origin 과 맞추기」 를 낸다
                 const originAhead = r.mirror === 'behind' || r.mirror === 'diverged' || notes.some((n) => /origin/.test(n.what) && /앞서/.test(n.note))
-                return (
+                const wr = wrOf(r.name)
+                const wrStale = wr.filter((w) => w.state !== '최신').length
+                const wrShown = wr.length > 0 && (wrAll || wrOpen.has(r.name))
+                return [
                   <tr key={r.name}>
                     <td>
                       <span className="name">{r.name}</span>
@@ -269,6 +311,17 @@ export default function Repos({ say }) {
                       </td>
                     )}
                     <td>
+                      {!wrData ? (
+                        <span className="dim">—</span>
+                      ) : wr.length ? (
+                        <button className="abtn" aria-expanded={wrShown} onClick={() => toggleWr(r.name)} title="이 레포의 작업 레포 등록 — 펼친다">
+                          {wrShown ? '▾' : '▸'} {wr.length}곳{wrStale ? <span className="awarn"> · 낡음 · 미설치 {wrStale}</span> : null}
+                        </button>
+                      ) : (
+                        <span className="dim">없음</span>
+                      )}
+                    </td>
+                    <td>
                       {r.users.length ? (
                         r.users.map((u) => (
                           <Chip key={u} kind="off">
@@ -284,7 +337,7 @@ export default function Repos({ say }) {
                         <Link className="abtn" to={'/r/' + encodeURIComponent(r.name) + '/'}>
                           <Icon name="doc" size={12} /> 열기
                         </Link>
-                        <button className="abtn" onClick={() => navigate(`/console/users?repo=${encodeURIComponent(r.name)}#matrix`)}>접근</button>
+                        <button className="abtn" onClick={() => navigate(`/console/people?repo=${encodeURIComponent(r.name)}#matrix`)}>접근</button>
                         <button className="abtn" disabled={!!acting} onClick={() => setLinking(r)} title={r.remote ? `origin: ${r.remote} — 바꾸거나 다시 보낸다` : '원격 저장소에 잇고 첫 push 를 한다'}>
                           {acting === r.name + ':origin' ? '잇는 중…' : r.remote ? 'origin' : 'origin 연결'}
                         </button>
@@ -293,8 +346,15 @@ export default function Repos({ say }) {
                         </button>
                       </div>
                     </td>
-                  </tr>
-                )
+                  </tr>,
+                  wrShown ? (
+                    <tr key={r.name + ':wr'} className="ctable__sub">
+                      <td colSpan={cur ? 10 : 8}>
+                        <WorkRows rows={wr} />
+                      </td>
+                    </tr>
+                  ) : null,
+                ]
               })}
             </tbody>
           </table>
@@ -320,22 +380,28 @@ export default function Repos({ say }) {
         <Note tone="accent">
           <b>{gone.name}</b> — 휴지통으로 옮겼다 · <Mono>{gone.trash}</Mono>
           {gone.revoked?.length ? ` · 접근을 뺀 사람 ${gone.revoked.join(', ')}` : ''}
-          {gone.workrepos ? ` · 작업 레포 등록 ${gone.workrepos}건은 「지식 레포 없음」 으로 남는다 — 서버 › 작업 레포 대장에서 지운다` : ''}. 되살리려면 셸에서 그 폴더를 서버 root 로 되돌려 놓는다.
+          {gone.workrepos ? ` · 작업 레포 등록 ${gone.workrepos}건은 「지식 레포 없음」 으로 남는다 — 이 페이지 아래 「지식 레포 없음」 에서 지운다` : ''}. 되살리려면 셸에서 그 폴더를 서버 root 로 되돌려 놓는다.
         </Note>
       )}
-      {/* 상태 다섯과 그 단추 — 한 문단에 다섯을 몰아 쓰면 읽히지 않았다(실서버 종합 시험 W1). 표 하나로 */}
-      <Note>
-        커밋과 push 는 서버가 합니다 — <code>save</code> 가 끝날 때마다. 표의 칩이 이상을 말하면 —
-        <table className="ckeys">
-          <tbody>
-            <tr><th>못 보냄</th><td>커밋은 됐고 origin 에 아직 못 갔다 — 사유와 함께 뜬다(인증 실패면 PAT · 셸)</td><td>「다시 보내기」</td></tr>
-            <tr><th>origin 앞섬</th><td>누군가 서버 밖에서 썼다</td><td>「origin 과 맞추기」(ff-only)</td></tr>
-            <tr><th>갈림</th><td>기계가 합치지 않는다</td><td>셸에서 rebase 뒤 「다시 보내기」</td></tr>
-            <tr><th>트리 더러움</th><td><code>save</code> 가 거절되는 상태</td><td>「트리 되돌리기」</td></tr>
-          </tbody>
-        </table>
-        진단에 「옛 도구 층」 이 뜨는 레포는 v1.0 으로 옮기지 않은 레포다 — 서버를 멈추고 셸에서 <code>ctx migrate</code>. 전부 관리자 확인 뒤에 돌고 감사에 남습니다.
-      </Note>
+      {/* 지식 레포가 없어진 등록(고아) — 그 레포의 관리 화면이 없어졌으니 지울 자리가 여기뿐이다(실서버 종합 시험 F5) */}
+      {orphans.length > 0 && (
+        <Card title="지식 레포 없음" hint={`남은 작업 레포 등록 ${orphans.length}`}>
+          {orphans.map((w) => (
+            <Row key={w.id} label={w.name}>
+              <Chip kind="warn">{w.knowledge}</Chip>
+              <span className="dim">{w.owner || '담당 없음'}</span>
+              <span className="topbar__spacer" />
+              <button className="abtn abtn--warn" disabled={!!acting} onClick={() => setOrphanDel(w)}>
+                삭제
+              </button>
+            </Row>
+          ))}
+        </Card>
+      )}
+      {/* 미러 칩(못 보냄 · origin 앞섬 · 갈림 · 트리 더러움)의 뜻과 푸는 길은 설명서 절이다 — 범례 표를 화면에 두지 않는다(안내 글 규칙 ④ ⑥) */}
+      <p className="amuted" style={{ fontSize: 12 }}>
+        미러 칩이 이상을 말하면 그 행의 단추 · 설명서 <HelpLink topic="mirror" />
+      </p>
 
       {restoring && (
         <Confirm
@@ -355,6 +421,17 @@ export default function Repos({ say }) {
       {linking && <Origin repo={linking} busy={acting === linking.name + ':origin'} mirrorOn={srv ? !!srv.mirror : null} onClose={() => setLinking(null)} onOk={(url) => link(linking.name, url)} />}
       {removing && <Remove repo={removing} busy={acting === removing.name + ':delete'} onClose={() => setRemoving(null)} onOk={() => remove(removing.name)} />}
       {adding && <NewRepo data={data} busy={busy} onClose={() => setAdding(false)} onOk={create} />}
+      {orphanDel && (
+        <Confirm
+          title={`${orphanDel.name} — 대장에서 지우기`}
+          text={`지식 레포 ${josa(orphanDel.knowledge, '이/가')} 없어진 등록 ${orphanDel.name}(${orphanDel.id})을 대장에서 지웁니다. 작업 레포의 파일은 그대로입니다. 감사에 남습니다.`}
+          okLabel="지운다"
+          danger
+          busy={!!acting}
+          onClose={() => setOrphanDel(null)}
+          onOk={removeOrphan}
+        />
+      )}
     </>
   )
 }
@@ -505,7 +582,7 @@ function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
       </Field>
       <div className="anote" style={{ fontSize: 12, lineHeight: 1.7 }}>
         두 모양 다 받는다 — <Mono>{ORIGIN_EX[0]}</Mono> 은 서버에 넣은 <b>PAT</b>(셸의 <code>ctx serve git-auth</code>) 로,{' '}
-        <Mono>{ORIGIN_EX[1]}</Mono> 은 서버의 <b>SSH 배포 키</b>(서버 › 서버 설정 › git 자격)로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
+        <Mono>{ORIGIN_EX[1]}</Mono> 은 서버의 <b>SSH 배포 키</b>(서버 › 서버 › git 자격)로 민다. 자격이 없으면 「인증 실패」 로 돌아오고 원격은 남는다 — 자격을 고친 뒤 이 단추를 다시 누른다.
       </div>
       {miss && (
         <div className="anote anote--warn" style={{ fontSize: 12 }}>
@@ -549,5 +626,41 @@ function Remove({ repo, busy, onClose, onOk }) {
         <input className="mono" value={v} onChange={(e) => setV(e.target.value)} spellCheck={false} autoFocus />
       </Field>
     </Modal>
+  )
+}
+
+// 작업 레포 대장의 한 레포 몫 — 펼친 행. 등록 · 설치 한 줄 · 삭제는 그 레포의 연결된 작업 레포 화면(설치 한 줄에 그 레포 이름과 등록 id 가 든다)
+function WorkRows({ rows }) {
+  return (
+    <table className="ctable ctable--inner">
+      <thead>
+        <tr>
+          <th>작업 레포</th>
+          <th>담당</th>
+          <th>상태</th>
+          <th>kit</th>
+          <th>마지막 보고</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((w) => (
+          <tr key={w.id}>
+            <td>
+              <span className="name">{w.name}</span>
+              {w.note && <span className="sub">{w.note}</span>}
+            </td>
+            <td>{w.owner || <span className="dim">담당 없음</span>}</td>
+            <td>
+              <Chip kind={WR_STATE[w.state] ?? 'off'}>{w.state}</Chip>
+            </td>
+            <td className="mono">
+              {w.applied?.kit || <span className="dim">—</span>}
+              {w.state === '낡음' && w.kitNow && <span className="dim"> → {w.kitNow}</span>}
+            </td>
+            <td className="dim">{w.applied ? `${w.applied.at} · ${w.applied.by}` : '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }

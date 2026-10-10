@@ -8,11 +8,15 @@
 // 산문을 고쳐 쓰지 않는다 — 그건 에이전트(`cdp-registry`)에게.
 //
 // 보기는 누구나 · 지우기 단추는 그 레포의 큐레이터에게만(v1.0 — 관리 문서는 큐레이터만 바꾼다 · admin 은 모든 레포의 큐레이터).
+// 큐레이터가 아닌 사람에게 「큐레이터에게 요청하라」 를 말하지 않는다(안내 글 규칙 ③). 0 종이면 한 문장 + 서식집(큐레이터).
 
 import { useMemo, useState } from 'react'
 import { api, currentRepo } from '../../lib/api.js'
 import { can } from '../../lib/roles.js'
-import { useResource } from '../../lib/cache.js'
+import { invalidate, useResource } from '../../lib/cache.js'
+import { Link } from '../../lib/router.jsx'
+import { repoBase } from '../../shell/nav.js'
+import HelpLink from '../HelpLink.jsx'
 import { Card, Note, Btn } from './ui.jsx'
 
 const FILTERS = [
@@ -105,6 +109,7 @@ export default function Docs({ me = null, say, onChanged = null }) {
       setPicked(new Set())
       setPreview(null)
       setReason('')
+      invalidate('/next')
       await load()
       onChanged?.()
     } catch (e) {
@@ -117,17 +122,26 @@ export default function Docs({ me = null, say, onChanged = null }) {
 
   if (error) return <Note tone="warn">관리 문서 목록을 읽지 못했다 — {error}</Note>
   if (!data) return <Note>읽는 중…</Note>
+  if (!docs.length && !data.dropped?.length) {
+    return canDrop ? (
+      <Note>
+        관리 문서가 없다 — 서식집에서 첫 문서를 고른다.{' '}
+        <Link className="abtn abtn--accent" to={repoBase(rk) + 'manage/forms'}>
+          서식집 →
+        </Link>
+      </Note>
+    ) : (
+      <Note>관리 문서가 없다.</Note>
+    )
+  }
 
   return (
     <>
       <Card
         title="관리 문서"
-        hint={`${data.total}종 · 좌표 ${data.registered} · 비대상 ${data.total - data.registered} · 서식 그대로 ${idle}`}
+        hint={`${data.total}종 · 좌표 ${data.registered} · 서식 그대로 ${idle}`}
+        actions={<HelpLink topic="registry" />}
       >
-        <Note>
-          「서식 그대로」 는 작업 기록이 쓴 섹션도 · 닿은 작업 기록도 없는 문서다 — <b>아직 안 쓴 것</b>일 수도 <b>안 쓸 것</b>일 수도 있다.
-          지울지는 사람이 정한다. 작업 기록이 쓴 문서는 고를 수 없다(합치거나 등록부에서 떼는 것은 큐레이터의 에이전트 — <code>cdp-registry</code>).
-        </Note>
         <div className="adocs__bar">
           <div className="adocs__seg" role="tablist" aria-label="거르기">
             {FILTERS.map(([k, label]) => (
@@ -208,7 +222,6 @@ export default function Docs({ me = null, say, onChanged = null }) {
             </Btn>
           </div>
         )}
-        {!canDrop && <Note>지우기는 그 레포의 큐레이터가 한다 — 지울 문서를 골라 큐레이터에게 요청한다.</Note>}
       </Card>
 
       {preview && <Preview preview={preview} setPreview={setPreview} reason={reason} setReason={setReason} busy={busy} onDrop={runDrop} onCancel={() => setPreview(null)} />}
@@ -227,7 +240,7 @@ export default function Docs({ me = null, say, onChanged = null }) {
       )}
 
       {data.dropped?.length > 0 && (
-        <Card title="지운 관리 문서" hint="_managed.md 의 기록 — 되살리려면 그 작업 기록의 커밋 바로 앞에서 꺼낸다">
+        <Card title="지운 관리 문서" hint="_managed.md 의 기록">
           <table className="atable">
             <thead>
               <tr>

@@ -7,6 +7,7 @@
 // **대기열(미반영)과 다르다** — 미반영이 0 이어도 생긴다. 화면이 직접 하는 쓰기는 스냅샷 하나다(서버가 원문 그대로 뜬다 — 글을
 // 쓰지 않는다). 좌표정정 · 다시 쓰기는 글을 쓰는 일이라 큐레이터의 에이전트 세션(`cdp-rebuild`)이 판정표 · 승인 뒤 save 한다.
 // 막는 것은 서버다(drift · snapshot 은 curate) — 이 화면은 메뉴가 큐레이터에게만 보인다.
+// **신호가 0 이면 한 문장뿐이다** — [지시 복사] · [스냅샷] · 0 인 칸을 그리지 않는다(제품화 2 검토 §4.2 · 불변조건 7).
 
 import { useMemo, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
@@ -52,6 +53,8 @@ export default function Drift({ say, onChanged }) {
   if (!d.data) return <span className="amuted">읽는 중…</span>
 
   const t = d.data.totals || {}
+  const signals = rows.length + (d.data.unreachableTotal || 0)
+  if (!signals) return <Note>어긋난 섹션이 없다.</Note>
   const toggle = (c) =>
     setPicked((s) => {
       const n = new Set(s)
@@ -81,6 +84,7 @@ export default function Drift({ say, onChanged }) {
       if (r?.error) return say?.(`스냅샷을 뜨지 못했다 — ${r.error.message || r.error.code || ''}`, 10000)
       say?.(`정본 스냅샷 ${r?.snapshots?.length || 0}건을 떴다${r?.commit ? ' · 커밋 ' + String(r.commit).slice(0, 7) : ''}`, 6000)
       invalidate('api:' + rk + '/')
+      invalidate('/next')
       await d.refresh().catch(() => {})
       onChanged?.()
     } catch (e) {
@@ -93,7 +97,7 @@ export default function Drift({ say, onChanged }) {
   return (
     <>
       <div className="kpis">
-        {SIGNALS.map(([k, l, s]) => (
+        {SIGNALS.filter(([k]) => t[k] > 0).map(([k, l, s]) => (
           <button key={k} type="button" className={only === k ? 'kpi kpi--on' : 'kpi'} title={s} onClick={() => setOnly(only === k || k === 'unreachable' ? '' : k)}>
             <span className="kpi__l">{l}</span>
             <b className="kpi__n num">{t[k] ?? '—'}</b>
@@ -104,7 +108,7 @@ export default function Drift({ say, onChanged }) {
 
       <Card
         title="어긋난 섹션"
-        hint={`섹션 ${t.sections ?? '—'} 중 신호가 있는 것 · 미반영과 다르다 — 반영된 뒤에 생긴다`}
+        hint={`섹션 ${t.sections ?? '—'} 중 신호가 있는 것`}
         actions={
           <select className="ainput" value={doc} onChange={(e) => setDoc(e.target.value)} aria-label="문서로 거르기">
             <option value="">문서 전부</option>
@@ -117,7 +121,7 @@ export default function Drift({ say, onChanged }) {
         }
       >
         {shown.length === 0 ? (
-          <Note>{rows.length ? '거른 조건에 맞는 섹션이 없다.' : '어긋난 섹션이 없다 — 근거 · 복제 · 비대 · 일지형 모두 0.'}</Note>
+          <Note>{rows.length ? '거른 조건에 맞는 섹션이 없다.' : '어긋난 섹션이 없다.'}</Note>
         ) : (
           <table className="atable dtable">
             <thead>
@@ -150,22 +154,22 @@ export default function Drift({ say, onChanged }) {
       </Card>
 
       <div className="qsplit">
-        <Card title="다시 세우기" hint="글을 쓰는 일은 큐레이터의 Claude Code — cdp-rebuild 가 판정표와 「사라지는 사실」 을 보이고 승인 뒤 save 한다">
+        <Card title="다시 세우기" hint="자기 PC 의 Claude Code(cdp-rebuild)에 붙인다">
           <div className="drow">
             <Btn kind="accent" onClick={copy}>
               <Icon name={copied ? 'check' : 'copy'} size={13} /> 에이전트 지시 복사{coords.length ? ` · 좌표 ${coords.length}` : ''}
             </Btn>
-            <Btn onClick={snapshot} disabled={busy || !t.unsourced} title="근거 없는 섹션을 서버가 원문 그대로 기록으로 뜬다 — 섹션은 바뀌지 않는다">
-              <Icon name="file" size={13} /> 근거 없는 섹션 스냅샷 뜨기{doc ? ' · 이 문서' : ''}
-            </Btn>
+            {t.unsourced > 0 && (
+              <Btn onClick={snapshot} disabled={busy} title="근거 없는 섹션을 서버가 원문 그대로 기록으로 뜬다 — 섹션은 바뀌지 않는다">
+                <Icon name="file" size={13} /> 근거 없는 섹션 스냅샷 뜨기{doc ? ' · 이 문서' : ''}
+              </Btn>
+            )}
           </div>
           <pre className="dcmd">{cmd}</pre>
         </Card>
 
-        <Card title="좌표 없는 기록" hint={`${d.data.unreachableTotal ?? 0}건 · 앞 50 — 좌표정정 기록으로 정본과 잇는다(cdp-rebuild ③)`}>
-          {(d.data.unreachable || []).length === 0 ? (
-            <Note>없다.</Note>
-          ) : (
+        {(d.data.unreachable || []).length > 0 && (
+          <Card title="좌표 없는 기록" hint={`${d.data.unreachableTotal ?? 0}건 · 앞 50`}>
             <ul className="dlist">
               {d.data.unreachable.map((w) => (
                 <li key={w.id}>
@@ -174,8 +178,8 @@ export default function Drift({ say, onChanged }) {
                 </li>
               ))}
             </ul>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
     </>
   )

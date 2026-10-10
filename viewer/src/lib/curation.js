@@ -66,3 +66,13 @@ export function formPath(f) {
   const id = String(f.id || '')
   return id.includes('/') ? id : `${f.group}/${id}`
 }
+
+// 관리 문서 › 문서 추가 › 서식집 › [에이전트 지시 복사] — 큐레이터의 Claude Code(`cdp-registry`)에 붙인다. 화면은 문서를 세우지 않는다 —
+// 서식에서 새 문서(행 더하기)는 등록부를 바꾸는 save 라 에이전트가 【등록부 변경】 을 보이고 승인 뒤 한다(cdp-registry 「행 더하기」).
+export const REGISTRY_RULE = '있는 문서부터 본다 · 서식에서 새 문서(행 더하기) · 【등록부 변경】 을 보이고 승인 뒤 save.'
+export function registryCommand(repo, forms = []) {
+  const list = [...new Set(forms.filter(Boolean))]
+  const pad = ' '.repeat(6)
+  const target = list.length ? '서식: ' + list.join('\n' + pad) : '서식: (기록이 쓴 좌표에 맞는 것 — forms() 에서 고른다)'
+  return `cdp-registry ${repo}\n${target}\n${REGISTRY_RULE}`
+}

@@ -42,6 +42,7 @@ import CoordGraph from './components/CoordGraph.jsx'
 import Icon from './components/Icon.jsx'
 import { copyText } from './lib/clip.js'
 import DocNav from './components/DocNav.jsx'
+import Start from './components/Start.jsx'
 import { docHref, docOfRoute, canonDocId, docTitle, tabsOpen, tabsClose, tabsPin, recentPush } from './lib/doclink.js'
 
 // 왼쪽 폭 — 하는 일에 따라 다르다. 목록은 제목 한 줄이면 되고, 뻗어나가기는
@@ -897,32 +898,41 @@ function shortRoot(root) {
   return s.length > 24 ? s.slice(0, 23) + '…' : s
 }
 
-// 문서를 안 골랐을 때 — 레포가 지금 무엇을 담고 있는지(§26.2) · 묶어서 내려받기(zip — 옛 관리 › 현황에서 왔다 · 개편안 S6)
+// 문서를 안 골랐을 때 — 「시작하기」(다음 할 일 · 서버가 계산) · 레포가 담은 것 · 묶어서 내려받기 · 최근 기록.
+// **빈 레포는 숫자를 그리지 않는다**(「0건 · 0종 · 0개」 + 빈 zip 단추 둘이었다 — 제품화 2 검토 §4.2). 할 일이 있으면 그 카드,
+// 없으면(권한 밖 · 다 끝남) 한 문장이다. zip 은 담긴 층만.
 function Landing({ repo, docs, managed = 0, onOpen }) {
   const settled = docs.filter((d) => d.settledCoords > 0)
+  const empty = docs.length === 0 && managed === 0
   return (
     <div className="docpane">
       <div className="docwrap">
-        <h1 style={{ fontSize: 20, margin: '32px 0 4px' }}>{repo.root.split(/[\\/]/).pop()}</h1>
-        <p style={{ color: 'var(--text-2)' }}>
-          {/* 무엇을 세는지 이름을 붙인다 — 「문서 8」 이 작업 기록인지 관리 문서인지 몰랐다(F18) */}
-          작업 기록 {docs.length}건 · 관리 문서 {managed}종 · 좌표 {repo.coords}개
-          {settled.length > 0 && ` · 후속이 있는 작업 기록 ${settled.length}건`}
-        </p>
-        {/* 내려받기 — 읽을 수 있는 사람이면 누구나. 레포 안의 상대 경로 그대로 묶여서 풀면 레포와 같은 모양이다. 문서 하나는 문서 맨 아래 「복사」 줄 */}
-        <div className="landing__dl">
-          <span className="landing__dlcap">내려받기 · zip</span>
-          <a className="abtn" href={api.archiveUrl('managed')} download>
-            <Icon name="doc" size={12} /> docs/ 전부
-          </a>
-          <a className="abtn" href={api.archiveUrl('work')} download title="첨부(work/assets) 포함">
-            <Icon name="work" size={12} /> work/ 전부
-          </a>
-        </div>
-        <p style={{ color: 'var(--text-3)', marginTop: 24 }}>
-          왼쪽 <b>목록</b>에서 하나를 고르면 <b>뻗어나가기</b>가 켜집니다.{' '}
-          <span className="kbd">{kbd('⌘K')}</span> 로 자연어 검색, <span className="kbd">\</span> 로 왼쪽 전환.
-        </p>
+        <h1 style={{ fontSize: 20, margin: '32px 0 12px' }}>{repo.root.split(/[\\/]/).pop()}</h1>
+        <Start repo={currentRepo()} empty={empty ? <p style={{ color: 'var(--text-2)' }}>아직 기록도 관리 문서도 없다.</p> : null} />
+        {!empty && (
+          <>
+            <p style={{ color: 'var(--text-2)', marginTop: 16 }}>
+              작업 기록 {docs.length}건 · 관리 문서 {managed}종 · 좌표 {repo.coords}개
+              {settled.length > 0 && ` · 후속이 있는 작업 기록 ${settled.length}건`}
+            </p>
+            <div className="landing__dl">
+              <span className="landing__dlcap">내려받기 · zip</span>
+              {managed > 0 && (
+                <a className="abtn" href={api.archiveUrl('managed')} download>
+                  <Icon name="doc" size={12} /> docs/ 전부
+                </a>
+              )}
+              {docs.length > 0 && (
+                <a className="abtn" href={api.archiveUrl('work')} download title="첨부(work/assets) 포함">
+                  <Icon name="work" size={12} /> work/ 전부
+                </a>
+              )}
+            </div>
+            <p style={{ color: 'var(--text-3)', marginTop: 24 }}>
+              왼쪽 목록에서 고르면 뻗어나가기가 켜진다 · <span className="kbd">{kbd('⌘K')}</span> 검색 · <span className="kbd">\</span> 왼쪽 전환
+            </p>
+          </>
+        )}
         {docs.slice(0, 5).map((d) => (
           <div className="nextread nextread--home" key={d.id}>
             <span className="num nowrap" style={{ color: 'var(--text-3)', fontSize: 11.5 }}>{d.date}</span>
@@ -951,10 +961,7 @@ function Help({ onClose }) {
         <div className="overlay__body help">
           <div className="help__cap">화면</div>
           <p className="help__note">
-            <b>왼쪽은 한 번에 하나만 한다</b> — 고르는 중이면 <b>목록</b>,
-            따라가는 중이면 <b>뻗어나가기</b>. 둘이 같은 자리를 쓰므로 각각이
-            세로 전체를 받는다. 좌표를 고르면 자동으로 뻗어나가기로 넘어간다 —
-            좌표는 오른쪽에 열 것이 없다.
+            왼쪽은 <b>목록</b>(고른다) 또는 <b>뻗어나가기</b>(따라간다) — 좌표를 고르면 뻗어나가기로 넘어간다.
           </p>
 
           <div className="help__cap">단축키</div>

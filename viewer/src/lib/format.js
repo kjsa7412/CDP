@@ -142,3 +142,6 @@ export function josa(word, pair) {
   else if (/[A-Za-z]/.test(last)) batchim = /(l|m|n|ng)$/i.test(s)
   return w + (batchim ? a : b)
 }
+
+// 빌드 시각 — 소스로 돌린 서버는 자리표(`__CTX_BUILT__`)를 그대로 낸다. 그때는 그리지 않는다(없는 값을 그리지 않는다 · 불변조건 7)
+export const builtOf = (v) => (typeof v === 'string' && v && !/^__/.test(v) ? v : null)

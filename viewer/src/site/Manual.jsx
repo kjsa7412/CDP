@@ -27,6 +27,8 @@ const GITHUB = 'https://github.com/kjsa7412/CDP/blob/main/'
 const GITHUB_RAW = 'https://github.com/kjsa7412/CDP/raw/main/'
 // 책이 소스 레포 어디에 있나 — `../` 링크를 풀 때 기준이 된다
 const BASE_OF = (id) => (id === '설치절차' ? 'ops/deploy/' : 'manual/')
+// 접어 두는 책 — 읽는 사람(사용자 · 큐레이터 · 관리자)의 것이 아니다
+const FOLDED = ['개발자_설명서', '설치절차']
 const ICON_OF = { 사용자_설명서: 'book', 큐레이터_설명서: 'managed', 관리자_설명서: 'shield', 개발자_설명서: 'gear', 설치절차: 'server' }
 
 export default function Manual({ info, id: asked, hash }) {
@@ -129,13 +131,18 @@ export default function Manual({ info, id: asked, hash }) {
     <div className="man">
       <nav className="man__nav" aria-label="설명서">
         <div className="man__cap">설명서</div>
-        {books.map((b) => (
-          <Link key={b.id} to={'/manual/' + encodeURIComponent(b.id)} className="man__book" aria-current={b.id === id ? 'page' : undefined}>
-            <Icon name={ICON_OF[b.id] || 'book'} size={14} />
-            {b.title.replace(/^CDP\s*/, '')}
-            <small>{b.id === '설치절차' ? 'deploy' : info?.version ? 'v' + info.version : ''}</small>
-          </Link>
+        {books.filter((b) => !FOLDED.includes(b.id)).map((b) => (
+          <BookLink key={b.id} b={b} cur={id} info={info} />
         ))}
+        {/* 만드는 사람 · 세우는 사람의 책은 접는다(제품화 2 ⑥) — 그 책을 읽는 중이면 펴 둔다 */}
+        {books.some((b) => FOLDED.includes(b.id)) && (
+          <details className="man__more" open={FOLDED.includes(id)}>
+            <summary>개발 · 서버 설치</summary>
+            {books.filter((b) => FOLDED.includes(b.id)).map((b) => (
+              <BookLink key={b.id} b={b} cur={id} info={info} />
+            ))}
+          </details>
+        )}
         {info && !books.length && <div className="anote anote--warn">이 서버에 설명서가 없습니다.</div>}
         {rendered && rendered.toc.length > 0 && (
           <>
@@ -161,5 +168,15 @@ export default function Manual({ info, id: asked, hash }) {
         {rendered && <article className="doc" ref={bodyRef} onClick={onClick} dangerouslySetInnerHTML={{ __html: rendered.html }} />}
       </div>
     </div>
+  )
+}
+
+function BookLink({ b, cur, info }) {
+  return (
+    <Link to={'/manual/' + encodeURIComponent(b.id)} className="man__book" aria-current={b.id === cur ? 'page' : undefined}>
+      <Icon name={ICON_OF[b.id] || 'book'} size={14} />
+      {b.title.replace(/^CDP\s*/, '')}
+      <small>{b.id === '설치절차' ? 'deploy' : info?.version ? 'v' + info.version : ''}</small>
+    </Link>
   )
 }

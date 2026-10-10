@@ -1,4 +1,5 @@
 // 감사 — auth.log 그대로. 명부 · 토큰 · 레포 · 대장의 변경. 회전하지 않는다, 이력이다.
+// 서버 페이지의 접힘 안에 선다(`embedded` · 제품화 2 ⑥) — 옛 `/console/audit` 은 `/console/server#audit`.
 //
 // 콘솔의 모든 쓰기가 여기 `admin <행위> · <행위자> · <대상> · <바뀐 값>` 으로 남는다. 셸의 것은
 // 행위자가 없다 — CLI 와 콘솔이 같은 파일에 같은 모양으로 남긴다.
@@ -6,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { admin } from '../lib/api.js'
 import { useResource } from '../lib/cache.js'
-import { PageHead, Toolbar, Search, Note, parseAudit, shortTime } from './ui.jsx'
+import { Toolbar, Search, parseAudit, shortTime } from './ui.jsx'
 
 const KINDS = [
   ['', '행위 전체'],
@@ -38,7 +39,6 @@ export default function Audit({ say }) {
   if (!data) return <span className="amuted">읽는 중…</span>
   return (
     <>
-      <PageHead title="감사" sub="명부 · 토큰 · 레포 · 대장의 변경 — auth.log 그대로. 회전하지 않는다, 이력이다" />
       <Toolbar>
         <Search value={q} onChange={setQ} placeholder="사용자 · 행위 · id" />
         <select className="tsel" value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -70,9 +70,6 @@ export default function Audit({ say }) {
           ))}
         </div>
       </section>
-      <Note>
-        토큰은 앞 8자만 적힌다. 셸에서 한 것은 행위자가 <b>(셸)</b> 이다 — CLI 와 화면(서버 묶음)이 같은 파일에 같은 모양으로 남긴다.
-      </Note>
     </>
   )
 }

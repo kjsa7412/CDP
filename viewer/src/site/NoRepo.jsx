@@ -6,12 +6,14 @@
 // 마지막에 보던 레포, 없으면 첫 레포 · 화면 · 권한 검토 v0.1 R7). `?from=` 은 서버가 **없는 레포와 권한 밖 레포를
 // 같은 길**로 보낸 것이다(D4 · §4.6 — 존재를 알리지 않는다). 그래서 문장도 하나다: "없거나 이 계정에 할당되지 않았다".
 // 전에는 말없이 첫 레포로 갔다 — 동료가 준 링크가 왜 다른 곳에서 열렸는지 알 길이 없었다(P5).
+// 볼 레포가 없는 빈 상태는 「시작하기」 다(제품화 2 ⑥) — admin 이면 서버가 「지식 레포가 없다 → 새 레포」 를 내고, 아니면 한 문장.
 
 import { useEffect } from 'react'
 import { lastRepo, rememberRepo } from '../lib/api.js'
 import { Link, navigate, useTitle } from '../lib/router.jsx'
 import { useSession } from '../lib/session.jsx'
 import Icon from '../components/Icon.jsx'
+import Start from '../components/Start.jsx'
 
 export default function NoRepo({ from = null }) {
   const s = useSession()
@@ -49,9 +51,7 @@ export default function NoRepo({ from = null }) {
               </span>
             </div>
             <div className="anote">
-              없거나 이 계정에 할당되지 않은 레포입니다 — 둘을 가르지 않습니다.
-              {repos.length ? ' 볼 수 있는 레포는 아래와 같습니다.' : ' 이 계정이 볼 수 있는 레포가 아직 없습니다.'}{' '}
-              필요하면 <b>관리자</b>에게 할당을 요청합니다 — 권한은 사람에 붙어 있어 토큰을 다시 받을 필요는 없습니다.
+              없거나 이 계정에 할당되지 않은 레포다.{repos.length ? '' : ' 볼 수 있는 레포가 아직 없다 — 관리자에게 할당을 요청한다.'}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
               {repos.map((r, i) => (
@@ -83,24 +83,9 @@ export default function NoRepo({ from = null }) {
             </span>
           </div>
           {me.admin ? (
-            <>
-              <div className="anote">
-                이 서버에 아직 지식 레포가 없거나 이 계정에 할당되지 않았습니다. <b>서버 › 지식 레포</b>에서 빈 레포로 세우거나 origin 에서 받아 옵니다.
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <Link className="btn btn--accent btn--sm" to="/console/repos">서버 › 지식 레포 →</Link>
-                <Link className="btn btn--sm" to="/manual/관리자_설명서">설명서 › 서버 관리자 5장</Link>
-              </div>
-            </>
+            <Start empty={<div className="anote">이 계정에 할당된 레포가 없다 — 서버 › 사람에서 자기에게 연다.</div>} />
           ) : (
-            <>
-              <div className="anote">
-                계정에 아직 레포 권한이 없습니다. <b>관리자</b>에게 레포 할당을 요청합니다 — 권한은 사람에 붙어 있어 토큰을 다시 받을 필요는 없습니다.
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <Link className="btn btn--sm" to="/manual/사용자_설명서">설명서 › 사용자</Link>
-              </div>
-            </>
+            <div className="anote">계정에 아직 레포 권한이 없다 — 관리자에게 할당을 요청한다.</div>
           )}
         </div>
       </section>

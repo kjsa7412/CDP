@@ -201,3 +201,16 @@
 .ckeys td { padding: 3px 8px 3px 0; color: var(--text-2); vertical-align: top; }
 .ckeys td:last-child { white-space: nowrap; color: var(--text); }
 @container shell (max-width: 720px) { .ckeys td:last-child { white-space: normal; } }
+
+/* 절 머리 — 옛 페이지가 한 페이지의 절이 된 자리(서버 › 사람의 토큰 · 서버의 감사) */
+.phead--sub { margin-top: var(--sp-4); scroll-margin-top: 16px; }
+.phead--sub .phead__t { font-size: 15px; }
+.cfold { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); scroll-margin-top: 16px; }
+.cfold > summary { padding: 10px var(--sp-3); font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--text); }
+.cfold > summary .amuted { font-weight: 400; margin-left: 6px; }
+.cfold[open] > summary { border-bottom: 1px solid var(--border); }
+.cfold__body { padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-3); }
+/* 지식 레포 › 작업 레포 펼침 — 옛 「작업 레포 대장」 페이지(제품화 2 ⑥) */
+.ctable__sub > td { background: var(--surface-2); padding: 6px 12px 10px 28px; }
+.ctable--inner { width: 100%; font-size: 12px; }
+.ctable--inner th { background: transparent; }

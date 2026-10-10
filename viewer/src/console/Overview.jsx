@@ -1,21 +1,27 @@
 // 현황 — **질문은 하나다: 이 서버를 지금 쓸 수 있는 상태인가.** 제품관리서비스 검토 §4.7.
 //
-// 카드 넷에 답이 있고, 각 카드는 자기 페이지로 간다. 여기서 고치지 않는다.
+// 맨 위 「시작하기」(admin 의 다음 할 일 — 서버 계산) · 카드 넷에 답이 있고, 각 카드는 자기 페이지로 간다. 여기서 고치지 않는다.
 // 경고 띠는 이상이 있을 때만 — 정상이면 카드와 감사 다섯 줄뿐이다(정상은 조용하다).
+// **진단은 첫 진입에 읽는다**(서버 60초 캐시 · 서버 페이지와 같은 키) — 전에는 「진단 아직 없음」 인데 서버 설정에 들어가면 fail 1 이었다.
 
 import { useEffect, useState } from 'react'
 import { admin } from '../lib/api.js'
-import { invalidate, useResource } from '../lib/cache.js'
+import { invalidate, put, useResource } from '../lib/cache.js'
 import { Link, navigate } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
 import { skewText } from '../lib/clock.js'
-import { PageHead, Card, Row, Note, Btn, when, parseAudit, shortTime } from './ui.jsx'
+import { PageHead, Card, Row, Btn, when, parseAudit, shortTime } from './ui.jsx'
+import { consoleHref } from '../shell/routes.js'
+import Start from '../components/Start.jsx'
+import { builtOf } from '../lib/format.js'
 
 export default function Overview({ say }) {
   const [busy, setBusy] = useState(false)
   const { data: d, error, refresh: load } = useResource('/admin/overview', admin.overview)
   // 큐레이션 대기 — 레포마다의 값은 `/admin/repos` 행에 있다(서버 › 지식 레포 · 레포 메뉴와 같은 키 — 요청 하나). 없으면 칸이 없다
   const { data: rs } = useResource('/admin/repos', admin.repos, { ttl: 60_000 })
+  // 진단 — 서버 페이지와 같은 키 · 같은 ttl(서버도 60초 캐시). 레포마다 origin 에 닿아 몇 초 걸린다 — 카드가 뒤따라 찬다
+  const { data: doc, loading: docLoading } = useResource('/admin/doctor', () => admin.doctor(), { ttl: 60_000 })
   const curRows = (rs?.repos || []).filter((r) => r.curation && typeof r.curation === 'object')
   const queued = curRows.reduce((a, r) => a + (r.curation.queue || 0), 0)
   const oldest = curRows.reduce((m, r) => (r.curation.queue > 0 && r.curation.oldestDays > m ? r.curation.oldestDays : m), 0)
@@ -26,8 +32,8 @@ export default function Overview({ say }) {
   const recheck = async () => {
     setBusy(true)
     try {
-      await admin.doctor(true)
-      invalidate('/admin/')
+      put('/admin/doctor', await admin.doctor(true))
+      invalidate('/admin/overview')
       await load()
     } catch (e) {
       say(e.message, 6000)
@@ -46,12 +52,14 @@ export default function Overview({ say }) {
     : d.alerts
   return (
     <>
-      <PageHead title="현황" sub="이 서버를 지금 쓸 수 있는 상태인가 — 카드마다 자기 페이지로 간다">
-        <span className="tcount">{d.doctor ? `진단 ${when(new Date(d.doctor.at).toISOString())}` : '진단 아직 없음'}</span>
+      <PageHead title="현황" sub="이 서버를 지금 쓸 수 있는 상태인가">
+        <span className="tcount">{doc ? `진단 ${when(new Date(doc.at).toISOString())}` : docLoading ? '진단 중…' : ''}</span>
         <Btn onClick={recheck} disabled={busy}>
           <Icon name="sync" size={13} className={busy ? 'spin' : undefined} /> {busy ? '검사 중…' : '다시 검사'}
         </Btn>
       </PageHead>
+
+      <Start />
 
       {alerts.length > 0 && (
         <div className="alerts">
@@ -60,7 +68,7 @@ export default function Overview({ say }) {
               <Icon name={a.level === 'bad' ? 'block' : 'warn'} size={14} />
               <span>{a.text}</span>
               <span className="sp" />
-              {a.to && <Link to={'/console/' + a.to}>{({ users: '사용자', tokens: '토큰', repos: '지식 레포', workrepos: '작업 레포 대장', server: '서버 설정' })[a.to] || a.to} →</Link>}
+              {a.to && <Link to={consoleHref(a.to)}>{({ users: '사람', tokens: '사람 › 토큰', people: '사람', repos: '지식 레포', workrepos: '지식 레포 › 작업 레포', server: '서버' })[a.to] || a.to} →</Link>}
             </div>
           ))}
         </div>
@@ -78,7 +86,7 @@ export default function Overview({ say }) {
           <Row label="판">
             <span className="amono">{d.version ? `v${d.version}` : '—'}</span>
             <div className="amuted asub">
-              빌드 {d.built} · node {d.node}
+              {builtOf(d.built) ? `빌드 ${builtOf(d.built)} · ` : ''}node {d.node}
             </div>
           </Row>
           <Row label="기동">
@@ -86,7 +94,7 @@ export default function Overview({ say }) {
           </Row>
         </Card>
 
-        <Card title="사람" actions={<Btn onClick={() => navigate('/console/users')}>자세히</Btn>}>
+        <Card title="사람" actions={<Btn onClick={() => navigate('/console/people')}>자세히</Btn>}>
           <div className="stats">
             <Stat n={d.users.count} l={`사용자 · 활성 ${d.users.active}`} />
             <Stat n={d.users.admins} l="관리자" bad={d.users.admins === 0} />
@@ -97,29 +105,37 @@ export default function Overview({ say }) {
           </Row>
         </Card>
 
-        <Card title="작업 레포 대장" actions={<Btn onClick={() => navigate('/console/workrepos')}>자세히</Btn>}>
+        <Card title="작업 레포 대장" actions={<Btn onClick={() => navigate(consoleHref('workrepos'))}>자세히</Btn>}>
           <div className="stats">
             <Stat n={wr.count} l="등록" />
             <Stat n={wr['최신'] || 0} l="최신" />
             <Stat n={(wr['낡음'] || 0) + (wr['미설치'] || 0)} l="낡음 · 미설치" warn={(wr['낡음'] || 0) + (wr['미설치'] || 0) > 0} />
           </div>
-          <Note>
-            등록 · 꾸러미는 그 지식 레포의 <b>레포 관리 › 연결된 작업 레포</b>에서 한다. 여기서는 서버 전체를 한눈에.
-          </Note>
         </Card>
 
         {/* 「자세히」 가 서버 카드와 같은 목적지로 둘 있었다 — 진단은 그 페이지의 진단 카드(#doctor)로(화면 · 권한 검토 v0.1 R6) */}
         <Card title="진단" hint="ctx serve doctor 와 같은 줄" actions={<Btn onClick={() => navigate('/console/server#doctor')}>자세히</Btn>}>
-          {d.doctor ? (
+          {doc ? (
             <div className="stats">
-              <Stat n={d.doctor.oks} l="ok" />
-              <Stat n={d.doctor.warns} l="warn" warn={d.doctor.warns > 0} />
-              <Stat n={d.doctor.fails} l="fail" bad={d.doctor.fails > 0} />
+              <Stat n={doc.rows.length - doc.warns - doc.fails} l="ok" />
+              <Stat n={doc.warns} l="warn" warn={doc.warns > 0} />
+              <Stat n={doc.fails} l="fail" bad={doc.fails > 0} />
             </div>
           ) : (
-            <Note>
-              아직 검사하지 않았다 — <b>다시 검사</b>를 누른다. 레포마다 origin 에 닿는지 · push 자격이 있는지를 본다(레포 하나에 몇 초).
-            </Note>
+            <span className="amuted">{docLoading ? '진단 중… 레포마다 origin 에 닿느라 몇 초' : '—'}</span>
+          )}
+          {doc && doc.fails + doc.warns > 0 && (
+            <div className="doctor">
+              {doc.rows
+                .filter((r) => r.state !== 'ok')
+                .slice(0, 3)
+                .map((r, i) => (
+                  <div className="doctor__row" key={i} data-s={r.state}>
+                    <Icon name={r.state === 'fail' ? 'block' : 'warn'} size={13} style={{ color: r.state === 'fail' ? 'var(--danger)' : 'var(--warn)', flex: 'none' }} />
+                    <span className="what">{r.what}</span>
+                  </div>
+                ))}
+            </div>
           )}
         </Card>
       </div>
@@ -156,7 +172,7 @@ export default function Overview({ say }) {
         ))}
       </Card>
 
-      <Card title="최근 감사" hint="auth.log 마지막 5줄" actions={<Btn onClick={() => navigate('/console/audit')}>전부 →</Btn>}>
+      <Card title="최근 감사" hint="auth.log 마지막 5줄" actions={<Btn onClick={() => navigate(consoleHref('audit'))}>전부 →</Btn>}>
         {d.audit.length === 0 && <span className="amuted">아직 없다</span>}
         {d.audit.map((line, i) => {
           const a = parseAudit(line)
@@ -169,9 +185,6 @@ export default function Overview({ say }) {
           )
         })}
       </Card>
-      <Note>
-        이 화면은 <b>사람이 열었을 때만 말합니다.</b> 알림을 띄우지 않습니다.
-      </Note>
     </>
   )
 }

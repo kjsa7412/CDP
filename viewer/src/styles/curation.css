@@ -217,6 +217,10 @@ a.fd__chip:hover {
 .fsplit {
   grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
 }
+/* 판정 재료는 기록을 고른 뒤에만 선다 — 그 전에는 대기열이 폭을 다 쓴다 */
+.qsplit--one {
+  grid-template-columns: minmax(0, 1fr);
+}
 @container shell (max-width: 1000px) {
   .qsplit,
   .fsplit {
@@ -519,3 +523,11 @@ a.dchip:hover {
   color: var(--text);
   border-style: solid;
 }
+
+/* 읽기 — 목록 위 세그(문서 · 기록). 메뉴의 옛 「작업 기록」 이 여기로 왔다(화면 22 → 16) */
+.fd__seg { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--border); }
+.fd__seg a { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; font-size: 12.5px; color: var(--text-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.fd__seg a:hover { color: var(--text); text-decoration: none; }
+.fd__seg a[aria-selected='true'] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+.fd__segn { font-size: 11px; color: var(--text-3); font-weight: 400; }
+.fd__segq { font-size: 10.5px; font-weight: 700; color: var(--pending); background: var(--pending-bg); border-radius: 9px; padding: 0 6px; line-height: 16px; }

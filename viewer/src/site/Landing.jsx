@@ -3,11 +3,18 @@
 // **광고 문구를 쓰지 않는다.** 이 레포의 말 그대로 — 좌표 · 두 층 · 검사. 「이 서버」 카드는
 // `/site/info` 하나로 그리고 레포 **이름**은 싣지 않는다(집계만 · D2).
 // 맨 아래 「MCP 가 도는 길」 은 번들 안의 그림이라 늘 있다(`McpFlow.jsx`).
+// 제품화 2 ⑥ ⑦ — 로그인한 사람에게는 「이 서버」 숫자 대신 「시작하기」(다음 할 일 — 할 일이 없으면 판 한 줄) · 도구 · 스킬 수를 손으로
+// 쓰지 않는다(서버 값이 아니면 숫자를 적지 않는다) · 설명서 카드는 읽는 셋 — 개발자 · 설치 절차는 접힘.
 
 import { repoHref } from '../lib/api.js'
 import { Link, useTitle } from '../lib/router.jsx'
 import Icon from '../components/Icon.jsx'
 import McpFlow from './McpFlow.jsx'
+import Start from '../components/Start.jsx'
+import { builtOf } from '../lib/format.js'
+
+// 설명서 카드 — 읽는 사람 셋이 먼저, 만드는 사람 · 세우는 사람의 것은 접는다
+const MAIN_BOOKS = ['사용자_설명서', '큐레이터_설명서', '관리자_설명서']
 
 const BOOKS = {
   사용자_설명서: { icon: 'book', desc: '작업 레포에서 에이전트로 일하고 작업 기록을 남긴다.', items: ['처음 한 번 — 연결', '하루 흐름 · 작업 요청 · 기록', '막혔을 때'] },
@@ -47,60 +54,11 @@ export default function Landing({ info }) {
             </div>
           </div>
           <aside className="hero__aside">
-            <section className="acard">
-              <div className="acard__head">
-                <span className="acard__title">이 서버</span>
-                <span className="acard__hint">{location.host}</span>
-              </div>
-              <div className="acard__body">
-                <div className="arow">
-                  <span className="arow__label">판</span>
-                  <span className="arow__value">
-                    <span className="amono">{info?.version ? `v${info.version}` : '—'}</span>
-                    {info?.built && <span className="amuted">· 빌드 {info.built}</span>}
-                  </span>
-                </div>
-                <div className="arow">
-                  <span className="arow__label">지식 레포</span>
-                  <span className="arow__value">
-                    <b className="num">{info?.repos ?? '—'}</b>
-                    <span className="amuted">곳</span>
-                  </span>
-                </div>
-                <div className="arow">
-                  <span className="arow__label">미러</span>
-                  <span className="arow__value">
-                    최신 <b className="num">{m.ok ?? '—'}</b> <span className="amuted">·</span> 못 보냄{' '}
-                    <b className="num" style={m.lag ? { color: 'var(--warn)' } : undefined}>{m.lag ?? '—'}</b> <span className="amuted">·</span> 원격 없음{' '}
-                    <b className="num">{m.off ?? '—'}</b>
-                  </span>
-                </div>
-                <div className="arow">
-                  <span className="arow__label">얼굴</span>
-                  <span className="arow__value">
-                    <span className="amuted">
-                      <b style={{ color: 'var(--text)' }}>소개</b>(이 화면) · <b style={{ color: 'var(--text)' }}>설명서</b>(토큰 없이) · <b style={{ color: 'var(--text)' }}>레포</b>(로그인 뒤 문서 · 그래프) · <b style={{ color: 'var(--text)' }}>서버</b>(관리자 — 사람 · 토큰 · 레포 · 서버 설정)
-                    </span>
-                  </span>
-                </div>
-                <div className="arow">
-                  <span className="arow__label">MCP</span>
-                  <span className="arow__value">
-                    <span className="amono">/mcp/&lt;레포&gt;</span>
-                    <span className="amuted">· 도구 13(역할별)</span>
-                  </span>
-                </div>
-                {info?.setupNeeded ? (
-                  <div className="anote anote--warn">
-                    이 서버는 아직 <b>첫 관리자</b>가 없습니다. <Link to="/setup">설치 마법사</Link>에서 만듭니다 — install.sh 가 찍은 코드가 필요합니다.
-                  </div>
-                ) : (
-                  <div className="anote">
-                    토큰은 이 서버의 <b>관리자</b>에게 받는다. 화면과 에이전트가 같은 토큰을 쓴다.
-                  </div>
-                )}
-              </div>
-            </section>
+            {info?.user ? (
+              <Start empty={<ServerCard info={info} m={m} brief />} />
+            ) : (
+              <ServerCard info={info} m={m} />
+            )}
           </aside>
         </div>
 
@@ -137,7 +95,7 @@ export default function Landing({ info }) {
             <div className="fcard">
               <h3>에이전트</h3>
               <p>
-                Claude Code 가 MCP 로 붙는다. 도구 13종 — 읽기 9 · <code>save</code> · 큐레이터의 <code>queue</code> · <code>forms</code> · <code>drift</code>(역할에 없는 도구는 보이지 않는다). 스킬 6종이 절차를 든다 — 검토 → 주입 → 기록 · 큐레이션 · 리빌딩.
+                Claude Code 가 MCP 로 붙는다 — 읽기 도구 · <code>save</code> · 큐레이터의 <code>queue</code> · <code>forms</code> · <code>drift</code>(역할에 없는 도구는 보이지 않는다). 스킬이 절차를 든다 — 검토 → 주입 → 기록 · 큐레이션 · 리빌딩.
               </p>
             </div>
             <div className="fcard">
@@ -184,7 +142,7 @@ export default function Landing({ info }) {
         <div className="sec">
           <p className="sec__cap">누가 읽나 — 설명서</p>
           <div className="cards3">
-            {(info?.manuals || []).map((b) => {
+            {(info?.manuals || []).filter((b) => MAIN_BOOKS.includes(b.id)).map((b) => {
               const meta = BOOKS[b.id] || { icon: 'book', desc: '', items: [] }
               return (
                 <Link key={b.id} to={'/manual/' + encodeURIComponent(b.id)} className="fcard fcard--link" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -206,6 +164,20 @@ export default function Landing({ info }) {
               <div className="anote anote--warn">이 서버에 설명서 폴더(<code>manual/</code>)가 없습니다 — 산출물의 것을 두거나 <code>--manual</code>.</div>
             )}
           </div>
+          {(info?.manuals || []).some((b) => !MAIN_BOOKS.includes(b.id)) && (
+            <details className="howto-more" style={{ marginTop: 12 }}>
+              <summary>CDP 를 고치는 사람 · 서버를 세우는 사람</summary>
+              <ul>
+                {(info?.manuals || [])
+                  .filter((b) => !MAIN_BOOKS.includes(b.id))
+                  .map((b) => (
+                    <li key={b.id}>
+                      <Link to={'/manual/' + encodeURIComponent(b.id)}>{b.title.replace(/^CDP\s*/, '')}</Link> — {BOOKS[b.id]?.desc || ''}
+                    </li>
+                  ))}
+              </ul>
+            </details>
+          )}
         </div>
 
         {/* 그림(manual/그림 의 「세 레포」 · 「MCP 두 모드」)은 뺐다 — 둘 다 v0.x 를 그린다(cdp.exe · ctx setup · stdio · git 훅).
@@ -216,3 +188,68 @@ export default function Landing({ info }) {
   )
 }
 
+
+// 이 서버 — 로그인 전에 보는 집계(레포 **이름**은 싣지 않는다 · D2). 로그인했고 할 일이 없으면 판 한 줄(brief)
+function ServerCard({ info, m, brief = false }) {
+  return (
+    <section className="acard">
+      <div className="acard__head">
+        <span className="acard__title">이 서버</span>
+        <span className="acard__hint">{location.host}</span>
+      </div>
+      <div className="acard__body">
+        <div className="arow">
+          <span className="arow__label">판</span>
+          <span className="arow__value">
+            <span className="amono">{info?.version ? `v${info.version}` : '—'}</span>
+            {builtOf(info?.built) && <span className="amuted">· 빌드 {builtOf(info.built)}</span>}
+          </span>
+        </div>
+        {!brief && (
+          <>
+            <div className="arow">
+              <span className="arow__label">지식 레포</span>
+              <span className="arow__value">
+                <b className="num">{info?.repos ?? '—'}</b>
+                <span className="amuted">곳</span>
+              </span>
+            </div>
+            {(m.ok || 0) + (m.lag || 0) + (m.off || 0) > 0 && (
+              <div className="arow">
+                <span className="arow__label">미러</span>
+                <span className="arow__value">
+                  최신 <b className="num">{m.ok ?? 0}</b>
+                  {m.lag > 0 && (
+                    <>
+                      {' '}
+                      <span className="amuted">·</span> 못 보냄 <b className="num" style={{ color: 'var(--warn)' }}>{m.lag}</b>
+                    </>
+                  )}
+                  {m.off > 0 && (
+                    <>
+                      {' '}
+                      <span className="amuted">·</span> 원격 없음 <b className="num">{m.off}</b>
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
+            <div className="arow">
+              <span className="arow__label">MCP</span>
+              <span className="arow__value">
+                <span className="amono">/mcp/&lt;레포&gt;</span>
+              </span>
+            </div>
+            {info?.setupNeeded ? (
+              <div className="anote anote--warn">
+                아직 <b>첫 관리자</b>가 없다 — <Link to="/setup">설치 마법사</Link>에서 만든다(install.sh 가 찍은 코드).
+              </div>
+            ) : (
+              <div className="anote">토큰은 이 서버의 관리자에게 받는다.</div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  )
+}

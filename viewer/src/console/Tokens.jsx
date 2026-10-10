@@ -1,4 +1,5 @@
-// 토큰 — 신원만 증명한다. 권한은 사람에게 있다. 제품관리서비스 검토 §4.7 · 검토 v0.1 §3.4.
+// 서버 › 사람 › 토큰 — 신원만 증명한다. 권한은 사람에게 있다. 제품관리서비스 검토 §4.7 · 검토 v0.1 §3.4.
+// 사람 페이지의 절이다(`People.jsx` — 옛 `/console/tokens` 는 `#tokens`). [발급] 은 사람 줄에서 온다(`?user=`) — 머리에 따로 두지 않는다.
 //
 // 원문은 발급 · 재발급 응답에 **한 번** 온다 — 모달에 크게 보이고 닫으면 다시 못 본다.
 // 잃었다 → **재발급 한 동작**(폐기 + 발급). 폐기한 행은 회색으로 남는다 — 이력이다.
@@ -11,7 +12,7 @@ import { navigate } from '../lib/router.jsx'
 import { josa } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from '../shell/sudo.jsx'
-import { PageHead, Toolbar, Search, Note, Modal, Field, Seg, Chip, Confirm, Prompt, TokenReveal, when, daysText } from './ui.jsx'
+import { SubHead, Toolbar, Search, Note, Modal, Field, Seg, Chip, Confirm, Prompt, TokenReveal, when, daysText } from './ui.jsx'
 
 export default function Tokens({ me, say, route }) {
   const withSudo = useSudo()
@@ -33,8 +34,13 @@ export default function Tokens({ me, say, route }) {
     const u = route.query.get('user')
     if (!u || !data) return
     setIssuing({ user: u })
-    navigate('/console/tokens', { replace: true })
+    navigate('/console/people', { replace: true })
   }, [route.query, data])
+
+  // 옛 `/console/tokens` 가 `#tokens` 로 온다 — 표가 선 뒤 그 절로
+  useEffect(() => {
+    if (route.hash === '#tokens' && data) document.getElementById('tokens')?.scrollIntoView({ block: 'start' })
+  }, [route.hash, data])
 
   const act = async (fn, ok) => {
     setBusy(true)
@@ -66,11 +72,7 @@ export default function Tokens({ me, say, route }) {
 
   return (
     <>
-      <PageHead title="토큰" sub="신원만 증명한다 — 권한은 사람에게 있다. 원문은 발급 때 한 번, 잃으면 재발급">
-        <button className="btn btn--accent btn--sm" onClick={() => setIssuing({ user: '' })}>
-          <Icon name="plus" size={13} /> 발급
-        </button>
-      </PageHead>
+      <SubHead id="tokens" title="토큰" sub="원문은 발급 때 한 번 · 잃으면 재발급 · 발급은 사람 줄에서" />
 
       <Toolbar>
         <Search value={q} onChange={setQ} placeholder="사용자 · 메모 · id" />
@@ -160,9 +162,7 @@ export default function Tokens({ me, say, route }) {
           </table>
         </div>
       </section>
-      <Note>
-        <b>원문은 어디에도 저장되지 않는다.</b> 표의 id 는 해시 앞 8자다. 폐기한 행은 회색으로 남는다 — "이 사람 토큰이 언제 있었나" 가 이력이다. 관리자 토큰은 기본 30일, 나머지는 90일.
-      </Note>
+
 
       {issuing && (
         <Issue

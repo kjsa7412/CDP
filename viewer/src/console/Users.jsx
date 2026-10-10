@@ -1,4 +1,6 @@
-// 사용자 — 권한은 사람에 붙는다(역할 · 볼 수 있는 레포). 제품관리서비스 검토 §4.7 · 검토 v0.1 §3.2.
+// 서버 › 사람 — 사용자 + 토큰(제품화 2 ⑥ · 옛 페이지 둘). 권한은 사람에 붙는다(역할 · 볼 수 있는 레포). 제품관리서비스 검토 §4.7 ·
+// 검토 v0.1 §3.2. **[발급] 은 사람 줄 한 곳이다** — 전에는 사용자 줄과 토큰 페이지 머리 두 곳이었다. 토큰 표는 `tokens` 로 받아
+// 사용자 표 아래에 끼운다(`People.jsx`) — 옛 주소 `/console/tokens` 는 `#tokens` 로 온다.
 //
 // 표 한 장 + 아래 **레포 × 사용자 매트릭스** — 레포마다 여는 쪽이 실제 운영이다.
 // 삭제는 없다, 비활성이다(D6). 자기 자신의 역할 · 활성은 바꿀 수 없다(`E_SELF`) · 마지막 admin 은
@@ -11,6 +13,7 @@ import { invalidate, useResource } from '../lib/cache.js'
 import { josa } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
 import { useSudo, CANCELLED } from '../shell/sudo.jsx'
+import HelpLink from '../components/HelpLink.jsx'
 import { PageHead, Toolbar, Search, Card, Note, Modal, Field, Seg, Chip, RoleChip, Confirm, when } from './ui.jsx'
 
 const ROLE_OPTS = [
@@ -19,7 +22,7 @@ const ROLE_OPTS = [
   ['admin', 'admin', '서버 관리'],
 ]
 
-export default function Users({ me, say, route }) {
+export default function Users({ me, say, route, tokens = null }) {
   const withSudo = useSudo()
   const [q, setQ] = useState('')
   const [role, setRole] = useState('')
@@ -46,6 +49,7 @@ export default function Users({ me, say, route }) {
       await withSudo(fn)
       if (ok) say(ok)
       invalidate('/admin/')
+      invalidate('/next')
       await load()
       return true
     } catch (e) {
@@ -68,7 +72,7 @@ export default function Users({ me, say, route }) {
 
   return (
     <>
-      <PageHead title="사용자" sub="권한은 사람에 붙는다 — 역할과 볼 수 있는 레포. 삭제는 없다, 비활성이다">
+      <PageHead title="사람" sub="권한은 사람에 붙고 토큰은 신원만 증명한다">
         <button className="btn btn--accent btn--sm" onClick={() => setAdding(true)}>
           <Icon name="plus" size={13} /> 사용자
         </button>
@@ -153,7 +157,7 @@ export default function Users({ me, say, route }) {
                             <a className="abtn" href="#matrix" onClick={(e) => { e.preventDefault(); document.getElementById('matrix')?.scrollIntoView({ block: 'start' }) }}>
                               레포
                             </a>
-                            <button className="abtn" onClick={() => navigate('/console/tokens?user=' + encodeURIComponent(u.name))}>
+                            <button className="abtn" onClick={() => navigate('/console/people?user=' + encodeURIComponent(u.name))}>
                               <Icon name="key" size={12} /> 발급
                             </button>
                           </>
@@ -171,8 +175,10 @@ export default function Users({ me, say, route }) {
         </div>
       </section>
 
+      {tokens}
+
       <div id="matrix" />
-      <Card title="레포 × 사용자" hint="체크 하나가 그 사람의 repos 한 줄이다 — 저장 즉시 다음 요청부터">
+      <Card title="레포 × 사용자" hint="체크 하나 = repos 한 줄 · 즉시">
         {repos.length === 0 ? (
           <Note>이 서버에 지식 레포가 없다 — 지식 레포 페이지에서 세우면 여기 열이 생긴다.</Note>
         ) : (
@@ -218,13 +224,11 @@ export default function Users({ me, say, route }) {
             </table>
           </div>
         )}
-        <Note>
-          권한 밖 레포는 그 사람의 화면 · API · MCP 어디에도 <b>존재를 알리지 않는다</b>. 전체(<code>*</code>)인 사람은 표에서 고칠 수 없다 — 역할처럼 사람에게 붙은 값이다.
-        </Note>
+        <Note>전체(<code>*</code>)인 사람은 표에서 고칠 수 없다 — 셸의 <code>user set</code>.</Note>
       </Card>
 
       <div id="curators" />
-      <Card title="레포 × 큐레이터" hint="체크 하나가 그 사람의 curate 한 줄이다 — 그 레포의 대기열 · 판정 · 섹션 쓰기(v1.0)">
+      <Card title="레포 × 큐레이터" hint="체크 하나 = curate 한 줄" actions={<HelpLink topic="curator" />}>
         {repos.length === 0 ? (
           <Note>이 서버에 지식 레포가 없다.</Note>
         ) : (
@@ -278,9 +282,7 @@ export default function Users({ me, say, route }) {
             </table>
           </div>
         )}
-        <Note>
-          큐레이터는 그 레포의 작업 기록을 판정해 관리 문서에 반영한다 — 대기열 · 판정 재료 · 서식집과 섹션을 쓰는 save 가 열린다. writer 는 기록만 남긴다.
-        </Note>
+
       </Card>
 
       {adding && <AddUser repos={repos} busy={busy} onClose={() => setAdding(false)} onOk={async (body) => (await act(() => admin.userAdd(body), `${josa(body.name, '을/를')} 넣었다`)) && setAdding(false)} />}
@@ -364,7 +366,7 @@ function AddUser({ repos, busy, onClose, onOk }) {
           </label>
         </div>
       </Field>
-      <Note>토큰은 여기서 발급하지 않는다 — 추가한 뒤 그 행의 [발급], 또는 토큰 페이지에서.</Note>
+      <Note>토큰은 여기서 발급하지 않는다 — 추가한 뒤 그 줄의 [발급].</Note>
     </Modal>
   )
 }

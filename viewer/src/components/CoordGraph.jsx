@@ -21,6 +21,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
+import Start from './Start.jsx'
+import { currentRepo } from '../lib/api.js'
 
 // 기본 배율 = 전체가 들어오는 배율의 1.5배.
 //
@@ -599,7 +601,16 @@ export default function CoordGraph({ tree, docs, onPick, onGo, picked, myCoords 
       ?.scrollIntoView({ block: 'nearest' })
   })
 
-  if (!g || !g.nodes.length) return <div className="gr__empty">좌표가 없습니다 — <code>_vocab.md</code> 를 확인하세요</div>
+  // 빈 상태 — v1.x 의 좌표는 save 로만 생긴다(`_vocab.md` 를 손으로 고치라고 이끌지 않는다 · 제품화 2 검토 §4.2). 다음 할 일은 서버가
+  if (!g || !g.nodes.length)
+    return (
+      <div className="gr__empty">
+        <p>좌표가 아직 없다 — 좌표는 큐레이터의 save 로 생긴다.</p>
+        <div style={{ maxWidth: 640, margin: '12px auto 0', textAlign: 'left' }}>
+          <Start repo={currentRepo()} />
+        </div>
+      </div>
+    )
 
   const S = stRef.current
 

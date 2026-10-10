@@ -1,20 +1,20 @@
 // 큐레이션 › 대기열 — 큐레이터가 매일 여는 자리(개편안 §7.3 S3 · §3.3).
 //
-//   위      대기 · 가장 오래된 · 미반영 섹션 · 마지막 큐레이션(`/api/<레포>/repo` 의 curation — App 이 이미 읽은 값)
+//   위      대기 · 가장 오래된 · 미반영 섹션 · 마지막 큐레이션(`/api/<레포>/repo` 의 curation — App 이 이미 읽은 값) — **0 인 칸은 없다**
 //   왼쪽    대기열 — 오래된 순(서버가 정렬). 기록마다 걸린 좌표를 넷으로 — 섹션 있음 · 섹션 없음(등록부만) · 등록부 없음 · 좌표 0
-//   오른쪽  고른 기록 하나의 판정 재료(`/queue/<id>` — curate 만) — 반영 후보 · 새 문서 후보 · 비슷한 서식 · 정본 후보 · 본문에만 있는 좌표
-//   아래    [기록으로 둠…] · [에이전트 지시 복사] · 큐레이터 폴더(처음 한 번 — 설치 한 줄)
+//   오른쪽  고른 기록 하나의 판정 재료(`/queue/<id>` — curate 만) — 고르기 전에는 카드가 없다
+//   아래    [기록으로 둠…] · [에이전트 지시 복사]
+// 대기가 0 이면 한 문장뿐이다(불변조건 7). 이력은 이 화면의 탭이다(`AdminView`). 큐레이터 폴더 한 줄은 「시작하기」 한 곳에만.
 //
 // **화면이 직접 하는 판정은 「기록으로 둠」 하나다.** 반영 · 새 문서는 글을 쓰는 일이라 큐레이터의 에이전트 세션(`cdp-curate`)이
 // 판정표 + diff 를 보이고 승인 뒤 save 한다 — 그래서 단추는 그 세션에 붙일 지시를 복사한다(서버는 LLM 을 부르지 않는다 · I11).
 // 그 세션이 도는 자리가 큐레이터 폴더다 — 코드가 없는 아무 폴더 · 설치 한 줄 `--curator`(v1.0 §6.3). 설치기의 거절 문장이
-// 「관리 화면의 큐레이터 한 줄」 을 가리키는 곳이 여기다.
+// 「관리 화면의 큐레이터 한 줄」 을 가리키는 곳은 이제 레포 현황의 「시작하기」 다(서버가 그 폴더를 받았는지 안다).
 // 막는 것은 서버다(재료 · 판정은 curate) — 이 화면은 메뉴가 큐레이터에게만 보인다.
 
 import { useMemo, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
 import { Card, Note, Btn } from '../../components/admin/ui.jsx'
-import CuratorFolder from '../../components/admin/CuratorFolder.jsx'
 import { Prompt } from '../../console/ui.jsx'
 import { api, currentRepo } from '../../lib/api.js'
 import { invalidate, useResource } from '../../lib/cache.js'
@@ -22,7 +22,6 @@ import { copyText } from '../../lib/clip.js'
 import { Link } from '../../lib/router.jsx'
 import { docHref } from '../../lib/doclink.js'
 import { coordCounts, curateCommand, formPath } from '../../lib/curation.js'
-import { can } from '../../lib/roles.js'
 import { repoBase } from '../../shell/nav.js'
 import { useSudo, CANCELLED } from '../../shell/sudo.jsx'
 import { ServerAbsent, isAbsent } from './marks.jsx'
@@ -48,6 +47,7 @@ export default function Queue({ repo, me = null, say, onChanged }) {
   if (isAbsent(q.error)) return <ServerAbsent what="큐레이션 대기열" />
   if (q.error) return <Note tone="bad">대기열을 읽지 못했습니다 — {q.error.message}</Note>
   if (!q.data) return <span className="amuted">읽는 중…</span>
+  if (!items.length) return <Note>대기 중인 기록이 없다.</Note>
 
   const cur = repo?.curation || null
   const oldest = q.data.oldestDays ?? cur?.oldestDays
@@ -81,8 +81,9 @@ export default function Queue({ repo, me = null, say, onChanged }) {
       setKeeping(false)
       setPicked(new Set())
       setFocus(null)
-      // 대기열 · 이력 · 기록 목록 · 상태(배지 · 대기 n)가 옛 값으로 남지 않게
+      // 대기열 · 이력 · 기록 목록 · 상태(배지 · 대기 n) · 시작하기가 옛 값으로 남지 않게
       invalidate('api:' + rk + '/')
+      invalidate('/next')
       await q.refresh().catch(() => {})
       onChanged?.()
     } catch (e) {
@@ -96,19 +97,14 @@ export default function Queue({ repo, me = null, say, onChanged }) {
     <>
       <div className="kpis">
         <Kpi n={q.data.total ?? items.length} l="대기" s="기록" />
-        <Kpi n={oldest != null ? `${oldest}일` : '—'} l="가장 오래된" s={`${STALE_DAYS}일이 넘으면 경고`} warn={oldest > STALE_DAYS} />
-        {cur?.pendingSections != null && <Kpi n={cur.pendingSections} l="미반영 섹션" s="섹션 뒤에 기록이 있다" />}
-        {cur && (
-          <Kpi n={cur.last ? String(cur.last.date || '').slice(5, 10) || '—' : '—'} l="마지막 큐레이션" s={cur.last ? cur.last.author || '' : '아직 없다'} />
-        )}
+        {oldest != null && <Kpi n={`${oldest}일`} l="가장 오래된" s={`${STALE_DAYS}일이 넘으면 경고`} warn={oldest > STALE_DAYS} />}
+        {cur?.pendingSections > 0 && <Kpi n={cur.pendingSections} l="미반영 섹션" s="섹션 뒤에 기록이 있다" />}
+        {cur?.last && <Kpi n={String(cur.last.date || '').slice(5, 10) || '—'} l="마지막 큐레이션" s={cur.last.author || ''} />}
       </div>
 
-      <div className="qsplit">
-        <Card title="대기열" hint="오래된 순 · 서버가 계산한다(저장하지 않는다)">
-          {items.length === 0 ? (
-            <Note>대기 중인 기록이 없다 — 모든 기록이 반영됐거나 기록으로 뒀다.</Note>
-          ) : (
-            <table className="atable qtable">
+      <div className={focus ? 'qsplit' : 'qsplit qsplit--one'}>
+        <Card title="대기열" hint="오래된 순">
+          <table className="atable qtable">
               <thead>
                 <tr>
                   <th aria-label="고르기" />
@@ -148,8 +144,6 @@ export default function Queue({ repo, me = null, say, onChanged }) {
                 })}
               </tbody>
             </table>
-          )}
-          {items.length > 0 && (
             <div className="qfoot">
               <span className="amuted">{picked.size ? `${picked.size}건 고름` : focus ? '지금 보는 기록 1건' : '기록을 고른다 — 체크 또는 줄을 누른다'}</span>
               <span className="topbar__spacer" />
@@ -160,18 +154,10 @@ export default function Queue({ repo, me = null, say, onChanged }) {
                 <Icon name={copied ? 'check' : 'copy'} size={13} /> 에이전트 지시 복사
               </Btn>
             </div>
-          )}
         </Card>
 
-        <Materials id={focus} base={base} cmd={ids.length ? cmd : null} />
+        {focus && <Materials id={focus} base={base} cmd={ids.length ? cmd : null} />}
       </div>
-
-      <Note>
-        반영 · 새 문서는 글을 쓰는 일이라 <b>에이전트 세션</b>이 한다 — 복사한 지시를 자기 PC 의 Claude Code 에 붙이면 <code>cdp-curate</code> 가 판정표와
-        diff 를 보이고, 승인하면 save 한다. 화면이 직접 하는 것은 <b>기록으로 둠</b> 하나다(서버는 LLM 을 부르지 않는다).
-      </Note>
-
-      {can(me, 'curate', rk) && <CuratorFolder repo={rk} />}
 
       {keeping && (
         <Prompt
@@ -210,13 +196,6 @@ function Kpi({ n, l, s, warn = false }) {
 function Materials({ id, base, cmd }) {
   const rk = currentRepo()
   const m = useResource(id ? 'api:' + rk + '/queue/' + id : null, () => api.queueItem(id), { enabled: !!id, ttl: 30_000 })
-  if (!id) {
-    return (
-      <Card title="판정 재료">
-        <Note>기록 하나를 누르면 여기 뜬다 — 걸린 섹션 · 등록부 없는 타입과 비슷한 서식 · 정본 후보 · 본문에만 있는 좌표.</Note>
-      </Card>
-    )
-  }
   const d = m.data
   const title = d?.record?.title || id
   const coords = d?.coords || []

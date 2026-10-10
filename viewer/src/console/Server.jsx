@@ -1,4 +1,5 @@
-// 서버 — 이 프로세스가 무엇으로 떠 있나 · 진단 · git 자격 · 갱신 · 로그. 제품관리서비스 검토 §4.7.
+// 서버 — 이 프로세스가 무엇으로 떠 있나 · 진단 · git 자격 · 갱신 · 감사 · 로그. 제품관리서비스 검토 §4.7.
+// 제품화 2 ⑥(콘솔 7 → 4) — 옛 「감사」 페이지가 여기 접힘으로 들어왔다(`/console/audit` → `#audit`). 감사 · 로그는 문제 났을 때 보는 것이라 접는다.
 //
 // **거의 읽기다.** 고치는 것은 셸이다(D7 · D8) — 갱신은 upgrade.sh, PAT 는 셸에서. 여기는
 // 그 명령과 지금 값을 보이는 자리. 파일 위치 · 로그는 관리자에게만 보인다.
@@ -10,6 +11,9 @@ import { put, useResource } from '../lib/cache.js'
 import Icon from '../components/Icon.jsx'
 import { PageHead, Card, Row, Mono, Note, Btn, Cmd, Search, when } from './ui.jsx'
 import GitAuth from './GitAuth.jsx'
+import HelpLink from '../components/HelpLink.jsx'
+import Audit from './Audit.jsx'
+import { builtOf } from '../lib/format.js'
 
 const MARK = { ok: ['check', 'var(--text-3)'], warn: ['warn', 'var(--warn)'], fail: ['block', 'var(--danger)'] }
 
@@ -20,14 +24,19 @@ export default function Server({ say, route }) {
   // 셋 다 캐시(R8) — 진단은 서버도 60초 캐시라 같은 ttl. 로그는 다시 열면 새것(ttl 기본)
   const { data: sv, error } = useResource('/admin/server', admin.server)
   const { data: doc, loading: docLoading } = useResource('/admin/doctor', () => admin.doctor(), { ttl: 60_000 })
-  const { data: log } = useResource('/admin/log?200', () => admin.log(200))
+  // 로그는 펼 때 읽는다 — 접힌 채로 매번 200줄을 받지 않는다
+  const [logOpen, setLogOpen] = useState(false)
+  const [auditOpen, setAuditOpen] = useState(route?.hash === '#audit')
+  const { data: log } = useResource(logOpen ? '/admin/log?200' : null, () => admin.log(200), { enabled: logOpen })
   useEffect(() => {
     if (error) say(error.message, 6000)
   }, [error, say])
   // 현황의 진단 카드 「자세히」 가 `#doctor` 를 들고 온다 — 표가 선 뒤 그 카드로
   useEffect(() => {
     // 연결 창의 「git 자격」 안내는 `#gitauth` 를 들고 온다
-    if ((route?.hash === '#doctor' || route?.hash === '#gitauth') && sv) document.getElementById(route.hash.slice(1))?.scrollIntoView({ block: 'start' })
+    // 옛 감사 페이지는 `#audit` 로 온다 — 펴고 그 자리로
+    if (route?.hash === '#audit') setAuditOpen(true)
+    if ((route?.hash === '#doctor' || route?.hash === '#gitauth' || route?.hash === '#audit') && sv) document.getElementById(route.hash.slice(1))?.scrollIntoView({ block: 'start' })
   }, [route?.hash, sv])
 
   const recheck = async () => {
@@ -56,10 +65,11 @@ export default function Server({ say, route }) {
   }, [log, q])
 
   if (!sv) return <span className="amuted">읽는 중…</span>
-  const prefix = sv.data ? sv.data.replace(/[\\/][^\\/]+$/, '') : '/opt/cdp'
+  // 설치 자리 — 서버가 낸 데이터 경로의 부모(손으로 경로를 쓰지 않는다 · 안내 글 규칙 ⑤). 모르면 갱신 명령을 그리지 않는다
+  const prefix = sv.data ? sv.data.replace(/[\\/][^\\/]+$/, '') : null
   return (
     <>
-      <PageHead title="서버 설정" sub="이 프로세스가 무엇으로 떠 있나 · 진단 · git 자격 · 갱신 · 로그. 고치는 것은 셸이고 여기는 보는 자리다">
+      <PageHead title="서버" sub="설정 · 진단 · git 자격 · 갱신 · 감사 · 로그 — 고치는 것은 셸이다">
         <Btn onClick={recheck} disabled={busy}>
           <Icon name="sync" size={13} className={busy ? 'spin' : undefined} /> {busy ? '검사 중…' : '다시 검사'}
         </Btn>
@@ -70,7 +80,7 @@ export default function Server({ say, route }) {
           <Row label="판">
             <Mono>{sv.version ? `v${sv.version}` : '—'}</Mono>
             {/* 둘째 줄이 「·」 로 시작하지 않게 — 값 아래 작은 줄로(실서버 종합 시험 L6) */}
-            <div className="amuted asub">빌드 {sv.built}</div>
+            {builtOf(sv.built) && <div className="amuted asub">빌드 {builtOf(sv.built)}</div>}
           </Row>
           <Row label="실행">
             <span className="amuted">
@@ -141,26 +151,36 @@ export default function Server({ say, route }) {
       <GitAuth say={say} prefix={prefix} />
 
       <div className="agrid">
-        <Card title="갱신" hint="셸의 일이다 — 여기는 판과 명령">
+        <Card title="갱신" hint="셸의 일이다" actions={<HelpLink topic="update" />}>
           <Row label="지금">
             <Mono>{sv.version ? `v${sv.version}` : '—'}</Mono>
-            <span className="amuted">· {sv.built}</span>
+            {builtOf(sv.built) && <span className="amuted">· {builtOf(sv.built)}</span>}
           </Row>
-          <Row label="새 판을 올리려면" stack>
-            <Cmd>{`sudo bash ${prefix}/deploy/upgrade.sh /tmp/cdp-server-v<버전>.tar.gz`}</Cmd>
-          </Row>
-          <Note>
-            자기 자신(<code>ctx.mjs</code>) · 화면 · 서식집 · kit 을 갈아 끼우고 재시작하는 일이라 브라우저에서 시작하지 않는다 — 실패했을 때 되돌리는 길이 셸뿐이다. 명부 · 대장 · 레포는 건드리지 않는다.
-          </Note>
+          {/* 명령은 서버가 낼 때(`upgrade`) 그대로 · 아니면 설치 자리(data 의 부모)의 upgrade.sh — 모르면 설명서 절만 */}
+          {(sv.upgrade || prefix) && (
+            <Row label="새 판을 올리려면" stack>
+              <Cmd>{sv.upgrade || `sudo bash ${prefix}/deploy/upgrade.sh /tmp/cdp-server-v<버전>.tar.gz`}</Cmd>
+            </Row>
+          )}
         </Card>
       </div>
 
-      <Card title="로그" hint={log ? `serve.log 마지막 ${log.lines.length}줄 (전체 ${log.total}) · 회전 3 × 1MB` : 'serve.log'} actions={<Search value={q} onChange={setQ} placeholder="걸러 보기 — 401 · save" style={{ minWidth: 180, height: 26 }} />}>
-        <pre className="logbox">{logLines.join('\n') || '(없음)'}</pre>
-        <Note>
-          문서 내용 · 검색어 · 토큰 원문은 로그에 없다. 프로세스가 죽었을 때는 <code>journalctl -u cdp-serve</code> — 그것은 프로세스 밖이라 여기 없다.
-        </Note>
-      </Card>
+      <details id="audit" className="cfold" open={auditOpen} onToggle={(e) => setAuditOpen(e.currentTarget.open)}>
+        <summary>
+          감사<span className="amuted">auth.log — 명부 · 토큰 · 레포 · 대장의 변경</span>
+        </summary>
+        <div className="cfold__body">{auditOpen && <Audit say={say} embedded />}</div>
+      </details>
+
+      <details className="cfold" open={logOpen} onToggle={(e) => setLogOpen(e.currentTarget.open)}>
+        <summary>
+          로그<span className="amuted">serve.log{log ? ` 마지막 ${log.lines.length}줄 · 전체 ${log.total}` : ''}</span>
+        </summary>
+        <div className="cfold__body">
+          <Search value={q} onChange={setQ} placeholder="걸러 보기 — 401 · save" style={{ minWidth: 180, height: 26 }} />
+          <pre className="logbox">{log ? logLines.join('\n') || '(없음)' : '읽는 중…'}</pre>
+        </div>
+      </details>
     </>
   )
 }

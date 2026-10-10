@@ -317,3 +317,19 @@
 @container shell (max-width: 720px) {
   .adocs__ref { grid-template-columns: 1fr; }
 }
+
+/* ── 시작하기 · 화면 안의 탭 · 설명서 절 링크(제품화 2 ⑥ ⑦) ─────────────── */
+.start { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.start__row { padding: 4px 0; border-bottom: 1px solid var(--border); }
+.start__row:last-child { border-bottom: 0; }
+.start__line { display: flex; align-items: center; gap: var(--sp-2); min-height: 28px; flex-wrap: wrap; }
+.start__fact { color: var(--text); min-width: 0; }
+.start__row[data-level='warn'] .start__fact { color: var(--warn); }
+.start__cmd { margin: 4px 0 6px; }
+.stabs { display: flex; gap: 2px; margin: 0 0 var(--sp-3); border-bottom: 1px solid var(--border); }
+.stabs a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: 12.5px; color: var(--text-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.stabs a:hover { color: var(--text); text-decoration: none; }
+.stabs a[aria-selected='true'] { color: var(--accent); font-weight: 600; border-bottom-color: var(--accent); }
+.stabs__n { font-size: 11px; color: var(--pending); font-weight: 600; }
+.helpq { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; font-size: 11.5px; font-weight: 600; color: var(--text-2); border: 1px solid var(--border-strong); border-radius: 50%; }
+.helpq:hover { color: var(--accent); border-color: var(--accent-line); text-decoration: none; }

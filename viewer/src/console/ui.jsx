@@ -21,6 +21,19 @@ export function PageHead({ title, sub, children }) {
   )
 }
 
+// 한 페이지 안의 둘째 머리 — 서버 › 사람의 「토큰」 처럼 옛 페이지가 절이 된 자리. id 가 `#토큰` 주소의 닻이다
+export function SubHead({ id, title, sub, children }) {
+  return (
+    <div className="phead phead--sub" id={id}>
+      <div>
+        <h2 className="phead__t">{title}</h2>
+        {sub && <p className="phead__s">{sub}</p>}
+      </div>
+      {children && <div className="phead__act">{children}</div>}
+    </div>
+  )
+}
+
 export function Toolbar({ children }) {
   return <div className="toolbar">{children}</div>
 }

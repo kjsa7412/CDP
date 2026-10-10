@@ -252,6 +252,12 @@ export const repoApi = (name) => {
   return { repo: () => p('/repo') }
 }
 
+// ── 다음 할 일 — 「시작하기」 카드(제품화 2 ②) ─────────────────────────────────────────
+// 계산은 서버(`core/nextsteps.js`) 한 곳이다 — 화면은 그 줄을 그릴 뿐. 끝난 줄 · 권한 밖 줄은 서버가 이미 뺐다.
+// 레포는 이름으로 받는다(콘솔 현황은 레포 없이 · 레포 화면은 그 레포). 키는 `stepsKey` — 쓰기 뒤 `invalidate('/next')`
+export const stepsKey = (repo = null) => '/next' + (repo ? '?repo=' + encodeURIComponent(repo) : '')
+export const steps = (repo = null) => req(stepsKey(repo), { absolute: true })
+
 // ── 사이트 (검토 §4.2) — 공개 자리. 레포 이름 · 사람 이름이 없는 값만 온다 ──────
 export const site = {
   info: () => req('/site/info', { absolute: true }),

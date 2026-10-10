@@ -91,7 +91,9 @@ function Frame({ m, route }) {
 
   // 없는 주소 · 권한 밖 주소 — 그리지 않고 바꿔 쓴다. 이 렌더에서는 얼굴을 그리지 않는다(권한 밖 화면이 한 프레임도 서지 않게 ·
   // 그 화면이 권한 밖 API 를 부르지 않게)
-  const to = s.ready && app ? redirectOf(scr, s.me) : null
+  // 옛 주소의 바꿔 쓰기(alias)는 `#` 를 들고 간다 — `/console/users#matrix` → `/console/people#matrix`
+  const to0 = s.ready && app ? redirectOf(scr, s.me) : null
+  const to = to0 && scr.alias === to0 && !to0.includes('#') && route.hash ? to0 + route.hash : to0
   useLayoutEffect(() => {
     if (to) navigate(to, { replace: true })
   }, [to])

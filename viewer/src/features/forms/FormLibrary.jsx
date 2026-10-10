@@ -1,4 +1,5 @@
-// 큐레이션 › 서식집 — 옛 패키지 넷이 서식집의 묶음이 됐다(개편안 §8.1 · §7.3 S5).
+// 관리 문서 › 문서 추가 › 서식집 — 옛 패키지 넷이 서식집의 묶음이 됐다(개편안 §8.1 · §7.3 S5). 서식을 보는 때는 문서를 들일 때뿐이라
+// 관리 문서 화면의 탭이 됐다(화면 22 → 16). 문서를 세우는 것은 에이전트다 — [에이전트 지시 복사](cdp-registry).
 //
 //   왼쪽   서식 찾기 · 묶음 거름 · 서식 목록(이 레포가 쓰는 서식은 「씀」)
 //   오른쪽 고른 서식 — 탭 셋. 주소다(`/manage/forms/<묶음>/<번호>?tab=stamp|guide|example`)
@@ -10,12 +11,15 @@
 
 import { useMemo, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
-import { Card, Note } from '../../components/admin/ui.jsx'
+import { Card, Note, Btn } from '../../components/admin/ui.jsx'
+import HelpLink from '../../components/HelpLink.jsx'
+import { copyText } from '../../lib/clip.js'
+import { useToast } from '../../shell/toast.jsx'
 import { api, currentRepo } from '../../lib/api.js'
 import { useResource } from '../../lib/cache.js'
 import { Link } from '../../lib/router.jsx'
 import { renderMarkdown } from '../../lib/markdown.js'
-import { formPath } from '../../lib/curation.js'
+import { formPath, registryCommand } from '../../lib/curation.js'
 import { repoBase } from '../../shell/nav.js'
 import { ServerAbsent, isAbsent } from '../curation/marks.jsx'
 
@@ -47,7 +51,7 @@ export default function FormLibrary({ form = null, tab = 'stamp' }) {
 
   return (
     <div className="fsplit">
-      <Card title="서식집" hint={`묶음 ${groups.length} · 서식 ${forms.length}`}>
+      <Card title="서식집" hint={`묶음 ${groups.length} · 서식 ${forms.length}`} actions={<HelpLink topic="forms" />}>
         <label className="tin fl__q">
           <Icon name="search" size={13} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="서식 찾기 — 테이블 · DE_431 · 대장" spellCheck={false} aria-label="서식 찾기" />
@@ -89,12 +93,8 @@ export default function FormLibrary({ form = null, tab = 'stamp' }) {
       {picked ? (
         <FormView path={picked} home={home} tab={tab} meta={forms.find((f) => formPath(f) === picked) || null} />
       ) : (
-        <Card title="서식 하나를 고른다">
-          <Note>
-            서식에서 문서를 세우면 서버가 <b>제목 · 서식 표지 · 머리말</b>만 찍는다 — 예시 · 작성지침 · 관리번호 표는 문서로 가지 않는다(서식집에
-            남는다). 그래서 예시가 섹션으로 잡혀 문서가 지저분해지는 일이 구조적으로 없다. 큐레이터의 에이전트는 같은 것을 <code>forms()</code> 로
-            읽는다.
-          </Note>
+        <Card title="서식 하나를 고른다" actions={<CopyRegistry repo={rk} forms={[]} />}>
+          <Note>고르면 만들어지는 문서 · 작성지침 · 예시가 보인다. 문서는 에이전트가 세운다 — 지시를 복사해 붙인다.</Note>
         </Card>
       )}
     </div>
@@ -112,7 +112,7 @@ function FormView({ path, home, tab, meta }) {
   const registry = meta?.registry || []
 
   return (
-    <Card title={d?.title || meta?.title || path} hint={path}>
+    <Card title={d?.title || meta?.title || path} hint={path} actions={<CopyRegistry repo={rk} forms={[path]} />}>
       {isAbsent(f.error) ? (
         <ServerAbsent what="서식 하나" />
       ) : f.error ? (
@@ -156,4 +156,22 @@ function FormView({ path, home, tab, meta }) {
 // 서식 표지 주석 — 마크다운이 글자로 낸 `<!-- cdp:form x -->` 문단을 표지로 칠한다(살균된 HTML 의 글자 그대로 · 새 태그는 code 하나)
 function markStamp(html) {
   return String(html).replace(/<p>(&lt;!--\s*cdp:form\s[^<]*?--&gt;)<\/p>/g, '<p class="fv__mark"><code>$1</code> 서식 표지 — 이 문서를 세운 서식(화면이 칩으로 그린다)</p>')
+}
+
+// [에이전트 지시 복사] — 이 서식으로 새 관리 문서를 세우라는 지시(cdp-registry). 화면이 문서를 세우지 않는다
+function CopyRegistry({ repo, forms }) {
+  const say = useToast()
+  const [done, setDone] = useState(false)
+  const copy = () =>
+    copyText(registryCommand(repo, forms)).then((ok) => {
+      if (!ok) return say('복사하지 못했습니다')
+      setDone(true)
+      setTimeout(() => setDone(false), 1400)
+      say('에이전트 지시를 복사했다 — 큐레이터 폴더의 Claude Code 에 붙인다')
+    })
+  return (
+    <Btn kind="accent" onClick={copy} title="큐레이터 폴더의 Claude Code(cdp-registry)에 붙일 지시">
+      <Icon name={done ? 'check' : 'copy'} size={13} /> 에이전트 지시 복사
+    </Btn>
+  )
 }

@@ -16,9 +16,10 @@ export const SHELLS = [
   { key: 'sh', label: 'macOS · Linux' },
 ]
 
-export function installCommand(shell, { origin, repo = null, id = null, update = false, curator = false }) {
+//   그 밖         args 로 설치기 인자를 그대로 — 서버의 「다음 할 일」(`/next` 의 cmd.args)이 정한 것
+export function installCommand(shell, { origin, repo = null, id = null, update = false, curator = false, args: given = null }) {
   const url = `${origin}/install.mjs`
-  const args = update ? '--update' : curator ? `--curator --repo ${repo} .` : `--repo ${repo} --workrepo ${id} .`
+  const args = given ? String(given) : update ? '--update' : curator ? `--curator --repo ${repo} .` : `--repo ${repo} --workrepo ${id} .`
   if (shell === 'ps') return `curl.exe -fsSLo "$env:TEMP\\cdp-install.mjs" ${url}; if ($?) { node "$env:TEMP\\cdp-install.mjs" ${args} }`
   if (shell === 'cmd') return `curl -fsSLo "%TEMP%\\cdp-install.mjs" ${url} && node "%TEMP%\\cdp-install.mjs" ${args}`
   return `curl -fsSLo /tmp/cdp-install.mjs ${url} && node /tmp/cdp-install.mjs ${args}`

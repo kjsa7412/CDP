@@ -1,7 +1,8 @@
 // 찾기 — 왼쪽이 하는 두 일 중 하나. **시작점을 고른다.**
 //
 // 무엇의 목록인지는 **주소가 정한다**(개편안 §7.2) — `/r/<레포>/` 관리 문서 · `/r/<레포>/w` 작업 기록. 층이 다른 것을
-// 한 목록에 섞지 않는다: 관리 문서는 지금 상태, 작업 기록은 사건이다.
+// 한 목록에 섞지 않는다: 관리 문서는 지금 상태, 작업 기록은 사건이다. 둘을 고르는 것은 목록 위 세그(문서 · 기록)다 —
+// 메뉴의 「읽기」 하나가 둘을 든다(화면 22 → 16 · 옛 메뉴 「작업 기록」). 기록 쪽 세그에 대기 수(보라).
 //
 // 전에는 목록 머리에 범위 칩 셋(관리문서 · 작업문서 · 좌표)이 있었다. 왼쪽 메뉴가 생기며 같은 일을 하는 단추가 두 곳이
 // 됐고, 칩을 지웠다. 좌표 목록은 「좌표 · 그래프」 화면의 왼쪽 레일(묶음 → 좌표)이 맡는다 — 「내 좌표」(우클릭)도 거기로 갔다.
@@ -66,7 +67,7 @@ export default function Finder({
   const placeholder = scope === 'work' ? '제목 · 작성자 · 좌표로 찾기' : '관리 문서 찾기'
 
   // 거름 칩 — 링크다(주소가 상태 · 새 탭에서도 같은 목록). 대기는 서버가 상태를 낼 때만 · 내 기록은 로그인했을 때만
-  const pending = cur ? docs.filter((d) => d.curation?.state === 'queued').length : 0
+  const pending = hasCuration(docs) ? docs.filter((d) => d.curation?.state === 'queued').length : 0
   const mine = me?.user ? docs.filter((d) => d.author === me.user).length : 0
   const chips =
     scope === 'work' && (cur || me?.user)
@@ -79,6 +80,16 @@ export default function Finder({
 
   return (
     <div className="fd">
+      <div className="fd__seg" role="tablist" aria-label="목록">
+        <Link to={listBase} role="tab" aria-selected={scope === 'managed'}>
+          문서 <span className="fd__segn">{managed.length}</span>
+        </Link>
+        <Link to={listBase + 'w'} role="tab" aria-selected={scope === 'work'} title={pending ? `대기 ${pending}` : undefined}>
+          기록 <span className="fd__segn">{docs.length}</span>
+          {pending > 0 && <span className="fd__segq" aria-label={`대기 ${pending}`}>{pending}</span>}
+        </Link>
+      </div>
+
       {chips && (
         <div className="fd__scope" role="group" aria-label="거름">
           {chips.map((c) => (
