@@ -7,6 +7,7 @@
 import { Link, useRoute, useTitle } from '../lib/router.jsx'
 import { repoHref } from '../lib/api.js'
 import { useSession } from '../lib/session.jsx'
+import { builtOf } from '../lib/format.js'
 import Landing from './Landing.jsx'
 import Manual from './Manual.jsx'
 import Login from './Login.jsx'
@@ -33,7 +34,7 @@ export default function Site() {
       {s.err && <div className="wrap"><div className="anote anote--bad" style={{ marginTop: 16 }}>서버에 닿지 않습니다 — {s.err}</div></div>}
       {page}
       <footer className="site-foot">
-        <span>CDP{info?.version ? ` v${info.version}` : ''}{info?.built ? ` · 빌드 ${info.built}` : ''}</span>
+        <span>CDP{info?.version ? ` v${info.version}` : ''}{builtOf(info?.built) ? ` · 빌드 ${builtOf(info.built)}` : ''}</span>
         <span className="sp" />
         <Link to="/manual">설명서</Link>
         {me ? <Link to={repoHref()}>레포</Link> : <Link to="/login">로그인</Link>}

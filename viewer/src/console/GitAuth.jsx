@@ -1,4 +1,4 @@
-// git 자격 — 서버가 origin 에 닿는 두 길. 서버 › 서버 설정 의 카드 셋. git 자격 TODO G1~G8.
+// git 자격 — 서버가 origin 에 닿는 두 길. 서버 › 서버 의 카드 셋. git 자격 TODO G1~G8.
 //
 //   SSH 배포 키   서버가 만들고 공개 키만 보인다 → 사람이 GitLab 의 Deploy keys 에 붙인다(쓰기 권한)
 //   호스트 키     사람이 지문을 보고 믿는다 — 모르는 호스트에 서버는 묻지도 붙지도 않는다(StrictHostKeyChecking)
@@ -30,11 +30,11 @@ export function missingFor(url, g) {
   if (!g) return null
   const r = remoteOf(url)
   if (r.kind === 'ssh') {
-    if (!g.ssh?.exists) return '서버에 SSH 배포 키가 없다 — 서버 › 서버 설정 › git 자격에서 만들어 GitLab 에 붙인다'
-    if (!(g.knownHosts || []).some((h) => h.host === r.hostKey)) return `호스트 ${r.hostKey} 를 아직 믿지 않았다 — 서버 › 서버 설정 › git 자격 › 「호스트 키 받기」`
+    if (!g.ssh?.exists) return '서버에 SSH 배포 키가 없다 — 서버 › 서버 › git 자격에서 만들어 GitLab 에 붙인다'
+    if (!(g.knownHosts || []).some((h) => h.host === r.hostKey)) return `호스트 ${r.hostKey} 를 아직 믿지 않았다 — 서버 › 서버 › git 자격 › 「호스트 키 받기」`
   }
   if (r.kind === 'http' || r.kind === 'https') {
-    if (!(g.https?.entries || []).some((e) => e.scheme === r.kind && e.host === r.host)) return `${r.kind}://${r.host} 의 PAT 가 서버에 없다 — 셸에서 ctx serve git-auth (서버 › 서버 설정 › git 자격)`
+    if (!(g.https?.entries || []).some((e) => e.scheme === r.kind && e.host === r.host)) return `${r.kind}://${r.host} 의 PAT 가 서버에 없다 — 셸에서 ctx serve git-auth (서버 › 서버 › git 자격)`
   }
   return null
 }
@@ -48,7 +48,8 @@ const safeDecode = (x) => {
   }
 }
 
-export default function GitAuth({ say, prefix = '/opt/cdp' }) {
+// prefix — 서버가 낸 데이터 경로의 부모(Server.jsx). 모르면 `<설치 자리>` 로 둔다 — 경로를 손으로 쓰지 않는다(안내 글 규칙 ⑤)
+export default function GitAuth({ say, prefix = null }) {
   const withSudo = useSudo()
   const { data: g, refresh } = useResource('/admin/gitauth', admin.gitauth)
   const [url, setUrl] = useState('')
@@ -106,7 +107,7 @@ export default function GitAuth({ say, prefix = '/opt/cdp' }) {
   const sshRepos = (g.repos || []).filter((x) => x.ssh)
   const miss = url.trim() ? missingFor(url, g) : null
   const httpHost = r.kind === 'http' || r.kind === 'https' ? r.host : '<호스트:포트>'
-  const cli = `sudo -u cdp -H node ${prefix}/bin/ctx.mjs serve git-auth --host ${httpHost}${r.kind === 'https' ? ' --scheme https' : ''} --user <GitLab 계정>${url.trim() && (r.kind === 'http' || r.kind === 'https') ? ' --test ' + url.trim() : ''}`
+  const cli = `sudo -u cdp -H node ${prefix || '<설치 자리>'}/bin/ctx.mjs serve git-auth --host ${httpHost}${r.kind === 'https' ? ' --scheme https' : ''} --user <GitLab 계정>${url.trim() && (r.kind === 'http' || r.kind === 'https') ? ' --test ' + url.trim() : ''}`
 
   return (
     <div id="gitauth">

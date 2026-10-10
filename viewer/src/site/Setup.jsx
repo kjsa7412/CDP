@@ -124,7 +124,7 @@ export default function Setup({ info, onDone }) {
                   </div>
                   {msg && <div className="anote anote--bad">{msg}</div>}
                   <div className="anote">
-                    이 사람은 <b>admin</b> 이고 모든 레포(<code>*</code>)를 본다. 다음 사람부터는 서버 › 사용자에서 역할과 레포를 고른다.
+                    이 사람은 <b>admin</b> 이고 모든 레포(<code>*</code>)를 본다. 다음 사람부터는 서버 › 사람에서 역할과 레포를 고른다.
                   </div>
                 </div>
               </div>
@@ -164,10 +164,10 @@ export default function Setup({ info, onDone }) {
                 </span>
               </div>
               <div className="anote anote--warn">
-                <b>닫으면 다시 볼 수 없습니다.</b> <code>CDP_TOKEN</code> 환경변수에 넣습니다 — 파일 · 메신저 · 이슈에 남기지 않습니다. 잃으면 서버 › 토큰에서 재발급합니다.
+                <b>닫으면 다시 볼 수 없습니다.</b> <code>CDP_TOKEN</code> 환경변수에 넣습니다 — 파일 · 메신저 · 이슈에 남기지 않습니다. 잃으면 서버 › 사람에서 재발급합니다.
               </div>
               <div className="anote">
-                브라우저는 이미 로그인되어 있습니다. 다음은 서버 › <b>지식 레포</b>에서 첫 레포를 세우는 것입니다(설치절차 4장).
+                브라우저는 이미 로그인되어 있다. 다음은 서버 › <b>지식 레포</b>에서 첫 레포를 세운다.
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Link className="btn btn--accent" to="/console/repos">

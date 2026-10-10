@@ -15,6 +15,7 @@ import { navigate } from '../lib/router.jsx'
 import { clearAll } from '../lib/cache.js'
 import { can } from '../lib/roles.js'
 import { KEYS } from '../lib/keys.js'
+import { builtOf } from '../lib/format.js'
 
 const THEMES = [
   ['system', '자동'],
@@ -69,7 +70,7 @@ export default function AccountMenu({ me, info, repo, onLogout }) {
   const days = me?.expiresInDays
   const soon = typeof days === 'number' && days <= 7
   // 소스에서 띄운 서버는 번들 시각이 자리표시(`__CTX_BUILT__`)다 — 없는 값을 그리지 않는다
-  const built = info?.built && !/^__/.test(info.built) ? info.built : null
+  const built = builtOf(info?.built)
   const can_ = abilities(me, repo)
 
   return (
