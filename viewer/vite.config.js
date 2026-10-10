@@ -13,7 +13,7 @@ export default defineConfig({
     // 서버가 내는 자리만 넘긴다 — 화면 주소(/r · /console · /manual …)는 vite 가 그린다. Origin 이 루프백이라
     // 서버의 같은 출처 검사를 통과한다. 로그인은 POST 와 개인 서버의 첫 접속 주소(GET /login?auto=)만 서버로
     proxy: Object.fromEntries(
-      ['/api', '/admin', '/me', '/logout', '/kit', '/mcp', '/healthz', '/install.mjs', '/site']
+      ['/api', '/admin', '/me', '/next', '/workrepos', '/repos', '/logout', '/kit', '/mcp', '/healthz', '/install.mjs', '/site']
         .map((p) => [p, { target: 'http://127.0.0.1:7373', changeOrigin: true }])
         .concat([['/login', { target: 'http://127.0.0.1:7373', changeOrigin: true, bypass: (req) => (req.method === 'GET' && !/[?&]auto=/.test(req.url) ? '/index.html' : undefined) }]])
     ),

@@ -41,17 +41,17 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx term <이름>           어휘 조회 (정본 / alias / deprecated)
   ctx brief                 두 줄 요약 (절차 + 살아 있는 레포 상태 · 대기열)
   ctx version               이 번들이 언제 만들어졌나
-  ctx up [<폴더>] [--install <코드 폴더>]… [--curator <폴더>] [--service]
+  ctx up [<폴더>] [--install <코드 폴더>]… [--curator <폴더>] [--skills <폴더>] [--service] [--no-open] [--save-token] [--fix-gitignore]
                             **혼자 · 서버 없이 시작하는 한 줄** — 빈 틀 · 개인 서버 · 토큰 · 화면 · 작업 레포 설치까지
   ctx up <폴더> --update [--commit]   판이 오른 뒤 — 이 PC 의 작업 레포 · 큐레이터 폴더 전부
-  ctx self-update <tar.gz|url>        서버 산출물을 ~/.cdp/server 에 풀고 current 를 옮긴다 · 서비스면 다시 띄운다
-  ctx serve --root <폴더>    MCP 서버 + 관리 서비스 (HTTP). 상주 프로세스
+  ctx self-update <tar.gz|url> [--dry]  서버 산출물을 ~/.cdp/server 에 풀고 current 를 옮긴다 · 서비스면 다시 띄운다
+  ctx serve --root <폴더> | --config <serve.json>   MCP 서버 + 관리 서비스 (HTTP). 상주 프로세스 — 번들 옆 serve.json 이 있으면 그것을 읽는다
   ctx serve --personal <레포>  개인 서버 — 레포 하나 · 127.0.0.1 · 명부(나 하나)를 스스로 만든다. 서버 없는 팀 · 한 사람
   ctx serve user add|set|list --auth <f> [--role viewer|writer|admin] [--curate <레포,…|*>]   명부 — 권한은 여기 붙는다(--curate 는 레포별 큐레이터 · 빈 값이면 해제)
   ctx serve token [list|reissue|set|revoke] --auth <f>   토큰 — 신원만 증명한다. 폐기는 상태로 남는다
   ctx serve git-auth --host <h[:p]> --user <계정> [--test <url>]   origin 자격 — PAT 를 숨김 입력으로(.git-credentials 600)
   ctx serve git-auth --ssh --data <dir> [--rotate] | --list      SSH 배포 키(공개 키를 GitLab 에) · 지금 상태
-  ctx serve doctor --root … --auth … --data …   서버 준비물 검사 (fail 이면 exit 1)
+  ctx serve doctor [--config <serve.json>] | --personal <레포>   서버 준비물 검사 (fail 이면 exit 1 · 팀 서버는 serve.json 이 플래그를 채운다)
   ctx serve init --auth <f> --name <이름>       첫 관리자 + 토큰을 한 번에 (명부가 없을 때만 · 브라우저 /setup 과 같은 일)
   ctx repo new <경로> [--title <한 줄>] [--origin <url>] [--push]   지식 레포를 빈 틀로 세운다(서식은 서식집 · 스킬은 서버 kit)
   ctx repo list --root <폴더>               서버 <root> 의 레포 목록
