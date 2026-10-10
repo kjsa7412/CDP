@@ -19,7 +19,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { loadRepo } from './repo.js'
 import { runBuiltinCheck, newErrors } from './check.js'
-import { resolveCoord, parseRegistry, docEscapes, normValue } from './managed.js'
+import { resolveCoord, parseRegistry, docEscapes, normValue, outsideFences } from './managed.js'
 import { planManaged, checkManagedShape } from './managedops.js'
 import { readText } from './scan.js'
 import * as git from './git.js'
@@ -271,6 +271,24 @@ function addVocab(text, entries) {
 // 헤딩은 **유지**하고 그 아래만 갈아 끼운다. `applied` 주석은 서버가 쓴다 --
 // 클라이언트가 보내면 2단계에서 거절했다.
 
+// 섹션의 헤딩 줄 · 끝 줄 — **코드펜스 안의 `#` 줄은 헤딩이 아니다**(읽는 쪽 `parseManagedSections` 와 같은 규칙).
+// 전에는 줄마다 `^#{1,6}\s` 를 봐서 셸 주석(`# ① …`)이 든 코드 블록에서 섹션이 거기서 끝났다 — `section` 은 섹션 전체를 주는데
+// 치환은 그 앞까지만 갈아 끼워 코드 블록의 뒷부분이 섹션 밖에 남았고, 짝이 어긋난 펜스가 뒤의 헤딩을 전부 삼켰다
+// (ezipez_cdp 리빌딩 — 운영매뉴얼 · 신규팩터추가런북 섹션 일곱이 anchor-missing)
+function sectionSpan(lines, value, level) {
+  const re = new RegExp('^#{' + level + '}\\s+' + value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)')
+  const heads = []
+  for (const [i, l] of outsideFences(lines)) {
+    const m = /^(#{1,6})\s/.exec(l)
+    if (m) heads.push([i, m[1].length, l])
+  }
+  const k = heads.findIndex(([, , l]) => re.test(l))
+  if (k < 0) return { at: -1, end: lines.length }
+  const at = heads[k][0]
+  const next = heads.slice(k + 1).find(([, lv]) => lv <= level)
+  return { at, end: next ? next[0] : lines.length }
+}
+
 function replaceSection(text, { value, level, applied, body, id, heading }) {
   // 등록부의 `—`(문서 전체) 규칙 — level 0. **파일 전체가 그 좌표의 상태**다.
   // applied 는 문서 첫 줄의 주석이고(`topApplied` — `section` 이 읽는 것과 같은 규칙), 본문은 통째로 갈린다.
@@ -282,8 +300,7 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
     return { text: next.join(NL) + NL, created: false, current }
   }
   const lines = text.split(NL)
-  const re = new RegExp('^#{' + level + '}\\s+' + value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)')
-  const at = lines.findIndex((l) => re.test(l))
+  const { at, end } = sectionSpan(lines, value, level)
 
   if (at < 0) {
     // 새 섹션 — 문서 끝에 붙인다.
@@ -292,15 +309,7 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
     return { text: lines.concat(add).join(NL) + NL, created: true, current: null }
   }
 
-  // 같은/상위 레벨의 다음 헤딩 전까지가 이 섹션이다.
-  let end = lines.length
-  for (let i = at + 1; i < lines.length; i++) {
-    const m = /^(#{1,6})\s/.exec(lines[i])
-    if (m && m[1].length <= level) {
-      end = i
-      break
-    }
-  }
+  // 같은/상위 레벨의 다음 헤딩 전까지가 이 섹션이다(펜스 밖의 헤딩만 — sectionSpan)
 
   // 지금 실려 있는 applied
   let current = null
@@ -321,20 +330,11 @@ function replaceSection(text, { value, level, applied, body, id, heading }) {
 // 기준선 블록만 갈아 끼운다 — 섹션을 찾고, 그 안의 블록을 바꾸거나(없으면) 경과 앞 · 끝에 넣는다. 섹션이 없으면 만든다(applied: null)
 function replaceBaseline(text, { value, level, heading, block }) {
   const lines = text.split(NL)
-  const re = new RegExp('^#{' + level + '}\\s+' + value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)')
-  const at = lines.findIndex((l) => re.test(l))
+  const { at, end } = sectionSpan(lines, value, level)
   if (at < 0) {
     const add = ['', '#'.repeat(level) + ' ' + (heading || value), APPLIED_MARK + ' null -->', '', ...block.split(NL)]
     while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
     return lines.concat(add).join(NL) + NL
-  }
-  let end = lines.length
-  for (let i = at + 1; i < lines.length; i++) {
-    const m = /^(#{1,6})\s/.exec(lines[i])
-    if (m && m[1].length <= level) {
-      end = i
-      break
-    }
   }
   // 헤딩 · applied 주석(앞 3줄)은 그대로 두고 그 아래를 가른다
   let k = at + 1
@@ -813,7 +813,14 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       // `—`(문서 전체 · level 0) 는 본문에 헤딩이 있는 것이 정상이라 보지 않는다.
       if (hit.level > 0) {
         const splitRe = new RegExp('^#{1,' + hit.level + '}\\s')
-        const at = s.body.split(NL).findIndex((l) => splitRe.test(l))
+        // 코드펜스 안의 `#` 줄(셸 주석)은 헤딩이 아니다 — 파서와 치환(sectionSpan)도 펜스 밖만 본다
+        let at = -1
+        for (const [i, l] of outsideFences(s.body.split(NL))) {
+          if (splitRe.test(l)) {
+            at = i
+            break
+          }
+        }
         if (at >= 0) {
           throw new CtxError(
             'E_INPUT',
