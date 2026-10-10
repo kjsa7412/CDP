@@ -154,6 +154,7 @@ function parseArgs(argv) {
     else if (a === '--update') out.update = true
     else if (a === '--commit') out.commit = true
     else if (a === '--fix-gitignore') out.fixIgnore = true
+    else if (a === '--config') out.config = argv[++i]
     else if (a === '--desktop') out.desktop = true
     else if (a === '--also') (out.also ||= []).push(argv[++i])
     else if (a === '--built-at') out.builtAt = argv[++i]
@@ -636,7 +637,24 @@ async function cmdDrift(r, opt) {
 // ── 진입점 ──────────────────────────────────────────────────────────────────
 
 export async function main(argv = process.argv.slice(2)) {
-  const opt = parseArgs(argv)
+  let opt = parseArgs(argv)
+  if (opt.cmd === 'serve' || (opt.cmd === 'repo' && opt.args[0] === 'new')) {
+    // serve.json(제품화 2 F5) — 팀 서버는 `install.sh` 가 번들 옆에 둔다. 개인 서버(--personal)는 쓰지 않는다
+    if (!opt.personal) {
+      try {
+        const { findServeConfig, applyServeConfig } = await import('./ctx-config.mjs')
+        const found = await findServeConfig({ explicit: opt.config || null })
+        if (found) {
+          opt = applyServeConfig(opt, found.cfg)
+          // `repo new <이름>` — 경로가 아니라 이름만 주면 서버의 레포 폴더(root) 아래로
+          if (opt.cmd === 'repo' && opt.root && opt.args[1] && !/[\\/]/.test(opt.args[1])) opt.args = ['new', path.join(opt.root, opt.args[1]), ...opt.args.slice(2)]
+        }
+      } catch (e) {
+        err('ctx: ' + e.message)
+        return 2
+      }
+    }
+  }
   if (opt.cmd === 'version') {
     // 판을 먼저 — 「지금 몇 판인가」 를 CLI 로 알 수 있게(제품화 2 F9). 빌드 시각은 같은 판의 다른 번들을 가른다
     out(`v${appVersion(hereDir(import.meta.url))} · ${BUILT.startsWith('__') ? '원본 실행(번들 아님)' : '빌드 ' + BUILT}`)

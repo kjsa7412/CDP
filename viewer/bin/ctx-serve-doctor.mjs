@@ -17,6 +17,7 @@
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import os from 'node:os'
 import * as auth from '../../core/auth.js'
 import { listRepos } from '../../core/reponew.js'
 import { classifyPushError } from '../../core/git.js'
@@ -104,7 +105,8 @@ export async function doctorRows(opt) {
         const adminNames = new Set(admins.map((a) => a.name))
         // 남은 일수는 그날 끝까지라 올림이다 — 갓 발급한 30일 토큰이 31 로 센다. 하루를 봐준다.
         const longAdmin = list.filter((t) => t.status === 'active' && adminNames.has(t.user) && (t.daysLeft === null || t.daysLeft > auth.ADMIN_EXPIRES_DAYS))
-        if (longAdmin.length) warn('관리자 토큰', longAdmin.map((t) => `${t.user}(${t.id}) ${t.daysLeft === null ? '무기한' : t.daysLeft + '일'}`).join(' · ') + ` — 관리자 토큰은 ${auth.ADMIN_EXPIRES_DAYS}일 안으로 둔다`)
+        // 개인 서버는 그 PC 의 주인 하나 — 무기한이 설계다(preparePersonal)
+        if (longAdmin.length && !opt.only) warn('관리자 토큰', longAdmin.map((t) => `${t.user}(${t.id}) ${t.daysLeft === null ? '무기한' : t.daysLeft + '일'}`).join(' · ') + ` — 관리자 토큰은 ${auth.ADMIN_EXPIRES_DAYS}일 안으로 둔다`)
       } catch (e) {
         fail('auth.json 형식', e.message)
       }
@@ -132,7 +134,7 @@ export async function doctorRows(opt) {
   {
     const web = await resolveWebDir({ explicit: opt.web || null })
     const has = await fs.access(path.join(web, 'index.html')).then(() => true).catch(() => false)
-    if (has) ok('web', web + (opt.web ? '' : ' (번들 옆)'))
+    if (has) ok('web', web)
     else if (opt.web) fail('web', `${opt.web}/index.html 이 없다 — 산출물의 web/ 을 준다`)
     else warn('web', '없다 — 화면 없이 MCP 와 읽기 API 만 돈다. 산출물의 web/ 을 번들 옆에 둔다')
   }
@@ -151,7 +153,8 @@ export async function doctorRows(opt) {
   // ── 레포
   if (!opt.root) fail('--root', '없다')
   else {
-    const repos = await listRepos(path.resolve(opt.root)).catch(() => null)
+    // 개인 서버는 레포 하나 — 옆 폴더들(~/Documents/GitHub 의 코드 레포들)을 「레포 아님」 으로 세지 않는다
+    const repos = await listRepos(path.resolve(opt.root)).then((rs) => (opt.only ? rs.filter((r) => r.name === opt.only) : rs)).catch(() => null)
     if (!repos) fail('--root', `${opt.root} 를 읽을 수 없다`)
     else {
       const real = repos.filter((r) => r.vocab)
@@ -232,6 +235,13 @@ export async function doctorRows(opt) {
 }
 
 export async function runDoctor(opt) {
+  // 개인 서버 — 자리는 정해져 있다(~/.cdp/personal/<레포> · up.json 의 포트). 플래그를 다시 받지 않는다(제품화 2 F5)
+  if (opt.personal) {
+    const repo = path.resolve(String(opt.personal === true ? opt.args?.[1] || '.' : opt.personal))
+    const data = path.resolve(opt.data || path.join(os.homedir(), '.cdp', 'personal', path.basename(repo)))
+    const up = await fs.readFile(path.join(data, 'up.json'), 'utf8').then(JSON.parse).catch(() => null)
+    opt = { ...opt, root: path.dirname(repo), auth: path.join(data, 'auth.json'), data, bind: '127.0.0.1', port: opt.port || up?.port || 7400, only: path.basename(repo) }
+  }
   const res = await doctorRows(opt)
   if (opt.json) {
     out(JSON.stringify(res, null, 2))

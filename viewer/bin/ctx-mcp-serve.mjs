@@ -2262,13 +2262,21 @@ export async function runAuthCmd(opt) {
   try {
     if (group === 'user') {
       if (sub === 'add') {
+        // 이름은 --name 또는 자리 인자(`serve user add bob`) — 제품화 2 F9
+        if (!opt.name && opt.args[2]) opt = { ...opt, name: opt.args[2] }
         const name = need(opt, 'name', '이름')
         if (!name) return 2
-        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos: reposOpt() ?? [], role: opt.role ?? null, write: !!opt.write, curate: opt.curate ? String(opt.curate).split(',') : [] })
-        out(`명부에 넣었다: ${u.name} · repos ${u.repos.join(',') || '(없음)'} · role ${u.role}`)
+        // 큐레이터로 맡긴 레포는 볼 수도 있어야 한다 — repos 를 안 줬으면 그 레포들로
+        const curate = opt.curate ? String(opt.curate).split(',') : []
+        const repos = reposOpt() ?? (curate.length ? curate : [])
+        const u = auth.userAdd(db, { name, label: opt.label ?? null, repos, role: opt.role ?? null, write: !!opt.write, curate })
+        out(`명부에 넣었다: ${u.name} · repos ${u.repos.join(',') || '(없음)'} · role ${u.role}${(u.curate || []).length ? ' · 큐레이터 ' + u.curate.join(',') : ''}`)
+        if (!u.repos.length) out('  볼 레포가 없다 — --repos <레포,…> 또는 콘솔 › 사람')
+        out(`  토큰 — serve token --user ${u.name}   (원문은 그때 한 번 · 또는 콘솔 › 사람 [발급])`)
         return done(`user add · ${u.name} · repos=${u.repos.join(',')} · role=${u.role}`)
       }
       if (sub === 'set') {
+        if (!opt.name && opt.args[2]) opt = { ...opt, name: opt.args[2] }
         const name = need(opt, 'name', '이름')
         if (!name) return 2
         const patch = {}
@@ -2281,7 +2289,7 @@ export async function runAuthCmd(opt) {
         if (opt.curate !== undefined) patch.curate = opt.curate === true || opt.curate === '' ? [] : String(opt.curate).split(',')
         // 셸에는 actor 가 없다 — 자기 해제 가드는 화면의 것이고, 마지막 admin 가드만 여기서도 선다.
         const u = auth.userSet(db, name, patch)
-        out(`고쳤다: ${u.name} · active ${u.active} · repos ${(u.repos || []).join(',')} · role ${u.role}`)
+        out(`고쳤다: ${u.name} · active ${u.active} · repos ${(u.repos || []).join(',')} · role ${u.role}${(u.curate || []).length ? ' · 큐레이터 ' + u.curate.join(',') : ''}`)
         return done(`user set · ${u.name} · ${JSON.stringify(patch)}`)
       }
       if (sub === 'list' || sub === undefined) {
@@ -2293,13 +2301,14 @@ export async function runAuthCmd(opt) {
           return 0
         }
         if (opt.repoFilter) out(`${opt.repoFilter} 를 볼 수 있는 사람 ${rows.length}명`)
-        out(`${pad('이름', 14)}${pad('상태', 8)}${pad('레포', 20)}${pad('역할', 8)}${pad('토큰', 8)}${pad('마지막 사용', 14)}설명`)
+        out(`${pad('이름', 14)}${pad('상태', 8)}${pad('레포', 20)}${pad('역할', 8)}${pad('큐레이터', 16)}${pad('토큰', 8)}${pad('마지막 사용', 14)}설명`)
         for (const r of rows) {
           out(
             pad(r.name, 14) +
               pad(r.active ? '활성' : '중지', 8) +
               pad((r.repos || []).join(',') || '-', 20) +
               pad(r.role, 8) +
+              pad(r.role === 'admin' ? '*' : (r.curate || []).join(',') || '-', 16) +
               pad(`${r.liveTokens}/${r.tokens}`, 8) +
               pad(r.lastUsed ? r.lastUsed.slice(0, 10) : '-', 14) +
               (r.label || '')

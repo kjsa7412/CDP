@@ -48,6 +48,8 @@ export async function runRepo(opt) {
       }
       if (r.origin) out(`  origin  ${r.origin}${r.pushed ? '  (push 완료)' : r.pushError ? '  (push 실패: ' + r.pushError + ')' : '  (push 안 함)'}`)
       if (r.pushError) out(`  다시 보내기 — git -C "${r.dest}" push -u origin HEAD   (자격: ctx serve git-auth · 빈 프로젝트인지 확인)`)
+      // install.sh 처럼 부르는 쪽이 다음 할 일을 한 번에 말할 때는 뺀다
+      if (process.env.CDP_QUIET_NEXT) return r.pushError ? 1 : 0
       out('')
       out('다음 —')
       out(`  혼자 · 서버 없이   ctx up "${r.dest}"            화면 · MCP · 토큰까지 한 번에(--install <코드 폴더> 로 작업 레포도)`)

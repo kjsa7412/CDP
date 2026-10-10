@@ -107,28 +107,38 @@ manual/           설명서 + 그림.  서버가 /manual 로 낸다
 deploy/           systemd 유닛 · install.sh · upgrade.sh · Dockerfile
 \`\`\`
 
-새 지식 레포는 콘솔 「새 지식 레포」(빈 틀 · 기록만 옮겨 오기) 또는 \`node bin/ctx.mjs repo new <root>/<이름>\`.
-
-## 처음
+## 혼자 · 서버 없이 — 한 줄
 
 \`\`\`
-sudo bash deploy/install.sh --bind <이 서버 IP>
+node bin/ctx.mjs self-update ../cdp-server-v${VERSION}.tar.gz      ~/.cdp/server 에 두고 ~/.cdp/bin/ctx 를 만든다(처음 한 번)
+ctx up ~/cdp/<레포 이름> --install <코드 폴더> --curator ~/cdp/curator
 \`\`\`
 
-끝에 찍히는 **부트스트랩 코드**로 브라우저 \`http://<IP>:7374/setup\` 에서 첫 관리자를 만들고,
-레포 · 사용자 · 토큰은 콘솔(\`/console\`)에서 한다. git 자격(3장)만 셸이다 — \`deploy/설치절차.md\`.
+빈 틀 · 개인 서버 · 토큰 · 화면 · 작업 레포 설치까지 한 번에. 판을 올릴 때는 \`ctx self-update <새 tar>\` 뒤 \`ctx up <레포> --update\`.
+
+## 팀 서버 — 한 줄
+
+\`\`\`
+sudo bash deploy/install.sh --bind <이 서버 IP> --admin <아이디> --repo <레포 이름> [--origin <빈 git 프로젝트>] [--ssh]
+\`\`\`
+
+설치 · 첫 관리자(토큰은 그때 한 번) · 첫 레포 · git 자격 · 준비물 검사까지. 끝에 남은 일만 찍힌다 —
+그다음은 브라우저 콘솔의 「시작하기」 를 따라간다. 설정은 \`serve.json\` 한 장이고 셸 명령은 \`cdp\` 하나다
+(\`cdp serve doctor\` · \`cdp serve user add <아이디> --role writer --curate <레포>\` · \`cdp repo new <이름>\`).
+Docker 는 \`deploy/docker-compose.yml\` — 머리 주석.
 
 ## 갱신
 
 \`\`\`
-sudo bash deploy/upgrade.sh <이 tar.gz>
+sudo bash deploy/upgrade.sh <이 tar.gz>          팀 서버
+ctx self-update <이 tar.gz>                       개인 서버
 \`\`\`
 
 ## 확인
 
 \`\`\`
-node bin/ctx.mjs version                         ${stamp} · mcp: http
-node bin/ctx.mjs serve doctor --root … --auth … --data … --web web     (kit · forms 는 번들 옆을 찾는다)
+node bin/ctx.mjs version                          v${VERSION} · 빌드 ${stamp}
+cdp serve doctor                                  (개인 서버: ctx serve doctor --personal <레포>)
 \`\`\`
 `,
   'utf8'

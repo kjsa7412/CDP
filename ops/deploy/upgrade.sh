@@ -39,6 +39,10 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] && systemc
 UNIT=""
 [ "$HAS_SYSTEMD" = 1 ] && UNIT="$(systemctl cat cdp-serve 2>/dev/null || true)"
 unit_arg() { printf '%s' "$UNIT" | grep -o -- "--$1 [^ \\]*" | awk '{print $2}' | head -1 || true; }
+# serve.json(제품화 2 F5) — install.sh v1.2 부터 유닛은 --config 하나다. 값은 거기서 읽는다
+conf_arg() { [ -f "$PREFIX/serve.json" ] && "$NODE_BIN" -p "(JSON.parse(require('fs').readFileSync('$PREFIX/serve.json','utf8'))['$1'] ?? '')" 2>/dev/null || true; }
+# `ctx version` 첫 줄 — v1.2 부터 「v<판> · 빌드 <시각>」. healthz.built 와 견줄 것은 시각이다(옛 번들은 시각만 찍는다)
+stamp_of() { "$NODE_BIN" "$1" version | head -1 | sed -e 's/^v[^ ]* · 빌드 //' -e 's/^v[^ ]* · 원본 실행.*$/__CTX_BUILT__/'; }
 
 # 통째로 갈아 끼우는 폴더 — 자산 이름에 해시가 붙어 덮어쓰기만 하면 옛 파일이 쌓인다
 DIRS="web forms kit manual"
@@ -53,9 +57,9 @@ if [ -d "$ART" ]; then NEW="$ART"; else
 fi
 [ -n "$NEW" ] && [ -f "$NEW/bin/ctx.mjs" ] || die "산출물 안에 bin/ctx.mjs 가 없다 (bin/ctx.mjs missing in artifact)"
 [ -f "$NEW/web/index.html" ] || die "산출물 안에 web/index.html 이 없다 (web/ missing)"
-NEW_BUILT="$("$NODE_BIN" "$NEW/bin/ctx.mjs" version | head -1)"
+NEW_BUILT="$(stamp_of "$NEW/bin/ctx.mjs")"
 NEW_ASSET="$(grep -o 'assets/index-[^"]*js' "$NEW/web/index.html" | head -1 || true)"
-OLD_BUILT="$("$NODE_BIN" "$PREFIX/bin/ctx.mjs" version | head -1 || echo '?')"
+OLD_BUILT="$(stamp_of "$PREFIX/bin/ctx.mjs" || echo '?')"
 say "지금 $OLD_BUILT → 새것 $NEW_BUILT · 화면 ${NEW_ASSET:-?}"
 
 # ── 2 되돌릴 것 (한 세대)
@@ -92,8 +96,8 @@ for d in $DIRS; do chown -R "$SVC_USER:$SVC_USER" "$PREFIX/$d" 2>/dev/null || tr
 if [ "$HAS_SYSTEMD" = 1 ]; then
   systemctl restart cdp-serve
   # 유닛에서 bind · port 를 읽어 healthz 를 친다
-  BIND="$(unit_arg bind)"
-  PORT="$(unit_arg port)"
+  BIND="$(conf_arg bind)"; [ -n "$BIND" ] || BIND="$(unit_arg bind)"
+  PORT="$(conf_arg port)"; [ -n "$PORT" ] || PORT="$(unit_arg port)"
   BIND="${BIND:-127.0.0.1}"; PORT="${PORT:-7374}"
   GOT=""
   for i in 1 2 3 4 5 6 7 8 9 10; do
@@ -117,7 +121,12 @@ if [ -n "$NEW_ASSET" ] && [ "$GOT_ASSET" != "$NEW_ASSET" ]; then
 fi
 say "화면 자산 $GOT_ASSET ✓"
 say "끝났다 (done). 브라우저는 강제 새로고침(Ctrl+Shift+R). 되돌릴 것: $PREFIX/bin/ctx.mjs.bak · web.bak · forms.bak · kit.bak · manual.bak (한 세대)"
-say "작업 레포의 스킬이 바뀌었으면 관리 › 작업 레포에 「낡음」 이 뜬다 — 각자 설치 한 줄 --update · 큐레이터는 --curator"
+# 에이전트 세팅(kit)이 바뀌었나 — 바뀌었으면 사람들이 할 한 줄을 말한다(제품화 2 ④). 안 바뀌었으면 말하지 않는다
+if [ -d "$PREFIX/kit.bak" ] && ! diff -rq "$PREFIX/kit.bak" "$PREFIX/kit" >/dev/null 2>&1; then
+  say "에이전트 세팅(kit)이 바뀌었다 — 각 PC 에서 한 줄(작업 레포 · 큐레이터 폴더 전부):"
+  say "    설치기 --update [--commit]   (화면 「시작하기」 · 연결된 작업 레포 에 같은 줄이 있다)"
+fi
+command -v cdp >/dev/null 2>&1 && say "확인: cdp serve doctor"
 # v0.x 에서 올라왔으면 — 옛 도구 층이 남은 레포는 진단(ctx serve doctor)이 알린다. 서버를 멈추고 ctx migrate <레포>
 [ -d "$PREFIX/packages" ] && say "v1.0 은 $PREFIX/packages 를 쓰지 않는다 — 확인 뒤 지워도 된다 (packages/ is unused since v1.0)"
 exit 0
