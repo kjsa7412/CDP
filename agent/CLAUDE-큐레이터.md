@@ -14,10 +14,11 @@
 |---|---|
 | `cdp-curate` | 대기열의 기록을 관리 문서에 반영 — 「큐레이션해 줘」 · 화면의 [에이전트 지시 복사] |
 | `cdp-registry` | 등록부 · 문서 구조 — 행 더하기(서식) · 이름 · 합치기 · 폐기 · 지우기 · 서식 예시 · 섹션 밖 글 |
+| `cdp-rebuild` | 시간이 지나 어긋난 관리 문서 — `drift` 로 진단 · 원천 채우기(스냅샷 · 좌표정정) · 묶음으로 다시 세우기(재큐레이션) |
 | `cdp-work` · `cdp-save` | 지금 상태 읽기 · 큐레이터 자신의 작업 기록 |
 
 큐레이터에게만 보이는 도구 — `queue`(대기열 · 오래된 순 · `queue({ id })` 판정 재료) · `forms`(서식집 — 새 문서의 서식 ·
-guide · example · 서버가 찍을 빈 문서). `save` 는 큐레이션 기록(`work.curates`)과 `sections` · `managed` · `vocab` · `edits` 를 한 커밋에 받는다.
+guide · example · 서버가 찍을 빈 문서) · `drift`(어긋남 진단 — 근거 없음 · 복제 · 비대 · 일지형 · 좌표 없는 기록). `save` 는 큐레이션 기록(`work.curates`)과 `sections` · `managed` · `vocab` · `edits` 를 한 커밋에 받는다.
 
 ### 지킬 것
 

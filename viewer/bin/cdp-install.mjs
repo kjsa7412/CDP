@@ -92,7 +92,7 @@ export async function main(argv) {
     return updateAll({ server, paths: pos, dry, yes, commit: flags.commit, noSave: flags.noSave })
   }
 
-  // 큐레이터 폴더(v1.0 §6.3) — git 레포가 아니어도 되고 대장에 오르지 않는다. 큐레이터 kit(스킬 다섯 · 큐레이터 블록)을 받는다
+  // 큐레이터 폴더(v1.0 §6.3) — git 레포가 아니어도 되고 대장에 오르지 않는다. 큐레이터 kit(스킬 여섯 · 큐레이터 블록)을 받는다
   if (flags.curator) {
     if (!net) return bail('--curator 는 한 줄 설치기로 돈다 — 큐레이션 › 대기열 아래 「큐레이터 폴더」 의 한 줄을 쓰세요.')
     const dir = pos[0] || '.'

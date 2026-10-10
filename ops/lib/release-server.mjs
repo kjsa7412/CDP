@@ -11,7 +11,7 @@
 //     bin/ctx.mjs  bin/ctx  bin/ctx.cmd     서버 본체 (MCP · 관리 서비스 · ctx)
 //     web/                                  관리 서비스 화면
 //     forms/<묶음>/                         서식집 — 큐레이터가 새 관리 문서를 세울 때 고른다(팀 서식은 <data>/forms)
-//     kit/                                  작업 레포 kit — 스킬 다섯 · CLAUDE 블록 둘(writer · 큐레이터). 설치 한 줄이 받는다
+//     kit/                                  작업 레포 kit — 스킬 여섯(writer 셋 · 큐레이터 여섯) · CLAUDE 블록 둘(writer · 큐레이터). 설치 한 줄이 받는다
 //     manual/                               설명서 + 그림 — 서버가 /manual 로 낸다
 //     deploy/                               유닛 · install.sh · upgrade.sh · Dockerfile · compose
 //     README.md                             버전 · 번들 시각 · 시작 한 줄
