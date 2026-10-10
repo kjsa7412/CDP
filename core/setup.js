@@ -237,6 +237,25 @@ export function repoDriftNote(had, repo) {
   return cur && cur !== repo ? `.mcp.json 의 cdp 가 /mcp/${cur} 를 가리키고 있었다 — /mcp/${repo} 로 바로잡는다(.claude/cdp.json 의 repo 와 같게). 그동안 repo 를 빠뜨린 읽기는 ${cur} 로 갔다` : null
 }
 
+// 서버는 폴더 안을 모르니 빈 폴더 기준의 파일을 보낸다 — 있는 `CLAUDE.md` 는 블록만, `.mcp.json` 은 `cdp` 키만 갈아 끼운다.
+// 전에는 받은 그대로 덮어 큐레이터가 블록 밖에 적은 레포 규칙 · 다른 MCP 서버가 사라졌다(ezipez_curator 설치)
+export function mergeCuratorFile(rel, data, cur, kit) {
+  if (cur == null) return data
+  if (rel === 'CLAUDE.md') {
+    const text = data.toString('utf8')
+    const i = text.indexOf(BEGIN)
+    const k = text.indexOf(END)
+    if (i < 0 || k < i) return data
+    const body = text.slice(i + BEGIN.length, k).replace(/^\s*<!--\s*cdp:kit\s+[0-9a-f]+\s*-->\s*/, '')
+    return Buffer.from(mergeClaude(cur.toString('utf8'), body, kit))
+  }
+  if (rel === '.mcp.json') {
+    const entry = JSON.parse(data.toString('utf8'))?.mcpServers?.cdp
+    return entry ? Buffer.from(mergeMcpJson(cur.toString('utf8'), entry)) : data
+  }
+  return data
+}
+
 export function mcpEntryServer(server, repo) {
   return {
     type: 'http',

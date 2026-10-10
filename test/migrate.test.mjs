@@ -90,6 +90,9 @@ test('ctx migrate — 전환 기록 커밋 · 대기열은 옛 판정이 남긴 
     'INDEX.md': '# 색인\n',
     'bin/ctx.mjs': '// 옛 도구\n',
     '.githooks/pre-commit': '#!/bin/sh\nexit 1\n',
+    // 로컬형의 뷰어 바이너리 — 무시된 채 디스크에만 있다. git rm 에 넣으면 걷기 전체가 실패했다(ezipez_cdp 이행)
+    '.gitignore': 'tools/\n',
+    'tools/cdp': '옛 뷰어\n',
   })
   const g = (...a) => run('git', ['-C', root, ...a])
   await g('init', '-q')
@@ -115,6 +118,8 @@ test('ctx migrate — 전환 기록 커밋 · 대기열은 옛 판정이 남긴 
 
   for (const rel of ['MANUAL.md', 'CLAUDE.md', 'INDEX.md', 'bin', '.githooks']) assert.equal(await fs.stat(path.join(root, rel)).catch(() => null), null, rel)
   assert.ok(await fs.stat(path.join(root, 'README.md')))
+  assert.ok(await fs.stat(path.join(root, 'tools/cdp')), '무시된 파일은 git 의 것이 아니다 — 두고 간다')
+  assert.doesNotMatch(text, /도구 층 — .*tools/)
   assert.equal((await g('config', '--get', 'core.hooksPath').catch((e) => e)).stdout?.trim() || '', '')
   const log = (await g('log', '--format=%an|%s')).stdout.trim().split('\n')
   assert.equal(log.length, 3)

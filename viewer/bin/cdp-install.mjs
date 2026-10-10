@@ -38,7 +38,7 @@ import path from 'node:path'
 import os from 'node:os'
 import readline from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { planSetup, applySetup, mergeMcpJson, mcpEntryServer, repoDriftNote } from '../../core/setup.js'
+import { planSetup, applySetup, mergeMcpJson, mcpEntryServer, repoDriftNote, mergeCuratorFile } from '../../core/setup.js'
 import { saveToken, storeLabel } from '../../core/tokenstore.js'
 import { execFile } from 'node:child_process'
 import { regFile, loadReg, saveReg, record, forServer, samePath } from '../../core/localreg.js'
@@ -253,8 +253,8 @@ async function installCurator({ server, repo, dir, dry, yes, noSave }) {
     const rel = String(f.name || '')
     const dst = path.resolve(root, rel)
     if (!rel || !(dst === root || dst.startsWith(root + path.sep))) continue
-    const data = Buffer.from(String(f.data || ''), 'base64')
     const cur = await fs.readFile(dst).catch(() => null)
+    const data = mergeCuratorFile(rel, Buffer.from(String(f.data || ''), 'base64'), cur, j.kit)
     plan.push({ rel, dst, data, op: cur == null ? 'create' : Buffer.compare(cur, data) === 0 ? 'same' : 'update' })
   }
   for (const a of plan) out(`  ${a.op === 'same' ? ' ' : '*'} ${a.op.padEnd(7)} ${a.rel}`)

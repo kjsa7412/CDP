@@ -69,7 +69,8 @@ export async function runMigrate(opt, io = {}) {
     // 3 도구 층
     if (!opt.keepTools) {
       const present = []
-      for (const rel of TOOL_LAYER) if (await fs.stat(path.join(root, rel)).catch(() => null)) present.push(rel)
+      // git 이 추적하는 것만 — 무시된 사본(로컬형의 tools/ 처럼 .gitignore 에 든 것)까지 넣으면 git rm 전체가 실패한다
+      for (const rel of TOOL_LAYER) if ((await git(root, ['ls-files', '--', rel])).out) present.push(rel)
       out(`  도구 층 — ${present.length ? present.join(' · ') : '없다'}`)
       if (present.length && !opt.dry) {
         const rm = await git(root, ['rm', '-r', '-q', '--', ...present])
