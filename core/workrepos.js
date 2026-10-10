@@ -113,3 +113,31 @@ export function list(db, { kits = {}, known = null } = {}) {
     ...(known ? { orphan: !known.includes(r.knowledge) } : {}),
   }))
 }
+
+// ── 큐레이터 폴더를 받은 사실 — 사람 × 레포 → 받은 kit(제품화 2 ②) ──────────────────────
+//
+// 큐레이터 폴더는 대장에 오르지 않는다(경로는 PC 만 안다 · v1.0 §6.3). 그래도 「시작하기」 는 「큐레이터 폴더가 없다 ·
+// 낡았다」 를 말해야 해서, 서버가 큐레이터 kit 을 내줄 때 **누가 · 어느 레포 · 어느 kit** 만 적는다. 권한을 들지 않는다 —
+// 잃어도 다음 `--curator` · `--update` 가 다시 적는다. 그래서 깨졌으면 빈 표로 읽는다.
+const ckFile = (dataDir) => path.join(dataDir, 'curatorkits.json')
+export const curatorKey = (user, repo) => `${user}\t${repo}`
+
+export async function loadCuratorKits(dataDir) {
+  if (!dataDir) return {}
+  try {
+    const j = JSON.parse(await fs.readFile(ckFile(dataDir), 'utf8'))
+    return j && typeof j === 'object' ? j : {}
+  } catch {
+    return {}
+  }
+}
+
+export async function seeCuratorKit(dataDir, { user, repo, kit, at = new Date() }) {
+  if (!dataDir || !user || !repo) return
+  const db = await loadCuratorKits(dataDir)
+  db[curatorKey(user, repo)] = { kit: kit || null, at: at.toISOString().slice(0, 16).replace('T', ' ') }
+  await fs.mkdir(dataDir, { recursive: true }).catch(() => {})
+  const tmp = ckFile(dataDir) + '.tmp-' + process.pid
+  await fs.writeFile(tmp, JSON.stringify(db, null, 2) + '\n', 'utf8')
+  await fs.rename(tmp, ckFile(dataDir))
+}

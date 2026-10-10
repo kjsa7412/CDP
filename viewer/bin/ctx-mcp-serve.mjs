@@ -18,11 +18,12 @@ import { createMcpHandler } from '@modelcontextprotocol/server'
 import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
 import { save as doSave } from '../../core/save.js'
-import { CtxError, driftOf } from '../../core/tools.js'
+import { CtxError, driftOf, toolDrift } from '../../core/tools.js'
 import { zip } from '../../core/zip.js'
 import * as wr from '../../core/workrepos.js'
 import { mergeClaude, mcpEntryServer, mergeMcpJson } from '../../core/setup.js'
 import { kitFiles } from '../../core/kit.js'
+import { nextSteps, helpLinks } from '../../core/nextsteps.js'
 import { Store } from '../../core/store.js'
 import { handleRead, MIME } from '../server/adapter/read-api.js'
 import { hereDir } from '../server/runtime.js'
@@ -350,7 +351,7 @@ function loginPage({ next = '/', failed = false } = {}) {
 }
 
 // 서버가 아는 첫 조각 — 이 밖의 GET 이 브라우저에서 오면 화면의 「없는 주소입니다」 다(아래 onRequest).
-const KNOWN_PREFIX = /^\/(api|admin|site|mcp|kit|workrepos|repos|me|healthz|r|console|login|logout|setup|manual|assets)(\/|$)/
+const KNOWN_PREFIX = /^\/(api|admin|site|mcp|kit|workrepos|repos|me|next|healthz|r|console|login|logout|setup|manual|assets)(\/|$)/
 
 function cookieStr(name, value, { maxAge = 12 * 3600, secure = false } = {}) {
   const parts = [`${name}=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`]
@@ -577,6 +578,8 @@ export async function runServe(opt = {}) {
   const manualDir = man?.dir || null
   log.line(man ? `설명서: ${man.dir} · ${man.books.length}권` : '설명서: 없음 — 산출물의 manual/ 을 두거나 --manual')
   const manuals = await manualIndex(manualDir)
+  // 설명서 주제 → 절 주소(제품화 2 ⑦ — 화면 · 다음 할 일이 손으로 장 번호를 쓰지 않게). 책이 없으면 빈 표
+  const HELP = helpLinks(await Promise.all(manuals.list().map(async (b) => ({ id: b.id, text: await fs.readFile(manuals.resolve(b.id), 'utf8').catch(() => '') }))))
   const webOk = await fs.access(path.join(webDir, 'index.html')).then(() => true).catch(() => false)
   // 첫 관리자 — 명부가 비어 있으면 일회용 코드를 만들고 한 줄 남긴다(D3). 코드를 읽으려면
   // 서버의 파일이나 로그를 볼 수 있어야 한다 — 그것이 "부트스트랩은 셸을 가진 사람" 이다.
@@ -814,6 +817,7 @@ export async function runServe(opt = {}) {
           setupNeeded: !!opt.auth && !!dataDir && db.users.length === 0,
           privatePages,
           manuals: manuals.list(),
+          help: HELP,
           user: who.ok ? who.user : null,
           role: who.ok ? who.role : null,
           admin: who.ok ? !!who.admin : false,
@@ -990,6 +994,7 @@ export async function runServe(opt = {}) {
         url.pathname.startsWith('/kit/') ||
         url.pathname.startsWith('/admin/') ||
         url.pathname === '/me' ||
+        url.pathname === '/next' ||
         url.pathname === '/repos' ||
         url.pathname.startsWith('/workrepos')
 
@@ -1028,6 +1033,42 @@ export async function runServe(opt = {}) {
           version: VERSION,
           repos: rows,
         })
+      }
+
+      // GET /next[?repo=<이름>] — 다음 할 일(제품화 2 ②). 「시작하기」 카드 · CLI 끝 출력과 같은 계산(`core/nextsteps.js`).
+      // 권한 밖 레포는 없는 것으로 — 레포 줄 없이 서버 줄만 낸다
+      if (url.pathname === '/next' && req.method === 'GET') {
+        const mine = (await store.list()).filter((r) => !a.allow || a.allow(r.name))
+        const want = url.searchParams.get('repo')
+        const name = want && mine.some((m) => m.name === want) ? want : null
+        const curate = name ? (a.curate ? a.curate(name) : !!a.admin) : false
+        let repo = null
+        let work = null
+        let curatorKit = null
+        if (name) {
+          const v = await store.view(name)
+          // 어긋남 — 신호가 하나라도 있는 섹션 수 + 좌표 없는 기록 수(진단 화면 머리의 합과 같다)
+          const d = curate ? toolDrift(v, {}) : null
+          repo = {
+            name,
+            docs: (v.managedDocs || []).length,
+            queue: { n: v.curation?.queue?.length || 0, oldestDays: v.curation?.stats?.oldestDays ?? null },
+            drift: d ? d.total + d.unreachableTotal : 0,
+          }
+          if (dataDir) {
+            const db = await wr.load(dataDir)
+            const kitNow = await bundleHash()
+            const rows = wr.list(db, { kits: { [name]: kitNow } }).filter((r) => r.knowledge === name)
+            work = { mine: rows.length, stale: rows.filter((r) => r.state === '낡음').length, unset: rows.filter((r) => r.state === '미설치').length }
+            if (curate) {
+              const seen = (await wr.loadCuratorKits(dataDir))[wr.curatorKey(a.user, name)]
+              curatorKit = { installed: !!seen, stale: !!seen && seen.kit !== (await bundleHash('curator')) }
+            }
+          }
+        }
+        const steps = nextSteps({ me: { admin: !!a.admin, write: !!a.write, curate, tokenDays: a.expiresInDays ?? null }, repos: mine.length, repo, work, curatorKit })
+        log.req({ ip, user: a.user, method: 'GET', tool: '/next', key: name || '-', ms: Date.now() - t0, status: 200 })
+        return json(res, 200, { repo: name, steps, help: HELP })
       }
 
       // ── 콘솔 API `/admin/*` (검토 §4.2 · §4.3) ──────────────────────────────────
@@ -1903,6 +1944,8 @@ export async function runServe(opt = {}) {
           ]
           const tpl = files.find((f) => f.name === '.claude/work-repo/CLAUDE.md')
           if (tpl) out.push({ name: 'CLAUDE.md', data: Buffer.from(mergeClaude(null, tpl.data.toString('utf8'), bundle.hash)).toString('base64') })
+          // 큐레이터 폴더를 받았다는 사실만 남긴다 — 「시작하기」 가 「큐레이터 폴더가 없다 · 낡았다」 를 가린다(경로는 PC 만 안다)
+          if (role === 'curator' && dataDir) await wr.seeCuratorKit(dataDir, { user: a.user, repo: name, kit: bundle.hash }).catch(() => {})
           log.req({ ip, user: a.user, method: 'GET', tool: '/kit', key: name + ' ' + role, ms: Date.now() - t0, status: 200 })
           return json(res, 200, { server: origin, repo: name, workrepo: null, role, kit: bundle.hash, files: out })
         }
@@ -2111,8 +2154,8 @@ export async function runServe(opt = {}) {
       process.stderr.write(
         (e.code === 'EACCES'
           ? `ctx serve: ${bind}:${port} 에서 들을 권한이 없다 — 1024 아래 포트는 root 가 필요하다. --port 로 바꾼다`
-          : h?.built
-            ? `ctx serve: ${bind}:${port} 에 CDP 서버가 이미 떠 있다(번들 ${h.built}) — 같은 레포면 그 주소를 쓰고, 다른 레포면 --port 로 다른 포트를 준다(ctx up 은 빈 포트를 고른다)`
+          : h?.ok
+            ? `ctx serve: ${bind}:${port} 에 CDP 서버가 이미 떠 있다${h.built && !String(h.built).startsWith('__') ? `(번들 ${h.built})` : ''} — 같은 레포면 그 주소를 쓰고, 다른 레포면 --port 로 다른 포트를 준다(ctx up 은 빈 포트를 고른다)`
             : `ctx serve: ${bind}:${port} 를 다른 프로그램이 쓰고 있다 — --port 로 다른 포트를 준다`) + NL
       )
       process.exit(2)
