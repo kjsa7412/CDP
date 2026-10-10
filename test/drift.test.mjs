@@ -162,3 +162,20 @@ test('dupKey · linked — 근거 가리킴 줄은 복제가 아니다 · 근거
   assert.deepEqual(a.linked, ['2026-0901-a1'])
   assert.equal(d.totals.unsourcedLinked, 1)
 })
+
+test('리빌딩 실측에서 다듬은 셋 — 날짜 뒤 글이 있는 경과 줄 · 좌표를 거는 한 줄 · 표 행은 비대가 아니다', async () => {
+  // 경과 줄 — 날짜와 기록 링크 사이에 글이 와도 경과다(복제 · 일지형이 아니다)
+  assert.equal(dupKey('· 2026-10-10 리빌딩 — 공통 규칙 · 근거 · 함정을 한 곳으로 모음(재큐레이션 [`2026-1010-큐레이션`](../work/2026-1010-큐레이션.md))'), null)
+  // 좌표를 거는 한 줄 — 백틱을 빼면 짧다
+  assert.equal(dupKey('  규칙 · 근거 · 교체 SQL · 함정은 정본 한 곳 — `table:factor.팩터_카테고리`(`설명` 칸).'), null)
+  // 백틱이 있어도 글이 길면 복제 후보다
+  assert.ok(dupKey('- ⚠ 코드 접두는 `O` 인데 **카테고리코드는 `I`(재건축)** 다. 첫 글자로 카테고리를 유추하는 코드가 있으면 틀린다.'))
+
+  // 표 행 50 + 글 3 — 비대가 아니다
+  const rowsT = Array.from({ length: 50 }, (_, i) => `| c${i} | int |`).join('\n')
+  const VOCAB3 = ['# 어휘', '', '## table', '', '- `table:t` — 티', ''].join('\n')
+  const MANAGED3 = ['# 등록부', '', '| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|', '| `table:*` | `docs/테이블.md` | `## {값}` |', ''].join('\n')
+  const DOC3 = ['# 테이블', '', '## t — 티', '', '**정의** 티 테이블.', '| 컬럼 | 타입 |', '|---|---|', rowsT, '', '**함정**', '- 없다', ''].join('\n')
+  const r = await loadRepo(await repo({ '_vocab.md': VOCAB3, '_managed.md': MANAGED3, 'docs/테이블.md': DOC3, 'work/2026-0901-t.md': work({ id: '2026-0901-t', date: '2026-09-01 10:00', touches: ['table:t'] }) }))
+  assert.equal(buildDrift(r, { sliceSection }).totals.oversize, 0)
+})

@@ -21,8 +21,9 @@ export const CONVENTION_SHARE = 0.05
 
 // 경과 — v1.0 의 `**경과**` 와 v0.x 레포의 `### 변경` · `### 경과` 소제목(그 아래 `· YYYY-MM-DD [기록](…) …` 줄)
 const RE_PROGRESS_HEAD = /^(\*\*경과\*\*|#{3,6}\s*(변경|경과)\s*$)/
-// 경과 한 줄 — 날짜 뒤에 기록 링크가 온다. 일지형이 아니다(출처 표시다)
-const RE_PROGRESS_LINE = /^[-*·]\s*\(?20\d\d-\d\d-\d\d[^\[]{0,20}\[/
+// 경과 한 줄 — 날짜로 시작하고 그 줄이 작업 기록을 링크한다. 일지형도 복제도 아니다(출처 표시다).
+// 날짜와 링크 사이에 글이 와도 된다(「· 2026-10-10 리빌딩 — … [기록](../work/…)」 — ezipez_cdp 리빌딩 실측)
+const RE_PROGRESS_LINE = /^[-*·]\s*\(?20\d\d-\d\d-\d\d(?:[^\[]{0,20}\[|.*\]\((?:\.\.\/)*(?:\.\/)?work\/)/
 const RE_DIARY = [/^[-*·]?\s*\(?20\d\d-\d\d-\d\d\)?\s/, /20\d\d-\d\d-\d\d.{0,24}(추가|변경|수정|신설|삭제|폐기|바꿨|고쳤)(했|하였|었)?다/]
 const isDiary = (t) => !RE_PROGRESS_LINE.test(t) && RE_DIARY.some((re) => re.test(t))
 
@@ -42,7 +43,8 @@ export function dupKey(line) {
   if (RE_PROGRESS_LINE.test(t)) return null
   const k = t.replace(/^[-*·]\s+/, '').replace(/\s+/g, ' ')
   // 길이는 링크를 뺀 글로 잰다 — 「실측은 [기록](…)」 같은 근거 가리킴은 같은 줄이 여러 섹션에 있어도 복제가 아니다(출처 표시다)
-  const prose = k.replace(/!?\[[^\]]*\]\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+  // 코드 칸(백틱)도 뺀다 — 「… 정본 한 곳 — `table:…`」 처럼 좌표를 거는 한 줄은 cdp-rebuild 가 남기라는 모양이다(복제가 아니다)
+  const prose = k.replace(/!?\[[^\]]*\]\([^)]*\)/g, '').replace(/`[^`]*`/g, '').replace(/\s+/g, ' ').trim()
   return prose.length >= DUP_MIN_CHARS ? k : null
 }
 
@@ -80,13 +82,15 @@ export function buildDrift(r, { sliceSection, oversizeLines = OVERSIZE_LINES } =
     if (!x || x.missing) continue
     const { lines, hasBaseline } = curatedBody(x.content || '')
     const text = lines.filter((l) => l.trim())
+    // 비대는 글로 잰다 — 표 행(컬럼 정의 · 값 표)은 서술이 아니라 데이터다
+    const prose = text.filter((l) => !l.trim().startsWith('|'))
     if (!text.length && !hasBaseline) continue // 빈 섹션 — 어긋날 글이 없다
     const row = { coord: s.coord, doc: x.doc, lines: text.length, unsourced: !!text.length && !hasBaseline && !sourced.has(s.coord), duplicated: [], oversize: null, diary: 0 }
     if (row.unsourced) {
       const linked = linkedWorkIds(text, r.byId)
       if (linked.length) row.linked = linked
     }
-    if (text.length > oversizeLines) row.oversize = { lines: text.length, limit: oversizeLines }
+    if (prose.length > oversizeLines) row.oversize = { lines: prose.length, limit: oversizeLines }
     for (const l of text) {
       if (isDiary(l.trim())) row.diary++
       const k = dupKey(l)
