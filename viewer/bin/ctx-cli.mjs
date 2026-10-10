@@ -145,7 +145,11 @@ function parseArgs(argv) {
     else if (a === '--keep-touches') out.keepTouches = true
     else if (a === '--yes' || a === '-y') out.yes = true
     // ctx up(제품화 2 ③)
-    else if (a === '--install') (out.install = out.install || []).push(argv[++i])
+    // --install 은 여러 폴더를 받는다(`--install a b` · `--install a --install b` 둘 다)
+    else if (a === '--install') {
+      out.install = out.install || []
+      while (argv[i + 1] && !argv[i + 1].startsWith('-')) out.install.push(argv[++i])
+    }
     else if (a === '--curator') out.curatorDir = argv[++i]
     else if (a === '--skills') out.skillsDir = argv[++i]
     else if (a === '--service') out.service = true
@@ -685,7 +689,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
   // 패키지 · 레포 · 이관 — 지식 레포 **밖**에서 도는 명령이다. findRepo 를 타지 않는다.
   if (opt.cmd === 'package') {
-    err('ctx package: v1.0 에서 없앴다 — 새 레포는 빈 틀(ctx repo new)이고 서식은 서식집(큐레이터의 forms · 화면 「큐레이션 › 서식집」)이다')
+    err('ctx package: v1.0 에서 없앴다 — 새 레포는 빈 틀(ctx repo new)이고 서식은 서식집(큐레이터의 forms · 화면 「관리 문서 › 서식집」)이다')
     return 2
   }
   if (opt.cmd === 'up') {

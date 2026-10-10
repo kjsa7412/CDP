@@ -22,7 +22,8 @@ export async function runRebuild(opt, io = {}) {
     err('ctx rebuild snapshot: --server <주소> --repo <레포> 가 필요하다   (토큰: 환경변수 CDP_TOKEN · 큐레이터)')
     return 2
   }
-  const token = process.env.CDP_TOKEN
+  // 설치기와 같은 자리 — 환경변수 → ~/.config/cdp/token(rc 를 안 읽는 셸에서도)
+  const token = String(process.env.CDP_TOKEN || '').trim() || (await (await import('../../core/tokenstore.js')).loadToken().catch(() => null))?.token
   if (!token) {
     err('ctx rebuild snapshot: 환경변수 CDP_TOKEN 이 없다 — 큐레이터 토큰을 넣는다')
     return 2

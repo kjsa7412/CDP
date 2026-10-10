@@ -360,7 +360,7 @@ export default function DocView({
                 <span className="topbar__spacer" />
                 {/* 서식 표지(`<!-- cdp:form … -->` · 개편안 §4.3) — 어느 서식에서 세운 문서인가. 없으면(서식 없이 · 옛 서버) 그리지 않는다 */}
                 {doc.layer === 'managed' && doc.form && (
-                  <span className="badge badge--quiet" title="이 문서를 세운 서식 — 큐레이션 › 서식집에서 작성지침을 연다">
+                  <span className="badge badge--quiet" title="이 문서를 세운 서식 — 관리 문서 › 서식집에서 작성지침을 연다">
                     서식 {doc.form}
                   </span>
                 )}

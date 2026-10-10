@@ -92,13 +92,13 @@ export async function main(argv) {
 
   // 일괄 — 이 PC 의 설치 목록을 돈다. 레포 · 등록 id 는 목록에 있다
   if (flags.update) {
-    if (!net) return bail('--update 는 한 줄 설치기로 돈다 — 레포 관리 › 연결된 작업 레포 의 「일괄 갱신」 한 줄을 쓰세요.')
+    if (!net) return bail('--update 는 한 줄 설치기로 돈다 — 화면 「시작하기」 의 「에이전트 세팅이 바뀌었다」 줄을 쓰세요.')
     return updateAll({ server, paths: pos, dry, yes, commit: flags.commit, noSave: flags.noSave, fixIgnore: flags.fixIgnore })
   }
 
   // 큐레이터 폴더(v1.0 §6.3) — git 레포가 아니어도 되고 대장에 오르지 않는다. 큐레이터 kit(스킬 여섯 · 큐레이터 블록)을 받는다
   if (flags.curator) {
-    if (!net) return bail('--curator 는 한 줄 설치기로 돈다 — 큐레이션 › 대기열 아래 「큐레이터 폴더」 의 한 줄을 쓰세요.')
+    if (!net) return bail('--curator 는 한 줄 설치기로 돈다 — 화면 「시작하기」 의 「큐레이터 폴더」 줄을 쓰세요.')
     const dir = pos[0] || '.'
     if (!repo) return bail('사용법 — node cdp-install.mjs --curator --repo <레포> [<폴더>] [--dry] [--yes]')
     return installSimple({ kind: 'curator', server, repo, dir, dry, yes, noSave: flags.noSave, brief: flags.brief })
@@ -107,7 +107,7 @@ export async function main(argv) {
   // 여러 코드 레포를 한 번에(제품화 2 F11) — 상위 폴더 아래의 git 레포를 고르고 · 대장에 한 번에 등록하고 · 설치한다. 묻는 것은 한 번
   if (flags.connect) {
     if (!net) return bail('--connect 는 한 줄 설치기로 돈다.')
-    if (!repo || !pos[0]) return bail('사용법 — node cdp-install.mjs --connect --repo <레포> <코드 레포들이 있는 폴더> [--dry] [--yes] [--fix-gitignore]')
+    if (!repo || !pos[0]) return bail('사용법 — node cdp-install.mjs --connect --repo <레포> <코드 레포들이 있는 폴더> [--commit] [--dry] [--yes] [--fix-gitignore]')
     return connectAll({ server, repo, dir: pos[0], dry, yes, noSave: flags.noSave, fixIgnore: flags.fixIgnore, commit: flags.commit })
   }
 

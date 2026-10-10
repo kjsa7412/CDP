@@ -67,7 +67,7 @@ export async function runBaseline(opt) {
         err('ctx baseline push <파일.json> --server <주소> --repo <레포>   (토큰: 환경변수 CDP_TOKEN · 큐레이터)')
         return 2
       }
-      const token = process.env.CDP_TOKEN
+      const token = String(process.env.CDP_TOKEN || '').trim() || (await (await import('../../core/tokenstore.js')).loadToken().catch(() => null))?.token
       if (!token) {
         err('ctx baseline push: 환경변수 CDP_TOKEN 이 없다 — 큐레이터 토큰을 넣는다')
         return 2
