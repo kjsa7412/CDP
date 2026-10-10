@@ -14,6 +14,7 @@ import { save } from '../core/save.js'
 import { loadRepo } from '../core/repo.js'
 import { recordKind } from '../core/curation.js'
 import { toolDrift, toolSection } from '../core/tools.js'
+import { runBuiltinCheck } from '../core/check.js'
 
 const run = promisify(execFile)
 const hasGit = await run('git', ['--version']).then(() => true).catch(() => false)
@@ -77,6 +78,22 @@ test('snapshot — 근거 없는 섹션만 원문 그대로 · 날짜는 섹션�
 
     // 다시 — 뜰 것이 없다
     await assert.rejects(save(r, { work: envelope({ id: '2026-1010-스냅샷-2' }), snapshot: [{ coord: 'table:b' }] }, curator), (e) => e.code === 'E_INPUT' && /뜰 스냅샷이 없다/.test(e.message))
+  } finally {
+    await rm()
+  }
+})
+
+test('snapshot — 본문의 좌표는 정본 원문의 가리키는 줄이다 · 「본문에만 있는 좌표」 경고를 내지 않는다', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const { r, rm } = await repo()
+  try {
+    await fs.writeFile(path.join(r, 'docs', 't.md'), T.replace('b 의 지금 — 정본에만 있다.', 'b 의 지금 — 정본에만 있다. 이웃은 `table:c`.'))
+    await run('git', ['-C', r, '-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-qam', 'ptr'])
+    await save(r, { work: envelope(), snapshot: [{ coord: 'table:b' }] }, curator)
+    const r1 = await loadRepo(r)
+    const snap = r1.works.find((d) => recordKind(d) === 'snapshot')
+    assert.match(await fs.readFile(path.join(r, snap.path), 'utf8'), /`table:c`/, '스냅샷 본문에 가리키는 좌표가 있다')
+    const f = runBuiltinCheck({ ...r1 }).findings.find((x) => x.kind === 'body-only-coord')
+    assert.ok(!f || !f.items.some((i) => i.id === snap.id), JSON.stringify(f))
   } finally {
     await rm()
   }
