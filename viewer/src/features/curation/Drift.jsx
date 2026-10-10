@@ -24,7 +24,8 @@ import { ServerAbsent, isAbsent } from './marks.jsx'
 const SIGNALS = [
   ['unsourced', '근거 없음', '그 좌표를 건드린 기록 · 스냅샷 · 기준선이 없다 — 기록만 옮겨 다시 세우면 사라진다'],
   ['duplicated', '복제', '같은 산문 줄이 다른 섹션에도 있다 — 하나만 고쳐진다'],
-  ['oversize', '비대', '경과 앞 본문이 40줄을 넘는다 — 경위 · 논의가 쌓였다'],
+  ['oversize', '비대', '대장 40줄 · 정의 25줄을 넘는다(종류를 모르면 40) — 경위 · 논의가 쌓였다'],
+  ['big', '큼', '대상 · 서술 섹션이 150줄을 넘는다 — 주입이 무겁다 · 쪼갤 후보'],
   ['diary', '일지형', '날짜별로 덧붙인 줄 — 섹션은 지금의 상태다'],
   ['unreachable', '좌표 없는 기록', '좌표 0 · 좌표정정이 없는 사람의 기록 — 정본과 만나지 않는다'],
 ]
@@ -189,7 +190,8 @@ function Signals({ x }) {
           복제 {x.duplicated.length + (x.duplicatedOmitted || 0)}
         </span>
       ) : null}
-      {x.oversize ? <span className="chip" title={`경과 앞 본문 ${x.oversize.lines}줄 · 문턱 ${x.oversize.limit}`}>비대 {x.oversize.lines}줄</span> : null}
+      {x.oversize ? <span className="chip" title={`경과 앞 본문 ${x.oversize.lines}줄 · 문턱 ${x.oversize.limit}${x.oversize.kind ? ' · ' + x.oversize.kind : ''}`}>비대 {x.oversize.lines}줄</span> : null}
+      {x.big ? <span className="chip" title={`${x.big.lines}줄 — 쪼갤 후보(하위 좌표)`}>큼 {x.big.lines}줄</span> : null}
       {x.diary ? <span className="chip" title="날짜별로 덧붙인 줄">일지형 {x.diary}</span> : null}
     </span>
   )

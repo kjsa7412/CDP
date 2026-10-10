@@ -43,16 +43,28 @@ export function* outsideFences(lines) {
 }
 
 // | `table:*` | `docs/테이블정의서.md` | `## {값}` |
+// 관리 문서의 종류 — 서식집과 같은 다섯(서식집 규약 v1.0). 섹션의 모양 · 비대 잣대가 종류에서 온다
+export const KINDS = ['대상', '대장', '정의', '사건', '서술']
+
 export function parseRegistry(text) {
   const rules = []
   const errors = []
   if (!text) return { rules, errors, present: false }
 
+  // 「종류」 칸(선택 · 리빌딩 검토 — 문서 종류별 잣대) — 머리행에서 이름으로 찾는다. 칸 순서는 레포마다 다르다(비고가 넷째)
+  let kindAt = -1
   for (const [i, line] of outsideFences(text.split('\n'))) {
-    if (!/^\s*\|/.test(line)) continue
+    if (!/^\s*\|/.test(line)) {
+      kindAt = -1 // 표가 끝났다 — 다음 표는 제 머리행을 본다
+      continue
+    }
     if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) continue // 구분행
 
     const cells = line.split('|').slice(1, -1).map((c) => c.trim())
+    if (/좌표\s*패턴/.test(cells[0] || '')) {
+      kindAt = cells.findIndex((c) => /^종류$/.test(c))
+      continue
+    }
     if (cells.length < 3) continue
 
     const unquote = (s) => s.replace(/^`|`$/g, '').trim()
@@ -88,7 +100,8 @@ export function parseRegistry(text) {
       doc,
       level: whole ? 0 : h[1].length,
       whole,
-      note: cells[3] ? cells[3].trim() : '',
+      note: cells[3] && kindAt !== 3 ? cells[3].trim() : '',
+      kind: kindAt >= 0 && KINDS.includes((cells[kindAt] || '').trim()) ? cells[kindAt].trim() : null,
       line: i + 1,
     })
   }
@@ -101,7 +114,7 @@ export function resolveCoord(registry, coord) {
   if (!registry || !registry.rules.length) return null
   for (const r of registry.rules) {
     if (r.re.test(coord)) {
-      return { doc: r.doc, level: r.level, whole: r.whole, value: coordValue(coord), pattern: r.pattern }
+      return { doc: r.doc, level: r.level, whole: r.whole, value: coordValue(coord), pattern: r.pattern, kind: r.kind ?? null }
     }
   }
   return null

@@ -200,3 +200,23 @@ test('어휘 좌표 모양 — 공백 든 좌표는 check 경고(save 의 checkC
   assert.equal(f?.sev, 'warn')
   assert.deepEqual(f.items.map((x) => x.coord), ['term:The Open Canvas'])
 })
+
+test('종류별 잣대 — 등록부 「종류」 칸 · 대장 40 · 정의 25 · 대상은 비대 대신 150줄 「큼」 · 칸이 없으면 40', async () => {
+  const long = (n) => Array.from({ length: n }, (_, i) => `- 줄 ${i} — 규칙이다`).join('\n')
+  const VOCAB6 = ['# 어휘', '', '## issue', '', '- `issue:a` — 에이', '', '## page', '', '- `page:b` — 비', '- `page:c` — 시', ''].join('\n')
+  const MANAGED6 = ['# 등록부', '', '| 좌표 패턴 | 정본 문서 | 섹션 | 비고 | 종류 |', '|---|---|---|---|---|', '| `issue:*` | `docs/대장.md` | `## {값}` | | 대장 |', '| `page:*` | `docs/화면.md` | `## {값}` | | 대상 |', ''].join('\n')
+  const W6 = work({ id: '2026-0901-k', date: '2026-09-01 10:00', touches: ['issue:a', 'page:b', 'page:c'] })
+  const files = {
+    '_vocab.md': VOCAB6, '_managed.md': MANAGED6, 'work/2026-0901-k.md': W6,
+    'docs/대장.md': ['# 대장', '', '## a — 에이', '', long(45), ''].join('\n'),
+    'docs/화면.md': ['# 화면', '', '## b — 비', '', long(100), '', '## c — 시', '', long(160), ''].join('\n'),
+  }
+  const r = await loadRepo(await repo(files))
+  const d = buildDrift(r, { sliceSection })
+  const row = (c) => d.sections.find((x) => x.coord === c)
+  assert.deepEqual(row('issue:a').oversize, { lines: 45, limit: 40, kind: '대장' })
+  assert.ok(!row('page:b'), '대상 100줄은 신호 없음')
+  assert.equal(row('page:c').oversize, null)
+  assert.deepEqual(row('page:c').big, { lines: 160, limit: 150, kind: '대상' })
+  assert.equal(d.totals.big, 1)
+})

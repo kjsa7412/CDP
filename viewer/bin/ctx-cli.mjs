@@ -607,9 +607,9 @@ async function cmdDrift(r, opt) {
     return 0
   }
   const t = d.totals
-  out(`ctx drift: 섹션 ${t.sections} — 근거 없음 ${t.unsourced} · 복제 ${t.duplicated} · 비대 ${t.oversize} · 일지형 ${t.diary} · 좌표 없는 기록 ${t.unreachable}`)
+  out(`ctx drift: 섹션 ${t.sections} — 근거 없음 ${t.unsourced} · 복제 ${t.duplicated} · 비대 ${t.oversize} · 큼 ${t.big ?? 0} · 일지형 ${t.diary} · 좌표 없는 기록 ${t.unreachable}`)
   for (const x of d.sections.slice(0, 40)) {
-    const sig = [x.unsourced && '근거 없음', x.duplicated.length && `복제 ${x.duplicated.length}(${x.duplicated.slice(0, 3).join(' · ')}${x.duplicated.length > 3 ? ' …' : ''})`, x.oversize && `비대 ${x.oversize.lines}줄`, x.diary && `일지형 ${x.diary}`].filter(Boolean)
+    const sig = [x.unsourced && '근거 없음', x.duplicated.length && `복제 ${x.duplicated.length}(${x.duplicated.slice(0, 3).join(' · ')}${x.duplicated.length > 3 ? ' …' : ''})`, x.oversize && `비대 ${x.oversize.lines}줄`, x.big && `큼 ${x.big.lines}줄`, x.diary && `일지형 ${x.diary}`].filter(Boolean)
     out(`   ${x.coord}  ${x.doc}  ${sig.join(' · ')}`)
   }
   if (d.total > 40) out(`   … ${d.total - 40}개 더 (--json · --doc · 좌표 인자로 좁힌다)`)

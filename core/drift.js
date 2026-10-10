@@ -11,8 +11,12 @@ import { splitBaseline } from './baseline.js'
 
 const NL = '\n'
 
-// 문턱 — cdp-curate 의 「대장 섹션이 40줄 · 정의 섹션이 25줄을 넘으면 서술이 들어간 것」. 서식 guide 가 값을 주면 그것이 이긴다(열린 질문 2)
+// 문턱 — cdp-curate 의 「대장 섹션이 40줄 · 정의 섹션이 25줄을 넘으면 서술이 들어간 것」. 문서 종류는 등록부의 「종류」 칸에서 온다.
+// 대상 · 서술 · 사건은 줄 수로 비대를 재지 않는다(사양 · 절차는 길 수 있다) — 대신 BIG_LINES 를 넘으면 「큼」(쪼갤 후보 · 주입 비용).
+// 종류를 모르면(칸이 없는 레포) 예전처럼 40줄
 export const OVERSIZE_LINES = 40
+export const OVERSIZE_BY_KIND = { 대장: 40, 정의: 25 }
+export const BIG_LINES = 150
 // 복제로 세는 가장 짧은 줄 — 짧은 줄은 우연히 같다
 export const DUP_MIN_CHARS = 40
 // 이만큼 넓게 반복되는 줄은 복제가 아니라 레포의 규약이다(`**SoT**` 가리킴 · 자리표시 같은 것 — 검토 Q3 의 385 → ≈130)
@@ -85,12 +89,15 @@ export function buildDrift(r, { sliceSection, oversizeLines = OVERSIZE_LINES } =
     // 비대는 글로 잰다 — 표 행(컬럼 정의 · 값 표)은 서술이 아니라 데이터다
     const prose = text.filter((l) => !l.trim().startsWith('|'))
     if (!text.length && !hasBaseline) continue // 빈 섹션 — 어긋날 글이 없다
-    const row = { coord: s.coord, doc: x.doc, lines: text.length, unsourced: !!text.length && !hasBaseline && !sourced.has(s.coord), duplicated: [], oversize: null, diary: 0 }
+    const row = { coord: s.coord, doc: x.doc, lines: text.length, big: null, unsourced: !!text.length && !hasBaseline && !sourced.has(s.coord), duplicated: [], oversize: null, diary: 0 }
     if (row.unsourced) {
       const linked = linkedWorkIds(text, r.byId)
       if (linked.length) row.linked = linked
     }
-    if (prose.length > oversizeLines) row.oversize = { lines: prose.length, limit: oversizeLines }
+    const kind = r.managedIndex?.find?.(s.coord)?.kind ?? null
+    const limit = kind ? OVERSIZE_BY_KIND[kind] ?? null : oversizeLines
+    if (limit != null && prose.length > limit) row.oversize = { lines: prose.length, limit, ...(kind ? { kind } : {}) }
+    else if (limit == null && prose.length > BIG_LINES) row.big = { lines: prose.length, limit: BIG_LINES, kind }
     // 일지형은 문단 · 목록의 **시작**만 본다 — 앞 줄에 이어 쓴 줄(줄바꿈된 문장)이 날짜로 시작한 것은 일지가 아니다
     // (ezipez_cdp 리빌딩 — 일지형 신호의 다수가 이것이었다)
     for (let k = 0; k < lines.length; k++) {
@@ -132,12 +139,13 @@ export function buildDrift(r, { sliceSection, oversizeLines = OVERSIZE_LINES } =
   for (const d of r.works) if ((d.touches || []).length) for (const s of d.supersedes || []) corrected.add(s.id)
   const unreachable = r.works.filter((d) => recordKind(d) === 'work' && !(d.touches || []).length && !corrected.has(d.id)).map((d) => d.id)
 
-  const flagged = rows.filter((x) => x.unsourced || x.duplicated.length || x.oversize || x.diary)
+  const flagged = rows.filter((x) => x.unsourced || x.duplicated.length || x.oversize || x.big || x.diary)
   const totals = {
     sections: rows.length,
     unsourced: rows.filter((x) => x.unsourced).length,
     duplicated: rows.filter((x) => x.duplicated.length).length,
     oversize: rows.filter((x) => x.oversize).length,
+    big: rows.filter((x) => x.big).length,
     diary: rows.filter((x) => x.diary).length,
     unreachable: unreachable.length,
     unsourcedLinked: rows.filter((x) => x.linked).length,
@@ -152,6 +160,7 @@ export function driftLine(t) {
   if (t.unsourced) parts.push(`근거 없음 ${t.unsourced}`)
   if (t.duplicated) parts.push(`복제 ${t.duplicated}`)
   if (t.oversize) parts.push(`비대 ${t.oversize}`)
+  if (t.big) parts.push(`큼 ${t.big}`)
   if (t.diary) parts.push(`일지형 ${t.diary}`)
   if (t.unreachable) parts.push(`좌표 없는 기록 ${t.unreachable}`)
   return parts.length ? `[CDP] 어긋남: ${parts.join(' · ')} — 큐레이터가 drift 로 보고 cdp-rebuild 로 다시 세운다` : null

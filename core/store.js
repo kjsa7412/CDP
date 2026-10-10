@@ -831,7 +831,7 @@ export class Store {
     return rows.map((r) => {
       const x = by.get(r.coord)
       if (!x) return r
-      return { ...r, drift: { unsourced: x.unsourced, linked: x.linked || null, duplicated: x.duplicated.length, pairs: x.duplicated.slice(0, 10), oversize: x.oversize, diary: x.diary } }
+      return { ...r, drift: { unsourced: x.unsourced, linked: x.linked || null, duplicated: x.duplicated.length, pairs: x.duplicated.slice(0, 10), oversize: x.oversize, big: x.big || null, diary: x.diary } }
     })
   }
 

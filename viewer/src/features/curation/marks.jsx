@@ -138,6 +138,7 @@ export function DriftChips({ d, to = null }) {
   if (d.unsourced) chips.push(['근거 없음' + (d.linked ? ' · 인용' : ''), d.linked ? `근거 기록이 없다 — 본문이 인용한 ${d.linked.join(' · ')} 의 좌표정정` : '그 좌표를 건드린 기록 · 스냅샷 · 기준선이 없다 — 스냅샷을 뜬다'])
   if (d.duplicated) chips.push([`복제 ${d.duplicated}`, '같은 산문 줄이 있는 섹션 — ' + (d.pairs || []).join(' · ')])
   if (d.oversize) chips.push([`비대 ${d.oversize.lines}줄`, `경과 앞 본문 ${d.oversize.lines}줄 · 문턱 ${d.oversize.limit}`])
+  if (d.big) chips.push([`큼 ${d.big.lines}줄`, '대상 · 서술 섹션이 150줄을 넘는다 — 쪼갤 후보'])
   if (d.diary) chips.push([`일지형 ${d.diary}`, '날짜별로 덧붙인 줄'])
   if (!chips.length) return null
   return chips.map(([l, title]) =>
