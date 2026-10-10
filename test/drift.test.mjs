@@ -146,3 +146,19 @@ test('스냅샷 — 섹션이 있으면 대기열에 서지 않고 · 섹션이 
   const bare = await loadRepo(await repo({ ...FILES, 'docs/테이블.md': '# 테이블\n' }))
   assert.ok(bare.curation.queue.some((q) => q.id === '2026-0905-snap-c'))
 })
+
+test('dupKey · linked — 근거 가리킴 줄은 복제가 아니다 · 근거 없는 섹션이 인용한 기록은 linked 로', async () => {
+  assert.equal(dupKey('실측은 [`work/2026-0908-R5-10-나머지8종-현행분석`](../work/2026-0908-R5-10-나머지8종-현행분석.md).'), null)
+  assert.ok(dupKey('실측은 [기록](../work/x.md) — 그리고 이 줄에는 링크 밖에도 충분히 긴 사실 설명이 붙어 있다.'))
+
+  const DOC2 = ['# 테이블', '', '## a — 가', '', '근거는 [`2026-0901-a1`](../work/2026-0901-a1.md) 에 있다 — 좌표만 빠졌다.', ''].join('\n')
+  const VOCAB2 = ['# 어휘', '', '## table', '', '- `table:a` — 가', '- `table:q` — 큐', ''].join('\n')
+  const MANAGED2 = ['# 등록부', '', '| 좌표 패턴 | 관리 문서 | 섹션 |', '|---|---|---|', '| `table:*` | `docs/테이블.md` | `## {값}` |', ''].join('\n')
+  // a1 은 table:q 를 건드렸다 — table:a 는 근거 없음이지만 본문이 a1 을 인용한다
+  const r = await loadRepo(await repo({ '_vocab.md': VOCAB2, '_managed.md': MANAGED2, 'docs/테이블.md': DOC2, 'work/2026-0901-a1.md': work({ id: '2026-0901-a1', date: '2026-09-01 10:00', touches: ['table:q'] }) }))
+  const d = buildDrift(r, { sliceSection })
+  const a = d.sections.find((x) => x.coord === 'table:a')
+  assert.equal(a.unsourced, true)
+  assert.deepEqual(a.linked, ['2026-0901-a1'])
+  assert.equal(d.totals.unsourcedLinked, 1)
+})

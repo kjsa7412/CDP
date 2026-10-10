@@ -17,7 +17,7 @@ import { createMcpHandler } from '@modelcontextprotocol/server'
 import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
 import { save as doSave } from '../../core/save.js'
-import { CtxError } from '../../core/tools.js'
+import { CtxError, driftOf } from '../../core/tools.js'
 import { zip } from '../../core/zip.js'
 import * as wr from '../../core/workrepos.js'
 import { mergeClaude, mcpEntryServer, mergeMcpJson } from '../../core/setup.js'
@@ -1687,6 +1687,11 @@ export async function runServe(opt = {}) {
 
         // 큐레이션 — 판정 재료(`/queue/<id>`)는 그 레포의 큐레이터만 본다. 대기열 목록 · 이력은 볼 수 있는 사람 모두(TODO §1.3)
         const canCurate = a.curate ? a.curate(name) : !!a.admin
+        // 어긋남 진단(리빌딩 검토 §5.1)도 큐레이터의 화면이다 — 다시 세우는 사람이 본다
+        if (sub === '/drift' && !canCurate) {
+          log.req({ ip, user: a.user, repo: name, method: req.method, tool: '/drift', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+          return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '어긋남 진단은 그 레포의 큐레이터가 본다', detail: { need: 'curate' } } })
+        }
         if (/^\/queue\/.+/.test(sub) && !canCurate) {
           log.req({ ip, user: a.user, repo: name, method: req.method, tool: '/queue', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
           return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '판정 재료는 그 레포의 큐레이터만 본다', detail: { need: 'curate' } } })
@@ -1780,6 +1785,57 @@ export async function runServe(opt = {}) {
             const code = e?.code || 'E_REPO'
             const status = code === 'E_FORBIDDEN' ? 403 : code === 'E_CONFLICT' ? 409 : code === 'E_NOT_FOUND' ? 404 : 400
             log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/baseline', ms: Date.now() - t0, status, code })
+            return json(res, status, { error: { code, message: e?.message || String(e), detail: e?.detail } })
+          }
+        }
+
+        // POST /api/<repo>/snapshot — 정본 스냅샷(리빌딩 검토 §5.2 · 큐레이터 · `ctx rebuild snapshot` · 화면 「진단」).
+        // 몸통 { coords?, doc?, all?, dryRun? } — 좌표를 안 주면 진단의 「근거 없음」 중 기록을 인용하지 않는 것(all 이면 전부 · doc 로 좁힌다 · 200 개씩). 봉투 기록을 지어 같은 save 를 탄다
+        if (sub === '/snapshot') {
+          if (req.method !== 'POST') return json(res, 405, { error: { code: 'E_INPUT', message: 'POST 다' } })
+          if (!canCurate) {
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/snapshot', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '정본 스냅샷은 그 레포의 큐레이터만 뜬다', detail: { need: 'curate' } } })
+          }
+          const got = await readBody(req, 1024 * 1024)
+          let body = null
+          try {
+            body = got?.tooLarge ? null : JSON.parse(got.toString('utf8') || '{}')
+          } catch {}
+          try {
+            if (!body || typeof body !== 'object') throw new CtxError('E_INPUT', '몸통이 JSON 이 아니다 — { coords?, doc?, dryRun? }', { field: 'body' })
+            let coords = Array.isArray(body.coords) ? body.coords.map(String) : null
+            let left = 0
+            if (!coords) {
+              const want = body.doc ? String(body.doc).toLowerCase() : null
+              // 본문이 기록을 인용하는 섹션(`linked`)은 빼고 — 그 기록의 좌표정정이 진짜 출처를 남긴다(cdp-rebuild). `all` 이면 같이 뜬다
+              const all = driftOf(await store.view(name)).sections.filter((x) => x.unsourced && (body.all || !x.linked) && (!want || x.doc.toLowerCase() === want)).map((x) => x.coord)
+              coords = all.slice(0, 200)
+              left = all.length - coords.length
+            }
+            if (!coords.length) throw new CtxError('E_INPUT', '뜰 섹션이 없다 — 근거 없는 섹션이 0 이다', { field: 'coords' })
+            const d = new Date()
+            const p2 = (n) => String(n).padStart(2, '0')
+            const id = `${d.getFullYear()}-${p2(d.getMonth() + 1)}${p2(d.getDate())}-스냅샷-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`
+            const input = {
+              work: {
+                id,
+                title: `정본 스냅샷 — ${coords.length}개${body.doc ? ' · ' + body.doc : ''}`.slice(0, 200),
+                date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`,
+                touches: [],
+                body: `근거 없는 섹션(그 좌표를 건드린 기록 · 스냅샷 · 기준선이 없는 섹션)을 원문 그대로 기록으로 떴다 — 기록만 옮겨 다시 세워도 잃지 않게(리빌딩).`,
+              },
+              snapshot: coords.map((coord) => ({ coord })),
+              ...(body.dryRun ? { dryRun: true } : {}),
+            }
+            const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: !!a.admin, curate: true, formsDir: opt.forms || null, formsData: dataDir, mirror: !!opt.mirror, log: (m) => log.line(m) })
+            if (!out.dryRun) await store.reload(name)
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/snapshot', key: (out.snapshots?.length ?? 0) + '건', ms: Date.now() - t0, status: 200 })
+            return json(res, 200, { ...out, ...(left > 0 ? { left } : {}) })
+          } catch (e) {
+            const code = e?.code || 'E_REPO'
+            const status = code === 'E_FORBIDDEN' ? 403 : code === 'E_CONFLICT' ? 409 : code === 'E_NOT_FOUND' ? 404 : 400
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/snapshot', ms: Date.now() - t0, status, code })
             return json(res, status, { error: { code, message: e?.message || String(e), detail: e?.detail } })
           }
         }

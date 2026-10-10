@@ -14,13 +14,16 @@ import { recordKind } from './curation.js'
 const NL = '\n'
 const bare = (l) => String(l).replace(/\r$/, '')
 
-// 옮길 기록 — 사람의 작업 기록(큐레이션 · 기준선 · 옛 기계 기록은 빼고)
+// 옮길 기록 — 사람의 작업 기록과 **정본 스냅샷**(큐레이션 · 기준선 · 옛 기계 기록은 빼고).
+// 스냅샷은 옛 정본에만 있던 지식을 원문 그대로 뜬 것이다 — 옮기지 않으면 그 지식이 다시 세우기에서 사라진다(리빌딩 검토 Q2 · K1).
+// 새 레포에는 섹션이 없으므로 대기열에 선다(curation.js — 섹션이 없는 좌표의 스냅샷)
 export function pickRecords(works) {
   const keep = []
   const skip = []
   for (const d of works) {
-    if (recordKind(d) === 'work') keep.push(d)
-    else skip.push({ id: d.id, kind: recordKind(d) })
+    const k = recordKind(d)
+    if (k === 'work' || k === 'snapshot') keep.push(d)
+    else skip.push({ id: d.id, kind: k })
   }
   return { keep, skip }
 }

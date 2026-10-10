@@ -476,11 +476,13 @@ export function toolBrief(r, { built = null, now = Date.now() } = {}) {
 
 // ── drift (리빌딩 검토 §5.1) ─────────────────────────────────────────────
 //
-// 계산만 — 레포 객체마다 한 번(서버는 HEAD 마다 레포를 다시 읽으므로 그 객체에 묶어 두면 낡지 않는다)
+// 계산만 — 읽은 판마다 한 번. 열쇠는 `r.works` 배열이다 — 화면의 Store 는 같은 객체에 새로 읽은 값을 덮어쓰므로(Object.assign)
+// 객체로 묶으면 낡는다. `loadRepo` 는 읽을 때마다 새 배열을 만든다
 const driftMemo = new WeakMap()
 export function driftOf(r) {
-  if (!driftMemo.has(r)) driftMemo.set(r, buildDrift(r, { sliceSection }))
-  return driftMemo.get(r)
+  const key = r.works || r
+  if (!driftMemo.has(key)) driftMemo.set(key, buildDrift(r, { sliceSection }))
+  return driftMemo.get(key)
 }
 
 export const DRIFT_SECTIONS_MAX = 200

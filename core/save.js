@@ -51,6 +51,8 @@ export const CONFLICT_CONTENT_MAX = 8000
 export const COMMIT_TIMEOUT_MS = 120000
 // 남이 쥔 index.lock 때문에 커밋이 시작도 못 했을 때 다시 하는 횟수 — 잠금이 풀린 뒤에(10단계)
 export const LOCK_RETRIES = 2
+// 정본 스냅샷 한 save 의 상한 — 섹션 하나에 기록 하나(RB3)라 실레포의 근거 없는 섹션(ezipez_cdp 192)을 두 번에
+export const SNAPSHOT_MAX = 200
 
 // ── 되돌리기 ────────────────────────────────────────────────────────────────
 //
@@ -144,7 +146,7 @@ const APPLIED_MARK = '<!-- applied:'
 function checkSchema(input) {
   const w = input?.work
   if (!w || typeof w !== 'object') throw new CtxError('E_INPUT', 'work 가 없다', { field: 'work' })
-  checkId(w.id)
+  w.id = checkId(w.id)
   if (!w.title || typeof w.title !== 'string') throw new CtxError('E_INPUT', 'title 이 없다', { field: 'work.title' })
   if (typeof w.body !== 'string' || !w.body.trim()) throw new CtxError('E_INPUT', 'body 가 없다', { field: 'work.body' })
   if (w.author != null) {
@@ -184,6 +186,18 @@ function checkSchema(input) {
   for (const s of input.sections || []) {
     // 큐레이터의 글은 기준선 블록을 건드리지 못한다 — 블록은 기준선 save 의 자리다(개편안 §3.2)
     if (hasMark(s.body)) throw new CtxError('E_INPUT', 'sections[].body 에 기준선 블록 표지가 있다 — 블록은 서버가 지키고 다시 붙인다. section 의 content(블록을 뺀 글)를 고쳐 보낸다', { coord: s.coord })
+  }
+  // 정본 스냅샷(리빌딩 검토 §5.2) — 좌표만 받는다. 본문은 서버가 섹션에서 짓는다(보낸 본문이 섹션과 다르면 스냅샷이 아니다 · RB4)
+  if (input.snapshot != null) {
+    if (!Array.isArray(input.snapshot)) throw new CtxError('E_INPUT', 'snapshot 은 배열이다 — [{ coord }]', { field: 'snapshot' })
+    if (input.snapshot.length > SNAPSHOT_MAX) throw new CtxError('E_INPUT', `snapshot 은 save 한 번에 ${SNAPSHOT_MAX}개까지다 — 나눠 보낸다`, { field: 'snapshot', count: input.snapshot.length })
+    const seen = new Set()
+    for (const x of input.snapshot) {
+      if (!x || typeof x !== 'object' || Object.keys(x).some((k) => k !== 'coord')) throw new CtxError('E_INPUT', 'snapshot[] 은 { coord } 하나만 받는다 — 본문은 서버가 섹션에서 뜬다', { field: 'snapshot' })
+      checkCoord(x.coord)
+      if (seen.has(x.coord)) throw new CtxError('E_INPUT', `snapshot 에 ${x.coord} 가 두 번 나온다`, { field: 'snapshot', coord: x.coord })
+      seen.add(x.coord)
+    }
   }
   for (const v of input.vocab || []) {
     checkCoord(v.coord)
@@ -349,6 +363,7 @@ export async function save(root, input, { user, write = false, admin = false, cu
         dryRun: true,
         id: r.id,
         sections: r.sections,
+        ...(r.snapshots ? { snapshots: r.snapshots, snapshotSkipped: r.snapshotSkipped } : {}),
         vocab: r.vocab,
         managed: r.managedChanges.length,
         ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
@@ -401,6 +416,7 @@ export async function save(root, input, { user, write = false, admin = false, cu
       id: r.id,
       sections: r.sections,
       ...(r.baseline ? { baseline: r.baseline } : {}),
+      ...(r.snapshots ? { snapshots: r.snapshots, snapshotSkipped: r.snapshotSkipped } : {}),
       vocab: r.vocab,
       managed: r.managedChanges.length,
       ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
@@ -452,6 +468,7 @@ function curatorOnly(input, w) {
   if ((input.edits || []).length) why.push('edits')
   if (input.examples != null) why.push('examples')
   if ((input.baseline || []).length) why.push('baseline')
+  if ((input.snapshot || []).length) why.push('snapshot')
   if (w.curates != null) why.push('work.curates')
   if (w.baseline != null) why.push('work.baseline')
   const tags = (w.tags || []).filter((t) => RESERVED_TAGS.includes(t))
@@ -535,6 +552,17 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     throw new CtxError('E_INPUT', 'work.baseline 은 baseline[] 과 같이 보낸다', { field: 'work.baseline' })
   }
 
+  // 2.4 정본 스냅샷(리빌딩 검토 §5.2) — 이 save 의 `work` 는 **봉투**다(태그 snapshot · 시스템 기록). 섹션마다 스냅샷 기록 하나를
+  // 서버가 같은 커밋에 더 쓴다(6.3). 기계의 자리라 사람의 판단 · 다른 쓰기와 섞지 않는다(기준선과 같은 규칙)
+  const snapshotOps = input.snapshot || []
+  if (snapshotOps.length) {
+    const mixed = [curates && 'work.curates', sections.length && 'sections', baselineOps.length && 'baseline', managedOps.length && 'managed', editOps.length && 'edits', input.examples != null && 'examples', (input.assets || []).length && 'assets'].filter(Boolean)
+    if (mixed.length) throw new CtxError('E_INPUT', `정본 스냅샷은 다른 쓰기와 한 save 에 섞지 않는다 — ${mixed.join(' · ')} 를 빼고 보낸다`, { field: 'snapshot', mixed })
+    if ((w.touches || []).length) throw new CtxError('E_INPUT', '스냅샷 봉투 기록은 touches 를 갖지 않는다 — 뜰 좌표는 snapshot[].coord 에', { field: 'work.touches' })
+    if (!w.touchesEmpty) w.touchesEmpty = '정본 스냅샷'
+    if (!(w.tags || []).includes('snapshot')) w.tags = [...(w.tags || []), 'snapshot']
+  }
+
   // 2.5 구조 정리(rename · merge · retire · drop)도 큐레이터의 일이다(v1.0 V2) — 2.1 이 이미 걸렀다
 
   // 3 존재 — 기존 기록은 고치지도 지우지도 않는다. 정정은 supersedes 를 단 새 기록이다.
@@ -572,7 +600,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       )
     }
     // 큐레이션 · 기준선 기록은 좌표가 없는 것이 그 기록의 모양이다 — 매번 나오는 경고는 아무것도 알리지 않는다
-    if (w.curates == null && !(input.baseline || []).length) warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
+    if (w.curates == null && !(input.baseline || []).length && !snapshotOps.length) warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
   }
 
   // 3.8 첨부 꺼내기 — **파일을 만지기 전에.** 없는 ref · 종류 어긋남 · 상한은 여기서 걸린다. 쓰는 것은 6.5
@@ -622,6 +650,39 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       if (!d) throw new CtxError('E_INPUT', `work.curates — ${j.id} 라는 작업 기록이 없다`, { field: 'work.curates', id: j.id })
       if (!['work', 'snapshot'].includes(recordKind(d))) throw new CtxError('E_INPUT', `work.curates — ${j.id} 는 큐레이션 · 기준선 · 옛 기계 기록이다 — 사람의 작업 기록 · 정본 스냅샷만 다룬다`, { field: 'work.curates', id: j.id })
     }
+    // 5.05 정본 스냅샷 — 섹션 원문 · 날짜(섹션 줄의 마지막 커밋) · 출처를 지금 트리에서 뜬다. 근거가 이미 있는 섹션은 건너뛴다
+    const snapshots = []
+    const snapshotSkipped = []
+    if (snapshotOps.length) {
+      const head = await git.headSha(root, { short: true }).catch(() => null)
+      const sourced = new Set()
+      for (const d of r0.works) if (['work', 'snapshot'].includes(recordKind(d))) for (const c of d.touches || []) sourced.add(c)
+      for (const { coord } of snapshotOps) {
+        const x = sliceSection(r0, coord)
+        if (!x) throw new CtxError('E_INPUT', '등록부에 걸리지 않는 좌표다 — 뜰 섹션이 없다', { field: 'snapshot', coord })
+        if (x.missing) throw new CtxError('E_INPUT', `섹션이 없다(${x.missing === 'doc' ? '문서 없음' : '헤딩 없음'}) — 뜰 원문이 없다`, { field: 'snapshot', coord })
+        const text = splitBaseline(x.content || '').curated.trim()
+        if (!text) throw new CtxError('E_INPUT', '섹션에 큐레이터의 글이 없다(비었거나 기준선 블록뿐) — 뜰 것이 없다', { field: 'snapshot', coord })
+        if (sourced.has(coord)) {
+          snapshotSkipped.push({ coord, reason: '근거 있음 — 그 좌표를 건드린 기록 · 스냅샷이 있다' })
+          continue
+        }
+        const hit = r0.managedIndex.find(coord)
+        const t = hit?.section && !hit.section.whole ? await git.blameMaxTime(root, x.doc, hit.section.line + 1, hit.section.end).catch(() => null) : null
+        const asof = fmtLocal(t != null ? t * 1000 : now)
+        const id = `${asof.slice(0, 4)}-${asof.slice(5, 7)}${asof.slice(8, 10)}-스냅샷-${slugOf(coord)}`
+        if (r0.byId.has(id) || snapshots.some((y) => y.id === id)) {
+          snapshotSkipped.push({ coord, reason: `같은 id 의 기록이 있다(${id})` })
+          continue
+        }
+        const heading = x.heading || x.anchor || coord
+        const source = `${x.doc}${head ? '@' + head : ''}#${String(heading).replace(/^#+\s*/, '')}`
+        snapshots.push({ coord, id, asof, source, heading, text, doc: x.doc })
+      }
+      if (!snapshots.length) throw new CtxError('E_INPUT', '뜰 스냅샷이 없다 — 보낸 좌표가 전부 근거가 있다', { field: 'snapshot', skipped: snapshotSkipped })
+      w.body = [w.body.replace(/\s*$/, ''), '', `**뜬 섹션 ${snapshots.length}**`, '', ...snapshots.map((y) => `- \`${y.coord}\` → [\`${y.id}\`](${y.id}.md)`), ''].join(NL)
+    }
+
     // 섹션의 applied — 반영(into)한 기록 중 그 좌표를 건드린 **가장 늦은 기록**(v1.0 §4.4 · H3). 판정이 없으면 이 기록
     // **applied 는 뒤로 가지 않는다** — 원문 날짜를 단 옛 기록(편입)만 반영해도 지금 applied 가 더 늦은 작업 기록이면 그것을 둔다.
     // 뒤로 가면 이미 반영한 늦은 기록이 그 섹션의 미반영(`later`)으로 되살아난다
@@ -873,6 +934,13 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       }
     }
 
+    // 6.9 정본 스냅샷 기록 — 섹션 하나에 하나. 원문 그대로(머리 한 줄만 — 사건이 아니라 그때의 상태라는 표시)
+    for (const y of snapshots) {
+      const body = [`> 정본 스냅샷 — \`${y.doc}\` 의 「${String(y.heading).replace(/^#+\s*/, '')}」 를 원문 그대로 떴다(${y.asof} 기준 · 봉투 [\`${w.id}\`](${w.id}.md)). 사건이 아니라 그때의 상태다.`, '', y.text].join(NL)
+      const rec = { id: y.id, title: `[스냅샷] ${y.coord}`, date: y.asof, source: y.source, touches: [y.coord], snapshot: { source: y.source, asof: y.asof.slice(0, 10) }, tags: ['snapshot'], body }
+      await snap.write(`work/${y.id}.md`, renderWork(rec, user))
+    }
+
     // 7 기록 — TEMPLATE 순서의 프론트매터. author 는 토큰의 user 다. 첨부는 `attachments` 로 — 화면의 첨부 목록이 이것을 읽는다
     await snap.write(workRel, renderWork(w, user, assetsOut.map((a) => a.path.slice('work/'.length)), curates))
 
@@ -902,6 +970,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       title: w.title,
       sections: sections.length,
       ...(baselineOps.length ? { baseline: baselineOps.length } : {}),
+      ...(snapshotOps.length ? { snapshots: snapshots.map(({ coord, id, asof }) => ({ coord, id, date: asof })), snapshotSkipped } : {}),
       vocab: added,
       managedChanges: plan?.events || [],
       assets: assetsOut.map(({ path: p, size }) => ({ path: p, size })),
@@ -958,6 +1027,7 @@ function renderWork(w, user, attachments = [], curates = null) {
   if (w.supersedes) fm.push(`supersedes: ${w.supersedes}`)
   if (attachments.length) fm.push(`attachments: [${attachments.map(yamlStr).join(', ')}]`)
   if (w.baseline) fm.push(`baseline: { source: ${JSON.stringify(w.baseline.source)}${w.baseline.asof ? ', asof: ' + JSON.stringify(String(w.baseline.asof)) : ''} }`)
+  if (w.snapshot) fm.push(`snapshot: { source: ${JSON.stringify(w.snapshot.source)}, asof: ${JSON.stringify(String(w.snapshot.asof))} }`)
   // 큐레이션 판정 — 한 줄에 하나. 좌표 · 사유는 JSON 문자열로(콜론 · 대괄호가 YAML 을 깨지 않게)
   if (curates?.length) {
     fm.push('curates:')
@@ -970,6 +1040,18 @@ function renderWork(w, user, attachments = [], curates = null) {
   }
   fm.push(`tags: [${(w.tags || []).map(yamlStr).join(', ')}]`, '---', '')
   return fm.join(NL) + NL + w.body.replace(/\s*$/, '') + NL
+}
+
+// 스냅샷 id 의 꼬리 — 좌표의 `:` · `/` · 공백을 `-` 로(id 규칙 RE_ID 는 `/` · 제어문자를 받지 않는다)
+function slugOf(coord) {
+  return String(coord).replace(/[:/\\\s]+/g, '-').replace(/-+/g, '-').slice(0, 100)
+}
+
+// `YYYY-MM-DD HH:MM` (이 PC 의 시간대) — 작업 기록의 date 모양
+function fmtLocal(ms) {
+  const d = new Date(ms)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 // YAML 에서 그대로 두면 깨지는 값(콜론 · 대괄호 · 따옴표 · # )은 인용한다 — importdir 와 같은 규칙.

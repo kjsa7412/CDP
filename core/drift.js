@@ -41,7 +41,18 @@ export function dupKey(line) {
   if (t.startsWith('|') || t.startsWith('>') || t.startsWith('#') || t.startsWith('```') || t.startsWith('<!--')) return null
   if (RE_PROGRESS_LINE.test(t)) return null
   const k = t.replace(/^[-*·]\s+/, '').replace(/\s+/g, ' ')
-  return k.length >= DUP_MIN_CHARS ? k : null
+  // 길이는 링크를 뺀 글로 잰다 — 「실측은 [기록](…)」 같은 근거 가리킴은 같은 줄이 여러 섹션에 있어도 복제가 아니다(출처 표시다)
+  const prose = k.replace(/!?\[[^\]]*\]\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+  return prose.length >= DUP_MIN_CHARS ? k : null
+}
+
+// 본문이 링크로 가리키는 작업 기록 id — `work/<id>.md` · `../work/<id>.md`. 근거 없는 섹션이 기록을 인용하고 있으면
+// 스냅샷보다 **그 기록의 좌표정정**이 낫다(진짜 출처가 남는다 — 리빌딩 검토 §5.2(나))
+const RE_WORK_LINK = /\]\((?:\.\.\/)*(?:\.\/)?work\/([^)#/]+)\.md(?:#[^)]*)?\)/g
+export function linkedWorkIds(lines, byId) {
+  const out = new Set()
+  for (const l of lines) for (const m of l.matchAll(RE_WORK_LINK)) if (byId?.has(m[1])) out.add(m[1])
+  return [...out]
 }
 
 /**
@@ -71,6 +82,10 @@ export function buildDrift(r, { sliceSection, oversizeLines = OVERSIZE_LINES } =
     const text = lines.filter((l) => l.trim())
     if (!text.length && !hasBaseline) continue // 빈 섹션 — 어긋날 글이 없다
     const row = { coord: s.coord, doc: x.doc, lines: text.length, unsourced: !!text.length && !hasBaseline && !sourced.has(s.coord), duplicated: [], oversize: null, diary: 0 }
+    if (row.unsourced) {
+      const linked = linkedWorkIds(text, r.byId)
+      if (linked.length) row.linked = linked
+    }
     if (text.length > oversizeLines) row.oversize = { lines: text.length, limit: oversizeLines }
     for (const l of text) {
       if (isDiary(l.trim())) row.diary++
@@ -113,6 +128,7 @@ export function buildDrift(r, { sliceSection, oversizeLines = OVERSIZE_LINES } =
     oversize: rows.filter((x) => x.oversize).length,
     diary: rows.filter((x) => x.diary).length,
     unreachable: unreachable.length,
+    unsourcedLinked: rows.filter((x) => x.linked).length,
   }
   return { totals, sections: flagged.map(({ lines, ...x }) => x), unreachable, conventionLines, convention }
 }

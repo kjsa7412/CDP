@@ -450,6 +450,20 @@ function firstLine(s) {
 
 // 경로마다 마지막으로 바꾼 커밋 — 관리문서 정리 검토 §4.6 의 `lastChange`. 문서 40개에 git 40번이 아니라 **한 번**이다.
 // 읽기라 잠그지 않는다. git 이 없거나 레포가 아니면 빈 지도(사용 현황은 그 칸만 비운다).
+// 줄 범위의 마지막 변경 시각(epoch 초) — 정본 스냅샷의 날짜(리빌딩 검토 RB6). 섹션 줄들을 blame 해 가장 늦은 커밋.
+// `start` · `end` 는 1부터 · 양끝 포함. 커밋되지 않은 줄 · git 이 없으면 null(부르는 쪽이 다른 날짜로)
+export async function blameMaxTime(root, file, start, end) {
+  if (!(start >= 1) || !(end >= start)) return null
+  const r = await run(root, [...READ_ONLY, 'blame', '--line-porcelain', '-L', `${start},${end}`, '--', file], { timeout: 30000 })
+  if (!r.ok) return null
+  let max = null
+  for (const line of r.out.split('\n')) {
+    const m = /^committer-time (\d+)$/.exec(line)
+    if (m) max = Math.max(max ?? 0, Number(m[1]))
+  }
+  return max
+}
+
 export async function lastChanges(root, prefix = 'docs') {
   const r = await run(root, [...READ_ONLY, 'log', '--format=%x01%h%x09%ad%x09%an%x09%s', '--date=short', '--name-only', '--no-renames', '--', prefix], { timeout: 30000 })
   const out = new Map()

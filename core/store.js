@@ -12,6 +12,7 @@ import { buildIndex, fullText, prepQuery, matchName, bestName } from './search.j
 import { runBuiltinCheck } from './check.js'
 import { visualRefs, visualTitle } from './visuals.js'
 import { formIdOfText } from './tools.js'
+import { nfc } from './frontmatter.js'
 
 // 검색이 한 갈래에 내는 최대 줄 수. 그 아래는 사람이 안 읽는다 — 개수는
 // 언제나 전체를 말한다(§13-②).
@@ -518,7 +519,7 @@ export class Store {
 
   // 문서 상세 — 원문 텍스트를 그대로 보낸다. 렌더는 클라이언트가 한다(§9).
   detail(idOrPath) {
-    const d = this.byId.get(idOrPath) || this.byPath.get(idOrPath)
+    const d = this.byId.get(nfc(idOrPath)) || this.byPath.get(idOrPath)
     if (!d) return null
     const body = this.bodies.get(d.path) || ''
     const settled = this.coords.ofWork(d)

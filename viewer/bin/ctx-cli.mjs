@@ -51,6 +51,8 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx repo list --root <폴더>               서버 <root> 의 레포 목록
   ctx repo new <경로> --records-from <옛 레포>   다시 세우기 — 작업 기록 · 첨부 · 그 기록이 쓰는 어휘만 옮긴다
   ctx baseline extract|push …               옛 섹션을 기준선 블록으로 옮긴다(다시 세운 레포의 출발점)
+  ctx drift [<좌표>] [--doc <문서>] [--json]   어긋남 진단 — 근거 없음 · 복제 · 비대 · 일지형 · 좌표 없는 기록(읽기만)
+  ctx rebuild snapshot --server <주소> --repo <레포> [--doc <문서>] [--all] [--dry]   근거 없는 섹션을 정본 스냅샷 기록으로 뜬다(큐레이터 · 200 개씩 · 기록을 인용하는 섹션은 --all 일 때만)
   ctx forms list|show <id>|check [--forms <dir>] [--data <dir>]   서식집 — 목록 · 서식 하나(찍힐 빈 문서까지) · 번들과 팀 서식(<data>/forms) 검사
   ctx migrate <레포> [--dry] [--by <이름>] [--keep-tools]   제자리 이행 — 전환 기록 하나 · 서식 예시 · 도구 층 걷기(서버를 멈추고)
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
@@ -112,6 +114,7 @@ function parseArgs(argv) {
     else if (a === '--active') out.active = true
     else if (a === '--inactive') out.active = false
     else if (a === '--dry') out.dry = true
+    else if (a === '--all') out.all = true
     else if (a === '--packages') out.packages = argv[++i]
     else if (a === '--forms') out.forms = argv[++i]
     else if (a === '--kit') out.kit = argv[++i]
@@ -596,6 +599,24 @@ async function cmdBrief(r, opt) {
   return 0
 }
 
+// 어긋남 진단(리빌딩 검토 §5.1) — 화면 「진단」 · MCP `drift` 와 같은 계산. 읽기만
+async function cmdDrift(r, opt) {
+  const d = T.toolDrift(r, { doc: opt.doc, coord: opt.args[0] })
+  if (opt.json) {
+    out(JSON.stringify(d, null, 2))
+    return 0
+  }
+  const t = d.totals
+  out(`ctx drift: 섹션 ${t.sections} — 근거 없음 ${t.unsourced} · 복제 ${t.duplicated} · 비대 ${t.oversize} · 일지형 ${t.diary} · 좌표 없는 기록 ${t.unreachable}`)
+  for (const x of d.sections.slice(0, 40)) {
+    const sig = [x.unsourced && '근거 없음', x.duplicated.length && `복제 ${x.duplicated.length}(${x.duplicated.slice(0, 3).join(' · ')}${x.duplicated.length > 3 ? ' …' : ''})`, x.oversize && `비대 ${x.oversize.lines}줄`, x.diary && `일지형 ${x.diary}`].filter(Boolean)
+    out(`   ${x.coord}  ${x.doc}  ${sig.join(' · ')}`)
+  }
+  if (d.total > 40) out(`   … ${d.total - 40}개 더 (--json · --doc · 좌표 인자로 좁힌다)`)
+  if (t.unsourced) out('다음 — 근거 없는 섹션은 ctx rebuild snapshot 으로 먼저 뜬다(기록만 옮겨 다시 세워도 잃지 않게)')
+  return 0
+}
+
 // ── 진입점 ──────────────────────────────────────────────────────────────────
 
 export async function main(argv = process.argv.slice(2)) {
@@ -643,6 +664,10 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'migrate') {
     const { runMigrate } = await import('./ctx-migrate.mjs')
     return runMigrate(opt)
+  }
+  if (opt.cmd === 'rebuild') {
+    const { runRebuild } = await import('./ctx-rebuild.mjs')
+    return runRebuild(opt)
   }
   if (opt.cmd === 'baseline') {
     const { runBaseline } = await import('./ctx-baseline.mjs')
@@ -698,6 +723,7 @@ export async function main(argv = process.argv.slice(2)) {
     where: cmdWhere,
     term: cmdTerm,
     brief: cmdBrief,
+    drift: cmdDrift,
   }
   const fn = table[opt.cmd]
   if (!fn) {

@@ -15,7 +15,7 @@ import path from 'node:path'
 import { resolveInside } from './security.js'
 import { HTML_CSP, HTML_EXTS, themeHtml } from '../../../core/assets.js'
 import { zip } from '../../../core/zip.js'
-import { toolDocs } from '../../../core/tools.js'
+import { toolDocs, toolDrift } from '../../../core/tools.js'
 import { lastChanges } from '../../../core/git.js'
 import { dropBlockers } from '../../../core/docusage.js'
 import { droppedDocs } from '../../../core/docrefs.js'
@@ -54,6 +54,12 @@ const MIME = {
 export async function handleRead({ p, method, url, res, send, store }) {
   if (p === '/repo' && method === 'GET') {
     send(res, 200, store.repoInfo())
+    return true
+  }
+
+  // 어긋남 진단(리빌딩 검토 §5.1) — 큐레이터 몫(권한은 부르는 서버가 먼저 본다). `doc` · `coord` 로 좁힌다
+  if (p === '/drift' && method === 'GET') {
+    send(res, 200, toolDrift(store, { doc: url.searchParams.get('doc') || undefined, coord: url.searchParams.get('coord') || undefined }))
     return true
   }
 

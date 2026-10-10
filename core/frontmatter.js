@@ -67,6 +67,11 @@ function normStatus(v) {
   return !t || t === '확정' || t === '완료' ? null : t
 }
 
+// 한글 id 의 유니코드 정규화 — 기록 id 는 NFC 하나로 다룬다(아래 parseDoc)
+export function nfc(s) {
+  return typeof s === 'string' ? s.normalize('NFC') : s
+}
+
 function toArray(v) {
   if (v == null) return []
   return Array.isArray(v) ? v.filter((x) => x != null).map((x) => String(x).trim()) : [String(v).trim()]
@@ -79,8 +84,8 @@ export function normalizeSupersedes(v) {
   if (v == null) return []
   const one = (x) => {
     if (x == null) return null
-    if (typeof x === 'string') return { id: x.trim(), scope: null }
-    if (typeof x === 'object' && x.id) return { id: String(x.id).trim(), scope: toArray(x.scope).length ? toArray(x.scope) : null }
+    if (typeof x === 'string') return { id: nfc(x.trim()), scope: null }
+    if (typeof x === 'object' && x.id) return { id: nfc(String(x.id).trim()), scope: toArray(x.scope).length ? toArray(x.scope) : null }
     return null
   }
   return (Array.isArray(v) ? v : [v]).map(one).filter(Boolean)
@@ -101,9 +106,9 @@ export function normalizeCurates(v) {
   return list
     .map((x) => {
       if (x == null) return null
-      if (typeof x === 'string') return { id: x.trim(), verdict: null, into: [], reason: null, bad: '판정이 없다' }
-      if (typeof x !== 'object') return { id: String(x).trim(), verdict: null, into: [], reason: null, bad: '모양이 아니다' }
-      const id = x.id != null ? String(x.id).trim() : ''
+      if (typeof x === 'string') return { id: nfc(x.trim()), verdict: null, into: [], reason: null, bad: '판정이 없다' }
+      if (typeof x !== 'object') return { id: nfc(String(x).trim()), verdict: null, into: [], reason: null, bad: '모양이 아니다' }
+      const id = x.id != null ? nfc(String(x.id).trim()) : ''
       const verdict = x.verdict != null ? String(x.verdict).trim() : null
       const into = toArray(x.into)
       const reason = x.reason != null && String(x.reason).trim() ? String(x.reason).trim() : null
@@ -189,8 +194,11 @@ export function parseDoc(path, text) {
     }
   }
 
-  const fileId = path.replace(/^.*\//, '').replace(/\.md$/i, '')
-  const id = fm.id ? String(fm.id).trim() : fileId
+  // id 는 읽는 경계에서 NFC 로 맞춘다(I13). macOS 의 git checkout 은 한글 파일명을 NFC 로도 NFD 로도 내고, 프론트매터의
+  // `id:` 는 쓴 사람의 편집기가 정한 모양 그대로다 — 눈에는 같은 id 가 바이트로 달라 「id 와 파일명 불일치」 · 없는 기록이 된다.
+  // 여기서 한 번 맞추면 byId · supersedes · curates 의 대조가 모두 같은 모양을 본다. `path` 는 디스크를 여는 열쇠라 그대로 둔다
+  const fileId = nfc(path.replace(/^.*\//, '').replace(/\.md$/i, ''))
+  const id = fm.id ? nfc(String(fm.id).trim()) : fileId
   const layer = layerOf(path)
   const headings = outline(body)
   const weight = bodyWeight(body)

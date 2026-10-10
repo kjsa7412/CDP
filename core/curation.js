@@ -18,7 +18,7 @@
 
 import { cmpDateDesc } from './validity.js'
 
-export const SYSTEM_TAGS = ['registry', 'docs-prune', 'derive']
+export const SYSTEM_TAGS = ['registry', 'docs-prune', 'derive', 'snapshot']
 export const QUEUE_STALE_DAYS = 14
 const EXCERPT_MAX = 160
 
