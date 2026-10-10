@@ -52,7 +52,7 @@ const err = (s = '') => process.stderr.write(s + NL)
 const CFG = globalThis.__CDP_KIT__ || null
 
 function parseArgs(argv) {
-  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false, curator: false, folder: false, fixIgnore: false, brief: false }
+  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false, curator: false, folder: false, fixIgnore: false, brief: false, connect: false }
   const pos = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -65,6 +65,7 @@ function parseArgs(argv) {
     else if (a === '--folder') flags.folder = true
     else if (a === '--fix-gitignore') flags.fixIgnore = true
     else if (a === '--brief') flags.brief = true
+    else if (a === '--connect') flags.connect = true
     else if (a === '--repo') flags.repo = argv[++i] || null
     else if (a === '--workrepo') flags.workrepo = argv[++i] || null
     else if (!a.startsWith('--')) pos.push(a)
@@ -103,6 +104,13 @@ export async function main(argv) {
     return installSimple({ kind: 'curator', server, repo, dir, dry, yes, noSave: flags.noSave, brief: flags.brief })
   }
 
+  // 여러 코드 레포를 한 번에(제품화 2 F11) — 상위 폴더 아래의 git 레포를 고르고 · 대장에 한 번에 등록하고 · 설치한다. 묻는 것은 한 번
+  if (flags.connect) {
+    if (!net) return bail('--connect 는 한 줄 설치기로 돈다.')
+    if (!repo || !pos[0]) return bail('사용법 — node cdp-install.mjs --connect --repo <레포> <코드 레포들이 있는 폴더> [--dry] [--yes] [--fix-gitignore]')
+    return connectAll({ server, repo, dir: pos[0], dry, yes, noSave: flags.noSave, fixIgnore: flags.fixIgnore, commit: flags.commit })
+  }
+
   // 스킬 사본 폴더(제품화 2 F15) — 워크스페이스 공용 skills 폴더처럼 **스킬만** 두는 자리. `cdp-*/` 를 그 폴더 바로 아래에 둔다.
   // 설치 목록에 `folder` 로 남아 `--update` 가 같이 돈다 — 손으로 cp 하던 사본이 낡지 않게
   if (flags.folder) {
@@ -117,6 +125,7 @@ export async function main(argv) {
     if (net) {
       out('  node cdp-install.mjs --repo <레포> --workrepo <등록 id> <작업 레포 경로> [--dry] [--yes] [--no-save]')
       out('  node cdp-install.mjs --update [<경로>…] [--dry] [--yes] [--commit]   이 PC 의 작업 레포 · 큐레이터 폴더 · 스킬 폴더 전부를 한 번에')
+      out('  node cdp-install.mjs --connect --repo <레포> <코드 레포들이 있는 폴더>   여러 레포를 한 번에 등록 · 설치')
       out('  node cdp-install.mjs --curator --repo <레포> [<폴더>]                큐레이터 폴더')
       out('  node cdp-install.mjs --folder --repo <레포> <skills 폴더>            스킬만 두는 폴더(워크스페이스 사본)')
     } else out('  node install.mjs <작업 레포 경로> [--dry] [--yes] [--no-save]')
@@ -351,6 +360,86 @@ async function applySimple(changes) {
     await fs.mkdir(path.dirname(a.dst), { recursive: true })
     await fs.writeFile(a.dst, a.data)
   }
+}
+
+// ── 여러 코드 레포를 한 번에(--connect) ──────────────────────────────────────
+
+async function gitReposUnder(dir) {
+  const root = path.resolve(dir)
+  if (await isDir(path.join(root, '.git'))) return [root]
+  const out = []
+  for (const e of (await fs.readdir(root, { withFileTypes: true }).catch(() => [])).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!e.isDirectory() || e.name.startsWith('.')) continue
+    const p = path.join(root, e.name)
+    if (await fs.stat(path.join(p, '.git')).then(() => true, () => false)) out.push(p)
+  }
+  return out
+}
+
+// 작업 레포에 CDP 가 두는 자리 — 커밋할 때 이것만(사람의 다른 .claude 파일은 건드리지 않는다)
+const CDP_PATHS = ['.mcp.json', 'CLAUDE.md', '.claude/cdp.json', '.claude/skills/cdp-work', '.claude/skills/cdp-save', '.claude/skills/cdp-push']
+
+async function connectAll({ server, repo, dir, dry, yes, noSave, fixIgnore, commit = false }) {
+  const found = await gitReposUnder(dir)
+  out(`서버     ${server}`)
+  out(`레포     ${repo}`)
+  out(`찾은 곳  ${path.resolve(dir)} — git 레포 ${found.length}개`)
+  if (!found.length) return bail('그 아래에 git 레포가 없다 — 코드 레포들이 들어 있는 폴더를 준다')
+  const tk = await resolveToken(server, { required: true, yes })
+  if (tk?.error) return bail(tk.error)
+  if (tk?.entered && !noSave && !dry) await offerSave(tk.token, { yes })
+  const H = { authorization: 'Bearer ' + tk.token, 'content-type': 'application/json' }
+  const list = await fetch(`${server}/workrepos`, { headers: H }).then((r) => r.json()).catch(() => null)
+  if (!list) return bail(`대장을 읽지 못했다 — ${server}`)
+  if (!list.write) return bail('이 토큰은 작업 레포를 등록할 수 없다(쓰기 권한) — 관리자에게 writer 이상을 받는다')
+  const rows = found.map((p) => ({ path: p, name: path.basename(p), row: list.repos.find((r) => r.knowledge === repo && r.name === path.basename(p)) || null }))
+  out('')
+  for (const r of rows) out(`  ${r.row ? ' ' : '*'} ${r.name.padEnd(24)} ${r.row ? `등록됨 ${r.row.id}` : '새로 등록'}`)
+  if (dry) {
+    out('')
+    out(`--dry 이므로 쓰지 않았습니다. 등록 ${rows.filter((r) => !r.row).length} · 설치 ${rows.length}`)
+    return 0
+  }
+  if (!yes && !(await confirm(`위 ${rows.length}곳을 ${repo} 에 붙일까요? [y/N] `))) {
+    out('그만둡니다. 아무것도 쓰지 않았습니다.')
+    return 1
+  }
+  const fresh = rows.filter((r) => !r.row)
+  if (fresh.length) {
+    const r = await fetch(`${server}/workrepos`, { method: 'POST', headers: H, body: JSON.stringify({ repos: fresh.map((x) => ({ name: x.name, knowledge: repo, owner: tk.who?.user || null })) }) })
+    const j = await r.json().catch(() => null)
+    if (!r.ok) return bail(`대장 등록 실패 — ${j?.error?.message || r.status}${j?.error?.detail?.name ? ' (' + j.error.detail.name + ')' : ''}`)
+    j.repos.forEach((row, i) => (fresh[i].row = row))
+  }
+  // kit 은 레포(지식 레포)마다 같다 — 한 번 받는다
+  const got = await fetchKit(server, repo, rows[0].row.id, tk.token)
+  if (got.error) return bail(got.error)
+  let bad = 0
+  try {
+    for (const r of rows) {
+      out('')
+      out(`── ${r.path}`)
+      // 커밋하려면 — 사람이 고치던 CDP 파일이 있으면 그 레포는 커밋하지 않는다(--update --commit 과 같은 규칙)
+      const pre = commit ? (await git(r.path, ['status', '--porcelain', '--', ...CDP_PATHS])).out : ''
+      const code = await install({ server, repo, workrepo: r.row.id, kit: got.kit, kitDir: got.dir, work: r.path, dry: false, yes: true, token: tk.token, fixIgnore, brief: true })
+      if (code) bad++
+      else if (commit) {
+        if (pre) out('커밋 안 함 — 원래 커밋 안 된 CDP 파일이 있었다')
+        else {
+          const c = await commitChanged(r.path, CDP_PATHS, got.kit, { fixIgnore })
+          out(c.ok ? `커밋 ${c.commit}` : `커밋 못 함 — ${c.why}`)
+          if (!c.ok) bad++
+        }
+      }
+    }
+  } finally {
+    await got.cleanup()
+  }
+  out('')
+  out('다음 —')
+  out('  1. Claude Code 를 다시 켠다 — 새 스킬 · MCP 는 시작할 때 읽힌다')
+  if (!commit) out('  2. 레포마다 커밋(팀원은 pull 로 받는다) — 이 명령에 --commit 을 주면 CDP 파일만 커밋한다')
+  return bad ? 1 : 0
 }
 
 // ── 이 PC 의 설치 목록(T9) ─────────────────────────────────────────────────

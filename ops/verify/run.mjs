@@ -2702,6 +2702,62 @@ await check(117, 'v1.1 스킬 여섯 — 폴더가 정확히 여섯 · 머리말
   return `${names.length}종 · 줄 ${sizes.join(' · ')}`
 })
 
+// 제품화 2 — 원큐(빈 HOME 에서 ctx up 한 줄 → 작업 레포 둘 · 큐레이터 폴더 · 스킬 폴더 → kit 이 바뀌면 --update 가 넷을 센다)
+await check(139, '원큐 — 빈 HOME 에서 ctx up <폴더> --install a --install b --curator c --skills s: 빈 틀 · 개인 서버 · 토큰 파일 · 대장 2 · 설치 목록 work 2 · curator · folder · /next 에 작업 레포 · 큐레이터 폴더 줄 없음 · stdout 에 토큰 원문 없음 · kit 이 바뀌면 ctx up --update 가 바뀔 곳 4', async () => {
+  const H0 = path.join(TMP, 'one-shot')
+  const HOME_T = path.join(H0, 'home')
+  const REPO_T = path.join(HOME_T, 'cdp', 'team')
+  const A = path.join(H0, 'code', 'a')
+  const B = path.join(H0, 'code', 'b')
+  const C = path.join(HOME_T, 'curator')
+  const SK = path.join(HOME_T, 'skills')
+  for (const d of [A, B]) {
+    await fs.mkdir(d, { recursive: true })
+    await run('git', ['-C', d, 'init', '-q'])
+  }
+  const P = PORT + 21
+  const env = { ...BASE_ENV, HOME: HOME_T, USERPROFILE: HOME_T, SHELL: '/bin/zsh', CDP_KIT: KIT, CDP_TOKEN: '' }
+  delete env.CDP_CONFIG_DIR
+  const up = (args) => spawn(process.execPath, [path.join(ROOT, 'viewer/bin/ctx-cli.mjs'), 'up', ...args], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  const p = up([REPO_T, '--install', A, '--install', B, '--curator', C, '--skills', SK, '--no-open', '--port', String(P), '--web', WEB])
+  let so = ''
+  p.stdout.on('data', (d) => (so += d.toString('utf8')))
+  p.stderr.on('data', () => {})
+  try {
+    for (const t0 = Date.now(); !/끄려면 Ctrl\+C/.test(so) && Date.now() - t0 < 120000; ) await wait(300)
+    must(/끄려면 Ctrl\+C/.test(so), 'ctx up 이 끝까지 안 갔다 — ' + so.slice(-300))
+    must(await exists(path.join(REPO_T, '_vocab.md')), '빈 틀')
+    const data = path.join(HOME_T, '.cdp', 'personal', 'team')
+    const tok = (await fs.readFile(path.join(data, 'personal.token'), 'utf8')).trim()
+    must(!so.includes(tok), 'stdout 에 토큰 원문')
+    eq((await fs.readFile(path.join(HOME_T, '.config', 'cdp', 'token'), 'utf8')).trim(), tok, '토큰 파일')
+    for (const f of [path.join(A, '.mcp.json'), path.join(B, '.claude', 'skills', 'cdp-save', 'SKILL.md'), path.join(C, '.claude', 'skills', 'cdp-curate', 'SKILL.md'), path.join(SK, 'cdp-save', 'SKILL.md')]) must(await exists(f), '없다 — ' + f)
+    must(!(await exists(path.join(C, '.claude', 'work-repo'))), '큐레이터 폴더에 kit 안쪽 원본(F12)')
+    const reg = JSON.parse(await fs.readFile(path.join(HOME_T, '.config', 'cdp', 'workrepos.json'), 'utf8'))
+    eq(reg.entries.map((e) => e.kind).sort(), ['curator', 'folder', 'work', 'work'], '설치 목록 kind')
+    const H2 = http(`http://127.0.0.1:${P}`)
+    const wrs = (await (await H2.call('/workrepos', bearer(tok))).json()).repos
+    eq(wrs.map((r) => r.state), ['최신', '최신'], '대장')
+    const nx = await (await H2.call('/next?repo=team', bearer(tok))).json()
+    const ids = nx.steps.map((s) => s.id)
+    must(!ids.includes('work-none') && !ids.includes('curator-folder'), '/next — ' + ids.join(','))
+    must(ids.includes('docs-none'), '/next 에 관리 문서 줄이 없다 — ' + ids.join(','))
+    // kit 이 바뀐다(판 올림) — 같은 서버에 ctx up --update 가 붙어 넷을 센다
+    await fs.appendFile(path.join(KIT, 'skills', 'cdp-save', 'SKILL.md'), '\n<!-- 원큐 139 -->\n')
+    const u = up([REPO_T, '--update', '--no-open'])
+    let uo = ''
+    u.stdout.on('data', (d) => (uo += d.toString('utf8')))
+    const code = await new Promise((r) => u.on('exit', r))
+    eq(code, 0, '--update — ' + uo.slice(-300))
+    must(/이미 떠 있다/.test(uo), '두 번째 ctx up 이 떠 있는 서버를 못 찾았다')
+    must(/바뀔 곳 4/.test(uo), '바뀔 곳 — ' + uo.slice(-400))
+    must((await fs.readFile(path.join(SK, 'cdp-save', 'SKILL.md'), 'utf8')).includes('원큐 139'), '스킬 폴더가 안 바뀌었다')
+    return `빈 틀 · 대장 최신 2 · 목록 work 2 · curator · folder · /next ${ids.join(',')} · --update 4곳`
+  } finally {
+    p.kill('SIGKILL')
+  }
+})
+
 // ── 보고 ────────────────────────────────────────────────────────────────────
 
 results.sort((a, b) => a.n - b.n)
@@ -2715,6 +2771,6 @@ for (const r of results) console.log(` ${mark[r.state]} ${String(r.n).padStart(3
 
 const n = (s) => results.filter((r) => r.state === s).length
 console.log('')
-console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (설계서 §10 1~69 · 제품화 70~77 · 관리 서비스 78~90 · 동시 기록 91~97 · 화면 · 권한 98~103 · 설치 한 줄 104~108 · 관리 문서 110 · 112~116 · 스킬 111 · 117 · v1.0 118~138)`)
+console.log(`✓ ${n('ok')}  ✗ ${n('fail')}  – ${n('skip')}   (설계서 §10 1~69 · 제품화 70~77 · 관리 서비스 78~90 · 동시 기록 91~97 · 화면 · 권한 98~103 · 설치 한 줄 104~108 · 관리 문서 110 · 112~116 · 스킬 111 · 117 · v1.0 118~138 · 제품화 2 139)`)
 await fs.writeFile(path.join(TMP, 'result.json'), JSON.stringify(results, null, 2))
 process.exit(n('fail') ? 1 : 0)

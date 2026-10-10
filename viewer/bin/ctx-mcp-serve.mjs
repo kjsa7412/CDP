@@ -1582,15 +1582,20 @@ export async function runServe(opt = {}) {
             return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '쓰기 권한이 없다 — 등록·삭제는 write 인 사람만' } })
           }
           if (url.pathname === '/workrepos' && req.method === 'POST') {
-            const body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}')
-            // 방금 세운 레포를 바로 등록할 수 있게 — 모르는 이름이면 폴더를 다시 훑는다
-            if (body.knowledge) await store.ensure(String(body.knowledge))
+            const body = JSON.parse((await readBody(req, 256 * 1024)).toString('utf8') || '{}')
+            // 여러 개를 한 번에 — `{ repos: [{ name, knowledge, owner }, …] }`(설치기 --connect · 제품화 2 F11). 하나라도 틀리면
+            // 아무것도 안 쓴다(반쯤 등록된 대장을 남기지 않는다). 하나면 지금 모양 그대로 행 하나를 돌려준다
+            const many = Array.isArray(body?.repos)
+            const items = many ? body.repos : [body]
+            if (many && (!items.length || items.length > 50)) throw new wr.WorkReposError('E_INPUT', 'repos 는 1~50개다')
+            for (const it of items) if (it?.knowledge) await store.ensure(String(it.knowledge))
             const known = (await store.list()).filter((r) => !a.allow || a.allow(r.name)).map((r) => r.name)
-            const row = wr.add(db, body, { users: (await usersByRepo(opt.auth, [String(body.knowledge || '')]))[String(body.knowledge || '')] || [], repos: known })
+            const usersOf = await usersByRepo(opt.auth, [...new Set(items.map((it) => String(it?.knowledge || '')))])
+            const rows = items.map((it) => wr.add(db, it, { users: usersOf[String(it?.knowledge || '')] || [], repos: known }))
             await wr.save(dataDir, db)
-            await auth.audit(dataDir, `workrepo add · ${a.user} · ${row.id} · ${row.name} · ${row.knowledge}`)
-            log.req({ ip, user: a.user, method: 'POST', tool: '/workrepos', key: row.id, ms: Date.now() - t0, status: 200 })
-            return json(res, 200, row)
+            for (const row of rows) await auth.audit(dataDir, `workrepo add · ${a.user} · ${row.id} · ${row.name} · ${row.knowledge}`)
+            log.req({ ip, user: a.user, method: 'POST', tool: '/workrepos', key: rows.map((r) => r.id).join(','), ms: Date.now() - t0, status: 200 })
+            return json(res, 200, many ? { repos: rows } : rows[0])
           }
           const am = /^\/workrepos\/([^/]+)\/applied$/.exec(url.pathname)
           if (am && req.method === 'POST') {
