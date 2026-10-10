@@ -2529,7 +2529,7 @@ await check(130, 'ctx migrate — 파생 이력이 있는 레포(viewer/fixture 
   return `전환 ${t.id} · 반영됨 ${reflect} · 기록으로 둠 ${keep} · 대기 ${queued} 그대로 · 두 번째 건너뜀`
 })
 
-await check(131, '개인 서버 — ctx serve --personal <레포>: 명부(나 하나 · admin)를 스스로 · 첫 접속 /login?auto=<토큰> 이 쿠키를 주고 그 레포로 · 틀린 토큰은 로그인 화면 · MCP 큐레이터 12 · 다른 서버에는 auto 가 없다', async () => {
+await check(131, '개인 서버 — ctx serve --personal <레포>: 명부(나 하나 · admin)를 스스로 · 첫 접속 /login?auto=<토큰>(login.url 파일 · stdout 에 원문 없음) 이 쿠키를 주고 그 레포로 · 틀린 토큰은 로그인 화면 · MCP 큐레이터 12 · 다른 서버에는 auto 가 없다', async () => {
   const P = PORT + 11
   const PR = path.join(TMP, 'personal', 'pfx')
   const PD = path.join(TMP, 'personal', 'data')
@@ -2539,7 +2539,10 @@ await check(131, '개인 서버 — ctx serve --personal <레포>: 명부(나 �
   try {
     await ready(P)
     const tok = (await fs.readFile(path.join(PD, 'personal.token'), 'utf8')).trim()
-    must(SP.out().includes(`/login?auto=${tok}`), '첫 접속 주소를 안 냈다 — ' + SP.out().slice(0, 160))
+    // 첫 접속 주소(토큰 원문)는 stdout 이 아니라 600 파일로(제품화 2 F14) — 화면에는 그 파일 자리만
+    must(!SP.out().includes(tok), 'stdout 에 토큰 원문이 찍혔다')
+    must(SP.out().includes(path.join(PD, 'login.url')), '자동 로그인 주소 파일을 안 알렸다 — ' + SP.out().slice(0, 160))
+    must((await fs.readFile(path.join(PD, 'login.url'), 'utf8')).includes(`/login?auto=${tok}`), 'login.url 내용')
     const db = JSON.parse(await fs.readFile(path.join(PD, 'auth.json'), 'utf8'))
     eq([db.users.length, db.users[0]?.role], [1, 'admin'], '명부')
     const base = `http://127.0.0.1:${P}`

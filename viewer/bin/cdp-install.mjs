@@ -52,7 +52,7 @@ const err = (s = '') => process.stderr.write(s + NL)
 const CFG = globalThis.__CDP_KIT__ || null
 
 function parseArgs(argv) {
-  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false, curator: false, folder: false, fixIgnore: false }
+  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false, curator: false, folder: false, fixIgnore: false, brief: false }
   const pos = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -64,6 +64,7 @@ function parseArgs(argv) {
     else if (a === '--curator') flags.curator = true
     else if (a === '--folder') flags.folder = true
     else if (a === '--fix-gitignore') flags.fixIgnore = true
+    else if (a === '--brief') flags.brief = true
     else if (a === '--repo') flags.repo = argv[++i] || null
     else if (a === '--workrepo') flags.workrepo = argv[++i] || null
     else if (!a.startsWith('--')) pos.push(a)
@@ -99,7 +100,7 @@ export async function main(argv) {
     if (!net) return bail('--curator 는 한 줄 설치기로 돈다 — 큐레이션 › 대기열 아래 「큐레이터 폴더」 의 한 줄을 쓰세요.')
     const dir = pos[0] || '.'
     if (!repo) return bail('사용법 — node cdp-install.mjs --curator --repo <레포> [<폴더>] [--dry] [--yes]')
-    return installCurator({ server, repo, dir, dry, yes, noSave: flags.noSave })
+    return installSimple({ kind: 'curator', server, repo, dir, dry, yes, noSave: flags.noSave, brief: flags.brief })
   }
 
   // 스킬 사본 폴더(제품화 2 F15) — 워크스페이스 공용 skills 폴더처럼 **스킬만** 두는 자리. `cdp-*/` 를 그 폴더 바로 아래에 둔다.
@@ -107,7 +108,7 @@ export async function main(argv) {
   if (flags.folder) {
     if (!net) return bail('--folder 는 한 줄 설치기로 돈다.')
     if (!repo || !pos[0]) return bail('사용법 — node cdp-install.mjs --folder --repo <레포> <skills 폴더> [--dry] [--yes]')
-    return installSimple({ kind: 'folder', server, repo, dir: pos[0], dry, yes, noSave: flags.noSave })
+    return installSimple({ kind: 'folder', server, repo, dir: pos[0], dry, yes, noSave: flags.noSave, brief: flags.brief })
   }
 
   const work = pos[0]
@@ -139,14 +140,16 @@ export async function main(argv) {
     return bail(`kit 폴더가 없습니다 — ${path.join(here, 'kit')}${NL}꾸러미를 통째로 푼 뒤 그 안에서 여세요.`)
   }
 
-  out(`서버     ${server}`)
-  out(`레포     ${repo}`)
-  out(`작업 레포 ${path.resolve(work)}`)
+  if (!flags.brief) {
+    out(`서버     ${server}`)
+    out(`레포     ${repo}`)
+    out(`작업 레포 ${path.resolve(work)}`)
+  }
 
   // ── 토큰(I3) — 한 줄 모양은 kit 을 받아야 하니 **없으면 못 간다.** 꾸러미는 보고에만 쓴다
-  const tk = await resolveToken(server, { required: net, yes })
+  const tk = await resolveToken(server, { required: net, yes, quiet: flags.brief })
   if (tk?.error) return bail(tk.error)
-  out('')
+  if (!flags.brief) out('')
 
   // 입력한 토큰이면 이 PC 에 둘지 묻는다(I4) — 설치를 그만둬도 토큰은 확인된 것이라 먼저 한다
   if (tk?.entered && !flags.noSave && !dry) await offerSave(tk.token, { yes })
@@ -162,20 +165,23 @@ export async function main(argv) {
     cleanup = got.cleanup
   }
   try {
-    return await install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token: tk?.token || null, fixIgnore: flags.fixIgnore })
+    return await install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token: tk?.token || null, fixIgnore: flags.fixIgnore, brief: flags.brief })
   } finally {
     await cleanup()
   }
 }
 
-async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token, fixIgnore = false }) {
+// `brief` — 여러 곳을 한 번에 붙이는 쪽(`ctx up`)이 부를 때. 파일 목록 · 「다음 —」 을 빼고 결과 한 줄 — 안내는 부른 쪽이 한 번만 낸다
+async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token, fixIgnore = false, brief = false }) {
   // `.mcp.json` 은 `planSetup` 이 모른다 — `planFor` 가 기존 파일을 읽어 병합한다. 덮지 않는다
   const pf = await planFor({ server, repo, kit, kitDir, work })
   if (pf.error) return bail(pf.error)
   const plan = pf.plan
 
-  for (const a of plan.actions) {
-    out(`  ${a.op === 'same' ? ' ' : '*'} ${a.op.padEnd(7)} ${a.kind.padEnd(8)} ${short(a.to, work)}`)
+  if (!brief) {
+    for (const a of plan.actions) {
+      out(`  ${a.op === 'same' ? ' ' : '*'} ${a.op.padEnd(7)} ${a.kind.padEnd(8)} ${short(a.to, work)}`)
+    }
   }
   for (const w of plan.warnings) {
     out('')
@@ -225,10 +231,16 @@ async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, to
   }
 
   await applySetup(plan)
-  out('')
+  if (!brief) out('')
   out(`${changes.length}건 적용했습니다.${kit ? ` (kit ${kit})` : ''}`)
   await report()
   await remember({ server, repo, workrepo, work, kit })
+  if (brief) {
+    const ig = await ignoredOf(work, changes.map((a) => relTo(work, a.to)))
+    if (ig.length && fixIgnore) out(`.gitignore 에 ${(await fixGitignore(work, ig)).length}줄을 더했습니다`)
+    else if (ig.length) out(`! .gitignore 가 CDP 파일을 막습니다 — 더할 줄 ${negations(ig).join(' ')} (--fix-gitignore)`)
+    return 0
+  }
 
   out('')
   out('다음 —')
@@ -294,18 +306,20 @@ async function planSimple({ kind, server, repo, root, token }) {
 
 const SIMPLE_LABEL = { curator: '큐레이터 폴더', folder: '스킬 폴더' }
 
-async function installSimple({ kind, server, repo, dir, dry, yes, noSave }) {
+async function installSimple({ kind, server, repo, dir, dry, yes, noSave, brief = false }) {
   const root = path.resolve(dir)
-  out(`서버     ${server}`)
-  out(`레포     ${repo}`)
-  out(`${SIMPLE_LABEL[kind]} ${root}`)
-  const tk = await resolveToken(server, { required: true, yes })
+  if (!brief) {
+    out(`서버     ${server}`)
+    out(`레포     ${repo}`)
+    out(`${SIMPLE_LABEL[kind]} ${root}`)
+  }
+  const tk = await resolveToken(server, { required: true, yes, quiet: brief })
   if (tk?.error) return bail(tk.error)
   if (tk?.entered && !noSave && !dry) await offerSave(tk.token, { yes })
   const got = await planSimple({ kind, server, repo, root, token: tk.token })
   if (got.error) return bail(got.error)
   const plan = got.plan
-  for (const a of plan) out(`  ${a.op === 'same' ? ' ' : '*'} ${a.op.padEnd(7)} ${a.rel}`)
+  if (!brief) for (const a of plan) out(`  ${a.op === 'same' ? ' ' : '*'} ${a.op.padEnd(7)} ${a.rel}`)
   const changes = plan.filter((a) => a.op !== 'same')
   if (!changes.length) {
     out('')
@@ -324,8 +338,9 @@ async function installSimple({ kind, server, repo, dir, dry, yes, noSave }) {
   }
   await applySimple(changes)
   await remember({ server, repo, workrepo: null, work: root, kit: got.kit, kind })
-  out('')
+  if (!brief) out('')
   out(`${changes.length}건 적용했습니다. (kit ${got.kit})`)
+  if (brief) return 0
   if (kind === 'curator') out('다음 — 이 폴더에서 Claude Code 를 다시 켜고 「큐레이션해 줘」 · 화면의 [에이전트 지시 복사] 를 붙여 넣는다')
   else out('다음 — 이 폴더를 읽는 Claude Code 를 다시 켠다. 판이 오르면 --update 가 이 폴더도 같이 돈다')
   return 0
@@ -615,13 +630,13 @@ async function whoami(server, token) {
 
 const whoLine = (w) => `${w.user} (${w.role})${w.days != null && w.days <= 14 ? ` · 만료 ${w.days}일 남음 — 관리자에게 재발급을` : ''}`
 
-async function resolveToken(server, { required, yes }) {
+async function resolveToken(server, { required, yes, quiet = false }) {
   const env = String(process.env.CDP_TOKEN || '').trim()
   if (env) {
     const w = await whoami(server, env)
     if (w.reach === false) return { error: `서버에 닿지 않습니다 — ${server}` }
     if (w.ok) {
-      out(`토큰     ${whoLine(w)} — CDP_TOKEN`)
+      if (!quiet) out(`토큰     ${whoLine(w)} — CDP_TOKEN`)
       return { token: env, who: w, entered: false }
     }
     out('')
@@ -633,7 +648,7 @@ async function resolveToken(server, { required, yes }) {
     const w = await whoami(server, saved.token)
     if (w.reach === false) return { error: `서버에 닿지 않습니다 — ${server}` }
     if (w.ok) {
-      out(`토큰     ${whoLine(w)} — ${saved.where}`)
+      if (!quiet) out(`토큰     ${whoLine(w)} — ${saved.where}`)
       return { token: saved.token, who: w, entered: false }
     }
   }

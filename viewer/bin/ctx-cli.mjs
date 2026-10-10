@@ -15,6 +15,8 @@ import { buildIndex, fullText, tokenize } from '../../core/search.js'
 import { reconcile, normKey } from '../../core/vocab.js'
 import { resolveCoord } from '../../core/managed.js'
 import * as git from '../../core/git.js'
+import { appVersion } from '../../core/appinfo.js'
+import { hereDir } from '../server/runtime.js'
 // 도구 12종의 형태는 **여기서 만들지 않는다.** `core/tools.js` 가 만든 것을
 // 그대로 낸다 -- MCP 의 tools/call 과 바이트까지 같아야 하기 때문이다(MCP 설계서 §10).
 import * as T from '../../core/tools.js'
@@ -39,6 +41,10 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx term <이름>           어휘 조회 (정본 / alias / deprecated)
   ctx brief                 두 줄 요약 (절차 + 살아 있는 레포 상태 · 대기열)
   ctx version               이 번들이 언제 만들어졌나
+  ctx up [<폴더>] [--install <코드 폴더>]… [--curator <폴더>] [--service]
+                            **혼자 · 서버 없이 시작하는 한 줄** — 빈 틀 · 개인 서버 · 토큰 · 화면 · 작업 레포 설치까지
+  ctx up <폴더> --update [--commit]   판이 오른 뒤 — 이 PC 의 작업 레포 · 큐레이터 폴더 전부
+  ctx self-update <tar.gz|url>        서버 산출물을 ~/.cdp/server 에 풀고 current 를 옮긴다 · 서비스면 다시 띄운다
   ctx serve --root <폴더>    MCP 서버 + 관리 서비스 (HTTP). 상주 프로세스
   ctx serve --personal <레포>  개인 서버 — 레포 하나 · 127.0.0.1 · 명부(나 하나)를 스스로 만든다. 서버 없는 팀 · 한 사람
   ctx serve user add|set|list --auth <f> [--role viewer|writer|admin] [--curate <레포,…|*>]   명부 — 권한은 여기 붙는다(--curate 는 레포별 큐레이터 · 빈 값이면 해제)
@@ -138,6 +144,16 @@ function parseArgs(argv) {
     else if (a === '--author') out.author = argv[++i]
     else if (a === '--keep-touches') out.keepTouches = true
     else if (a === '--yes' || a === '-y') out.yes = true
+    // ctx up(제품화 2 ③)
+    else if (a === '--install') (out.install = out.install || []).push(argv[++i])
+    else if (a === '--curator') out.curatorDir = argv[++i]
+    else if (a === '--skills') out.skillsDir = argv[++i]
+    else if (a === '--service') out.service = true
+    else if (a === '--no-open') out.noOpen = true
+    else if (a === '--save-token') out.saveToken = true
+    else if (a === '--update') out.update = true
+    else if (a === '--commit') out.commit = true
+    else if (a === '--fix-gitignore') out.fixIgnore = true
     else if (a === '--desktop') out.desktop = true
     else if (a === '--also') (out.also ||= []).push(argv[++i])
     else if (a === '--built-at') out.builtAt = argv[++i]
@@ -622,7 +638,8 @@ async function cmdDrift(r, opt) {
 export async function main(argv = process.argv.slice(2)) {
   const opt = parseArgs(argv)
   if (opt.cmd === 'version') {
-    out(BUILT.startsWith('__') ? '(원본 실행 — 번들 아님)' : BUILT)
+    // 판을 먼저 — 「지금 몇 판인가」 를 CLI 로 알 수 있게(제품화 2 F9). 빌드 시각은 같은 판의 다른 번들을 가른다
+    out(`v${appVersion(hereDir(import.meta.url))} · ${BUILT.startsWith('__') ? '원본 실행(번들 아님)' : '빌드 ' + BUILT}`)
     // **무엇을 할 수 있는 번들인가**를 같이 낸다. 낡은 번들은 `ctx mcp` 를
     // "모르는 명령" 으로 답하는데, 그것만으로는 번들이 낡은 것인지 설정이
     // 잘못된 것인지 알 수 없다(MCP 설계서 §9).
@@ -637,7 +654,7 @@ export async function main(argv = process.argv.slice(2)) {
   // 모드 A 의 명령은 v1.0 에서 끝났다(개편안 §5.6) — 무엇으로 바뀌었는지 한 줄로 답한다
   const gone = {
     mcp: 'stdio MCP 는 없다 — 작업 레포는 서버의 HTTP MCP 를 쓴다. 서버 없이 혼자면 ctx serve --personal <레포>',
-    setup: '작업 레포 세팅은 서버의 설치 한 줄이다 — 화면 「에이전트 설치」 의 install.mjs (--update · --curator)',
+    setup: '작업 레포 세팅은 서버의 설치 한 줄이다 — ctx up --install · 화면 「연결된 작업 레포」 의 한 줄 (--update · --curator)',
     index: 'INDEX 와 등록부 사본은 더 만들지 않는다 — 레포에는 지식만 둔다(v1.0)',
     derive: '파생은 큐레이션이다 — 서버 화면 「큐레이션 › 대기열」 · MCP queue',
     apply: '파생은 큐레이션이다 — 서버 화면 「큐레이션 › 대기열」 · MCP section(미반영 기록이 같이 온다)',
@@ -652,6 +669,14 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'package') {
     err('ctx package: v1.0 에서 없앴다 — 새 레포는 빈 틀(ctx repo new)이고 서식은 서식집(큐레이터의 forms · 화면 「큐레이션 › 서식집」)이다')
     return 2
+  }
+  if (opt.cmd === 'up') {
+    const { runUp } = await import('./ctx-up.mjs')
+    return runUp(opt)
+  }
+  if (opt.cmd === 'self-update') {
+    const { runSelfUpdate } = await import('./ctx-selfupdate.mjs')
+    return runSelfUpdate(opt)
   }
   if (opt.cmd === 'repo') {
     const { runRepo } = await import('./ctx-repo.mjs')

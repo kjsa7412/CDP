@@ -36,7 +36,7 @@ import * as gitauth from '../../core/gitauth.js'
 import { findFormsDir } from '../../core/formslib.js'
 import { parseCidrs, ipInCidrs, makeLimiter } from '../../core/net.js'
 import { appVersion } from '../../core/appinfo.js'
-import { doctorRows, resolveManualDir } from './ctx-serve-doctor.mjs'
+import { doctorRows, resolveManualDir, resolveWebDir } from './ctx-serve-doctor.mjs'
 
 const NL = String.fromCharCode(10)
 
@@ -54,7 +54,8 @@ const CTX = new AsyncLocalStorage()
 // 어떻게 끝났나다. `search` 는 말이 아니라 **건수만** 적는다 — 검색어는 사람이
 // 무엇을 모르는지를 드러내고, 그것은 로그가 알 일이 아니다.
 
-function makeLog(dataDir) {
+// `quietReq` — 요청 줄은 파일에만(`ctx up` 이 같은 터미널에 안내를 찍는다 · 서버 줄 `[cdp-serve]` 는 그대로 보인다)
+function makeLog(dataDir, { quietReq = false } = {}) {
   const file = dataDir ? path.join(dataDir, 'logs', 'serve.log') : null
   let size = 0
   let ready = file
@@ -66,8 +67,8 @@ function makeLog(dataDir) {
         })
     : Promise.resolve()
 
-  const write = async (line) => {
-    process.stderr.write(line + NL)
+  const write = async (line, quiet = false) => {
+    if (!quiet) process.stderr.write(line + NL)
     if (!file) return
     await ready
     // 회전 3×1MB. 오래된 것부터 밀어낸다 — 서버는 몇 달을 돌고, 로그가 디스크를
@@ -101,7 +102,8 @@ function makeLog(dataDir) {
           // 토큰 id(앞 8자) — **끝 열**이다(2026-09-23). 토큰별 마지막 사용을 세는 유일한 근거.
           // 앞 열은 그대로라 옛 로그도 사용자별은 읽힌다(`lastUsed`).
           o.tid || '-',
-        ].join(' · ')
+        ].join(' · '),
+        quietReq
       ),
   }
 }
@@ -524,7 +526,7 @@ export async function runServe(opt = {}) {
   const dataDir = opt.data ? path.resolve(opt.data) : null
   // 올린 첨부를 save 전까지 두는 자리(그림 · 첨부 검토 A3) — 레포 밖. `--data` 가 없으면 임시 폴더
   const stagingDir = dataDir ? path.join(dataDir, 'staging') : path.join(os.tmpdir(), 'cdp-staging')
-  const log = makeLog(dataDir)
+  const log = makeLog(dataDir, { quietReq: !!opt.quietPersonal })
 
   if (!LOOPBACK.test(bind) && !opt.auth) {
     log.line(`거부: --bind ${bind} 는 루프백이 아닌데 --auth 가 없다. 인증 없이 밖으로 열 수 없다`)
@@ -540,7 +542,7 @@ export async function runServe(opt = {}) {
   }
 
   // 화면 파일. 없으면 안내만 낸다 — 서버는 화면 없이도 돈다(MCP 는 별개다).
-  const webDir = opt.web ? path.resolve(opt.web) : path.resolve(hereDir(import.meta.url), '../../ops/out/web')
+  const webDir = await resolveWebDir({ explicit: opt.web || null, binDir: hereDir(import.meta.url) })
 
   const store = makeStore(root, log, { ...(personal ? { only: { name: personal.name, root: personal.repo } } : {}), formsOpt: { explicit: opt.forms || null, dataDir } })
   await store.refresh()
@@ -2165,16 +2167,21 @@ export async function runServe(opt = {}) {
   const list = await store.list()
   log.line(`시작 · ${bind}:${port} · root ${root} · 레포 ${list.length}개 (${list.map((r) => r.name).join(' · ') || '없음'}) · 번들 ${BUILT}`)
   if (personal) {
-    process.stdout.write(
-      [
-        '',
-        `개인 서버 — ${personal.name} (${personal.repo})`,
-        `  화면   http://127.0.0.1:${port}/login?auto=${personal.token}`,
-        `  MCP    http://127.0.0.1:${port}/mcp/${encodeURIComponent(personal.name)}   (토큰은 ${path.join(personal.data, 'personal.token')})`,
-        `  작업 레포에 깔기 — node -e "fetch('http://127.0.0.1:${port}/install.mjs').then(r=>r.text()).then(t=>require('fs').writeFileSync('install.mjs',t))" 뒤 node install.mjs --curator --repo ${personal.name} <폴더>`,
-        '',
-      ].join(NL)
-    )
+    // 자동 로그인 주소(토큰 원문)는 화면에 찍지 않고 600 파일로 — 터미널 기록 · 화면 공유에 남지 않게(제품화 2 F14)
+    const loginFile = path.join(personal.data, 'login.url')
+    await fs.writeFile(loginFile, `http://127.0.0.1:${port}/login?auto=${personal.token}` + NL, { mode: 0o600 }).catch(() => {})
+    if (!opt.quietPersonal) {
+      process.stdout.write(
+        [
+          '',
+          `개인 서버 — ${personal.name} (${personal.repo})`,
+          `  화면   http://127.0.0.1:${port}   (자동 로그인 주소 ${loginFile})`,
+          `  MCP    http://127.0.0.1:${port}/mcp/${encodeURIComponent(personal.name)}   (토큰 ${path.join(personal.data, 'personal.token')})`,
+          `  코드 레포 붙이기 — ctx up "${personal.repo}" --install <코드 폴더>   · 큐레이터 폴더 --curator <폴더>`,
+          '',
+        ].join(NL)
+      )
+    }
   }
   // 더러운 트리는 시작 뒤 한 줄 — `save` 가 거절될 레포를 관리자가 로그에서 먼저 본다(동시 기록 검토 v0.1 D5).
   // 듣기 시작한 **뒤**에 돈다 — 레포마다 git 을 띄우는 일이라 기동을 늦추지 않는다.
@@ -2185,8 +2192,13 @@ export async function runServe(opt = {}) {
 
   await new Promise((resolve) => {
     server.on('close', resolve)
-    process.on('SIGINT', () => server.close(resolve))
-    process.on('SIGTERM', () => server.close(resolve))
+    // keep-alive 연결이 남아 있으면 close 가 끝나지 않는다(같은 프로세스의 fetch — `ctx up`) — 연결도 같이 닫는다
+    const stop = () => {
+      server.close(resolve)
+      server.closeAllConnections?.()
+    }
+    process.on('SIGINT', stop)
+    process.on('SIGTERM', stop)
   })
   return 0
 }
@@ -2444,6 +2456,11 @@ async function sourceInstaller() {
   return SOURCE_INSTALLER
 }
 
+// `ctx up --service` 가 서버를 띄우기 전에 명부 · 토큰만 만든다
+export async function preparePersonalOnly(opt) {
+  return preparePersonal(opt)
+}
+
 // 개인 서버의 준비 — 레포 확인 · 데이터 자리(<home>/.cdp/personal/<레포>) · 명부(나 하나 · admin) · 토큰(원문을 이 PC 의
 // 0600 파일에 둔다 — 개인 서버는 그 PC 의 주인 한 사람만 쓴다. 다른 서버는 원문을 어디에도 두지 않는다)
 async function preparePersonal(opt) {
@@ -2572,9 +2589,9 @@ async function serveWeb({ req, res, url, webDir, log, status = 200 }) {
       return
     }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-    return res.end(page('CDP', `<h1>화면이 빌드되지 않았습니다</h1>
-<p class="mut"><code>npm run build</code> 를 돌려 <code>ops/out/web</code> 을 만든 뒤
-서버의 <code>--web</code> 로 가리키거나 그 자리에 두세요.</p>
+    return res.end(page('CDP', `<h1>화면 파일이 없습니다</h1>
+<p class="mut">서버 산출물의 <code>web/</code> 폴더를 <code>bin/</code> 옆에 두거나 <code>--web</code> 으로 가리킵니다.
+(소스에서는 <code>npm run build</code>)</p>
 <hr><p class="mut">읽기 API 와 MCP 는 화면 없이도 돕니다.</p>`))
   }
   // **같은 번들이 로컬 뷰어에서도 돈다**(§6.8). `/r/` 밖의 경로(`/` · `/manual` · `/console`)에서

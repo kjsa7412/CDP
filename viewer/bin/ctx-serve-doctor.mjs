@@ -43,10 +43,20 @@ function git(cwd, args, timeout = 10000) {
 export async function resolveManualDir({ explicit = null, binDir = hereDir(import.meta.url) } = {}) {
   const cands = [explicit, path.resolve(binDir, '..', 'manual'), path.resolve(binDir, '..', '..', 'manual')].filter(Boolean)
   for (const dir of cands) {
-    const names = await fs.readdir(dir).catch(() => null)
+    // 이름은 NFC 로 본다 — macOS 에서 싼 옛 산출물은 NFD 였다(제품화 2 S1)
+    const names = (await fs.readdir(dir).catch(() => null))?.map((n) => n.normalize('NFC'))
     if (names && names.some((n) => /_설명서\.md$/.test(n))) return { dir: path.resolve(dir), books: names.filter((n) => /_설명서\.md$/.test(n)).sort() }
   }
   return null
+}
+
+// 화면 파일 자리 — forms · kit · manual 처럼 **번들 옆을 먼저** 찾는다(제품화 2 F1). 전에는 소스 자리(ops/out/web)만 봐서
+// 산출물에서 --web 없이 띄우면 「npm run build 를 돌려…」 가 관리자에게 보였다
+export async function resolveWebDir({ explicit = null, binDir = hereDir(import.meta.url) } = {}) {
+  if (explicit) return path.resolve(explicit)
+  const cands = [path.resolve(binDir, '..', 'web'), path.resolve(binDir, '..', '..', 'ops', 'out', 'web')]
+  for (const dir of cands) if (await fs.access(path.join(dir, 'index.html')).then(() => true).catch(() => false)) return dir
+  return cands[cands.length - 1]
 }
 
 export async function doctorRows(opt) {
@@ -119,10 +129,13 @@ export async function doctorRows(opt) {
   }
 
   // ── 화면 · 설명서
-  if (opt.web) {
-    if (await fs.access(path.join(opt.web, 'index.html')).then(() => true).catch(() => false)) ok('--web', opt.web)
-    else fail('--web', `${opt.web}/index.html 이 없다 — npm run build`)
-  } else warn('--web', '없다 — 화면 없이 MCP 와 읽기 API 만 돈다')
+  {
+    const web = await resolveWebDir({ explicit: opt.web || null })
+    const has = await fs.access(path.join(web, 'index.html')).then(() => true).catch(() => false)
+    if (has) ok('web', web + (opt.web ? '' : ' (번들 옆)'))
+    else if (opt.web) fail('web', `${opt.web}/index.html 이 없다 — 산출물의 web/ 을 준다`)
+    else warn('web', '없다 — 화면 없이 MCP 와 읽기 API 만 돈다. 산출물의 web/ 을 번들 옆에 둔다')
+  }
   const man = await resolveManualDir({ explicit: opt.manual })
   if (man) ok('manual', `${man.dir} · 설명서 ${man.books.length}권`)
   else warn('manual', '없다 — 설명서 페이지가 빈다. 산출물의 manual/ 을 두거나 --manual')
