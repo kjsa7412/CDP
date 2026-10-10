@@ -29,9 +29,36 @@ export function rcFile({ shell = process.env.SHELL || '', home = os.homedir() } 
   return path.join(home, /zsh$/.test(shell) ? '.zshrc' : '.bashrc')
 }
 
-export async function saveTokenPosix(token, { home = os.homedir(), shell = process.env.SHELL || '' } = {}) {
+// 저장된 토큰을 읽는다 — env 가 없을 때(rc 를 안 읽는 셸 · IDE 터미널 · cron)의 두 번째 자리(제품화 2 S2).
+// Windows 는 사용자 환경변수(HKCU)를 읽는다 — 지금 프로세스가 그 값이 생기기 전에 떴을 수 있다.
+export async function loadToken({ platform = process.platform, home = os.homedir(), env = process.env } = {}) {
+  // CDP_CONFIG_DIR 이 있으면 그 폴더만 — 설치 목록(`localreg.js`)과 같은 자리 · 시험이 이 PC 의 진짜 토큰을 읽지 않게
+  if (env.CDP_CONFIG_DIR) {
+    const t = String(await fs.readFile(path.join(env.CDP_CONFIG_DIR, 'token'), 'utf8').catch(() => '')).trim()
+    return t ? { token: t, where: path.join(env.CDP_CONFIG_DIR, 'token') } : null
+  }
+  if (platform === 'win32') {
+    const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "[Environment]::GetEnvironmentVariable('CDP_TOKEN','User')"], { encoding: 'utf8', windowsHide: true })
+    const t = String(r.stdout || '').trim()
+    return t ? { token: t, where: '사용자 환경변수' } : null
+  }
+  const file = tokenFile({ home })
+  const t = String(await fs.readFile(file, 'utf8').catch(() => '')).trim()
+  return t ? { token: t, where: '~/.config/cdp/token' } : null
+}
+
+export const tokenFile = ({ home = os.homedir() } = {}) => path.join(home, '.config', 'cdp', 'token')
+
+// `~/.config/cdp` — 먼저 만드는 쪽이 누구든(설치 목록 · 토큰) 0700(F16). 있던 폴더도 좁힌다.
+export async function ensureConfigDir({ home = os.homedir() } = {}) {
   const dir = path.join(home, '.config', 'cdp')
   await fs.mkdir(dir, { recursive: true, mode: 0o700 })
+  if (process.platform !== 'win32') await fs.chmod(dir, 0o700).catch(() => {})
+  return dir
+}
+
+export async function saveTokenPosix(token, { home = os.homedir(), shell = process.env.SHELL || '' } = {}) {
+  const dir = await ensureConfigDir({ home })
   const file = path.join(dir, 'token')
   await fs.writeFile(file, String(token).trim() + NL, { mode: 0o600 })
   // 이미 있던 파일이면 writeFile 의 mode 가 안 먹는다

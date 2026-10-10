@@ -149,7 +149,8 @@ export async function load(file) {
     if (e.code === 'ENOENT') return null
     throw new AuthError('E_REPO', `auth.json 을 읽을 수 없다: ${e.message}`, { file })
   })
-  if (raw == null) return emptyDb()
+  // 빈 파일은 빈 명부다 — Docker 의 `touch auth.json` 이 만든 자리(제품화 2 S5). `/setup` 과 `serve init` 이 같게 받는다
+  if (raw == null || !raw.trim()) return emptyDb()
   let db
   try {
     db = JSON.parse(raw)

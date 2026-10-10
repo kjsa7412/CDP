@@ -1,9 +1,11 @@
 # CDP 서버 — compose 한 장. 서버 산출물 폴더(cdp-server-v<버전>/)에서:
 #
 #     docker compose -f deploy/docker-compose.yml up -d --build
-#     docker compose -f deploy/docker-compose.yml exec cdp node bin/ctx.mjs serve init --auth /opt/cdp/auth.json --data /opt/cdp/data --name <이름> --write
+#     docker compose -f deploy/docker-compose.yml logs cdp     ← 첫 관리자 코드 → 브라우저 http://<호스트>:7374/setup
 #
-# auth.json 은 호스트 파일이다 — 컨테이너를 지워도 명부는 남는다. 없으면 빈 파일로 만들어 둔다.
+# 명부(auth.json) · git 자격은 data 볼륨 안이다 — 새 판 폴더에서 올려도 이름 붙은 볼륨이 이어진다(-p 로 프로젝트 이름을 고정하면 확실하다:
+#     docker compose -p cdp -f deploy/docker-compose.yml up -d --build).
+# 셸로 첫 관리자를 만들려면 — docker compose exec cdp node bin/ctx.mjs serve init --auth /opt/cdp/data/auth.json --data /opt/cdp/data --name <이름>
 services:
   cdp:
     build:
@@ -17,7 +19,6 @@ services:
     volumes:
       - repos:/opt/cdp/repos
       - data:/opt/cdp/data
-      - ./auth.json:/opt/cdp/auth.json
 
 volumes:
   repos:

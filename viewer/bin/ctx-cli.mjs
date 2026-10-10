@@ -738,7 +738,9 @@ export async function main(argv = process.argv.slice(2)) {
 const invokedDirect = process.argv[1] && /ctx(-cli)?(\.mjs|\.js)?$/i.test(process.argv[1])
 if (invokedDirect) {
   main().then(
-    (code) => process.exit(code),
+    // 파이프로 받은 stdout 은 비동기로 흘러간다 — 바로 exit 하면 큰 --json 이 8KB 언저리에서 잘렸다(하네스 1 · 137).
+    // 빈 쓰기의 콜백은 앞선 쓰기가 다 나간 뒤에 온다
+    (code) => process.stdout.write('', () => process.exit(code)),
     (e) => {
       err('ctx: ' + (e?.message || e))
       process.exit(1)

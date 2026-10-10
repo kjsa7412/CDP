@@ -39,7 +39,7 @@ import os from 'node:os'
 import readline from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { planSetup, applySetup, mergeMcpJson, mcpEntryServer, repoDriftNote, mergeCuratorFile } from '../../core/setup.js'
-import { saveToken, storeLabel } from '../../core/tokenstore.js'
+import { saveToken, storeLabel, loadToken } from '../../core/tokenstore.js'
 import { execFile } from 'node:child_process'
 import { regFile, loadReg, saveReg, record, forServer, samePath } from '../../core/localreg.js'
 
@@ -52,7 +52,7 @@ const err = (s = '') => process.stderr.write(s + NL)
 const CFG = globalThis.__CDP_KIT__ || null
 
 function parseArgs(argv) {
-  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false, curator: false }
+  const flags = { dry: false, yes: false, noSave: false, repo: null, workrepo: null, update: false, commit: false, curator: false, folder: false, fixIgnore: false }
   const pos = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -62,6 +62,8 @@ function parseArgs(argv) {
     else if (a === '--update') flags.update = true
     else if (a === '--commit') flags.commit = true
     else if (a === '--curator') flags.curator = true
+    else if (a === '--folder') flags.folder = true
+    else if (a === '--fix-gitignore') flags.fixIgnore = true
     else if (a === '--repo') flags.repo = argv[++i] || null
     else if (a === '--workrepo') flags.workrepo = argv[++i] || null
     else if (!a.startsWith('--')) pos.push(a)
@@ -89,7 +91,7 @@ export async function main(argv) {
   // 일괄 — 이 PC 의 설치 목록을 돈다. 레포 · 등록 id 는 목록에 있다
   if (flags.update) {
     if (!net) return bail('--update 는 한 줄 설치기로 돈다 — 레포 관리 › 연결된 작업 레포 의 「일괄 갱신」 한 줄을 쓰세요.')
-    return updateAll({ server, paths: pos, dry, yes, commit: flags.commit, noSave: flags.noSave })
+    return updateAll({ server, paths: pos, dry, yes, commit: flags.commit, noSave: flags.noSave, fixIgnore: flags.fixIgnore })
   }
 
   // 큐레이터 폴더(v1.0 §6.3) — git 레포가 아니어도 되고 대장에 오르지 않는다. 큐레이터 kit(스킬 여섯 · 큐레이터 블록)을 받는다
@@ -100,18 +102,29 @@ export async function main(argv) {
     return installCurator({ server, repo, dir, dry, yes, noSave: flags.noSave })
   }
 
+  // 스킬 사본 폴더(제품화 2 F15) — 워크스페이스 공용 skills 폴더처럼 **스킬만** 두는 자리. `cdp-*/` 를 그 폴더 바로 아래에 둔다.
+  // 설치 목록에 `folder` 로 남아 `--update` 가 같이 돈다 — 손으로 cp 하던 사본이 낡지 않게
+  if (flags.folder) {
+    if (!net) return bail('--folder 는 한 줄 설치기로 돈다.')
+    if (!repo || !pos[0]) return bail('사용법 — node cdp-install.mjs --folder --repo <레포> <skills 폴더> [--dry] [--yes]')
+    return installSimple({ kind: 'folder', server, repo, dir: pos[0], dry, yes, noSave: flags.noSave })
+  }
+
   const work = pos[0]
   if (!work || (net && (!repo || !workrepo))) {
     out('사용법 —')
     if (net) {
       out('  node cdp-install.mjs --repo <레포> --workrepo <등록 id> <작업 레포 경로> [--dry] [--yes] [--no-save]')
-      out('  node cdp-install.mjs --update [<작업 레포 경로>…] [--dry] [--yes] [--commit]   이 PC 의 작업 레포 전부를 한 번에')
+      out('  node cdp-install.mjs --update [<경로>…] [--dry] [--yes] [--commit]   이 PC 의 작업 레포 · 큐레이터 폴더 · 스킬 폴더 전부를 한 번에')
+      out('  node cdp-install.mjs --curator --repo <레포> [<폴더>]                큐레이터 폴더')
+      out('  node cdp-install.mjs --folder --repo <레포> <skills 폴더>            스킬만 두는 폴더(워크스페이스 사본)')
     } else out('  node install.mjs <작업 레포 경로> [--dry] [--yes] [--no-save]')
     out('')
     out('  --dry      무엇이 바뀔지만 보고 쓰지 않는다')
     out('  --yes      묻지 않는다 (스크립트에서 부를 때 — 토큰은 CDP_TOKEN 에서)')
     out('  --no-save  입력한 토큰을 이 PC 에 두지 않는다')
     if (net) out('  --commit   (--update) 레포마다 바꾼 파일만 커밋한다')
+    out('  --fix-gitignore  .gitignore 가 CDP 파일을 막으면 푸는 줄을 더한다')
     out('')
     out(`서버   ${server}`)
     if (repo) out(`레포   ${repo}`)
@@ -149,13 +162,13 @@ export async function main(argv) {
     cleanup = got.cleanup
   }
   try {
-    return await install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token: tk?.token || null })
+    return await install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token: tk?.token || null, fixIgnore: flags.fixIgnore })
   } finally {
     await cleanup()
   }
 }
 
-async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token }) {
+async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, token, fixIgnore = false }) {
   // `.mcp.json` 은 `planSetup` 이 모른다 — `planFor` 가 기존 파일을 읽어 병합한다. 덮지 않는다
   const pf = await planFor({ server, repo, kit, kitDir, work })
   if (pf.error) return bail(pf.error)
@@ -225,7 +238,19 @@ async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, to
   out('  1. Claude Code 를 완전히 끄고 다시 켠다 — 환경변수는 프로세스가 시작할 때 읽힌다')
   out('     VS Code · 데스크톱 앱 안의 Claude Code 면 그 앱을 다시 켠다 (열려 있던 터미널에는 새 값이 없다)')
   out('  2. /mcp 에 cdp 가 connected 인지 본다')
-  out('  3. git add .mcp.json .claude CLAUDE.md && git commit')
+  // .gitignore 가 .claude 를 막으면 `git add` 가 스킬을 조용히 빼먹는다(제품화 2 S3) — 커밋 줄을 내기 전에 본다
+  const rels = changes.map((a) => relTo(work, a.to))
+  const ig = await ignoredOf(work, rels)
+  if (ig.length) {
+    if (fixIgnore) {
+      const added = await fixGitignore(work, ig)
+      out(`     .gitignore 에 ${added.length}줄을 더했습니다 — ${added.join(' · ')}`)
+    } else {
+      out(`  ! .gitignore 가 CDP 파일을 막습니다 — ${ig.join(' · ')}`)
+      out(`    .gitignore 에 더할 줄: ${negations(ig).join('  ')}   (--fix-gitignore 를 주면 이 명령이 더한다)`)
+    }
+  }
+  out('  3. git add .mcp.json .claude CLAUDE.md .gitignore && git commit')
   out('     팀원은 pull 과 토큰만으로 끝난다 — 이 명령을 돌리면 토큰을 묻고 대장에 보고까지 한다')
   return 0
 }
@@ -236,32 +261,56 @@ async function install({ server, repo, workrepo, kit, kitDir, work, dry, yes, to
 // 준다 — `.mcp.json` · `.claude/cdp.json` · `.claude/skills/cdp-*` · `CLAUDE.md`(큐레이터 블록). 있는 `.mcp.json` · `CLAUDE.md`
 // 는 병합한다(덮지 않는다 — 같은 규칙의 `mergeMcpJson` · `mergeClaude` 를 서버가 이미 적용해 보냈다면 그대로 쓴다).
 async function installCurator({ server, repo, dir, dry, yes, noSave }) {
-  const root = path.resolve(dir)
-  out(`서버     ${server}`)
-  out(`레포     ${repo}`)
-  out(`큐레이터 폴더 ${root}`)
-  const tk = await resolveToken(server, { required: true, yes })
-  if (tk?.error) return bail(tk.error)
-  if (tk?.entered && !noSave && !dry) await offerSave(tk.token, { yes })
-  const r = await fetch(`${server}/kit/${encodeURIComponent(repo)}?as=json&role=curator`, { headers: { authorization: 'Bearer ' + tk.token } }).catch(() => null)
-  if (!r) return bail(`서버에 닿지 않습니다 — ${server}`)
+  return installSimple({ kind: 'curator', server, repo, dir, dry, yes, noSave })
+}
+
+// 큐레이터 폴더 · 스킬 사본 폴더의 계획 — 받은 kit 을 그 폴더에 놓일 모양으로. 한 번 설치와 `--update` 가 같은 것을 쓴다
+async function planSimple({ kind, server, repo, root, token }) {
+  const role = kind === 'curator' ? 'curator' : 'writer'
+  const r = await fetch(`${server}/kit/${encodeURIComponent(repo)}?as=json&role=${role}`, { headers: { authorization: 'Bearer ' + token } }).catch(() => null)
+  if (!r) return { error: `서버에 닿지 않습니다 — ${server}` }
   const j = await r.json().catch(() => null)
-  if (!r.ok || !j || !Array.isArray(j.files)) return bail(`kit 을 받지 못했습니다 — ${j?.error?.message || 'HTTP ' + r.status}`)
-  if (j.role !== 'curator') return bail(`이 토큰은 ${repo} 의 큐레이터가 아닙니다 — 관리자에게 그 레포의 큐레이터 권한(curate)을 받습니다.`)
+  if (!r.ok || !j || !Array.isArray(j.files)) return { error: `kit 을 받지 못했습니다 — ${j?.error?.message || 'HTTP ' + r.status}` }
+  if (kind === 'curator' && j.role !== 'curator') return { error: `이 토큰은 ${repo} 의 큐레이터가 아닙니다 — 관리자에게 그 레포의 큐레이터 권한(curate)을 받습니다.` }
   const plan = []
   for (const f of j.files) {
-    const rel = String(f.name || '')
+    let rel = String(f.name || '')
+    // 서버가 옛 판이면 kit 안쪽 원본이 온다 — 폴더에 두지 않는다(F12)
+    if (rel.startsWith('.claude/work-repo/')) continue
+    if (kind === 'folder') {
+      // 스킬만 — `.claude/skills/cdp-x/…` → `cdp-x/…`
+      if (!rel.startsWith('.claude/skills/')) continue
+      rel = rel.slice('.claude/skills/'.length)
+    }
     const dst = path.resolve(root, rel)
     if (!rel || !(dst === root || dst.startsWith(root + path.sep))) continue
     const cur = await fs.readFile(dst).catch(() => null)
-    const data = mergeCuratorFile(rel, Buffer.from(String(f.data || ''), 'base64'), cur, j.kit)
+    const raw = Buffer.from(String(f.data || ''), 'base64')
+    const data = kind === 'curator' ? mergeCuratorFile(rel, raw, cur, j.kit) : raw
     plan.push({ rel, dst, data, op: cur == null ? 'create' : Buffer.compare(cur, data) === 0 ? 'same' : 'update' })
   }
+  return { plan, kit: j.kit || null }
+}
+
+const SIMPLE_LABEL = { curator: '큐레이터 폴더', folder: '스킬 폴더' }
+
+async function installSimple({ kind, server, repo, dir, dry, yes, noSave }) {
+  const root = path.resolve(dir)
+  out(`서버     ${server}`)
+  out(`레포     ${repo}`)
+  out(`${SIMPLE_LABEL[kind]} ${root}`)
+  const tk = await resolveToken(server, { required: true, yes })
+  if (tk?.error) return bail(tk.error)
+  if (tk?.entered && !noSave && !dry) await offerSave(tk.token, { yes })
+  const got = await planSimple({ kind, server, repo, root, token: tk.token })
+  if (got.error) return bail(got.error)
+  const plan = got.plan
   for (const a of plan) out(`  ${a.op === 'same' ? ' ' : '*'} ${a.op.padEnd(7)} ${a.rel}`)
   const changes = plan.filter((a) => a.op !== 'same')
   if (!changes.length) {
     out('')
     out('이미 최신입니다.')
+    if (!dry) await remember({ server, repo, workrepo: null, work: root, kit: got.kit, kind })
     return 0
   }
   if (dry) {
@@ -273,26 +322,32 @@ async function installCurator({ server, repo, dir, dry, yes, noSave }) {
     out('그만둡니다. 아무것도 쓰지 않았습니다.')
     return 1
   }
+  await applySimple(changes)
+  await remember({ server, repo, workrepo: null, work: root, kit: got.kit, kind })
+  out('')
+  out(`${changes.length}건 적용했습니다. (kit ${got.kit})`)
+  if (kind === 'curator') out('다음 — 이 폴더에서 Claude Code 를 다시 켜고 「큐레이션해 줘」 · 화면의 [에이전트 지시 복사] 를 붙여 넣는다')
+  else out('다음 — 이 폴더를 읽는 Claude Code 를 다시 켠다. 판이 오르면 --update 가 이 폴더도 같이 돈다')
+  return 0
+}
+
+async function applySimple(changes) {
   for (const a of changes) {
     await fs.mkdir(path.dirname(a.dst), { recursive: true })
     await fs.writeFile(a.dst, a.data)
   }
-  out('')
-  out(`${changes.length}건 적용했습니다. (kit ${j.kit})`)
-  out('다음 — 이 폴더에서 Claude Code 를 다시 켜고 「큐레이션해 줘」 · 화면의 [에이전트 지시 복사] 를 붙여 넣는다')
-  return 0
 }
 
 // ── 이 PC 의 설치 목록(T9) ─────────────────────────────────────────────────
 
 // 설치가 끝났으면(바뀐 것이 없어도) 한 줄 적는다 — 다음에 에이전트 세팅이 바뀌면 `--update` 가 이 줄을 돈다.
 // **관문이 아니다** — 못 적어도 설치는 끝났다.
-async function remember({ server, repo, workrepo, work, kit }) {
+async function remember({ server, repo, workrepo, work, kit, kind = 'work' }) {
   if (!repo) return
   try {
     const f = regFile()
     const db = await loadReg(f)
-    record(db, { server, repo, workrepo, path: work, kit })
+    record(db, { server, repo, workrepo, path: work, kit, kind })
     await saveReg(db, f)
   } catch (e) {
     out(`이 PC 의 설치 목록에 적지 못했습니다 — ${e.message} (설치는 끝났습니다 · --update 가 이 레포를 모릅니다)`)
@@ -337,19 +392,60 @@ async function reportTo(server, workrepo, token, kit) {
 
 const relTo = (work, p) => path.relative(path.resolve(work), p).split(path.sep).join('/')
 
+// .gitignore 가 막는 경로 — `git add` 가 실패하거나(경로를 콕 집으면) 조용히 빼먹는다(폴더를 주면). 제품화 2 S3
+async function ignoredOf(work, rels) {
+  if (!rels.length) return []
+  const r = await git(work, ['check-ignore', '--no-index', '--', ...rels])
+  return r.out ? r.out.split(NL).map((l) => l.trim()).filter(Boolean) : []
+}
+
+// 막힌 경로를 푸는 `.gitignore` 줄 — 폴더 단위로(`!.claude/skills/` · `!.claude/cdp.json`). 상위가 `dir/*` 로 막혀야 `!` 가 먹는다
+function negations(ignored) {
+  const set = new Set()
+  for (const p of ignored) {
+    const m = /^(\.claude\/skills)\//.exec(p)
+    set.add(m ? '!' + m[1] + '/' : '!' + p)
+  }
+  return [...set]
+}
+
+async function fixGitignore(work, ignored) {
+  const f = path.join(path.resolve(work), '.gitignore')
+  const had = await fs.readFile(f, 'utf8').catch(() => '')
+  const lines = negations(ignored).filter((l) => !had.split(/\r?\n/).includes(l))
+  if (lines.length) await fs.writeFile(f, had + (had && !had.endsWith(NL) ? NL : '') + '# CDP 에이전트 세팅' + NL + lines.join(NL) + NL)
+  return lines
+}
+
 // 바꾼 파일만 커밋한다(T10). **그 파일에 원래 커밋 안 된 변경이 있으면 커밋하지 않는다** — 사람이 고치던
 // CLAUDE.md 줄이 「에이전트 세팅 갱신」 커밋에 딸려 가면 안 된다. 다른 경로의 스테이징은 건드리지 않는다(`commit -- <경로>`).
-async function commitChanged(work, rels, kit) {
+// **.gitignore 에 막히면 add 전에 멈춘다** · 실패하면 그 경로의 스테이징을 되돌린다(제품화 2 S3 — staged 를 남기던 버그).
+async function commitChanged(work, rels, kit, { fixIgnore = false } = {}) {
+  const ig = await ignoredOf(work, rels)
+  if (ig.length) {
+    if (!fixIgnore) return { ok: false, ignored: ig, why: `.gitignore 가 막는다 — ${ig.join(' · ')} · 더할 줄 ${negations(ig).join(' ')} (--fix-gitignore)` }
+    await fixGitignore(work, ig)
+    rels = [...rels, '.gitignore']
+    const still = await ignoredOf(work, rels)
+    if (still.length) return { ok: false, ignored: still, why: `.gitignore 를 고쳐도 막힌다 — ${still.join(' · ')} (상위 폴더 규칙을 사람이 본다)` }
+  }
+  const undo = () => git(work, ['reset', '-q', '--', ...rels])
   const add = await git(work, ['add', '-A', '--', ...rels])
-  if (!add.ok) return { ok: false, why: add.err.split(NL)[0] }
+  if (!add.ok) {
+    await undo()
+    return { ok: false, why: add.err.split(NL)[0] }
+  }
   const c = await git(work, ['commit', '-q', '-m', `CDP 에이전트 세팅 갱신${kit ? ' — kit ' + kit : ''}`, '--', ...rels])
-  if (!c.ok) return { ok: false, why: (c.err || c.out).split(NL)[0] }
+  if (!c.ok) {
+    await undo()
+    return { ok: false, why: (c.err || c.out).split(NL)[0] }
+  }
   const head = await git(work, ['rev-parse', '--short', 'HEAD'])
   return { ok: true, commit: head.out }
 }
 
 // 일괄 — 이 PC 에 이 서버로 설치한 작업 레포 전부(또는 준 경로만). 계획을 다 보여 주고 **한 번** 묻는다.
-async function updateAll({ server, paths, dry, yes, commit, noSave }) {
+async function updateAll({ server, paths, dry, yes, commit, noSave, fixIgnore = false }) {
   const file = regFile()
   const db = await loadReg(file)
   let rows = forServer(db, server)
@@ -388,6 +484,18 @@ async function updateAll({ server, paths, dry, yes, commit, noSave }) {
         it.error = '폴더가 없다 — 옮겼거나 지웠다(목록에서 빼려면 그 자리에 다시 설치하거나 목록 파일에서 그 줄을 지운다)'
         continue
       }
+      // 큐레이터 폴더 · 스킬 폴더 — 등록 없이 받는 kit(제품화 2 S4 · F15). 커밋 · 대장 보고가 없다
+      if (r.kind === 'curator' || r.kind === 'folder') {
+        const got = await planSimple({ kind: r.kind, server, repo: r.repo, root: r.path, token: tk.token })
+        if (got.error) {
+          it.error = got.error.split(NL)[0]
+          continue
+        }
+        it.kit = got.kit
+        it.simple = got.plan.filter((a) => a.op !== 'same')
+        it.changes = it.simple.map((a) => ({ op: a.op, kind: r.kind, to: a.dst }))
+        continue
+      }
       if (!r.workrepo) {
         it.error = '등록 id 가 없다 — 행의 한 줄로 한 번 다시 설치한다'
         continue
@@ -415,7 +523,8 @@ async function updateAll({ server, paths, dry, yes, commit, noSave }) {
     out('')
     for (const it of items) {
       const tag = it.error ? '못 함' : it.changes.length ? `바뀔 것 ${it.changes.length}` : '이미 최신'
-      out(`■ ${it.row.path}  (${it.row.repo} · ${it.row.workrepo || '—'})  ${tag}${it.kit ? ' · kit ' + it.kit : ''}`)
+      const what = it.row.kind === 'curator' ? '큐레이터 폴더' : it.row.kind === 'folder' ? '스킬 폴더' : it.row.workrepo || '—'
+      out(`■ ${it.row.path}  (${it.row.repo} · ${what})  ${tag}${it.kit ? ' · kit ' + it.kit : ''}`)
       if (it.error) out('    ' + it.error)
       for (const a of it.changes) out(`    * ${a.op.padEnd(7)} ${a.kind.padEnd(8)} ${short(a.to, it.row.path)}`)
     }
@@ -437,8 +546,18 @@ async function updateAll({ server, paths, dry, yes, commit, noSave }) {
     }
 
     const needCommit = []
+    let reported = 0
     for (const it of [...todo, ...fresh]) {
       const w = it.row.path
+      if (it.simple) {
+        if (it.simple.length) {
+          await applySimple(it.simple)
+          out(`  ${w} — ${it.simple.length}건 적용`)
+        }
+        record(db, { server, repo: it.row.repo, workrepo: null, path: w, kit: it.kit, kind: it.row.kind })
+        continue
+      }
+      let committed = true
       if (it.changes.length) {
         const rels = it.changes.map((a) => relTo(w, a.to))
         // 원래 커밋 안 된 변경이 있던 파일인가 — 적용 **전에** 본다
@@ -449,23 +568,32 @@ async function updateAll({ server, paths, dry, yes, commit, noSave }) {
           // porcelain 줄은 「XY 경로」 — 첫 줄은 git() 가 trim 해 앞 칸이 빠질 수 있다. 상태 칸을 글자 수가 아니라 모양으로 뗀다
           if (pre) line += ' · 커밋 안 함 — 원래 커밋 안 된 변경이 있던 파일이 있다: ' + pre.split(NL).map((l) => l.trim().replace(/^\S{1,2}\s+/, '')).join(' · ')
           else {
-            const c = await commitChanged(w, rels, it.kit)
+            const c = await commitChanged(w, rels, it.kit, { fixIgnore })
             line += c.ok ? ` · 커밋 ${c.commit}` : ` · 커밋 못 함 — ${c.why}`
+            committed = c.ok
           }
+          if (pre) committed = false
         } else needCommit.push(w)
         out(line)
       }
+      // 커밋하라 했는데 못 한 레포는 대장에 「최신」 으로 올리지 않는다 — 팀원은 pull 로 아무것도 못 받는다(제품화 2 S3)
+      if (!committed) continue
       const rep = await reportTo(server, it.row.workrepo, tk.token, it.kit)
       if (rep === false) out(`  ${w} — 대장 보고 실패 (설치는 끝났습니다)`)
+      else if (rep) reported++
       record(db, { server, repo: it.row.repo, workrepo: it.row.workrepo, path: w, kit: it.kit })
     }
     await saveReg(db, file).catch((e) => out('설치 목록을 쓰지 못했습니다 — ' + e.message))
     out('')
-    out(`끝났습니다 — 적용 ${todo.length}곳 · 대장 보고 ${todo.length + fresh.length}곳${bad.length ? ` · 못 함 ${bad.length}곳(위)` : ''}`)
+    out(`끝났습니다 — 적용 ${todo.length}곳 · 대장 보고 ${reported}곳${bad.length ? ` · 못 함 ${bad.length}곳(위)` : ''}`)
     if (needCommit.length) {
       out('')
       out('커밋은 각 레포에서 — 팀원은 pull 로 받습니다 (--commit 을 주면 이 명령이 바꾼 파일만 커밋합니다)')
-      for (const w of needCommit) out(`  git -C "${w}" add .mcp.json .claude CLAUDE.md && git -C "${w}" commit -m "CDP 에이전트 세팅 갱신"`)
+      for (const w of needCommit) {
+        const ig = await ignoredOf(w, ['.mcp.json', '.claude/cdp.json', '.claude/skills/cdp-save/SKILL.md', 'CLAUDE.md'])
+        if (ig.length) out(`  ! ${w} — .gitignore 가 막는다: 더할 줄 ${negations(ig).join(' ')} (--fix-gitignore)`)
+        out(`  git -C "${w}" add .mcp.json .claude CLAUDE.md && git -C "${w}" commit -m "CDP 에이전트 세팅 갱신"`)
+      }
     }
     if (todo.length) out('Claude Code 를 열어 둔 레포는 다시 켜야 새 스킬을 읽습니다.')
     return bad.length ? 1 : 0
@@ -498,6 +626,16 @@ async function resolveToken(server, { required, yes }) {
     }
     out('')
     out('CDP_TOKEN 이 이 서버에서 통하지 않습니다 — 만료 · 폐기됐거나 다른 서버의 것일 수 있습니다.')
+  }
+  // 두 번째 자리 — 이 PC 에 저장된 토큰(rc 를 안 읽은 셸 · IDE 터미널 · cron). 제품화 2 S2
+  const saved = await loadToken().catch(() => null)
+  if (saved && saved.token !== env) {
+    const w = await whoami(server, saved.token)
+    if (w.reach === false) return { error: `서버에 닿지 않습니다 — ${server}` }
+    if (w.ok) {
+      out(`토큰     ${whoLine(w)} — ${saved.where}`)
+      return { token: saved.token, who: w, entered: false }
+    }
   }
   // 대답할 사람이 없으면 묻지 않는다 — 넘어가면 그것은 묻지 않은 것과 같다
   if (yes || !process.stdin.isTTY) {

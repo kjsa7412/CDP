@@ -4,7 +4,7 @@
 // 더럽거나 origin 이 앞선 레포는 건너뛰어 그 레포의 작업 레포는 옛 스킬을 계속 받았다(배포 조사 C1). v1.0 은 **레포에
 // 지식만** 두고(I9) kit 은 서버 번들에서 낸다 — 판을 올리면 모든 레포의 kit 이 같이 바뀐다.
 //
-// 역할별 — writer 는 기록하는 스킬만(cdp-work · cdp-save · cdp-push) 받는다. 큐레이터는 다섯 전부와 큐레이터 블록을 받는다.
+// 역할별 — writer 는 기록하는 스킬만(cdp-work · cdp-save · cdp-push) 받는다. 큐레이터는 여섯 전부(+ cdp-curate · cdp-registry · cdp-rebuild)와 큐레이터 블록을 받는다.
 // 큐레이션 도구는 서버가 역할로 가리지만(I7 · §5.3), 스킬이 없으면 writer 세션이 그 절차를 흉내 낼 일도 없다.
 //
 // 자리 — 앞에서부터 있는 곳 하나: ① explicit(--kit) ② 환경변수 CDP_KIT ③ 번들 옆 <bin>/../kit ④ 소스 <root>/agent
@@ -34,10 +34,18 @@ export async function findKitDir({ explicit = null, env = process.env, binDir = 
 async function walk(dir, rel, out) {
   for (const e of (await fs.readdir(dir, { withFileTypes: true }).catch(() => [])).sort((a, b) => a.name.localeCompare(b.name))) {
     const abs = path.join(dir, e.name)
-    const r = rel + '/' + e.name
+    const r = rel + '/' + e.name.normalize('NFC')
     if (e.isDirectory()) await walk(abs, r, out)
     else out.push({ name: r, data: await fs.readFile(abs) })
   }
+}
+
+// 한글 이름 파일을 NFC/NFD 어느 쪽으로 풀렸든 읽는다 — macOS 에서 싼 옛 산출물은 NFD 였다(제품화 2 S1)
+async function readNfc(dir, name) {
+  const hit = await fs.readFile(path.join(dir, name)).catch(() => null)
+  if (hit) return hit
+  const alt = (await fs.readdir(dir).catch(() => [])).find((n) => n.normalize('NFC') === name.normalize('NFC'))
+  return alt ? fs.readFile(path.join(dir, alt)).catch(() => null) : null
 }
 
 // 역할의 kit — 작업 레포에 놓일 자리 이름으로(`.claude/skills/…` · `.claude/work-repo/CLAUDE.md`)
@@ -52,7 +60,7 @@ export async function kitFiles({ role = 'writer', explicit = null } = {}) {
     .sort()
   const files = []
   for (const n of names) await walk(path.join(skillsDir, n), '.claude/skills/' + n, files)
-  const block = await fs.readFile(path.join(found.dir, BLOCK[role] || BLOCK.writer)).catch(() => null)
+  const block = await readNfc(found.dir, BLOCK[role] || BLOCK.writer)
   if (block) files.push({ name: '.claude/work-repo/CLAUDE.md', data: block })
   files.sort((a, b) => a.name.localeCompare(b.name))
   return { files, hash: hashOf(files), skills: names, role, dir: found.dir }

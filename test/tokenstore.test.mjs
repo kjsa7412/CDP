@@ -45,3 +45,21 @@ test('rcFile · storeLabel — zsh 면 .zshrc · 나머지는 .bashrc · Windows
 test('saveTokenWindows — 변수 이름이 이상하면 PowerShell 을 부르기 전에 멈춘다', () => {
   assert.throws(() => saveTokenWindows('x', { name: "A'); Remove-Item x; ('" }), /변수 이름/)
 })
+
+test('제품화 2 S2 — loadToken: CDP_CONFIG_DIR · ~/.config/cdp/token · 없으면 null · 폴더는 0700', async () => {
+  const { loadToken, saveTokenPosix } = await import('../core/tokenstore.js')
+  const fsp = (await import('node:fs/promises')).default
+  const osm = (await import('node:os')).default
+  const p = (await import('node:path')).default
+  const home = await fsp.mkdtemp(p.join(osm.tmpdir(), 'cdp-tk-'))
+  assert.equal(await loadToken({ platform: 'linux', home, env: {} }), null)
+  await saveTokenPosix('abc123', { home, shell: '/bin/zsh' })
+  assert.equal((await loadToken({ platform: 'linux', home, env: {} })).token, 'abc123')
+  assert.equal((await fsp.stat(p.join(home, '.config', 'cdp'))).mode & 0o777, 0o700)
+  const cfg = p.join(home, 'cfg')
+  await fsp.mkdir(cfg)
+  assert.equal(await loadToken({ platform: 'linux', home, env: { CDP_CONFIG_DIR: cfg } }), null)
+  await fsp.writeFile(p.join(cfg, 'token'), 'zzz\n')
+  assert.equal((await loadToken({ platform: 'linux', home, env: { CDP_CONFIG_DIR: cfg } })).token, 'zzz')
+  await fsp.rm(home, { recursive: true, force: true })
+})

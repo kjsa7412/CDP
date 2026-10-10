@@ -66,10 +66,12 @@ cdp.example.com { reverse_proxy 127.0.0.1:7374 }
 
 ```bash
 cd cdp-server-v<버전>
-touch auth.json
-docker compose -f deploy/docker-compose.yml up -d --build
-docker compose -f deploy/docker-compose.yml exec cdp node bin/ctx.mjs serve init --auth /opt/cdp/auth.json --data /opt/cdp/data --name <관리자>    # 또는 브라우저 /setup
+docker compose -p cdp -f deploy/docker-compose.yml up -d --build
+docker compose -p cdp -f deploy/docker-compose.yml logs cdp     # 첫 관리자 코드 → 브라우저 /setup
 ```
+
+명부(`/opt/cdp/data/auth.json`)와 git 자격(HOME = `/opt/cdp/data/home`)은 **data 볼륨 안**이다 — 새 판 폴더에서
+같은 `-p cdp` 로 올리면 이어진다. 손으로 만들 파일이 없다.
 
 컨테이너 안에서 `--bind 0.0.0.0` 은 맞다 — 경계는 호스트의 `-p` 매핑이다. 기본 배치는
 systemd 다(검토 R10). Docker 는 사내 배치가 바뀌었을 때의 두 번째 길이고 CI 에서 서버
@@ -93,6 +95,6 @@ WSL Ubuntu(systemd · node 20.20.2)에 tar 로 — `install.sh` 두 번(둘째�
 **깨진 번들을 주면 되돌리고 exit 1**(서비스는 옛 번들로 살아 있다). Docker — 이미지
 빌드 · `/healthz` · HEALTHCHECK healthy. 절차는 [`제품화 TODO` 9단계](../../docs/dev/제품화_TODO.md).
 
-시험 셸이 Git Bash 면 앞에 **`MSYS_NO_PATHCONV=1`** 을 둔다 — `/opt/cdp/auth.json` 같은
+시험 셸이 Git Bash 면 앞에 **`MSYS_NO_PATHCONV=1`** 을 둔다 — `/opt/cdp/data/auth.json` 같은
 인자를 `C:/Program Files/Git/opt/…` 로 바꿔 `wsl` · `docker exec` 에 넘긴다. 컨테이너 안
 `init` 이 그것 때문에 한 번 헛돌았다.

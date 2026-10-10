@@ -395,3 +395,14 @@ test('curate — 레포별 큐레이터: admin 은 전부 · writer 는 목록 �
   assert.deepEqual(userList(db).find((u) => u.name === 'see').curate, [])
   assert.deepEqual(curateOf({ role: 'writer', curate: ['a', '*'] }), ['*'])
 })
+
+test('제품화 2 S5 — 빈 auth.json 은 빈 명부(Docker 의 touch · serve init 과 /setup 이 같다)', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-auth-empty-'))
+  const f = path.join(dir, 'auth.json')
+  await fs.writeFile(f, '')
+  const db = await auth.load(f)
+  assert.equal(db.users.length, 0)
+  await fs.writeFile(f, '  \n')
+  assert.equal((await auth.load(f)).users.length, 0)
+  await fs.rm(dir, { recursive: true, force: true })
+})

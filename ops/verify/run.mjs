@@ -111,9 +111,9 @@ function must(cond, msg) {
 const eq = (a, b, msg) => must(JSON.stringify(a) === JSON.stringify(b), `${msg} — ${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`)
 const exists = (p) => fs.access(p).then(() => true, () => false)
 
-// v1.0 스킬 다섯(개편안 §6.1)과 SKILL.md 줄 수 상한 — 111 · 117 이 보고, 설치 항목(106 · 125 · 126)은 깔린 것이 이 안에 있는지 본다.
+// v1.1 스킬 여섯(개편안 §6.1 + cdp-rebuild)과 SKILL.md 줄 수 상한 — 111 · 117 이 보고, 설치 항목(106 · 125 · 126)은 깔린 것이 이 안에 있는지 본다.
 // writer 몫은 work · save · push — 역할별 kit(W5)이라 작업 레포에는 그 셋만 간다
-const SKILL_LINES = { 'cdp-curate': 350, 'cdp-push': 180, 'cdp-registry': 200, 'cdp-save': 300, 'cdp-work': 250 }
+const SKILL_LINES = { 'cdp-curate': 350, 'cdp-push': 180, 'cdp-rebuild': 200, 'cdp-registry': 200, 'cdp-save': 300, 'cdp-work': 250 }
 const SKILL_SET = Object.keys(SKILL_LINES)
 const WRITER_SKILLS = ['cdp-push', 'cdp-save', 'cdp-work']
 const kitSkillsOk = (names) => WRITER_SKILLS.every((n) => names.includes(n)) && names.every((n) => SKILL_SET.includes(n))
@@ -549,7 +549,7 @@ await check(118, '역할별 도구 목록 — viewer 9(save 없음) · writer 10
   const BASE10 = ['brief', 'check', 'docs', 'match', 'repos', 'save', 'search', 'section', 'where', 'work']
   eq(await toolNames(TQ), BASE10.filter((t) => t !== 'save'), 'viewer')
   eq(await toolNames(TW), BASE10, 'writer')
-  eq(await toolNames(TC), [...BASE10, 'forms', 'queue'].sort(), '큐레이터')
+  eq(await toolNames(TC), [...BASE10, 'drift', 'forms', 'queue'].sort(), '큐레이터')
   for (const gone of ['derive', 'apply', 'sync', 'version']) {
     const r = await H.rpc('/mcp/alpha', 'tools/call', { name: gone, arguments: {} }, TC)
     must(r.j?.error || r.j?.result?.isError, `${gone} 가 아직 불린다`)
@@ -557,7 +557,7 @@ await check(118, '역할별 도구 목록 — viewer 9(save 없음) · writer 10
   // 명함도 역할별 — writer 의 save 는 기록만, 큐레이터의 save 는 판정 · 섹션을 말한다
   const card = async (tk) => (await H.rpc('/mcp/alpha', 'tools/list', {}, tk)).j.result.tools.find((t) => t.name === 'save').description
   must(/E_FORBIDDEN/.test(await card(TW)) && /큐레이터의 save/.test(await card(TC)), 'save 명함이 역할과 맞지 않는다')
-  return 'viewer 9 · writer 10 · 큐레이터 12 · 옛 넷 없음 · save 명함 둘'
+  return 'viewer 9 · writer 10 · 큐레이터 13 · 옛 넷 없음 · save 명함 둘'
 })
 
 await check(113, 'docs 도구 — 관리 문서 목록 · 등록부 여부 / match 의 문서 이름 대조 / brief({ repo }) 가 이 연결의 기본 레포와 다르면 경고', async () => {
@@ -840,19 +840,21 @@ await check(105, 'kit 을 JSON 으로 — 토큰 없으면 401 · 권한 밖 레
   return `${names.length}개 · 401 · 404 · 원문 0`
 })
 
-await check(125, '/kit 역할별 — writer 는 cdp-work · cdp-save · cdp-push + 작업 레포 블록 · 큐레이터는 다섯 + 큐레이터 블록 · 큐레이터도 role=writer 면 writer · 큐레이터가 아닌 레포에서는 writer', async () => {
+await check(125, '/kit 역할별 — writer 는 cdp-work · cdp-save · cdp-push + 작업 레포 블록 · 큐레이터는 여섯 + 큐레이터 블록 · 큐레이터도 role=writer 면 writer · 큐레이터가 아닌 레포에서는 writer', async () => {
   const kit = async (tk, repo = 'alpha', q = '') => (await H.call(`/kit/${repo}?as=json${q}`, bearer(tk))).json()
   const skillsOf = (j) => [...new Set(j.files.map((f) => /^\.claude\/skills\/([^/]+)\//.exec(f.name)?.[1]).filter(Boolean))].sort()
   const text = (j, n) => Buffer.from(j.files.find((f) => f.name === n)?.data || '', 'base64').toString('utf8')
   const w = await kit(TW)
   eq(w.role, 'writer', 'writer 역할')
   eq(skillsOf(w), WRITER_SKILLS, 'writer 스킬')
-  must(/업무 맥락 — CDP/.test(text(w, '.claude/work-repo/CLAUDE.md')), 'writer 블록')
+  // kit 안쪽 원본(.claude/work-repo/)은 오지 않는다 — CLAUDE.md 로 병합돼 온다(제품화 2 F12)
+  must(!w.files.some((f) => f.name.startsWith('.claude/work-repo/')), 'kit 안쪽 원본이 왔다')
+  must(/업무 맥락 — CDP/.test(text(w, 'CLAUDE.md')), 'writer 블록')
   must(text(w, 'CLAUDE.md').includes(`<!-- cdp:kit ${w.kit} -->`), 'CLAUDE.md 의 cdp:kit')
   const c = await kit(TC)
   eq(c.role, 'curator', '큐레이터 역할')
   eq(skillsOf(c), SKILL_SET, '큐레이터 스킬')
-  must(/CDP 큐레이터/.test(text(c, '.claude/work-repo/CLAUDE.md')), '큐레이터 블록')
+  must(/CDP 큐레이터/.test(text(c, 'CLAUDE.md')), '큐레이터 블록')
   must(c.kit !== w.kit, '해시가 같다')
   const cw = await kit(TC, 'alpha', '&role=writer')
   eq([cw.role, cw.kit], ['writer', w.kit], 'role=writer')
@@ -860,7 +862,7 @@ await check(125, '/kit 역할별 — writer 는 cdp-work · cdp-save · cdp-push
   // 등록된 작업 레포(`?workrepo=`)는 누가 받든 writer kit — 팀이 같이 커밋하는 자리다. 큐레이터 kit 은 큐레이터 폴더에만
   const ww = await (await H.call(`/kit/alpha?workrepo=${WR1}&as=json`, bearer(TC))).json()
   eq([skillsOf(ww), ww.kit], [WRITER_SKILLS, w.kit], '큐레이터가 받은 작업 레포 kit')
-  return `writer ${w.kit} (스킬 3) · 큐레이터 ${c.kit} (스킬 5) · 작업 레포는 누가 받든 writer`
+  return `writer ${w.kit} (스킬 3) · 큐레이터 ${c.kit} (스킬 ${skillsOf(c).length}) · 작업 레포는 누가 받든 writer`
 })
 
 // 설치기가 이 PC 의 설치 목록을 쓴다(에이전트 세팅 갱신 T9) — 하네스는 진짜 %APPDATA% · ~/.config 를 건드리지 않는다
@@ -948,7 +950,7 @@ await check(107, '한 줄 설치기는 토큰이 없고 물을 수 없으면 아
   return 'exit 2 · 쓴 것 0 · 틀린 토큰도 멈춤'
 })
 
-await check(126, '설치 한 줄 --curator — 큐레이터 폴더(git · 대장 등록 없이): 스킬 다섯 · 큐레이터 블록 · cdp:kit = 큐레이터 kit · 두 번째는 이미 최신 · writer 토큰은 아무것도 안 쓰고 멈춘다', async () => {
+await check(126, '설치 한 줄 --curator — 큐레이터 폴더(git · 대장 등록 없이): 스킬 여섯 · 큐레이터 블록 · cdp:kit = 큐레이터 kit · 두 번째는 이미 최신 · writer 토큰은 아무것도 안 쓰고 멈춘다', async () => {
   const D = path.join(TMP, 'curator-dir')
   await fs.mkdir(D, { recursive: true })
   const wr0 = (await (await H.call('/workrepos', bearer(TK3))).json()).repos.length
@@ -2550,11 +2552,11 @@ await check(131, '개인 서버 — ctx serve --personal <레포>: 명부(나 �
     eq([me.role, me.curate, me.repos.map((x) => x.name)], ['admin', ['*'], ['pfx']], '/me')
     const bad = await fetch(`${base}/login?auto=nope`, { redirect: 'manual' })
     must(bad.status === 200 && !/cdp_s=/.test(bad.headers.get('set-cookie') || ''), '틀린 토큰 — ' + bad.status)
-    eq((await http(base).rpc('/mcp/pfx', 'tools/list', {}, tok)).j?.result?.tools?.length, 12, 'MCP 도구')
+    eq((await http(base).rpc('/mcp/pfx', 'tools/list', {}, tok)).j?.result?.tools?.length, 13, 'MCP 도구')
     // 다른 서버에는 이 길이 없다 — 맞는 토큰이어도 화면만 낸다
     const o = await fetch(`${BASE}/login?auto=${encodeURIComponent(TKA)}`, { redirect: 'manual' })
     must(o.status === 200 && !/cdp_s=/.test(o.headers.get('set-cookie') || ''), '공용 서버가 auto 로 로그인시켰다')
-    return `명부 1(admin) · auto 302 → /r/pfx/ · /me admin · 틀린 토큰 화면 · MCP 12 · 공용 서버 auto 없음`
+    return `명부 1(admin) · auto 302 → /r/pfx/ · /me admin · 틀린 토큰 화면 · MCP 13 · 공용 서버 auto 없음`
   } finally {
     SP.kill()
   }
@@ -2651,7 +2653,7 @@ await check(111, '스킬의 끝 보고는 save 응답(commit · mirror)과 brief
   return 'push 문구 0 · cdp-save 끝 보고 표(commit · mirror · 큐레이션 대기) · curate · registry 가 가리킨다'
 })
 
-await check(117, 'v1.0 스킬 다섯 — 폴더가 정확히 다섯 · 머리말이 YAML 로 읽힌다(name = 폴더 · description 은 큰따옴표 · 누가 쓰는지) · 줄 수 상한', async () => {
+await check(117, 'v1.1 스킬 여섯 — 폴더가 정확히 여섯 · 머리말이 YAML 로 읽힌다(name = 폴더 · description 은 큰따옴표 · 누가 쓰는지) · 줄 수 상한', async () => {
   // description 이 `**` 로 시작하면 `*` 가 YAML 별칭이라 머리말 전체가 깨진다(2026-10-06 cdp-save · cdp-push).
   // 그때 Claude Code 는 H1 을 설명으로 대신 쓴다 — 언제 쓰는지 · 무엇과 다른지가 **말없이** 사라진다. 그래서 큰따옴표로 싼다(A5).
   // 큐레이터 스킬은 writer 가 대신 무엇을 하는지까지 말한다(A6). 줄 수는 개편안 §6.1 의 목표 — 예시 · 드문 길은 참고 파일로(A3)

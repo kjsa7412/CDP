@@ -18,11 +18,11 @@
 //
 // 지식 레포 폴더(옛 `packages/<이름>/`)는 담지 않는다 — 새 레포는 서버가 빈 틀로 세운다(v1.0).
 
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { ROOT, bundleStamp, copyDirLF, copyFileLF, copyKit, measure } from './bundle-files.mjs'
-import { zip } from '../../core/zip.js'
+import { packDir } from '../../core/tar.js'
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
 const arg = process.argv.slice(2).find((a) => !a.startsWith('-'))
@@ -134,34 +134,14 @@ node bin/ctx.mjs serve doctor --root … --auth … --data … --web web     (ki
   'utf8'
 )
 
-// ── 3) tar.gz — 있으면 tar, 없으면 zip ─────────────────────────────────────
+// ── 3) tar.gz — 우리가 싼다(`core/tar.js`) ──────────────────────────────────
 //
-// 서버는 Linux 라 tar.gz 가 자연스럽다. Windows 10 도 `tar`(bsdtar)가 있다.
-// 없으면 `core/zip.js` 로 zip 을 내고 **그 사실을 찍는다** — 조용히 다른
-// 모양을 내지 않는다.
-let artifact = null
-const hasTar = spawnSync('tar', ['--version'], { stdio: 'ignore' }).status === 0
-if (hasTar) {
-  artifact = path.join(OUT_DIR, NAME + '.tar.gz')
-  fs.rmSync(artifact, { force: true })
-  // **경로를 전부 상대로 준다.** Git for Windows 의 GNU tar 는 `C:\…` 의 드라이브
-  // 글자를 원격 호스트로 읽는다("Cannot connect to C"). cwd 를 OUT_DIR 로 두면
-  // 드라이브 글자가 명령줄에 안 나온다 — bsdtar · GNU tar 어느 쪽이든 같다.
-  execFileSync('tar', ['-czf', NAME + '.tar.gz', NAME], { stdio: 'inherit', cwd: OUT_DIR })
-} else {
-  artifact = path.join(OUT_DIR, NAME + '.zip')
-  const entries = []
-  ;(function walk(d, rel) {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name)
-      const r = rel + '/' + e.name
-      if (e.isDirectory()) walk(p, r)
-      else entries.push({ name: r, data: fs.readFileSync(p) })
-    }
-  })(OUT, NAME)
-  fs.writeFileSync(artifact, await zip(entries))
-  log('⚠ tar 가 없어 zip 으로 냈다 — 서버에서는 unzip 으로 푼다')
-}
+// 시스템 tar 를 쓰지 않는다. macOS 의 bsdtar 는 한글 파일명을 NFD 로 바꿔 싸서
+// Linux 서버에서 설명서 · kit CLAUDE 블록이 조용히 빠졌다(제품화 2 검토 S1).
+// 이름은 NFC · 실행 비트는 살린다. 풀 때는 GNU tar · bsdtar · `ctx self-update` 어느 쪽이든 같다.
+const artifact = path.join(OUT_DIR, NAME + '.tar.gz')
+fs.rmSync(artifact, { force: true })
+fs.writeFileSync(artifact, packDir(OUT, NAME))
 
 // ── 4) 보고 ─────────────────────────────────────────────────────────────
 const m = measure(OUT)

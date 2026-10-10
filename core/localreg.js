@@ -30,7 +30,12 @@ export function samePath(a, b, platform = process.platform) {
   return n(a) === n(b)
 }
 
-const normServer = (s) => String(s || '').replace(/\/+$/, '')
+// 같은 서버인지 — 루프백 별칭(localhost · 127.0.0.1 · [::1])은 하나로 본다. 같은 서버를 화면에서는 localhost 로,
+// 설치 줄에서는 127.0.0.1 로 받은 PC 의 목록이 갈리지 않게(제품화 2 F13).
+export const normServer = (s) =>
+  String(s || '')
+    .replace(/\/+$/, '')
+    .replace(/^(https?:\/\/)(?:localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/i, '$1127.0.0.1')
 
 export async function loadReg(file = regFile()) {
   const raw = await fs.readFile(file, 'utf8').catch(() => null)
@@ -46,7 +51,7 @@ export async function loadReg(file = regFile()) {
 }
 
 export async function saveReg(db, file = regFile()) {
-  await fs.mkdir(path.dirname(file), { recursive: true })
+  await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 })
   const tmp = file + '.tmp-' + process.pid
   await fs.writeFile(tmp, JSON.stringify({ version: 1, entries: db.entries }, null, 2) + '\n', 'utf8')
   await fs.rename(tmp, file)
@@ -54,9 +59,13 @@ export async function saveReg(db, file = regFile()) {
 
 // 한 줄 적는다 — **경로가 열쇠다.** 작업 레포 하나의 `.mcp.json` 에는 `cdp` 항목이 하나뿐이라
 // 같은 경로를 다른 서버 · 레포로 다시 설치하면 옛 줄을 바꿔 쓴다.
-export function record(db, { server, repo, workrepo = null, path: p, kit = null, at = new Date() }, platform = process.platform) {
+// kind — 'work'(작업 레포 · 기본) · 'curator'(큐레이터 폴더) · 'folder'(스킬 사본만 두는 폴더 — 워크스페이스 사본).
+// `--update` 가 셋을 같이 돈다(제품화 2 S4 · F15).
+export const KINDS = ['work', 'curator', 'folder']
+export function record(db, { server, repo, workrepo = null, path: p, kit = null, kind = 'work', at = new Date() }, platform = process.platform) {
   const row = {
     path: path.resolve(p),
+    kind: KINDS.includes(kind) ? kind : 'work',
     server: normServer(server),
     repo,
     workrepo: workrepo || null,

@@ -12,6 +12,7 @@ import http from 'node:http'
 import os from 'node:os'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import fs from 'node:fs/promises'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import * as git from '../../core/git.js'
@@ -772,8 +773,9 @@ export async function runServe(opt = {}) {
       // 사람이 붙여넣은 **토큰으로** `/kit/<레포>?…&as=json` 에서 받는다(I2) — 판정은 zip 과 같은 자리다.
       if (url.pathname === '/install.mjs' && (req.method === 'GET' || req.method === 'HEAD')) {
         const head = 'globalThis.__CDP_KIT__ = ' + JSON.stringify({ server: publicOrigin(req, opt) }) + NL
-        // 번들이 아니면(소스로 도는 개발 · 하네스) 이 PC 의 설치기를 부르는 두 줄(I8) — 같은 PC 에서만 돈다
-        const body = HAS_INSTALLER ? head + INSTALLER_SRC : head + `await import(${JSON.stringify(new URL('./cdp-install.mjs', import.meta.url).href)})` + NL
+        // 번들이 아니면(소스로 도는 개발 · 하네스) 그 자리에서 말아 낸다 — 전에는 이 PC 의 소스 경로를 import 하는 두 줄이라
+        // 받은 사본이 소스를 옮기면 깨지고 홈 경로(사람 이름)가 새어 나갔다(제품화 2 F14). 말 수 없으면(esbuild 없음) 옛 두 줄
+        const body = head + (HAS_INSTALLER ? INSTALLER_SRC : await sourceInstaller())
         log.req({ ip, method: req.method, tool: '/install.mjs', ms: Date.now() - t0, status: 200 })
         res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
         return res.end(req.method === 'HEAD' ? undefined : body)
@@ -1893,8 +1895,9 @@ export async function runServe(opt = {}) {
         // 큐레이터 폴더 — 등록 없이 받는다(v1.0 §6.3 · `install.mjs --curator`). git 레포가 아니어도 되고 대장에 오르지 않는다
         if (!wid && url.searchParams.get('as') === 'json') {
           const origin = publicOrigin(req, opt)
+          // kit 안쪽 원본(`.claude/work-repo/CLAUDE.md`)은 보내지 않는다 — 아래 CLAUDE.md 로 병합돼 가고, 폴더에 두면 블록이 두 벌이다(제품화 2 F12)
           const out = [
-            ...files.map((f) => ({ name: f.name, data: Buffer.from(f.data).toString('base64') })),
+            ...files.filter((f) => !f.name.startsWith('.claude/work-repo/')).map((f) => ({ name: f.name, data: Buffer.from(f.data).toString('base64') })),
             { name: '.mcp.json', data: Buffer.from(mergeMcpJson(null, mcpEntryServer(origin, name))).toString('base64') },
             { name: '.claude/cdp.json', data: Buffer.from(JSON.stringify({ server: origin, repo: name }, null, 2) + NL).toString('base64') },
           ]
@@ -2100,7 +2103,22 @@ export async function runServe(opt = {}) {
     onRequest(req, res)
   })
 
-  await new Promise((resolve) => server.listen(port, bind, resolve))
+  // 포트가 겹치면 날 스택 대신 한 줄(제품화 2 S6) — 개인 서버 기본 7400 이라 레포를 둘 띄우면 바로 여기다
+  await new Promise((resolve) => {
+    server.once('error', async (e) => {
+      if (e?.code !== 'EADDRINUSE' && e?.code !== 'EACCES') throw e
+      const h = await fetch(`http://${bind === '0.0.0.0' ? '127.0.0.1' : bind}:${port}/healthz`).then((r) => r.json()).catch(() => null)
+      process.stderr.write(
+        (e.code === 'EACCES'
+          ? `ctx serve: ${bind}:${port} 에서 들을 권한이 없다 — 1024 아래 포트는 root 가 필요하다. --port 로 바꾼다`
+          : h?.built
+            ? `ctx serve: ${bind}:${port} 에 CDP 서버가 이미 떠 있다(번들 ${h.built}) — 같은 레포면 그 주소를 쓰고, 다른 레포면 --port 로 다른 포트를 준다(ctx up 은 빈 포트를 고른다)`
+            : `ctx serve: ${bind}:${port} 를 다른 프로그램이 쓰고 있다 — --port 로 다른 포트를 준다`) + NL
+      )
+      process.exit(2)
+    })
+    server.listen(port, bind, resolve)
+  })
   const list = await store.list()
   log.line(`시작 · ${bind}:${port} · root ${root} · 레포 ${list.length}개 (${list.map((r) => r.name).join(' · ') || '없음'}) · 번들 ${BUILT}`)
   if (personal) {
@@ -2367,6 +2385,22 @@ const INSTALLER_SRC = '__CDP_INSTALLER_SRC__'
 // 넣으면 받는 사람이 돌지 않는 파일을 손에 쥔다.
 const HAS_INSTALLER = !INSTALLER_SRC.startsWith('__CDP_INSTALLER')
 
+// 소스로 돌 때의 설치기 — `build-ctx` 와 같은 옵션으로 한 번 말아 둔다. 명세를 변수로 둬서 번들러가 esbuild 를 끌어오지 않게 한다
+let SOURCE_INSTALLER = null
+async function sourceInstaller() {
+  if (SOURCE_INSTALLER) return SOURCE_INSTALLER
+  const entry = fileURLToPath(new URL('./cdp-install.mjs', import.meta.url))
+  try {
+    const spec = 'esbuild'
+    const esb = await import(spec)
+    const r = await esb.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', target: 'node20', legalComments: 'none', write: false, logLevel: 'silent' })
+    SOURCE_INSTALLER = r.outputFiles[0].text
+  } catch {
+    SOURCE_INSTALLER = `await import(${JSON.stringify(new URL('./cdp-install.mjs', import.meta.url).href)})` + NL
+  }
+  return SOURCE_INSTALLER
+}
+
 // 개인 서버의 준비 — 레포 확인 · 데이터 자리(<home>/.cdp/personal/<레포>) · 명부(나 하나 · admin) · 토큰(원문을 이 PC 의
 // 0600 파일에 둔다 — 개인 서버는 그 PC 의 주인 한 사람만 쓴다. 다른 서버는 원문을 어디에도 두지 않는다)
 async function preparePersonal(opt) {
@@ -2434,9 +2468,11 @@ async function manualIndex(manualDir) {
   const ORDER = ['사용자_설명서.md', '큐레이터_설명서.md', '관리자_설명서.md', '개발자_설명서.md']
   const rank = (n) => (ORDER.includes(n) ? ORDER.indexOf(n) : ORDER.length)
   if (manualDir) {
-    for (const n of (await fs.readdir(manualDir).catch(() => [])).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))) {
+    // 이름은 NFC 로 견준다 — macOS 에서 싼 옛 산출물은 NFD 이름이었다(제품화 2 S1). 파일은 디스크의 이름 그대로 연다.
+    const names = (await fs.readdir(manualDir).catch(() => [])).map((raw) => ({ raw, n: raw.normalize('NFC') }))
+    for (const { raw, n } of names.sort((a, b) => rank(a.n) - rank(b.n) || a.n.localeCompare(b.n))) {
       if (!/_설명서\.md$/.test(n)) continue
-      items.push({ id: n.replace(/\.md$/, ''), title: await titleOfMd(path.join(manualDir, n)), file: path.join(manualDir, n) })
+      items.push({ id: n.replace(/\.md$/, ''), title: await titleOfMd(path.join(manualDir, raw)), file: path.join(manualDir, raw) })
     }
     for (const cand of [path.resolve(manualDir, '..', 'deploy', '설치절차.md'), path.resolve(manualDir, '..', 'ops', 'deploy', '설치절차.md')]) {
       if (await fs.access(cand).then(() => true).catch(() => false)) {

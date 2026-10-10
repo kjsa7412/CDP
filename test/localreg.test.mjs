@@ -48,3 +48,15 @@ test('loadReg · saveReg — 없으면 빈 목록 · 깨졌으면 옆으로 치�
     await fs.rm(d, { recursive: true, force: true })
   }
 })
+
+test('제품화 2 — 루프백 별칭은 같은 서버(F13) · kind(work · curator · folder)', async () => {
+  const { normServer } = await import('../core/localreg.js')
+  assert.equal(normServer('http://localhost:7400/'), 'http://127.0.0.1:7400')
+  assert.equal(normServer('http://[::1]:7400'), 'http://127.0.0.1:7400')
+  assert.equal(normServer('http://localhostx:1'), 'http://localhostx:1')
+  const db = { entries: [] }
+  record(db, { server: 'http://localhost:7400', repo: 'a', path: '/w/a' }, 'linux')
+  record(db, { server: 'http://127.0.0.1:7400', repo: 'a', path: '/w/cur', kind: 'curator' }, 'linux')
+  record(db, { server: 'http://127.0.0.1:7400', repo: 'a', path: '/w/sk', kind: 'nope' }, 'linux')
+  assert.deepEqual(forServer(db, 'http://localhost:7400').map((e) => e.kind), ['work', 'curator', 'work'])
+})
