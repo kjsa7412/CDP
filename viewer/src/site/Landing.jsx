@@ -87,7 +87,7 @@ export default function Landing({ info }) {
                   <span className="arow__label">MCP</span>
                   <span className="arow__value">
                     <span className="amono">/mcp/&lt;레포&gt;</span>
-                    <span className="amuted">· 도구 12(역할별)</span>
+                    <span className="amuted">· 도구 13(역할별)</span>
                   </span>
                 </div>
                 {info?.setupNeeded ? (
@@ -137,7 +137,7 @@ export default function Landing({ info }) {
             <div className="fcard">
               <h3>에이전트</h3>
               <p>
-                Claude Code 가 MCP 로 붙는다. 도구 12종 — 읽기 9 · <code>save</code> · 큐레이터의 <code>queue</code> · <code>forms</code>(역할에 없는 도구는 보이지 않는다). 스킬 5종이 절차를 든다 — 검토 → 주입 → 기록 · 큐레이션.
+                Claude Code 가 MCP 로 붙는다. 도구 13종 — 읽기 9 · <code>save</code> · 큐레이터의 <code>queue</code> · <code>forms</code> · <code>drift</code>(역할에 없는 도구는 보이지 않는다). 스킬 6종이 절차를 든다 — 검토 → 주입 → 기록 · 큐레이션 · 리빌딩.
               </p>
             </div>
             <div className="fcard">

@@ -17,7 +17,7 @@ const WORKREPO = String.raw`# 작업 레포 — 사람마다 한 줄 (PowerShell
 curl.exe -fsSLo "$env:TEMP\cdp-install.mjs" http://<서버>:7374/install.mjs; if ($?) { node "$env:TEMP\cdp-install.mjs" --repo library --workrepo <id> . }
 #   → 토큰을 숨김 입력으로 묻고, 서버에 확인하고, .mcp.json · 스킬 셋 · 규약 블록을 둔다
 
-# 큐레이터 폴더 — 같은 설치기에 --curator (등록 없이 · 스킬 다섯)
+# 큐레이터 폴더 — 같은 설치기에 --curator (등록 없이 · 스킬 여섯)
 node "$env:TEMP\cdp-install.mjs" --curator --repo library .`
 
 const PERSONAL = `# 개인 서버 — 서버 없는 팀 · 한 사람. 같은 서버 산출물을 자기 PC 에 푼다 (Node 20 · git)

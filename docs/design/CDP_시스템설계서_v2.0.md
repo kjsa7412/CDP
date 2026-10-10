@@ -85,6 +85,7 @@
 | 작업 기록 | writer(큐레이터도 자기 작업은 이것으로) | `work/<id>.md` · 첨부 `work/assets/<id>/` | 사건 · 불변 · **홀로 선다**(값 · 표 · 결정 · 제약은 본문에 — 큐레이터는 기록만 보고 반영한다) |
 | 큐레이터의 판단 | 큐레이터 | 관리 문서 섹션의 서술 · 큐레이션 기록(`curates`) | 정본 · 현재형 · 경과는 한 줄씩 |
 | 추출 | 기계(프로젝트의 생성기) | 섹션 안 기준선 블록 · 기준선 기록(`baseline`) | 통째로 갈아 끼운다(멱등) · `asof` 가 신선도다 · 대기열 · 미반영을 만들지 않는다 |
+| 정본 스냅샷 | 기계(서버 · 큐레이터가 부른다) | 정본 스냅샷 기록(`snapshot`) — 섹션 하나에 하나 | 근거 없는 섹션(그 좌표를 건드린 기록 · 기준선이 없다)을 **원문 그대로** 기록으로 뜬다 — 정본에만 있던 지식이 기록만 옮겨 다시 세울 때 사라지지 않게. 사건이 아니라 그때의 상태다(리빌딩 검토 v0.1 §5.2) |
 
 gdi 는 셋째를 제품 밖 생성기(`gdi_wiki_gen`)로 해 왔고 「작업 기록이 쓴 섹션은 덮지 않는다」 를 생성기가 스스로 지켰다. v1.0 은 그 규칙을 **블록 경계 하나**로 바꿨다 — 큐레이션 save 는 블록 안을, 기준선 save 는 블록 밖을 못 쓴다(개편안 §3.2 · V3).
 
@@ -165,14 +166,15 @@ tags: [curate]
 - 읽는 경계는 너그럽다 — 모양이 틀린 판정도 버리지 않고 `bad` 를 달아 둔다. 거르면 「이 기록은 큐레이션됐다」 가 조용히 사라지고 그 기록이 대기열로 돌아온다. 판정은 save 와 `check` `curates-shape` error 가 한다.
 - 읽기는 옛 모양도 받는다 — `knowledge/` 층 · `supersedes: [{ id, scope }]`(§12).
 
-### 3.3 기록의 종류 넷 — `curation.recordKind`
+### 3.3 기록의 종류 다섯 — `curation.recordKind`
 
 | 종류 | 가르는 것 | 대기열 | 미반영 |
 |---|---|:--:|:--:|
 | `work` | 아래 어느 것도 아니다 — 사람의 작업 기록 | 선다 | 만든다 |
 | `curation` | `curates` 키 | 안 선다 | 안 만든다 |
 | `baseline` | `baseline` 키 | 안 선다 | 안 만든다 |
-| `system` | 태그 `registry` · `docs-prune` · `derive` — 옛 문서 층의 기계 기록(등록부 정리 · 문서 정리 · 파생 정리) | 안 선다 | 안 만든다 |
+| `snapshot` | `snapshot` 키 — 정본 스냅샷(섹션 원문 · `source` · `asof` = 섹션 줄의 마지막 커밋) | **그 좌표의 섹션이 없을 때만** 선다(기록만 옮겨 다시 세운 레포) | 안 만든다 |
+| `system` | 태그 `registry` · `docs-prune` · `derive` · `snapshot`(스냅샷의 봉투) — 옛 문서 층 · 기계의 정리 기록 | 안 선다 | 안 만든다 |
 
 전환 기록(태그 `transition`)은 `curates` 가 있어 `curation` 이다. **키가 있으면 그 기록이다** — 판정을 본문 표에 두지 않고 데이터로 둔다(V17). 화면은 마크다운을 파싱하지 않는다.
 
@@ -272,7 +274,7 @@ tags: [curate]
 | 파일 | 하는 것 |
 |---|---|
 | `ctx-cli.mjs` | `ctx` — 읽기 명령 · 하위 명령으로 가른다(§8) |
-| `ctx-mcp.mjs` | MCP 서버 정의 — 도구 12 · 명함(`CARD`) · 리소스 · prompts · 레포 캐시(HEAD sha) · [MCP 설계서 v2.0](CDP_MCP_설계서_v2.0.md) |
+| `ctx-mcp.mjs` | MCP 서버 정의 — 도구 13 · 명함(`CARD`) · 리소스 · prompts · 레포 캐시(HEAD sha) · [MCP 설계서 v2.0](CDP_MCP_설계서_v2.0.md) |
 | `ctx-mcp-serve.mjs` | `ctx serve` — HTTP 서버 하나(MCP · 화면 API · 콘솔 API · 사이트 · kit · 설치기) · 개인 서버 · `serve user` · `token`. **2,565줄 한 파일**이다 |
 | `ctx-serve-doctor.mjs` | `serve doctor` · `serve init` |
 | `ctx-repo.mjs` · `ctx-migrate.mjs` · `ctx-baseline.mjs` · `ctx-import.mjs` · `ctx-gitauth.mjs` | 레포 세우기 · 제자리 이행 · 기준선 · 들이기 · git 자격 |
@@ -285,7 +287,7 @@ tags: [curate]
 | 자리 | 무엇 |
 |---|---|
 | `viewer/src/` | 화면(React) — [화면 설계서 v1.0](CDP_화면_설계서_v1.0.md) |
-| `agent/skills/` · `agent/CLAUDE-프로젝트레포.md` · `agent/CLAUDE-큐레이터.md` | kit 의 원본 — 스킬 다섯(`cdp-work` · `cdp-save` · `cdp-curate` · `cdp-registry` · `cdp-push`)과 CLAUDE 블록 둘. 서버 산출물의 `kit/` 이 된다(`ops/lib/bundle-files.mjs` `copyKit`) |
+| `agent/skills/` · `agent/CLAUDE-프로젝트레포.md` · `agent/CLAUDE-큐레이터.md` | kit 의 원본 — 스킬 여섯(`cdp-work` · `cdp-save` · `cdp-curate` · `cdp-registry` · `cdp-rebuild` · `cdp-push` — writer 는 앞의 둘과 `cdp-push`)과 CLAUDE 블록 둘. 서버 산출물의 `kit/` 이 된다(`ops/lib/bundle-files.mjs` `copyKit`) |
 | `agent/forms/` | 서식집 — 묶음 넷 · 서식 79([서식집 규약](CDP_서식집_규약_v1.0.md)) |
 | `manual/` | 설명서 원천 — 넷(사용자 · 큐레이터 · 서버 관리자 · 개발자). 서버가 `/manual` 로 낸다 |
 | `ops/lib/` · `ops/deploy/` · `ops/verify/run.mjs` | 빌드 · 산출물 · 설치 스크립트 · 하네스 |
@@ -310,6 +312,7 @@ tags: [curate]
 | `examples: "purge"` | — | ○ | 옛 레포의 서식 예시 정리 |
 | `work.curates` · 태그 `curate` · `transition` | — | ○ | |
 | `baseline[]`(`{ coord, body, src?, asof?, heading? }`) · `work.baseline` | — | ○ | 생성기도 큐레이터 토큰을 쓴다 |
+| `snapshot[]`(`{ coord }` · 200) | — | ○ | 정본 스냅샷 — 본문은 서버가 섹션에서 뜬다(받지 않는다) · `work` 는 봉투 · 다른 쓰기와 섞지 않는다 |
 
 writer 가 큐레이터만 받는 입력(위 표에서 writer 칸이 — 인 줄 · 예약 태그)을 하나라도 보내면 **파일을 만지기 전에** `E_FORBIDDEN { need: 'curate', fields }` — 메시지가 「work 만 다시 보낸다 · 기록은 대기열에 선다」 를 말한다.
 
@@ -325,13 +328,17 @@ writer 가 큐레이터만 받는 입력(위 표에서 writer 칸이 — 인 줄
                    into ⊂ 이번 sections — 전환 기록은 면한다                               E_INPUT
 2.3  기준선 기록    큐레이션과 한 save 에 섞지 않는다 · touches 없음 · source 필수 ·
                    touchesEmpty 「기준선」 · 태그 baseline 을 서버가                         E_INPUT
+2.4  스냅샷 봉투    sections · curates · baseline · managed · edits · examples · assets 와 섞지 않는다 ·
+                   touches 없음(touchesEmpty 「정본 스냅샷」 · 태그 snapshot 을 서버가)       E_INPUT
 3    존재          work/<id>.md 가 없어야 한다                                           E_EXISTS
 3.5  트리          git status — 커밋 안 된 변경이 있으면                                   E_GIT { reason: 'dirty', paths }
 3.7  좌표 0개      touches 가 비면 touchesEmpty(사유) 필수 · 받으면 경고(큐레이션 · 기준선은 경고 없음)   E_INPUT
 3.8  첨부          staging 의 ref → 바이트 · 종류 ↔ 확장자 · 합 30 MB                        E_INPUT
 4    어휘          vocab[] 를 타입 절 끝에 — 절이 없으면 만들고 경고
 5    쓰기 전 검사   loadRepo → before = 검사 결과                                          (V21 의 기준)
-5.0  판정 대상      curates 의 id 가 있고 work 종류 · 전환 기록은 암묵 전환 레포에서 한 번      E_INPUT
+5.0  판정 대상      curates 의 id 가 있고 work · snapshot 종류 · 전환 기록은 암묵 전환 레포에서 한 번   E_INPUT
+5.05 정본 스냅샷    좌표마다 섹션 원문(기준선 블록 · 경과는 그대로 글) · 날짜 = 섹션 줄 blame 최댓값 ·
+                   출처 docs/<문서>@<sha>#<헤딩> · 근거가 이미 있으면 건너뛴다 · 뜰 것이 없으면     E_INPUT
 5.1  예시 정리      examples: "purge"
 5.2  섹션 밖 쓰기   edits[] — old 가 정확히 한 번 · 못 쓰는 줄                              E_INPUT · E_CONFLICT
      좌표           touches · sections · baseline 의 좌표가 어휘에 있다                       E_INPUT
@@ -447,6 +454,8 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 | `POST /curate` | **curate** | `{ verdict: 'keep', ids(1~50), reason }` → 큐레이션 기록을 지어 save |
 | `POST /docs-drop` | **curate** | `{ docs(1~10), reason, edits?, reviewed?, dryRun? }` → 정리 기록(`docs-prune`)을 지어 save |
 | `POST /baseline` | **curate** | `{ source, asof?, items, vocab?, managed?, dryRun? }` → 기준선 기록을 지어 save |
+| `GET /drift` | **curate** | 어긋남 진단 `{ totals, sections, unreachable … }`(`?doc=` · `?coord=`) — MCP `drift` 와 같은 계산 |
+| `POST /snapshot` | **curate** | `{ coords?, doc?, all?, dryRun? }` → 봉투를 지어 save(좌표를 안 주면 근거 없는 섹션 중 기록을 인용하지 않는 것 · 200 개씩) |
 
 이 PC 를 만지는 옛 로컬 라우트(`/setup` · `/open` · `/git/*` · `/sync` · `/diag` …)는 **없다** — 막은 것이 아니라 없는 것이다(404).
 
@@ -544,7 +553,7 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 
 | 산출물 | 담는 것 | 만드는 것 |
 |---|---|---|
-| `cdp-server-v<판>.tar.gz` | `bin/ctx.mjs` · `ctx` · `ctx.cmd` · `web/` · `forms/`(서식집) · `kit/`(스킬 다섯 · CLAUDE 블록 둘) · `manual/`(+ 그림 셋) · `deploy/`(유닛 · `install.sh` · `upgrade.sh` · Dockerfile · compose · 설치절차) · `README.md` | `npm run release:server` — 빠진 것이 있으면 세어 알리고 exit 1(I13) |
+| `cdp-server-v<판>.tar.gz` | `bin/ctx.mjs` · `ctx` · `ctx.cmd` · `web/` · `forms/`(서식집) · `kit/`(스킬 여섯 · CLAUDE 블록 둘) · `manual/`(+ 그림 셋) · `deploy/`(유닛 · `install.sh` · `upgrade.sh` · Dockerfile · compose · 설치절차) · `README.md` | `npm run release:server` — 빠진 것이 있으면 세어 알리고 exit 1(I13) |
 | `cdp-site-v<판>.zip` | 공식 사이트 정적 폴더 | `npm run build:site`(prerender · 누출 검사) |
 
 `SHA256SUMS` 가 같이 붙는다. **없앤 것** — win zip · exe(SEA) · `knowledge-repo-<묶음>` · 서버 산출물의 `packages/`(1403331).

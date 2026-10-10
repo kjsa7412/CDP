@@ -1,6 +1,6 @@
 # CDP MCP 설계서 v2.0
 
-> **무엇인가** — 서버가 에이전트(Claude Code 등 MCP 호스트)에게 내는 것 — 도구 12 · 역할별 등록 · HTTP 전송 · 인증 · 레포 고르기 · 캐시 · 오류 규약 · kit 과 설치.
+> **무엇인가** — 서버가 에이전트(Claude Code 등 MCP 호스트)에게 내는 것 — 도구 13 · 역할별 등록 · HTTP 전송 · 인증 · 레포 고르기 · 캐시 · 오류 규약 · kit 과 설치.
 > **기준** — 코드 main `d5e0a1c`(2026-10-06). 결정은 [`CDP_v1.0_개편안.md`](CDP_v1.0_개편안.md) §5.3 · §5.6 · §6.3(V9 · V10). **어긋나면 코드가 맞다** — [§14](#14-코드와-개편안이-어긋난-곳).
 > **대신하는 것** — [`CDP_MCP_설계서_v1.0.md`](CDP_MCP_설계서_v1.0.md)(내용은 v1.1 · 2026-09-21)에서 **살아남은 것만** 옮겼다. 모드 A(stdio) · `ctx setup` · 패키지 · kit-refresh 는 없다. 짝 문서 — [`CDP_시스템설계서_v2.0.md`](CDP_시스템설계서_v2.0.md)(save · 서버 · 검사).
 >
@@ -41,7 +41,7 @@
 
 ---
 
-## 2. 도구 12
+## 2. 도구 13
 
 | 도구 | 입력 | 출력 요지 | viewer | writer | 큐레이터 |
 |---|---|---|:--:|:--:|:--:|
@@ -54,11 +54,12 @@
 | `docs` | `doc?`(경로 · 관리번호 · `_vocab.md` · `_managed.md`) | 목록(문서마다 `usage`) · 문서 하나의 원문 · 헤딩(좌표 섹션이면 `coord`) | ○ | ○ | ○ |
 | `brief` | — | `{ lines, …repoStatus, curation?, sync, built }` — 옛 `sync` · `version` 을 흡수했다 | ○ | ○ | ○ |
 | `repos` | — | `[{ name, title, default, coords, works, docs }]` — 권한 안의 레포만 | ○ | ○ | ○ |
-| `save` | `repo`(필수) · `work` · `sections?` · `vocab?` · `managed?` · `edits?` · `examples?` · `dryRun?` · `baseline?` · `assets?` | [시스템설계서 §5](CDP_시스템설계서_v2.0.md#5-save-v10) | (보인다 · 거절) | 기록만 | 전부 |
+| `save` | `repo`(필수) · `work` · `sections?` · `vocab?` · `managed?` · `edits?` · `examples?` · `dryRun?` · `baseline?` · `snapshot?` · `assets?` | [시스템설계서 §5](CDP_시스템설계서_v2.0.md#5-save-v10) | (보인다 · 거절) | 기록만 | 전부 |
 | **`queue`** | `id?` | 대기열 `{ items, total, oldestDays, implicit }` · `id` 면 그 기록의 판정 재료 | — | — | ○ |
 | **`forms`** | `q?` · `form?` | `{ forms, total, groups }` · `form` 이면 `{ head, guide, example, stamp, … }` — `stamp` 은 서버가 실제로 찍을 빈 문서 | — | — | ○ |
+| **`drift`** | `doc?` · `coord?` | `{ totals, sections, total, unreachable, unreachableTotal, conventionLines }` — 반영된 뒤 어긋난 섹션(근거 없음 · 복제 짝 · 비대 · 일지형) · 좌표 없는 기록. `coord` 면 그 섹션과 복제 짝. 상한 섹션 200 · 짝 10 · 기록 50(리빌딩 검토 v0.1 §5.1) | — | — | ○ |
 
-**v0.x 의 14 → 12** — `derive` · `apply` · `sync` · `version` 을 지웠다(5488d75). 무엇이 대신하나 — `queue`(남은 일) · `section`(미반영 기록) · `brief`(미러 · kit 해시 · 번들 판).
+**v0.x 의 14 → 12 → 13** — `derive` · `apply` · `sync` · `version` 을 지웠다(5488d75) · `drift` 를 더했다(리빌딩). 무엇이 대신하나 — `queue`(남은 일) · `section`(미반영 기록) · `brief`(미러 · kit 해시 · 번들 판).
 
 ### 2.1 `section` — 보증이 실리는 자리(I7 · V10)
 
@@ -95,7 +96,7 @@
 
 | 무엇 | 가르는 값 | 코드 |
 |---|---|---|
-| `queue` · `forms` 등록 | `curateAny` — admin 이거나 `curate` 목록이 비어 있지 않다 | `ctx-mcp-serve.mjs` → `buildServer({ curateAny })` |
+| `queue` · `forms` · `drift` 등록 | `curateAny` — admin 이거나 `curate` 목록이 비어 있지 않다 | `ctx-mcp-serve.mjs` → `buildServer({ curateAny })` |
 | 부를 때 레포마다 | `curate(name)` — 그 레포의 큐레이터가 아니면 `E_FORBIDDEN { need: 'curate' }` | `queue` · `forms` 핸들러 |
 | `save` 명함 | `curateAny` 면 `CARD.saveCurator`(판정 · 섹션 · 등록부 · edits · 예시 · 첨부) · 아니면 `CARD.save`(기록 하나 · 관리 문서는 쓰지 않는다) | 같다 |
 | `save` 의 입력 | save 2.1 이 역할로 가른다 — writer 가 큐레이터 입력을 보내면 `E_FORBIDDEN { need: 'curate', fields }` | `core/save.js` `curatorOnly` |
