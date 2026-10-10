@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CDP 서버 갱신 — 설치절차 10장 「고친 뒤 다시 올리기」 를 명령 하나로. 제품화 TODO 3.2 · v1.0 개편안 §8.2.
+# CDP 서버 갱신 — 관리자 설명서 8장 「갱신」 을 명령 하나로. 제품화 TODO 3.2 · v1.0 개편안 §8.2.
 #
 #   sudo bash upgrade.sh <cdp-server-v*.tar.gz> [--prefix /opt/cdp] [--user cdp]
 #   (산출물 폴더를 이미 풀어 두었으면 그 폴더 경로도 받는다)

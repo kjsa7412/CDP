@@ -155,7 +155,7 @@ EOF
   CMD=cdp
 else
   CDP="$PREFIX/bin/ctx"
-  cdp() { "$NODE_BIN" "$PREFIX/bin/ctx.mjs" "$@"; }
+  cdp() { env CDP_QUIET_NEXT="${CDP_QUIET_NEXT:-}" "$NODE_BIN" "$PREFIX/bin/ctx.mjs" "$@"; }
   CMD="$PREFIX/bin/ctx"
 fi
 if [ "$DRY" = 0 ]; then say "번들 $(cdp version | head -1)"; fi
@@ -200,6 +200,7 @@ fi
 
 # ── 5 첫 관리자 · git 자격 · 첫 레포 · doctor — 준 것만 한다
 TOKEN=""
+SSH_LATER=""
 if [ -n "$ADMIN" ] && [ "$DRY" = 0 ]; then
   if "$NODE_BIN" -e "const j=(()=>{try{return JSON.parse(require('fs').readFileSync('$AUTH','utf8')||'{}')}catch{return {}}})();process.exit((j.users||[]).length?0:1)"; then
     skip "명부가 이미 있다 — 첫 관리자는 만들지 않는다(사람은 콘솔 › 사람)"
@@ -223,8 +224,19 @@ fi
 
 if [ -n "$REPO" ] && [ "$DRY" = 0 ]; then
   if [ -f "$PREFIX/repos/$REPO/_vocab.md" ]; then skip "레포 $REPO 있음"; else
-    say "첫 지식 레포 $REPO${ORIGIN:+ → $ORIGIN (첫 커밋을 보낸다)}"
-    if [ -n "$ORIGIN" ]; then CDP_QUIET_NEXT=1 cdp repo new "$REPO" --origin "$ORIGIN" || say "⚠ push 가 안 됐다 — 위 줄을 본다(자격 · 빈 프로젝트인지)"; else CDP_QUIET_NEXT=1 cdp repo new "$REPO"; fi
+    # SSH 배포 키는 방금 만들어 아직 GitLab 에 없다 — 지금 보내면 반드시 실패한다. 레포만 세우고 이을 한 줄을 남긴다
+    if [ "$GIT_MODE" = ssh ] && [ -n "$ORIGIN" ]; then
+      say "첫 지식 레포 $REPO — origin 은 공개 키를 GitLab 에 넣은 뒤 잇는다"
+      CDP_QUIET_NEXT=1 cdp repo new "$REPO"
+      RUNAS=""; [ "$ROOT_MODE" = 1 ] && RUNAS="sudo -u $SVC_USER -H "
+      SSH_LATER="${RUNAS}git -C $PREFIX/repos/$REPO remote add origin $ORIGIN && ${RUNAS}git -C $PREFIX/repos/$REPO push -u origin HEAD   (또는 콘솔 › 지식 레포 「origin 연결」)"
+    elif [ -n "$ORIGIN" ]; then
+      say "첫 지식 레포 $REPO → $ORIGIN (첫 커밋을 보낸다)"
+      CDP_QUIET_NEXT=1 cdp repo new "$REPO" --origin "$ORIGIN" || say "⚠ push 가 안 됐다 — 위 줄을 본다(자격 · 빈 프로젝트인지)"
+    else
+      say "첫 지식 레포 $REPO"
+      CDP_QUIET_NEXT=1 cdp repo new "$REPO"
+    fi
   fi
 fi
 
@@ -246,6 +258,7 @@ if [ -z "$TOKEN" ] && [ -f "$DATA/bootstrap.code" ]; then
 else
   next "브라우저 http://$BIND:$PORT/login — 위 토큰으로. 콘솔 「시작하기」 가 남은 일을 줄마다 알려 준다"
 fi
+[ -z "$SSH_LATER" ] || next "공개 키(위)를 GitLab 프로젝트 › Deploy keys 에 쓰기 권한으로 넣고 origin 을 잇는다 — $SSH_LATER"
 [ -n "$GIT_MODE" ] || [ -n "$ORIGIN" ] || next "origin 자격(레포를 GitLab 에 미러할 때) — $CMD serve git-auth --host <호스트> --user <계정>  또는  --ssh"
 [ -n "$REPO" ] || next "첫 지식 레포 — 콘솔 › 지식 레포 [새 레포]  또는  $CMD repo new <이름> [--origin <빈 프로젝트 url>]"
 next "사람 · 큐레이터 — 콘솔 › 사람  (셸: $CMD serve user add <아이디> --role writer --curate <레포>)"

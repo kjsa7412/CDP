@@ -281,7 +281,7 @@ export async function push(root) {
 // 같은 것을 부른다(동시 기록 검토 v0.1 D2). 자리마다 정규식을 두면 반드시 갈라진다.
 //
 //   non-ff       origin 에 서버가 모르는 커밋이 있다 — 사람이 맞춘다(콘솔 「origin 과 맞추기」 · 갈라졌으면 rebase)
-//   auth         자격 — PAT 만료가 가장 흔하다(관리자 설명서 10.1)
+//   auth         자격 — PAT 만료가 가장 흔하다(관리자 설명서 7.1 미러 · 10장)
 //   net          망 — 기다리거나 원격 주소를 본다
 //   protected    보호 브랜치 · pre-receive 훅이 거절
 //   locked       같은 ref 를 동시에 밀었다 — 큐가 막지만 남이 밀었을 수도 있다

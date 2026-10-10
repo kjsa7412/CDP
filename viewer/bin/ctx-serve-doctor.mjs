@@ -3,7 +3,7 @@
 //   ctx serve doctor --root <폴더> --auth <f> --data <d> [--web <dir>] [--manual <dir>] [--bind <IP>] [--port <n>] [--forms <dir>] [--kit <dir>] [--json]
 //   ctx serve init   --auth <f> --data <d> --name <이름> [--label …] [--repos *]
 //
-// `doctor` 는 설치절차 0장(준비물)과 4장 끝(push --dry-run)과 6장 확인을 한
+// `doctor` 는 설치절차 0장(준비물) · 3장(git 자격 · push --dry-run) · 부록 A(확인표)를 한
 // 자리에서 본다. 줄마다 ok · warn · fail. **fail 이 하나라도 있으면 exit 1**,
 // warn 만이면 0 — 경고로 설치를 막지 않는다.
 //
@@ -210,7 +210,7 @@ export async function doctorRows(opt) {
     const home = process.env.HOME || process.env.USERPROFILE || ''
     const cred = await fs.readFile(path.join(home, '.git-credentials'), 'utf8').catch(() => '')
     const alt = await fs.readFile(path.join(path.dirname(opt.auth || ''), '.git-credentials'), 'utf8').catch(() => '')
-    if (/glpat-/.test(cred + alt)) warn('git 자격', '평문 PAT 가 있다 — 스코프가 api 면 계정 전체를 연다. Deploy Key 로 좁힐 수 있으면 좁힌다(설치절차 10장)')
+    if (/glpat-/.test(cred + alt)) warn('git 자격', '평문 PAT 가 있다 — 스코프가 api 면 계정 전체를 연다. Deploy Key 로 좁힐 수 있으면 좁힌다(설치절차 3장)')
   } catch {}
 
   // ── 포트 — 이미 떠 있으면 /healthz 를 본다. 서버 안에서 부를 때는 자기 자신이라 건너뛴다
