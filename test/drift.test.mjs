@@ -13,7 +13,7 @@ import { sliceSection, toolDrift, toolBrief } from '../core/tools.js'
 import { buildDrift, dupKey, curatedBody, OVERSIZE_LINES } from '../core/drift.js'
 
 const COPY = '⚠ 코드 접두는 O 인데 카테고리코드는 I 다 — 첫 글자로 카테고리를 가르지 않는다.'
-const CONV = '**SoT** `catalog/팩터.xlsx` · `factor` 스키마 DB 가 원천이다 — 값은 여기 옮겨 적지 않는다.'
+const CONV = '- 값은 여기 옮겨 적지 않는다 — 원천은 `catalog/팩터.xlsx` 와 `factor` 스키마 DB 이고 섹션은 판단 · 함정만 둔다.' // 규약 줄(SoT 줄은 따로 빠진다)
 
 function work({ id, date, touches = [], body = '본문 첫 문단이다.', extra = [] }) {
   return ['---', `id: ${id}`, `title: ${id}`, `date: ${date}`, 'author: kim', 'touches:' + (touches.length ? '' : ' []'), ...touches.map((c) => `  - ${c}`), ...extra, 'tags: []', '---', '', body, ''].join('\n')
@@ -87,6 +87,9 @@ test('dupKey — 표 행 · 경과 줄 · 인용 · 짧은 줄은 복제 후보�
   assert.equal(dupKey('| 산출 파라미터 | `{"aggregation": "weighted_sum"}` 값은 같은 인용이다 |'), null)
   assert.equal(dupKey('· 2026-09-02 13:20 [`b2`](../work/2026-0902-b2.md) 섹션 신설 · 일지형이 아니다'), null)
   assert.equal(dupKey('> 이 좌표에 결착된 판단이나 함정은 아직 기록된 것이 없다 — 자리표시다'), null)
+  // `**SoT**` 가리킴 — 같은 원천 묶음 두셋이 나눠 가져도 복제가 아니다(검토 Q3 · 규약 문턱 밑이어도)
+  assert.equal(dupKey('**SoT** 주기·수집처·이용조건 3필드 값 = 8100 `data_admin.원천` · 칸 뜻 = sql/85 `COMMENT`.'), null)
+  assert.ok(dupKey('주기·수집처·이용조건 3필드 값은 8100 `data_admin.원천` 에 있고 칸 뜻은 sql/85 COMMENT 이다.'))
   assert.equal(dupKey('짧다'), null)
   assert.equal(dupKey('- ' + COPY), COPY)
 })

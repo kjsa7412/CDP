@@ -45,6 +45,9 @@ export function dupKey(line) {
   if (t.length < DUP_MIN_CHARS) return null
   if (t.startsWith('|') || t.startsWith('>') || t.startsWith('#') || t.startsWith('```') || t.startsWith('<!--')) return null
   if (RE_PROGRESS_LINE.test(t)) return null
+  // `**SoT**` 줄은 값이 사는 곳을 가리키는 줄이다(검토 Q3 — 복제에서 뺀다). 규약 문턱(5%)만으로는 같은 원천 묶음 두셋이
+  // 나눠 가진 SoT 줄이 복제로 남았다(ezipez_cdp 수집원정의서 juso 3종)
+  if (/^[-*·]?\s*\*\*SoT\*\*/.test(t)) return null
   const k = t.replace(/^[-*·]\s+/, '').replace(/\s+/g, ' ')
   // 길이는 링크를 뺀 글로 잰다 — 「실측은 [기록](…)」 같은 근거 가리킴은 같은 줄이 여러 섹션에 있어도 복제가 아니다(출처 표시다)
   // 코드 칸(백틱)도 뺀다 — 「… 정본 한 곳 — `table:…`」 처럼 좌표를 거는 한 줄은 cdp-rebuild 가 남기라는 모양이다(복제가 아니다)
