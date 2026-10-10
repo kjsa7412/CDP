@@ -8,6 +8,8 @@
 //   curation  큐레이션 기록(`curates` 키). 다른 기록을 다룬다 · 자신은 대기열에 안 선다
 //   baseline  기준선 기록(`baseline` 키). 추출 블록을 갈아 끼운 기록 · 대기열 · 미반영을 만들지 않는다
 //   system    옛 문서 층의 기계 기록(tags: registry · docs-prune · derive) — 등록부 · 문서 정리 · 파생 정리
+//   snapshot  정본 스냅샷 기록(`snapshot` 키 · 리빌딩 검토 §5.2) — 근거 없던 섹션을 원문 그대로 뜬 것. 섹션이 있으면 이미
+//             반영된 것이라 대기열에 서지 않고, **그 좌표의 섹션이 없을 때만**(기록만 옮겨 다시 세운 레포) 대기열에 선다
 //
 // **큐레이션 기록이 하나도 없는 레포는 「암묵 전환」 으로 읽는다.** v1.0 전의 레포는 파생이 필수였으므로
 // 섹션이 최신인 좌표만 건드린 기록은 이미 반영된 것이다. 그것까지 대기열에 세우면 판을 올린 순간 기록 전부가
@@ -23,6 +25,7 @@ const EXCERPT_MAX = 160
 export function recordKind(d) {
   if (d.curates) return 'curation'
   if (d.baseline) return 'baseline'
+  if (d.snapshot) return 'snapshot'
   if ((d.tags || []).some((t) => SYSTEM_TAGS.includes(t))) return 'system'
   return 'work'
 }
@@ -151,6 +154,12 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
   // 다시 세운 레포 · 새 레포는 섹션이 없으니 기록 전부가 대기다(그것이 「큐레이션부터 다시」 의 뜻이다)
   const implicit = curations.length === 0 && sections.some((s) => s.applied)
 
+  // 스냅샷은 그 좌표의 섹션이 없을 때만 사람의 기록처럼 대기열에 선다 — 섹션이 있으면 이미 반영된 원문이다(리빌딩 검토 §5.4)
+  const live = new Set(sections.filter((s) => s.state !== 'anchor-missing' && s.state !== 'doc-missing').map((s) => s.coord))
+  for (const d of works) {
+    if (kindOf.get(d.id) === 'snapshot' && (d.touches || []).some((c) => !live.has(c))) kindOf.set(d.id, 'work')
+  }
+
   // ── 기록마다 상태 ──
   const byId = new Map()
   for (const d of works) {
@@ -160,7 +169,7 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
   // 오래된 큐레이션부터 덮어쓴다 — 가장 늦은 판정이 이긴다(재큐레이션)
   for (const c of curations) {
     for (const j of c.curates || []) {
-      if (!j.id || kindOf.get(j.id) !== 'work') continue
+      if (!j.id || !['work', 'snapshot'].includes(kindOf.get(j.id))) continue
       const state = j.verdict === 'keep' ? 'kept' : 'reflected'
       byId.set(j.id, { state, verdict: j.verdict ?? null, into: j.into || [], reason: j.reason ?? null, by: c.id, at: c.date ?? null, ...(j.bad ? { bad: j.bad } : {}) })
     }

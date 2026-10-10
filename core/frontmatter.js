@@ -222,8 +222,10 @@ export function parseDoc(path, text) {
     // 큐레이션 기록 · 기준선 기록(v1.0) — 키가 있으면 그 기록이다. 없으면 null
     curates: normalizeCurates(fm.curates),
     baseline: normalizeBaseline(fm.baseline),
+    // 정본 스냅샷 기록(리빌딩 검토 §5.2) — 근거 없는 섹션을 원문 그대로 뜬 기계 기록. 사건이 아니라 그때의 상태다
+    snapshot: normalizeBaseline(fm.snapshot),
     unknownFields: Object.keys(fm).filter(
-      (k) => !['id', 'title', 'date', 'author', 'source', 'status', 'touches', 'touchesEmpty', 'supersedes', 'attachments', 'tags', 'curates', 'baseline'].includes(k)
+      (k) => !['id', 'title', 'date', 'author', 'source', 'status', 'touches', 'touchesEmpty', 'supersedes', 'attachments', 'tags', 'curates', 'baseline', 'snapshot'].includes(k)
     ),
     headings,
     bodyChars: weight.chars,

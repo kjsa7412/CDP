@@ -620,7 +620,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     for (const j of curates || []) {
       const d = r0.byId.get(j.id)
       if (!d) throw new CtxError('E_INPUT', `work.curates — ${j.id} 라는 작업 기록이 없다`, { field: 'work.curates', id: j.id })
-      if (recordKind(d) !== 'work') throw new CtxError('E_INPUT', `work.curates — ${j.id} 는 큐레이션 · 기준선 · 옛 기계 기록이다 — 사람의 작업 기록만 다룬다`, { field: 'work.curates', id: j.id })
+      if (!['work', 'snapshot'].includes(recordKind(d))) throw new CtxError('E_INPUT', `work.curates — ${j.id} 는 큐레이션 · 기준선 · 옛 기계 기록이다 — 사람의 작업 기록 · 정본 스냅샷만 다룬다`, { field: 'work.curates', id: j.id })
     }
     // 섹션의 applied — 반영(into)한 기록 중 그 좌표를 건드린 **가장 늦은 기록**(v1.0 §4.4 · H3). 판정이 없으면 이 기록
     // **applied 는 뒤로 가지 않는다** — 원문 날짜를 단 옛 기록(편입)만 반영해도 지금 applied 가 더 늦은 작업 기록이면 그것을 둔다.
@@ -630,7 +630,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       if (!hits.length) return w.id
       const cur = r0.sections.find((x) => x.coord === coord)?.applied
       const curDoc = cur ? r0.byId.get(cur) : null
-      if (curDoc && recordKind(curDoc) === 'work' && !hits.includes(curDoc)) hits.push(curDoc)
+      if (curDoc && ['work', 'snapshot'].includes(recordKind(curDoc)) && !hits.includes(curDoc)) hits.push(curDoc)
       return hits.sort(cmpDateDesc)[0].id
     }
     const known = new Set(r0.vocab.coords.keys())

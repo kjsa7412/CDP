@@ -54,6 +54,8 @@ const CARD = {
     '**큐레이터만.** 서식집 — 새 관리 문서를 세울 때 고르는 서식(묶음 넷 · 79종 · 팀 서식). `q` 로 찾는다(제목 · 관리번호 · 등록부 타입 — 예: `테이블` · `DE_431` · `인터페이스`). `form` 을 주면 그 서식의 `head`(새 문서로 가는 첫 문단) · `guide`(작성지침 · 여기 적지 않는 것 · 섹션 모양) · `example`(예시)와 **서버가 실제로 찍을 빈 문서**(`stamp`)를 준다. 문서를 세우는 것은 `save` 의 `managed: [{ pattern, doc, form }]` — 서버가 제목 · 서식 표지 · 첫 문단만 찍는다(예시 · 작성지침은 가지 않는다). 섹션은 `guide` 의 모양을 따라 쓴다. `kind` 는 문서 종류(대상 · 대장 · 정의 · 사건 · 서술) — 대장은 표와 결론 한 줄 · 정의는 뜻만 · 사건은 결정과 할 일만. 맞는 서식이 없으면 form 없이 세운다(`# 제목` 한 줄)',
   queue:
     '**큐레이터만.** 큐레이션 대기열 — 아직 아무도 판정하지 않은 작업 기록, 오래된 순. 기록마다 좌표를 셋으로 나눈다: `section`(섹션 있음 · 반영 후보) · `anchor`(등록부 행은 있는데 섹션 · 문서가 없음) · `unregistered`(등록부 없음 · 새 문서 후보 또는 기록으로 둠). `zero` 는 좌표 0개. `id` 를 주면 그 기록 하나의 **판정 재료** — 좌표별 문서 · 상태 · applied · 미반영 수, 등록부 없는 타입(`forms` 로 서식을 찾는다), 본문에만 있는 좌표, 같은 좌표를 건드린 다른 대기 기록(`together` — 묶어서 한 번에 다룬다). 판정 · 반영은 `cdp-curate` 절차로 `save` 의 `work.curates` 와 `sections` 를 한 번에',
+  drift:
+    '**큐레이터만.** 어긋남 진단 — 반영된 뒤 시간이 지나며 정본이 원천 · 규칙과 어긋난 자리(미반영과 다르다 · 미반영이 0 이어도 생긴다). `totals` 는 레포 합계: `unsourced`(근거 없음 — 그 좌표를 건드린 기록 · 스냅샷 · 기준선이 없는 섹션 · 기록만 옮겨 다시 세우면 사라진다) · `duplicated`(다른 섹션과 같은 산문 줄 — 짝 좌표가 `duplicated` · 표 행 · 경과 · 레포 규약 줄은 뺐다) · `oversize`(경과 앞 본문이 문턱 줄 수를 넘는다 — 서술이 쌓였다) · `diary`(날짜별로 덧붙인 일지형 줄) · `unreachable`(좌표 0 · 좌표정정이 없는 사람의 기록). `doc`(경로 · 관리번호) · `coord` 로 좁힌다 — `coord` 는 그 섹션과 그 섹션의 복제 짝. 다시 세우는 절차는 `cdp-rebuild` — 근거 없음은 스냅샷부터 · 좌표 없는 기록은 좌표정정 · 복제 · 비대 · 일지형은 묶음으로 재유도(재큐레이션)',
   save:
     '작업 기록 하나를 남긴다 — 이 세션에서 한 작업 · 밖에서 온 문서 편입 · 문서를 고치라는 지시. **관리 문서는 쓰지 않는다**: 기록은 큐레이션 대기열에 서고 큐레이터가 반영한다 — 그동안 `section` 이 이 기록을 섹션과 함께 낸다. **기록은 홀로 선다** — 값 · 표 · 결정 · 제약은 본문에 쓴다(큐레이터는 기록만 보고 반영한다). 큰 추출물(DDL · 덤프)은 첨부로. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 새 좌표는 `vocab` 에 같이 보낸다. 밖에서 온 문서면 `source` 에 원문 출처를 적는다. 그림 · pdf · HTML 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(본문에서는 `![설명](assets/<id>/<name>)` · HTML 은 링크). `sections` · `managed` · `edits` · `work.curates` 는 큐레이터만 — 보내면 E_FORBIDDEN(need curate). `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
   saveCurator:
@@ -244,6 +246,10 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
       const q = r.curation.queue
       return { items: q, total: q.length, oldestDays: r.curation.stats.oldestDays, implicit: r.curation.implicit }
     })
+    tool('drift', { doc: z.string().max(240).optional(), coord: z.string().max(240).optional() }, (r, a, { name }) => {
+      if (!canCurate(name)) throw new CtxError('E_FORBIDDEN', '그 레포의 큐레이터가 아니다 — 어긋남을 다시 세우는 것은 큐레이터의 일이다', { repo: name, need: 'curate' })
+      return T.toolDrift(r, a)
+    }, { big: true })
     tool('forms', { q: z.string().max(100).optional(), form: z.string().max(120).optional() }, async (r, a, { name }) => {
       if (!canCurate(name)) throw new CtxError('E_FORBIDDEN', '그 레포의 큐레이터가 아니다 — 서식은 문서를 세우는 큐레이터의 것이다', { repo: name, need: 'curate' })
       const lib = await formsLib(formsOpt || {})

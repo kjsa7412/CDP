@@ -14,6 +14,7 @@
 
 import { repoStatus } from './repo.js'
 import { runBuiltinCheck } from './check.js'
+import { buildDrift, driftLine } from './drift.js'
 import { buildIndex, fullText, tokenize } from './search.js'
 import { reconcile } from './vocab.js'
 import { resolveCoord } from './managed.js'
@@ -465,9 +466,54 @@ export function toolBrief(r, { built = null, now = Date.now() } = {}) {
     '[CDP] 절차: (1) 검토(대상 추출) -> (2) 맥락 주입(필요시) -> (3) 요청수행 / 작업 끝에 cdp-save',
     '[CDP] 레포: ' + parts.join(' · '),
   ]
+  const dr = driftOf(r).totals
+  const dl = driftLine(dr)
+  if (dl) lines.push(dl)
   const age = bundleAgeNotice(built, now)
   if (age) lines.push(age)
-  return { lines, ...st, ...(cs ? { curation: cs } : {}) }
+  return { lines, ...st, ...(cs ? { curation: cs } : {}), drift: dr }
+}
+
+// ── drift (리빌딩 검토 §5.1) ─────────────────────────────────────────────
+//
+// 계산만 — 레포 객체마다 한 번(서버는 HEAD 마다 레포를 다시 읽으므로 그 객체에 묶어 두면 낡지 않는다)
+const driftMemo = new WeakMap()
+export function driftOf(r) {
+  if (!driftMemo.has(r)) driftMemo.set(r, buildDrift(r, { sliceSection }))
+  return driftMemo.get(r)
+}
+
+export const DRIFT_SECTIONS_MAX = 200
+export const DRIFT_PAIRS_MAX = 10
+export const DRIFT_UNREACHABLE_MAX = 50
+
+// 큐레이터 도구 `drift` — 합계는 늘 전부, 섹션 목록은 doc · coord 로 좁히고 상한을 둔다
+export function toolDrift(r, { doc, coord } = {}) {
+  const d = driftOf(r)
+  let rows = d.sections
+  if (doc) {
+    const want = String(doc).toLowerCase()
+    rows = rows.filter((x) => x.doc.toLowerCase() === want || docNo(x.doc)?.toLowerCase() === want)
+  }
+  if (coord) rows = rows.filter((x) => x.coord === coord || x.duplicated.includes(coord))
+  const sections = rows.slice(0, DRIFT_SECTIONS_MAX).map((x) => ({
+    ...x,
+    duplicated: x.duplicated.slice(0, DRIFT_PAIRS_MAX),
+    ...(x.duplicated.length > DRIFT_PAIRS_MAX ? { duplicatedOmitted: x.duplicated.length - DRIFT_PAIRS_MAX } : {}),
+  }))
+  const unreachable = d.unreachable.slice(0, DRIFT_UNREACHABLE_MAX).map((id) => {
+    const w = r.byId.get(id)
+    return { id, title: w?.title ?? null, date: w?.date ?? null, state: r.curation?.statusOf(id)?.state ?? null }
+  })
+  return {
+    totals: d.totals,
+    sections,
+    total: rows.length,
+    ...(rows.length > sections.length ? { omitted: rows.length - sections.length } : {}),
+    unreachable,
+    unreachableTotal: d.unreachable.length,
+    conventionLines: d.conventionLines,
+  }
 }
 
 // ── 응답 상한 (§8) ──────────────────────────────────────────────────────────
