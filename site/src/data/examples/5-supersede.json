@@ -1,8 +1,8 @@
 {
   "n": 5,
   "slug": "supersede",
-  "version": "1.0.0",
-  "recorded": "2026-10-08",
+  "version": "1.2.0",
+  "recorded": "2026-10-10",
   "repo": "library",
   "title": "잘못 적은 것을 정정한다",
   "summary": "work/ 는 지우지도 고치지도 않는다. 틀린 기록은 그것을 대신하는 새 기록으로 바로잡고, 큐레이터가 정본 섹션을 고친다 — 그 사이에도 정정은 미반영으로 같이 실린다.",
@@ -91,7 +91,7 @@
       },
       "res": {
         "repo": "library",
-        "commit": "a61f04c",
+        "commit": "6cc72d6",
         "id": "2026-1007-우수회원-한도-정정",
         "sections": 0,
         "vocab": 0,
@@ -273,7 +273,7 @@
       },
       "res": {
         "repo": "library",
-        "commit": "e750a54",
+        "commit": "79a24cc",
         "id": "2026-1007-큐레이션-한도-정정",
         "sections": 2,
         "vocab": 0,
@@ -306,7 +306,8 @@
           "level": 2,
           "whole": false,
           "value": "LN02",
-          "pattern": "코드정의서:*"
+          "pattern": "코드정의서:*",
+          "kind": null
         },
         "section": {
           "doc": "docs/코드정의서.md",

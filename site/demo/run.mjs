@@ -2,9 +2,9 @@
 //
 //   node site/demo/run.mjs [all|stage|record|shots] [--keep] [--port 7390] [--only=<장 id 앞>]
 //
-//   stage   빈 틀 레포 둘 · 명부 넷(레포별 큐레이터) · 서버 · 줄거리(첫날 · 작업 기록 · 큐레이션 — 전부 save)
+//   stage   빈 틀 레포 둘 · 명부 넷(레포별 큐레이터) · 서버 · 줄거리(첫날 · 작업 기록 · 큐레이션 — 전부 save) · 작업 레포 대장 셋
 //   record  시나리오 다섯을 진짜 MCP 로 돌려 site/src/data/examples/*.json 으로
-//   shots   화면 17장 × 라이트 · 다크 → site/public/shots/ (playwright-core + Edge)
+//   shots   화면 17장 × 라이트 · 다크 → site/public/shots/ (playwright-core + Edge · 없으면 Chrome)
 //   all     셋을 차례로(기본)
 //
 // 판이 오르면 `npm run site:demo` 를 다시 돌리고 바뀐 PNG 를 넘겨 본다(제작 검토 v0.1 S14). 녹화 · 그림은 package.json 의
@@ -13,7 +13,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { ROOT, FORMS, KIT, ctx, serve, ready, call, progressLine, withProgress, judgmentTable } from './lib.mjs'
-import { PEOPLE, REPOS, TIMELINES, DRAFT, headingOf } from './content.mjs'
+import { PEOPLE, REPOS, WORKREPOS, TIMELINES, DRAFT, headingOf } from './content.mjs'
 
 const argv = process.argv.slice(2)
 const what = argv.find((a) => !a.startsWith('--')) || 'all'
@@ -130,6 +130,25 @@ async function seed(st) {
   await saveState(st)
 }
 
+// 연결된 작업 레포 — 등록(write) 한 번에 셋 · 설치 보고(applied)는 설치기가 하는 것과 같은 길
+async function link(st) {
+  const h = { 'content-type': 'application/json', authorization: 'Bearer ' + st.tokens.lead }
+  const post = async (url, body) => {
+    const r = await fetch(BASE + url, { method: 'POST', headers: h, body: JSON.stringify(body) })
+    if (!r.ok) throw new Error(`${url} ${r.status} ${await r.text()}`)
+    return r.json()
+  }
+  const { repos } = await post('/workrepos', { repos: WORKREPOS.map(({ name, knowledge, owner }) => ({ name, knowledge, owner })) })
+  const now = (await (await fetch(BASE + '/workrepos', { headers: h })).json()).repos
+  for (const w of WORKREPOS) {
+    if (!w.kit) continue
+    const row = repos.find((r) => r.name === w.name && r.knowledge === w.knowledge)
+    const kit = w.kit === 'now' ? now.find((r) => r.id === row.id).kitNow : '3b9e1d'
+    await post(`/workrepos/${row.id}/applied`, { kit })
+  }
+  say(`작업 레포 ${WORKREPOS.map((w) => `${w.name}(${w.kit === 'now' ? '최신' : w.kit ? '낡음' : '미설치'})`).join(' · ')}`)
+}
+
 // ── 본체 ────────────────────────────────────────────────────────────────────
 
 // 번들을 먼저 — 서버 화면의 「빌드」 칸이 찍힌다. CDP_REPO 가 있으면 build-ctx 가 그 레포까지 고치므로 뺀다
@@ -144,7 +163,10 @@ const S = up()
 try {
   await ready(PORT)
   const st = await state()
-  if (what === 'all' || what === 'stage') await seed(st)
+  if (what === 'all' || what === 'stage') {
+    await seed(st)
+    await link(st)
+  }
   if (what === 'all' || what === 'record') await (await import('./record.mjs')).record({ base: BASE, st, out: F, saves: { writerSave, curatorSave }, saveState })
   if (what === 'all' || what === 'shots') await (await import('./capture.mjs')).capture({ base: BASE, st, out: F })
   if (KEEP) {

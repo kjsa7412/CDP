@@ -1,4 +1,4 @@
-// 캡처 — 화면 17장 × 라이트 · 다크(공식 사이트 제작 검토 v0.1 S7 · §5.1 · v1.0 셸).
+// 캡처 — 화면 17장 × 라이트 · 다크(공식 사이트 제작 검토 v0.1 S7 · §5.1 · v1.2 셸 — 화면 16 · 「시작하기」).
 //
 // `playwright-core` 에 이 PC 의 Edge(없으면 Chrome)를 붙인다 — 브라우저를 내려받지 않는다. CI 는 이것을 돌지 않는다:
 // 사람이 판을 올릴 때 한 번 돌리고 PNG 를 커밋한다. **찍기 전에 화면의 글자와 속성값을 누출 패턴으로 훑는다** —
@@ -6,7 +6,7 @@
 //
 // 녹화(record.mjs) **뒤의** 상태를 찍는다 — 대기 5 · 미반영 · 큐레이션 7번. 장마다 누가 보나가 정해져 있다:
 //   dev.a  writer(library 는 기록만) — 지식 묶음      doc.c  library 의 큐레이터 — 큐레이션 묶음(메뉴에 서버가 없다)
-//   lead   admin — 레포 관리 · 서버 묶음              dev.b  viewer — 읽기만
+//   lead   admin — 레포 관리 · 서버 묶음(현황 · 지식 레포 · 사람 · 서버)   dev.b  viewer — 읽기만
 //
 // 선택자 · 주소는 제품 화면의 것이다(viewer/src · 셸 표 `shell/nav.js` · `shell/routes.js`). 화면을 고쳐 선택자가 바뀌면 여기가
 // 멈춘다 — 그때 고친다.
@@ -14,7 +14,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
-import { ROOT, NL, FORMS, KIT, serve, ready, wait } from './lib.mjs'
+import { ROOT, NL, wait } from './lib.mjs'
 import { findLeaks } from '../tools/leaks.mjs'
 
 const DEST = path.join(ROOT, 'site', 'public', 'shots')
@@ -42,17 +42,37 @@ const textOf = (page) =>
     return out.join('\n')
   })
 
+// 서버 › 서버 는 파일 자리(레포 · data · 화면 · 서식집 · kit · 설명서)를 그대로 보인다 — 이 PC 의 경로(사용자 이름이 든다)를
+// 서버에 깐 모양의 자리로 바꿔 그린다. 긴 것부터 · 글자와 속성값 둘 다. 바꾼 뒤에 누출 검사가 다시 훑는다
+const PATHS = [
+  ['ops/out/site-demo/repos', '/srv/cdp/repos'],
+  ['ops/out/site-demo/data', '/srv/cdp/data'],
+  ['ops/out/site-demo', '/srv/cdp'],
+  ['ops/out/web', '/srv/cdp/web'],
+  ['ops/out/ctx', '/srv/cdp/bin'],
+  ['site/demo/manual', '/srv/cdp/manual'],
+  ['agent/forms', '/srv/cdp/forms'],
+  ['agent', '/srv/cdp/kit'],
+  ['', '/srv/cdp'],
+].map(([rel, to]) => [rel ? path.join(ROOT, rel) : ROOT, to])
+const maskPaths = (page) =>
+  page.evaluate((pairs) => {
+    const fix = (t) => pairs.reduce((s, [from, to]) => s.split(from).join(to), t)
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (pairs.some(([f]) => n.nodeValue.includes(f))) n.nodeValue = fix(n.nodeValue)
+    for (const el of document.querySelectorAll('*')) for (const a of ['title', 'value', 'href', 'aria-label']) {
+      const v = el.getAttribute?.(a)
+      if (v && pairs.some(([f]) => v.includes(f))) el.setAttribute(a, fix(v))
+    }
+  }, PATHS)
+
 const idle = (p) => p.waitForFunction(() => !document.body.innerText.includes('읽는 중…'))
 
 export async function capture({ base, st, out }) {
   await fs.mkdir(DEST, { recursive: true })
   const browser = await launch()
-  // 빈 명부 서버 — 처음 설정(15)은 명부가 비어야 뜬다
-  const setupPort = Number(new URL(base).port) + 1
-  const S2 = serve(['--root', out.repos, '--port', String(setupPort), '--auth', path.join(out.data, '..', 'auth-empty.json'), '--data', path.join(out.data, '..', 'data-empty'), '--web', path.join(ROOT, 'ops/out/web'), '--forms', FORMS, '--kit', KIT])
   const done = []
   try {
-    await ready(setupPort)
     for (const theme of ['light', 'dark']) {
       const ctxs = {}
       const ctxFor = async (who) => {
@@ -85,6 +105,7 @@ export async function capture({ base, st, out }) {
           await fn(page)
           await page.mouse.move(1, 1)
           await wait(400)
+          await maskPaths(page)
           const leaks = findLeaks(await textOf(page))
           if (leaks.length) throw new Error(`${id} — 화면에 누출 패턴: ${leaks.slice(0, 5).map((l) => `${l.kind} 「${l.hit}」 … ${l.near}`).join(' | ')}`)
           const file = path.join(DEST, `${id}-${theme}.png`)
@@ -175,9 +196,11 @@ export async function capture({ base, st, out }) {
       // ── 레포 관리 ──
       // library 에는 「섹션 없음」 좌표(대기열의 등록부 있음 · 섹션 없음)가 둘 있다 — 깨진 섹션이 아니라 큐레이터의 일이다(v1.0 H1 ·
       // 현황의 「깨진 섹션」 은 문서 없는 행 · 유령 applied 만 센다)
+      // 맨 위 「시작하기」 — 대기 · 낡은 작업 레포 · 큐레이터 폴더 줄(서버 /next 가 계산한다)
       await shoot('07-repo-admin', 'lead', async (p) => {
         await open(p, '/r/library/manage/overview')
         await p.waitForSelector('.agrid')
+        await p.waitForSelector('.start')
         await idle(p)
         await p.waitForLoadState('networkidle')
       })
@@ -230,9 +253,11 @@ export async function capture({ base, st, out }) {
       })
 
       // ── 서버 — admin ──
+      // 현황(「시작하기」 는 서버 일이 있을 때만 — 레포 없음 · 토큰 만료) · 지식 레포는 작업 레포 펼침 열을 전부 편다(?wr=1) · 서버는 설정 · 진단 · 감사(접힘)
       for (const [id, url, sel] of [
         ['12-console-home', '/console', '.agrid'],
-        ['13-console-repos', '/console/repos', '.admin__body table'],
+        ['13-console-repos', '/console/repos?wr=1', '.ctable__sub'],
+        ['15-console-server', '/console/server', '#doctor .tcount'],
       ]) {
         await shoot(id, 'lead', async (p) => {
           await open(p, url)
@@ -244,27 +269,17 @@ export async function capture({ base, st, out }) {
         })
       }
 
-      // 사용자 — 명부 · 레포 × 사용자 · 레포 × 큐레이터(레포별 권한)
-      await shoot('14-console-users', 'lead', async (p) => {
-        await open(p, '/console/users')
+      // 사람 — 명부(줄마다 [발급]) · 토큰 · 레포 × 사용자 · 레포 × 큐레이터(레포별 권한)
+      await shoot('14-console-people', 'lead', async (p) => {
+        await open(p, '/console/people')
         await p.waitForSelector('.admin__body .ctable')
         await idle(p)
         await p.waitForLoadState('networkidle')
-        await p.evaluate(() => document.getElementById('matrix')?.scrollIntoView({ block: 'start' }))
+        await p.evaluate(() => (document.getElementById('tokens') || document.getElementById('matrix'))?.scrollIntoView({ block: 'start' }))
         await wait(400)
       })
 
       // ── 사이트 · 설명서 — 토큰 없이 ──
-      await shoot('15-site-setup', null, async (p) => {
-        await p.goto(`http://127.0.0.1:${setupPort}/setup`)
-        await p.waitForSelector('#su-code')
-        await p.fill('#su-code', 'XXXXXXXXXXXXXXXXXXXXXXXX')
-        await p.getByRole('button', { name: /다음/ }).click()
-        await p.waitForSelector('#su-name')
-        await p.fill('#su-code', '').catch(() => {})
-        await wait(300)
-      })
-
       await shoot('16-site-landing', null, async (p) => {
         await p.goto(base + '/')
         await p.waitForSelector('.hero')
@@ -281,7 +296,6 @@ export async function capture({ base, st, out }) {
     }
   } finally {
     await browser.close()
-    S2.kill()
   }
   if (!ONLY.length) {
     // 이번에 찍지 않은 그림(판이 바뀌며 없어진 장)을 치운다

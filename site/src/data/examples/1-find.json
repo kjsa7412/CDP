@@ -1,8 +1,8 @@
 {
   "n": 1,
   "slug": "find",
-  "version": "1.0.0",
-  "recorded": "2026-10-08",
+  "version": "1.2.0",
+  "recorded": "2026-10-10",
   "repo": "library",
   "title": "이름으로 좌표를 찾는다",
   "summary": "말 한마디에서 정본 좌표 → 그 섹션과 미반영 기록 → 그렇게 정한 까닭까지 네 걸음.",
@@ -61,7 +61,8 @@
           "level": 2,
           "whole": false,
           "value": "LN030",
-          "pattern": "화면설계서:*"
+          "pattern": "화면설계서:*",
+          "kind": null
         },
         "section": {
           "doc": "docs/화면설계서.md",

@@ -86,21 +86,21 @@ export default function Home() {
               <h3>팀 서버</h3>
               <p>지식 레포는 서버에 있다. 서버가 유일한 작성자다. 사람은 토큰 하나로 브라우저와 에이전트에서 같이 붙는다.</p>
               <ul>
-                <li>HTTP MCP + 토큰 · 작업 레포에는 설치 한 줄</li>
+                <li>세우기 한 줄 — <code>install.sh --admin … --repo …</code></li>
                 <li><code>save</code> 가 검사 · 한 커밋 · origin 미러</li>
-                <li>서버 화면에서 사람 · 토큰 · 레포별 큐레이터 · 레포를 관리</li>
+                <li>작업 레포는 <code>--connect</code> 한 줄 · 할 일은 화면 「시작하기」</li>
               </ul>
             </div>
             <div className="fcard">
               <Icon name="folder" size={20} />
               <h3>개인 서버 — 서버가 없을 때</h3>
               <p>
-                같은 서버를 자기 PC 에 띄운다 — <code>ctx serve --personal &lt;레포&gt;</code>. 레포 하나 · <code>127.0.0.1</code> · 명부는 나 하나로 스스로 만든다.
+                같은 서버를 자기 PC 에 띄운다 — <code>ctx up &lt;폴더&gt; --install &lt;코드 폴더&gt;</code> 한 줄. 빈 틀 · 빈 포트 · 토큰 · 연결까지 하고 브라우저를 연다.
               </p>
               <ul>
                 <li>같은 코드 · 같은 <code>save</code> · 같은 화면</li>
-                <li>혼자 기록하고 혼자 큐레이션한다</li>
-                <li>원격이 있으면 save 마다 origin 으로 민다</li>
+                <li>혼자 기록하고 혼자 큐레이션한다(<code>--curator</code>)</li>
+                <li>새 판은 <code>ctx self-update</code> 한 줄</li>
               </ul>
             </div>
           </div>
@@ -110,10 +110,10 @@ export default function Home() {
           <h2 className="sec__cap">더 보기</h2>
           <div className="cards3 st-more-cards">
             <More to="/concept" icon="section" title="개념" text="두 층 · 좌표 · 어휘와 등록부 · 큐레이션과 미반영 · 기준선 · 정정. 쓰는 길은 save 하나." />
-            <More to="/screens" icon="image" title="화면 17장" text="레포 · 큐레이션 · 서버 · 사이트 · 설명서. 가상 데모 레포를 붙인 진짜 서버를 찍었다." />
+            <More to="/screens" icon="image" title="화면 17장" text="읽기 · 큐레이션 · 서버 넷 · 시작하기 · 설명서. 가상 데모 레포를 붙인 진짜 서버를 찍었다." />
             <More to="/examples" icon="work" title="예제 다섯" text="찾기 · 기록 · 미반영 · 큐레이터 둘의 충돌 · 정정 — 녹화한 MCP 요청과 응답." />
             <More to="/agent" icon="plug" title="에이전트" text="역할이 가르는 도구 13 · 스킬 6 · MCP 가 도는 길 열두 걸음." />
-            <More to="/deploy" icon="server" title="배치 · 설치" text="팀 서버 · 개인 서버 · 설치 세 길 · 무엇이 PC 를 떠나나." />
+            <More to="/deploy" icon="server" title="배치 · 설치" text="한 줄 셋 — 개인 서버 · 팀 서버 · 연결과 갱신. 무엇이 PC 를 떠나나." />
             <More to="/releases" icon="list" title="판 이력" text="v0.2 부터 판마다 무엇이 바뀌었나." />
           </div>
         </section>

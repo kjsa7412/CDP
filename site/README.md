@@ -7,7 +7,7 @@
 
 ```
 src/            페이지 일곱 · 라우터(base 를 안다) · 재생기 · 스크린숏
-  data/         screens.js(17장 설명) · examples/*.json(녹화 — 손으로 고치지 않는다) · facts.js(도구 13 · 스킬 6)
+  data/         screens.js(17장 설명 — 화면 16 중) · examples/*.json(녹화 — 손으로 고치지 않는다) · facts.js(도구 13 · 스킬 6)
 public/shots/   실사용 화면 17장 × 라이트 · 다크 (site:demo 가 찍는다 · 커밋한다)
 demo/           데모 레포 줄거리(content.mjs) · 세우기 · 녹화(record.mjs) · 캡처(capture.mjs) · 한 줄(run.mjs) · 줄인 설명서 넷
 tools/          prerender · 누출 검사(leaks.mjs · leak-names.txt) · 판 이력 · Vercel 흉내 미리보기
@@ -22,10 +22,10 @@ tools/          prerender · 누출 검사(leaks.mjs · leak-names.txt) · 판 �
 
 **화면은 진짜이고 내용은 가상이다.** 데모 레포 둘(「도서관 대출 관리 시스템 개편」 `library` · 운영 `library-ops`)은 v1.0 흐름 그대로 선다 —
 `ctx repo new`(빈 틀) → 첫날 큐레이터의 save 한 번(서식집에서 관리 문서 · 등록부 행 · 어휘 · 대상 초안) → writer 의 작업 기록 save →
-큐레이터의 큐레이션 save(반영 · 새 문서 · 기록으로 둠). 대기 몇 건은 일부러 남겨 대기열 · 미반영 · 이력이 화면에 보이게 한다.
+큐레이터의 큐레이션 save(반영 · 새 문서 · 기록으로 둠) → 작업 레포 대장 셋(최신 · 낡음 · 미설치 — `content.mjs` `WORKREPOS`). 대기 몇 건은 일부러 남겨 대기열 · 미반영 · 이력 · 「시작하기」 가 화면에 보이게 한다.
 사람은 넷 — `lead`(admin) · `doc.c`(library 의 큐레이터) · `dev.a`(writer · library-ops 의 큐레이터) · `dev.b`(viewer). 줄거리와 날짜는
 `demo/content.mjs` 한 곳이다(남긴 대기가 14일을 넘으면 화면이 앰버가 된다 — 한참 뒤에 다시 찍으면 날짜를 같이 민다).
-실물 fixture(`viewer/fixture`)와 기존 검토 그림은 사내 흔적이 있어 쓰지 않는다. 새 이름 · 주소가 보이면 `tools/leak-names.txt` · `tools/leaks.mjs` 에 더한다.
+데모 서버는 `ops/out/site-demo/` 에 서고 포트 7390 을 쓴다(개인 서버의 7400 과 겹치지 않는다). 서버 › 서버 화면의 파일 자리는 찍기 전에 `/srv/cdp/…` 로 바꿔 그린다(이 PC 경로에 사용자 이름이 든다). 실물 fixture(`viewer/fixture`)와 기존 검토 그림은 사내 흔적이 있어 쓰지 않는다. 새 이름 · 주소가 보이면 `tools/leak-names.txt` · `tools/leaks.mjs` 에 더한다.
 
 Vercel — 설정은 레포 루트 [`../vercel.json`](../vercel.json). 도메인은 환경변수 `CDP_SITE_URL`(없으면 Vercel 프로덕션 주소).
 **사이트에 닿는 파일이 바뀐 push 만 빌드한다** — `ignoreCommand` 가 [`tools/vercel-ignore.mjs`](tools/vercel-ignore.mjs) 를 부르고, 마지막 배포 커밋(`VERCEL_GIT_PREVIOUS_SHA`) 이후 `WATCH`(site/ · vercel.json · package.json · lock · .nvmrc · CHANGELOG.md · docs/그림/ · 제품의 tokens.css · site.css · Icon.jsx · McpFlow.jsx)가 안 바뀌었으면 건너뛴다. 모르면(첫 배포 · 기준 커밋 없음 · git 실패) 빌드한다. 억지로 빌드하려면 환경변수 `CDP_SITE_FORCE=1`. 사이트가 `site/` 밖의 파일을 새로 import 하면 `WATCH` 에 더한다 — 빠지면 `test/site.test.mjs` 가 잡는다.

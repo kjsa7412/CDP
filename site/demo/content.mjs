@@ -36,6 +36,14 @@ export const REPOS = [
   { name: 'library-ops', title: '도서관 대출 시스템 운영 — 서버 · DB · 연계' },
 ]
 
+// 연결된 작업 레포 — 대장에 오른 코드 레포(v1.2 — 서버 › 지식 레포의 펼침 열 · 레포 관리 › 연결된 작업 레포 · 「시작하기」 의 낡음 줄).
+// kit — 'now' 는 지금 서버 kit 으로 설치 보고(최신) · 'old' 는 옛 kit(낡음) · null 은 보고 없음(미설치)
+export const WORKREPOS = [
+  { name: 'library-web', knowledge: 'library', owner: 'dev.a', kit: 'now' },
+  { name: 'library-batch', knowledge: 'library', owner: 'dev.a', kit: 'old' },
+  { name: 'library-infra', knowledge: 'library-ops', owner: 'dev.a', kit: null },
+]
+
 // ── 섹션 본문 — 큐레이터가 반영해 쓴 지금(현재형) ─────────────────────────────
 //
 // 기록 하나가 좌표마다 남기는 것 — `secs[좌표] = [본문, 경과 한 줄]`. 큐레이션이 그 기록을 반영하면 run.mjs 가 본문을

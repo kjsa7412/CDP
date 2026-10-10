@@ -1,4 +1,4 @@
-// 화면 — 실사용 화면 17장을 묶음별로. 확대는 `?shot=<id>` 로 남아 공유된다(제작 검토 v0.1 §5.2).
+// 화면 — 실사용 화면 17장을 묶음별로(v1.2 — 화면 16 · 메뉴 admin 11 · 큐레이터 7 · writer · viewer 5). 확대는 `?shot=<id>` 로 남아 공유된다(제작 검토 v0.1 §5.2).
 // 그림은 찍은 판(shots.json)의 것이다 — 판을 올리고 화면이 바뀌면 `npm run site:demo` 로 다시 찍는다.
 
 import { Link, useRoute, useNavigate } from '../router.jsx'
@@ -20,7 +20,7 @@ export default function Screens() {
         <h1 tabIndex={-1}>화면</h1>
         <p className="st-lead">
           판 <span className="amono">v{shots.version}</span> 의 서버를 그대로 띄우고 <b>가상 프로젝트</b>(도서관 대출 관리 시스템 개편)로 채운 지식 레포를 붙여 찍었다. 목업이 아니다 — 화면은 진짜이고, 내용만 가상이다. {shots.captured} 에 찍었다.
-          레포는 빈 틀로 세웠고, 관리 문서는 큐레이터가 서식집에서 세웠고, 작업 기록 · 큐레이션은 전부 <code>save</code> 로 넣었다. 대기 몇 건은 일부러 남겼다.
+          레포는 빈 틀로 세웠고, 관리 문서는 큐레이터가 서식집에서 세웠고, 작업 기록 · 큐레이션은 전부 <code>save</code> 로 넣었다. 대기 몇 건은 일부러 남겼고, 작업 레포 셋을 대장에 올려 최신 · 낡음 · 미설치가 보이게 했다.
         </p>
         <p className="st-lead">
           사람은 넷이다 — <span className="amono">lead</span>(admin · 모든 레포의 큐레이터) · <span className="amono">doc.c</span>(writer · library 의 큐레이터) ·{' '}

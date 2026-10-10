@@ -1,8 +1,8 @@
 {
   "n": 3,
   "slug": "pending",
-  "version": "1.0.0",
-  "recorded": "2026-10-08",
+  "version": "1.2.0",
+  "recorded": "2026-10-10",
   "repo": "library",
   "title": "섹션을 못 고쳐도 기록은 들어간다",
   "summary": "writer 의 save 는 기록만 받는다 — 섹션을 보내면 손대기 전에 거절된다. 막는 것은 그 save 자신의 결함(미등재 좌표 · 필수 필드)뿐이고, 못 고친 섹션은 「미반영」 으로 같이 실린다.",
@@ -157,7 +157,7 @@
       },
       "res": {
         "repo": "library",
-        "commit": "9354d7a",
+        "commit": "8ebd598",
         "id": "2026-1006-반납예정일-휴관일",
         "sections": 0,
         "vocab": 1,

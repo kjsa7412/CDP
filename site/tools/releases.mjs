@@ -21,12 +21,15 @@ export function releasesOf(md) {
     const body = rest.join(NL)
     const heads = [...body.matchAll(/^\*\*([^*]+)\*\*/gm)].map((x) => clean(x[1]))
     let items = heads.filter((h) => h && h !== '문서' && h !== '그 밖' && h !== '하네스')
+    // 굵은 머리가 목록 항목 첫머리에 있는 절(v1.1.4 ~) — `- **머리** — 본문` 의 머리만. 머리 안의 `**` 는 코드 안이라 닫는 `**` 뒤가 공백 · 괄호 · 끝이다.
+    // 절 머리가 한 줄(요약)뿐이면 그 뒤에 잇는다(v1.2.0 — 「제품화 2 — …」 + 항목 머리)
+    if (items.length <= 1) items = [...items.map((h) => h.replace(/\.$/, '')), ...[...body.matchAll(/^-\s+\*\*(.+?)\*\*(?=[\s(]|$)/gm)].map((x) => clean(x[1]))].filter(Boolean)
     if (!items.length) {
       const para = body.split(/\n\s*\n/).map((x) => x.trim()).find((x) => x && !x.startsWith('-'))
       const first = (para || body.split(NL).find((l) => l.trim().startsWith('-')) || '').replace(/^-\s*/, '')
       items = [clean(first).split(/(?<=다)\.\s|\. /)[0].replace(/\.$/, '')]
     }
-    out.push({ v: m[1], to: m[2] || null, date: m[3] || null, untagged: !!m[4], items: items.slice(0, 5) })
+    out.push({ v: m[1], to: m[2] || null, date: m[3] || null, untagged: !!m[4], items: items.slice(0, 6) })
   }
   return out
 }
