@@ -23,6 +23,7 @@ import { docUsage } from './docusage.js'
 import { CtxError } from './errors.js'
 import { splitBaseline } from './baseline.js'
 import { formIdOf } from './forms.js'
+import { nfc } from './frontmatter.js'
 
 const NL = String.fromCharCode(10)
 
@@ -55,8 +56,9 @@ export function checkCoord(coord) {
   return v
 }
 
+// 받은 id 는 NFC 로 맞춰 돌려준다 — 읽은 기록의 id 와 같은 모양이어야 byId 가 찾는다(frontmatter.nfc · I13)
 export function checkId(id) {
-  const v = String(id ?? '')
+  const v = nfc(String(id ?? ''))
   if (!RE_ID.test(v) || v.includes('..')) {
     throw new CtxError('E_INPUT', '작업 기록 id 형식이 아니다 (YYYY-MMDD-slug)', { id: v.slice(0, 140) })
   }

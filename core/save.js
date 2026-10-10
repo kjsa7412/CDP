@@ -26,7 +26,7 @@ import * as git from './git.js'
 import { CtxError, checkCoord, checkId, sliceSection } from './tools.js'
 import { withLock } from './lock.js'
 import { enqueuePush, lastPush, describe as mirrorLine } from './mirror.js'
-import { topApplied, normalizeCurates } from './frontmatter.js'
+import { topApplied, normalizeCurates, nfc } from './frontmatter.js'
 import { recordKind, SYSTEM_TAGS } from './curation.js'
 import { cmpDateDesc } from './validity.js'
 import { splitBaseline, joinBaseline, renderBlock, hasMark } from './baseline.js'
@@ -566,10 +566,12 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
   // 2.5 구조 정리(rename · merge · retire · drop)도 큐레이터의 일이다(v1.0 V2) — 2.1 이 이미 걸렀다
 
   // 3 존재 — 기존 기록은 고치지도 지우지도 않는다. 정정은 supersedes 를 단 새 기록이다.
+  // 파일명은 NFC 로도 NFD 로도 있을 수 있다(checkout 한 OS 마다 다르다) — 디스크에 묻지 않고 이름을 NFC 로 맞춰 대조한다.
+  // 묻기만 하면 정규화를 가리지 않는 파일 시스템(Linux)에서 같은 id 의 기록이 둘 생긴다
   const workRel = 'work/' + w.id + '.md'
   const exists = await fs
-    .access(path.join(root, workRel))
-    .then(() => true)
+    .readdir(path.join(root, 'work'))
+    .then((names) => names.some((n) => nfc(n) === w.id + '.md'))
     .catch(() => false)
   if (exists) throw new CtxError('E_EXISTS', '그 id 의 작업 기록이 이미 있다', { id: w.id })
 
