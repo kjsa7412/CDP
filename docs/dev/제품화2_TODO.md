@@ -14,12 +14,13 @@
 | 검토 | **완료** — 실측 셋(서버 · 연결 · 화면) · D1~D9 확정(2026-10-10 · 전부 권장안) |
 | ① 깨짐 S1~S6 | **완료** — a5c1d22 |
 | ② `nextSteps` (core) | **완료** — 85b1eda |
-| ③ 한 줄 — 개인 `ctx up` | **완료** — 38b354b · `--service` 는 실기 미측(아래) |
-| ④ 한 줄 — 팀 `install.sh` · Docker | **완료** — c14a0a4 · Linux systemd · Docker 실기는 남음(아래) |
-| ⑤ 한 줄 — `install.mjs` 연결 · 갱신 | **완료** — 3512c55 · D3 headersHelper 는 실측 항목으로 남음 · D5 는 brief 로 갈음 |
-| ⑥ 화면 22 → 16 | **완료** — 2f9eb11 |
-| ⑦ 안내 글 | **완료** — 79f511f · 53b9d33(kit 안 글) |
-| ⑧ 설계서 · 판 · 검증 | **완료** — 53b9d33 · 판 1.2.0 · CHANGELOG · 하네스 139 |
+| ③ 한 줄 — 개인 `ctx up` | **완료** — db70e0e · `--service` 는 실기 미측(아래) |
+| ④ 한 줄 — 팀 `install.sh` · Docker | **완료** — 56c7e6e · Linux systemd · Docker 실기는 남음(아래) |
+| ⑤ 한 줄 — `install.mjs` 연결 · 갱신 | **완료** — d8dfae9 · D3 headersHelper 는 실측 항목으로 남음 · D5 는 brief 로 갈음 |
+| ⑥ 화면 22 → 16 | **완료** — 6614db1 |
+| ⑦ 안내 글 | **완료** — a4fbdef · a0da4fd(kit 안 글) |
+| ⑨ 설명서 · 사이트 | 진행 — 아래 ⑨ |
+| ⑧ 설계서 · 판 · 검증 | **완료** — a0da4fd · 판 1.2.0 · CHANGELOG · 하네스 139 |
 
 끝났다고 보는 기준(검토 §7) — **빈 macOS 사용자 폴더에서 `ctx up ~/cdp/team --install ~/code/a ~/code/b` 한 줄 + Claude Code 재시작 한 번으로 writer · curator 가 일하고, 판 올림은 `ctx self-update <tar>` + `install.mjs --update` 두 줄.** 팀은 `install.sh --admin …` 한 줄 뒤 콘솔 「시작하기」 만 따라가면 된다. ⑧ 의 원큐 시나리오가 이것을 명령으로 확인한다.
 
@@ -151,6 +152,17 @@
 - [x] 판 1.2.0 · CHANGELOG 절
 - [x] 「나온 것」 표 채우기
 
+## ⑨ 설명서 · 공식 사이트 — v1.2 에 맞추고 줄인다(운영자 지시 2026-10-11)
+
+원칙 — **화면 「시작하기」 · CLI 끝 출력이 말하는 것은 책에서 줄인다.** 책은 「한 줄 → 무엇이 일어났나 → 막히면」 순서로 핵심만.
+절 제목은 `core/nextsteps.js` `HELP_TOPICS` 가 맞히는 말을 지킨다(화면 `?` 링크 · `test/nextsteps.test.mjs`).
+
+- [ ] 사용자 설명서 — 처음 한 번은 `ctx up --install` · 연결된 작업 레포 한 줄 · `--connect` · `--update` · 토큰 파일 · 화면 이름(읽기 · 시작하기) · 줄인다
+- [ ] 큐레이터 설명서 — 큐레이터 폴더(`ctx up --curator` · 한 줄) · 대기열 › 이력 탭 · 관리 문서 › 서식집 탭 · 시작하기 · 줄인다
+- [ ] 관리자 설명서 · 설치절차 — `install.sh --admin --repo --origin --ssh` 한 줄 · serve.json · `cdp` · Docker(볼륨 · touch 없음) · 개인 서버 `ctx up` · `self-update` · 콘솔 넷(현황 · 지식 레포 · 사람 · 서버) · 줄인다
+- [ ] 개발자 설명서 · README — `core/tar.js` · `nextsteps` · `/next` · `ctx up` · `serve.json` · 하네스 139
+- [ ] 공식 사이트(cdp-about) — 시작 · 배포 페이지의 한 줄 셋 · 화면 소개(16 · 시작하기) · facts · 줄인 설명서 넷 · 판 이력 · 데모 다시 찍기(`site:demo`) · `build:site` 누출 0
+
 ---
 
 ## 나온 것
@@ -166,5 +178,5 @@
 | **D3 남음** | `headersHelper` 는 Claude Code 문서에 있다(연결마다 실행 · stdout JSON 헤더 · `/mcp` 재연결로 새 토큰 · 프로젝트 신뢰 승인 뒤에만 · Windows 는 문서 없음). 실제 Claude Code 로 재 보지 못해 `.mcp.json` 모양은 바꾸지 않았다 — 실측(macOS · Windows · 신뢰 전 세션) 뒤 `mcpEntryServer` 를 고친다 |
 | ② brief 첫 줄 | 넣지 않았다 — `brief.lines` 가 이미 대기 · 미반영 · 어긋남 줄을 낸다. 같은 사실을 두 번 싣지 않는다 |
 | 남은 실기 | Linux systemd 에서 `install.sh` root 모드(계정 · `/usr/local/bin/cdp` · 유닛 `--config`) · `ctx up --service`(launchd 실제 등록) · Docker 이미지 빌드 · 재생성 뒤 명부 · 자격 유지 — 이 Mac 에서 시스템 서비스를 등록하지 않으려고 미뤘다 |
-| 이력 | ③~⑤ 커밋(38b354b · c14a0a4 · 3512c55 · 53b9d33)에 화면 쪽이 미리 스테이징한 파일 삭제 둘(`CuratorFolder.jsx` · `console/WorkRepos.jsx`)이 같이 담겨 그 사이 HEAD 는 화면 빌드가 깨진다. 2f9eb11 부터 정상 — push 전이라 이력을 고칠 수 있다(사람이 정한다) |
+| 이력 | ③~⑤ 커밋에 화면 쪽이 미리 스테이징한 파일 삭제 둘이 섞여 그 사이 HEAD 의 화면 빌드가 깨졌다 — push 전에 다시 지었다(삭제를 6614db1 로 옮김 · 최종 트리는 같다 · 중간 56c7e6e 빌드 확인 · 옛 끝은 `backup/pre-rewrite-e41d518` 가지) |
 | 다음 단계 | 설명서 네 권 · cdp-about 사이트 · 데모 다시 찍기(D8). 설명서 관리자 2.6 의 Docker 절차(`touch auth.json`)가 지금 코드와 다르다 — 그 단계에서 고친다 |
