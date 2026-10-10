@@ -3,6 +3,19 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v1.2.0
+
+**제품화 2 — 원큐 설치 · 쉬운 연결 · 줄인 화면.** 검토 `docs/design/CDP_제품화_검토_v2.0.md` · 실행 `docs/dev/제품화2_TODO.md`. 데이터 · save 모양은 그대로다.
+
+- **개인 서버 한 줄 `ctx up <폴더>`** — 빈 틀(없으면) · 빈 포트(7400~) · 이미 떠 있으면 그 주소 · 토큰(`~/.config/cdp/token`) · 브라우저 · `--install <코드 폴더>` · `--curator <폴더>` · `--skills <폴더>` 를 토큰 복사 없이 · `--update` · `--service`(launchd · systemd --user) · 끝은 다음 할 일. 판 올림 **`ctx self-update <tar|url>`** — `~/.cdp/server/v<판>` · `current` · `~/.cdp/bin/ctx` · SHA256SUMS 대조
+- **팀 서버 한 줄 `install.sh --admin <id> --repo <이름> [--origin <url>] [--ssh | --pat-stdin …]`** — 첫 관리자 · git 자격 · 첫 레포와 push · doctor 까지, 끝에는 남은 일만. 설정 한 장 **`serve.json`**(유닛 `serve --config` · 셸이 같이 읽는다) · **`cdp`** 명령(`cdp serve doctor` 를 플래그 없이) · root 없이 `--prefix ~/…`
+- **연결 · 갱신** — 설치기 `--connect --repo <레포> <폴더>`(아래 git 레포를 한 번에 등록 · 설치 · `--commit`) · `--folder`(스킬 사본 폴더) · `--update` 가 작업 레포 · 큐레이터 폴더 · 스킬 폴더를 같이 돈다 · 토큰을 `~/.config/cdp/token` 에서도 찾는다 · `--fix-gitignore`
+- **「시작하기」 — 다음 할 일 한 곳**(`core/nextsteps.js` · `GET /next`) — 레포 없음 · 관리 문서 없음 · 작업 레포 없음 · 큐레이터 폴더 없음 · 에이전트 세팅 낡음 · 대기 · 어긋남 · 토큰 만료를 역할에 맞는 줄만. 화면(읽기 빈 상태 · 레포 현황 · 콘솔 현황 · 소개)과 CLI 끝 출력이 같은 계산
+- **화면 22 → 16**(admin 메뉴 17 → 11 · 큐레이터 10 → 7 · writer · viewer 6 → 5) — 읽기(문서 + 작업 기록) · 대기열 › 이력 탭 · 관리 문서 › 서식집 탭 · 콘솔 넷(현황 · 지식 레포 + 작업 레포 펼침 · 사람 = 사용자 + 토큰 · 서버 + 감사 · 로그). 옛 주소는 바꿔 쓴다
+- **안내 글** — 화면 하나에 한 줄 · 빈 상태는 한 문장과 할 일 하나 · 권한 밖 일은 말하지 않는다 · 설명서는 절 링크(`?`)로 · 장 번호 · 스킬 수 · 경로는 서버 값
+- **고침** — macOS 에서 싼 서버 tar 의 한글 파일명이 NFD 라 설명서 · kit CLAUDE 블록을 못 찾았다(tar 를 `core/tar.js` 로 싼다) · `--commit` 이 `.gitignore` 에 막히면 스테이징을 남기고 대장엔 「최신」 이었다 · 큐레이터 폴더가 일괄 갱신에서 빠졌다 · 큐레이터 폴더에 kit 안쪽 원본이 깔렸다 · Docker 명부가 산출물 폴더 파일이라 새 판에서 사라질 수 있었다(이제 data 볼륨 · git 자격도) · 빈 `auth.json` 에서 `serve init` 이 실패했다 · 포트가 겹치면 날 스택이 나왔다 · 산출물에서 `--web` 없이 띄우면 화면이 없었다 · `ctx --json` 이 파이프에서 8KB 언저리에서 잘렸다 · 소스 실행의 `/install.mjs` 가 홈 경로를 냈다 · 개인 서버가 자동 로그인 주소(토큰 원문)를 stdout 에 찍었다(이제 `<data>/login.url`)
+- `ctx version` 이 판을 먼저 찍는다 · `ctx repo new --origin` 이면 push · `serve user add <이름>`(자리 인자 · 큐레이터 열) · `serve doctor --personal`
+
 ## v1.1.6
 
 - **고침 — 어긋남 진단이 `**SoT**` 가리킴 줄을 복제로 셌다** — 값이 사는 곳을 가리키는 줄은 복제가 아니다(검토 Q3). 규약 문턱(섹션 5%)에만 기대 같은 원천 묶음 두셋이 나눠 가진 SoT 줄이 복제로 남았다(실레포 수집원정의서 juso 3종)

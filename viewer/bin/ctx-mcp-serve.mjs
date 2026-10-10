@@ -1068,7 +1068,9 @@ export async function runServe(opt = {}) {
             }
           }
         }
-        const steps = nextSteps({ me: { admin: !!a.admin, write: !!a.write, curate, tokenDays: a.expiresInDays ?? null }, repos: mine.length, repo, work, curatorKit })
+        // admin 은 서버의 레포 수로 센다 — 자기에게 할당 안 된 레포가 있는데 「레포가 없다」 고 하지 않게
+        const repoCount = a.admin ? (await store.list()).length : mine.length
+        const steps = nextSteps({ me: { admin: !!a.admin, write: !!a.write, curate, tokenDays: a.expiresInDays ?? null }, repos: repoCount, repo, work, curatorKit })
         log.req({ ip, user: a.user, method: 'GET', tool: '/next', key: name || '-', ms: Date.now() - t0, status: 200 })
         return json(res, 200, { repo: name, steps, help: HELP })
       }
@@ -1511,6 +1513,10 @@ export async function runServe(opt = {}) {
               adminFrom: adminFrom.map((c) => c.text),
               privatePages,
               manuals: manuals.list(),
+              // 판 올리는 한 줄 — 개인 서버는 ctx self-update · 팀 서버는 설치 자리의 upgrade.sh(serve.json 이 있는 자리 = bin 의 부모)
+              upgrade: personal
+                ? `ctx self-update <cdp-server-v<판>.tar.gz>   → ctx up "${personal.repo}" --update`
+                : `sudo bash ${path.join(path.dirname(hereDir(import.meta.url)), 'deploy', 'upgrade.sh')} <cdp-server-v<판>.tar.gz>`,
             })
           }
           if ((sub === '/audit' || sub === '/log') && req.method === 'GET') {

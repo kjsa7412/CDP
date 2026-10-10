@@ -16,6 +16,7 @@
 export const HELP_TOPICS = {
   repo: { book: '관리자_설명서', heading: /지식 레포 세우기/ },
   people: { book: '관리자_설명서', heading: /사람/ },
+  mirror: { book: '관리자_설명서', heading: /미러/ },
   curator: { book: '관리자_설명서', heading: /큐레이터 맡기기/ },
   install: { book: '사용자_설명서', heading: /처음 한 번/ },
   workrepo: { book: '관리자_설명서', heading: /작업 레포/ },
@@ -62,7 +63,7 @@ export function helpLinks(books) {
 //   me        { admin, write, curate: bool(이 레포), tokenDays: n|null }
 //   repos     볼 수 있는 지식 레포 수
 //   repo      null | { name, docs: 관리 문서 수, queue: { n, oldestDays }, drift: 신호 합 }
-//   work      null | { mine: 이 레포의 작업 레포 등록 수, stale: 낡음 수, unset: 미설치 수 }
+//   work      null | { mine: 이 레포의 작업 레포 등록 수(누구 것이든 — 이름은 옛 것), stale: 낡음 수, unset: 미설치 수 }
 //   curatorKit null | { installed: bool, stale: bool }   — 이 사람이 이 레포의 큐레이터 폴더를 받았나(서버가 본 것)
 export function nextSteps({ me = {}, repos = 0, repo = null, work = null, curatorKit = null } = {}) {
   const steps = []
