@@ -604,7 +604,8 @@ async function updateAll({ server, paths, dry, yes, commit, noSave, fixIgnore = 
         it.error = '등록 id 가 없다 — 행의 한 줄로 한 번 다시 설치한다'
         continue
       }
-      if (!kits.has(r.repo)) {
+      // 실패는 기억하지 않는다 — 낡은 등록 하나가 같은 레포의 다른 작업 레포까지 「못 함」 으로 만들었다
+      if (!kits.has(r.repo) || kits.get(r.repo).error) {
         const got = await fetchKit(server, r.repo, r.workrepo, tk.token)
         if (!got.error) cleanups.push(got.cleanup)
         kits.set(r.repo, got)
