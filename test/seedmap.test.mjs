@@ -39,6 +39,11 @@ test('parseSeedMap — 모양 검사: version · 경로 · split · 좌표 · �
   assert.throws(() => normalizeSeedMap({ ...MAP, records: [{ id: 'x', date: '2026-09-01', src: 'a.md', touches: [] }] }), /YYYY-MMDD/)
   assert.throws(() => normalizeSeedMap({ ...MAP, docs: [MAP.docs[0], { ...MAP.docs[0] }] }), /겹친다/)
   assert.throws(() => parseSeedMap('{'), /JSON/)
+  // skip — 따라가기의 예외(커밋 sha → 까닭)
+  assert.deepEqual(normalizeSeedMap({ ...MAP, skip: { f71e573: '위키에 맞춘 커밋' } }).skip, { f71e573: '위키에 맞춘 커밋' })
+  assert.deepEqual(m.skip, {})
+  assert.throws(() => normalizeSeedMap({ ...MAP, skip: { 'HEAD~1': 'x' } }), /sha/)
+  assert.throws(() => normalizeSeedMap({ ...MAP, skip: { f71e573: '' } }), /까닭/)
 })
 
 test('splitH2 · docSections — 세 모양 · 값에 공백이면 첫 낱말 · 부록 건너뜀 · 코드 블록 · 이력 줄 · 머리말', () => {

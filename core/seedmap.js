@@ -12,6 +12,7 @@
 //     alias:   { "<원천 경로>": "<기록 id>" },
 //     ignore:  [{ src, why }],
 //     intent:  { "<좌표>": "<위키와 다른 까닭>" },
+//     skip:    { "<커밋 sha>": "<까닭>" },  — 따라가기(follow)의 예외: 원천을 위키에 맞춘 커밋 · 기록을 일부러 두지 않은 커밋
 //     target:  { server, repo } }   — 세울 지식 레포(명령의 --server · --repo 를 대신한다)
 
 import path from 'node:path'
@@ -87,7 +88,13 @@ export function normalizeSeedMap(m) {
   dupe(docs, 'src', '문서')
   dupe(docs, 'doc', '문서')
   dupe(records, 'id', '기록')
-  return { version: 1, root, rules: { ...rules, history }, docs, records, alias: m.alias || {}, ignore: m.ignore || [], intent: m.intent || {}, ...(m.target ? { target: m.target } : {}) }
+  const skip = m.skip || {}
+  if (typeof skip !== 'object' || Array.isArray(skip)) throw new SeedError('skip 은 { "<커밋 sha>": "<까닭>" } 다', { field: 'skip' })
+  for (const [k, v] of Object.entries(skip)) {
+    if (!/^[0-9a-f]{7,40}$/.test(k)) throw new SeedError(`skip 의 ${k} 는 커밋 sha(7자 이상)가 아니다`, { field: 'skip' })
+    if (typeof v !== 'string' || !v.trim()) throw new SeedError(`skip.${k} 에 까닭이 없다`, { field: 'skip' })
+  }
+  return { version: 1, root, rules: { ...rules, history }, docs, records, alias: m.alias || {}, ignore: m.ignore || [], intent: m.intent || {}, skip, ...(m.target ? { target: m.target } : {}) }
 }
 
 // ── 다듬기 ───────────────────────────────────────────────────────────────────

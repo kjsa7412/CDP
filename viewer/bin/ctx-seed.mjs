@@ -422,8 +422,17 @@ async function runFollow(opt, io) {
     .filter(Boolean)
     .map((l) => l.split('\t'))
   let miss = 0
+  let skipped = 0
+  // 지도의 skip — 원천을 위키에 맞춘 커밋 · 기록을 일부러 두지 않은 커밋(sha 앞자리가 같으면 같은 커밋)
+  const skipOf = (h) => Object.entries(s.map.skip || {}).find(([k]) => k.startsWith(h) || h.startsWith(k))?.[1]
   io.out(`ctx follow: ${opt.since}..${s.at} — 커밋 ${commits.length}`)
   for (const [h, when, subj] of commits) {
+    const why = skipOf(h)
+    if (why) {
+      skipped++
+      io.out(`− 뺌 ${h} ${when.slice(0, 16)} ${subj}\n    ${why}`)
+      continue
+    }
     const x = changedCoords(s, s.map, `${h}^`, h)
     const after = human.filter((w) => String(w.date || '') >= when.slice(0, 10))
     // 출처로 잇는 것은 그 커밋을 **가리킨** 기록만 — `커밋 <sha>` · `@<sha>` · 범위의 끝 `..<sha>`. 범위의 시작(`<sha>..`)은 그 커밋을 빼는 쪽이다
@@ -436,7 +445,8 @@ async function runFollow(opt, io) {
     if (x.records.length) io.out(`    판단 문서가 바뀜(새 기록 거리): ${x.records.map((y) => y.id).join(', ')}`)
     if (x.outside.length) io.out(`    지도 밖 파일: ${x.outside.join(' · ')}`)
   }
-  io.out(`커밋 ${commits.length} · 누락 ${miss}${commits.length ? ` (${Math.round((miss / commits.length) * 100)}%)` : ''} — 누락은 같은 모양의 업데이트 기록으로 메운다(ctx update)`)
+  const counted = commits.length - skipped
+  io.out(`커밋 ${commits.length} · 누락 ${miss}${counted ? ` (${Math.round((miss / counted) * 100)}%)` : ''}${skipped ? ` · 뺌 ${skipped}(지도의 skip)` : ''} — 누락은 같은 모양의 업데이트 기록으로 메운다(ctx update)`)
   return miss ? 1 : 0
 }
 
