@@ -18,6 +18,31 @@
 
 import { cmpDateDesc } from './validity.js'
 
+// ── 세운 자리 — 레포 뿌리의 `_seed.json` ──
+// 문서 레포(dpms_docs 같은)에서 지식 레포를 세우면 이관 · 기준선 · 스냅샷 · 큐레이션 기록이 백 건 넘게 생겨 작업 기록 목록을
+// 덮었다(dpms_wiki 140건 중 113건 · 2026-10-12 운영자 「세우는 기록을 작업문서로 남기지 않는다」). 세우기는 **기록이 아니라
+// 이 파일 하나**를 남긴다 —
+//   { at, from, note, records: [기록 id], sections: [좌표] }
+//   records   세울 때 함께 들인 기록. 원천 문서가 이미 싣고 있으므로 큐레이션 기록 없이 「반영됨(seeded)」 이다.
+//             뒤의 큐레이션 판정이 있으면 그것이 이긴다
+//   sections  세울 때 있던 섹션의 좌표. drift 는 이것을 근거 있는 섹션으로 본다(원천은 `from`)
+// 이 파일이 있으면 암묵 전환은 없다 — 판정 없는 옛 기록이 따로 없다는 뜻이다.
+export const SEED_FILE = '_seed.json'
+
+// 모양이 틀린 파일은 없는 셈 치지 않는다 — `bad` 를 달아 돌려준다(조용히 무시하면 기록 백 건이 대기열에 쏟아진다)
+export function parseSeed(text) {
+  if (text == null) return null
+  let j
+  try {
+    j = JSON.parse(text)
+  } catch (e) {
+    return { at: null, from: null, note: null, records: [], sections: [], bad: `${SEED_FILE} 이 JSON 이 아니다 — ${e.message}` }
+  }
+  const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : [])
+  const bad = !j || typeof j !== 'object' || !Array.isArray(j.records) ? `${SEED_FILE} 에 records 배열이 없다` : null
+  return { at: j?.at ?? null, from: j?.from ?? null, note: j?.note ?? null, records: list(j?.records), sections: list(j?.sections), ...(bad ? { bad } : {}) }
+}
+
 export const SYSTEM_TAGS = ['registry', 'docs-prune', 'derive', 'snapshot']
 export const QUEUE_STALE_DAYS = 14
 const EXCERPT_MAX = 160
@@ -147,14 +172,14 @@ export function materialsOf(r, id) {
 //   managedIndex   좌표 → 섹션
 //   coords         buildCoordIndex(byCoord)
 //   bodies         경로 → 원문(발췌용 · 없으면 발췌 없음)
-export function buildCuration({ works, sections = [], managedIndex = null, coords = null, bodies = null, today = Date.now() }) {
+export function buildCuration({ works, sections = [], managedIndex = null, coords = null, bodies = null, seed = null, today = Date.now() }) {
   const kindOf = new Map(works.map((d) => [d.id, recordKind(d)]))
   const curations = works.filter((d) => kindOf.get(d.id) === 'curation').sort(cmpDateAsc)
   // 암묵 전환은 **옛 파생 이력이 있는 레포**만 — 큐레이션 기록이 없고, 작업 기록을 반영한 섹션(applied)이 하나라도 있을 때.
   // 다시 세운 레포 · 새 레포는 섹션이 없으니 기록 전부가 대기다(그것이 「큐레이션부터 다시」 의 뜻이다).
   // 기존 문서 레포에서 세운 레포는 섹션이 있어도 그 applied 가 **이관 · 기준선 · 스냅샷 같은 기계 기록**이다 — 옛 파생이 아니다.
   // 사람의 기록(또는 레포에 없는 옛 id)을 가리키는 applied 가 있을 때만 옛 파생 이력으로 본다(dpms_wiki 세팅 — 이관 직후 대기 22 가 1 로 보였다)
-  const implicit = curations.length === 0 && sections.some((s) => s.applied && (!kindOf.has(s.applied) || kindOf.get(s.applied) === 'work'))
+  const implicit = !seed && curations.length === 0 && sections.some((s) => s.applied && (!kindOf.has(s.applied) || kindOf.get(s.applied) === 'work'))
 
   // 스냅샷은 그 좌표의 섹션이 없을 때만 사람의 기록처럼 대기열에 선다 — 섹션이 있으면 이미 반영된 원문이다(리빌딩 검토 §5.4)
   const live = new Set(sections.filter((s) => s.state !== 'anchor-missing' && s.state !== 'doc-missing').map((s) => s.coord))
@@ -167,6 +192,10 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
   for (const d of works) {
     const k = kindOf.get(d.id)
     if (k !== 'work') byId.set(d.id, { state: 'system', kind: k })
+  }
+  // 세울 때 들인 기록 — 판정 없이 반영됨. 아래 큐레이션이 있으면 덮는다
+  for (const id of seed?.records || []) {
+    if (kindOf.get(id) === 'work') byId.set(id, { state: 'reflected', seeded: true, verdict: null, into: [], reason: null, by: null, at: seed.at ?? null })
   }
   // 오래된 큐레이션부터 덮어쓴다 — 가장 늦은 판정이 이긴다(재큐레이션)
   for (const c of curations) {
@@ -230,7 +259,7 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
     if (implicit) {
       list = (row?.items || []).map((it) => workById.get(it.id)).filter(Boolean)
     } else {
-      const later = (row?.items || []).map((it) => workById.get(it.id)).filter((d) => d && byId.get(d.id)?.state !== 'kept')
+      const later = (row?.items || []).map((it) => workById.get(it.id)).filter((d) => d && byId.get(d.id)?.state !== 'kept' && !byId.get(d.id)?.seeded)
       const fromQueue = (coords?.byCoord?.get(coord) || []).filter((d) => queued.has(d.id))
       const seen = new Set()
       list = [...later, ...fromQueue].filter((d) => !seen.has(d.id) && seen.add(d.id))

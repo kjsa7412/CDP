@@ -74,7 +74,8 @@ export function buildDrift(r, { sliceSection, oversizeLines = OVERSIZE_LINES } =
   if (typeof sliceSection !== 'function') throw new Error('buildDrift 에는 sliceSection 을 넘긴다')
 
   // 원천 — 그 좌표를 건드린 사람의 기록 · 정본 스냅샷. 전환 · 큐레이션 · 기준선 기록은 원천이 아니다(기준선은 블록으로 본다)
-  const sourced = new Set()
+  // 세운 자리(`_seed.json` 의 sections)도 원천이다 — 그 섹션은 원천 문서(`from`)에서 왔다
+  const sourced = new Set(r.seed?.sections || [])
   for (const d of r.works) {
     const k = recordKind(d)
     if (k !== 'work' && k !== 'snapshot') continue

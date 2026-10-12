@@ -302,3 +302,31 @@ test('sectionMarkdown — 리소스 · 프롬프트도 섹션 뒤에 미반영 �
   assert.match(md, /A 에 컬럼을 더했다\./)
   assert.doesNotMatch(sectionMarkdown({ body: '섹션.', pending: [] }), /미반영/)
 })
+
+test('세운 자리(_seed.json) — 들인 기록은 판정 없이 반영됨 · 암묵 전환 없음 · 뒤 기록만 대기 · drift 근거', async () => {
+  const { buildDrift } = await import('../core/drift.js')
+  const { sliceSection } = await import('../core/tools.js')
+  const root = await repo({
+    'docs/테이블.md': DOC([['a', '2026-0901-a', '가 본문'], ['b', 'null', '나 본문'], ['c', '2026-0901-a', '다 본문']]),
+    'work/2026-0901-a.md': work({ id: '2026-0901-a', date: '2026-09-01', touches: ['table:a', 'table:c'] }),
+    'work/2026-0905-late.md': work({ id: '2026-0905-late', date: '2026-09-05', touches: ['table:c'] }),
+    '_seed.json': JSON.stringify({ at: '2026-09-02', from: 'docs@abc', records: ['2026-0901-a'], sections: ['table:a', 'table:b', 'table:c'] }),
+  })
+  const r = await loadRepo(root)
+  assert.equal(r.seed.records.length, 1)
+  assert.equal(r.curation.implicit, false)
+  assert.equal(r.curation.statusOf('2026-0901-a').state, 'reflected')
+  assert.equal(r.curation.statusOf('2026-0901-a').seeded, true)
+  assert.deepEqual(r.curation.queue.map((q) => q.id), ['2026-0905-late'])
+  assert.deepEqual(r.curation.pendingOf('table:a'), [])
+  assert.deepEqual(r.curation.pendingOf('table:c').map((x) => x.id), ['2026-0905-late'])
+  const d = buildDrift(r, { sliceSection })
+  assert.equal(d.totals.unsourced, 0)
+})
+
+test('세운 자리 — 모양이 틀리면 bad 를 단다', async () => {
+  const { parseSeed } = await import('../core/curation.js')
+  assert.match(parseSeed('{').bad, /JSON/)
+  assert.match(parseSeed('{}').bad, /records/)
+  assert.equal(parseSeed(null), null)
+})

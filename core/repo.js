@@ -13,7 +13,7 @@ import { scan, countIndexRows, readText } from './scan.js'
 import { parseVocab } from './vocab.js'
 import { parseRegistry, buildManagedIndex } from './managed.js'
 import { buildCoordIndex, buildSectionStatus, buildValidity, cmpDateDesc } from './validity.js'
-import { buildCuration } from './curation.js'
+import { buildCuration, parseSeed, SEED_FILE } from './curation.js'
 
 // CRLF 는 여기서 이미 없앤다 (scan.js `readText` 주석 참고)
 async function readOr(root, name, fallback = '') {
@@ -26,6 +26,7 @@ export async function loadRepo(root, { cache = new Map(), settings = {}, onProgr
 
   const vocabText = await readOr(root, '_vocab.md', null)
   const managedText = await readOr(root, '_managed.md', null)
+  const seed = parseSeed(await readOr(root, SEED_FILE, null))
   const vocab = parseVocab(vocabText ?? '')
   const registry = parseRegistry(managedText ?? '')
 
@@ -77,7 +78,9 @@ export async function loadRepo(root, { cache = new Map(), settings = {}, onProgr
     allCoords,
     sections,
     // 대기열 · 기록의 큐레이션 상태 · 섹션의 미반영(v1.0 개편안 §4.4)
-    curation: buildCuration({ works, sections, managedIndex, coords, bodies }),
+    // 세운 자리(`_seed.json`) — 세울 때 들인 기록 · 섹션. 세우는 과정은 기록을 남기지 않는다(문서 레포에서 세우기 검토 S13)
+    seed,
+    curation: buildCuration({ works, sections, managedIndex, coords, bodies, seed }),
     validity: buildValidity(works),
     byId: new Map(works.map((d) => [d.id, d])),
     byPath: new Map(docs.map((d) => [d.path, d])),
