@@ -6,7 +6,7 @@ export const ROUTES = [
   { path: '/concept', nav: '개념', title: '개념 · CDP', description: '사건과 상태 두 층 · 좌표 · 어휘와 등록부 · 큐레이션과 미반영 · 기준선 · 정정. 쓰는 길은 save 하나.' },
   { path: '/screens', nav: '화면', title: '화면 · CDP', description: '실제 화면 17장 — 읽기 · 큐레이션 · 서버 · 시작하기 · 사이트 · 설명서. 가상 데모 레포로 찍었다 — 화면은 진짜이고 내용만 가상이다.' },
   { path: '/examples', nav: '예제', title: '예제 · CDP', description: '좌표 찾기 · 기록 · 미반영 · 큐레이터 둘의 충돌 · 정정 — 데모 레포에 실제로 보낸 MCP 요청과 응답.' },
-  { path: '/agent', nav: '에이전트', title: '에이전트 · CDP', description: 'Claude Code 가 MCP 로 붙는 법 · 역할이 가르는 도구 13 · 스킬 6 · MCP 가 도는 길 열두 걸음.' },
+  { path: '/agent', nav: '에이전트', title: '에이전트 · CDP', description: 'Claude Code 가 MCP 로 붙는 법 · 역할이 가르는 도구 13 · 스킬 7 · MCP 가 도는 길 열두 걸음.' },
   { path: '/deploy', nav: '배치 · 설치', title: '배치 · 설치 · CDP', description: '한 줄 셋 — 개인 서버(ctx up) · 팀 서버(install.sh) · 연결과 갱신(--connect · --update). 서버 산출물 · Docker · git 자격 · 미러 · 문서 내용은 PC 를 떠나지 않는다.' },
   { path: '/releases', nav: '판 이력', title: '판 이력 · CDP', description: 'v0.2 부터 지금까지 판마다 무엇이 바뀌었나.' },
 ]

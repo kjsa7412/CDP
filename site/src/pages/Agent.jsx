@@ -1,4 +1,4 @@
-// 에이전트 — Claude Code 가 MCP 로 붙는 법 · 역할이 가르는 도구 13 · 스킬 6 · 「MCP 가 도는 길」.
+// 에이전트 — Claude Code 가 MCP 로 붙는 법 · 역할이 가르는 도구 13 · 스킬 7 · 「MCP 가 도는 길」.
 // 「MCP 가 도는 길」 은 서버 소개 얼굴의 것을 그대로 쓴다 — 예의 값은 둘 다 데모 레포의 것이고, host 만 `<서버>` 로 넘긴다.
 
 import McpFlow from '../../../viewer/src/site/McpFlow.jsx'
@@ -38,7 +38,7 @@ export default function Agent() {
         <h1 tabIndex={-1}>에이전트</h1>
         <p className="st-lead">
           CDP 는 <b>Claude Code</b> 에 MCP 서버로 붙는다. 에이전트는 좌표로 대상을 확정하고, 그 섹션만 읽고(아직 반영 안 된 기록까지), 일을 마치면 <code>save</code> 한 번으로 작업 기록을 남긴다.
-          관리 문서는 레포마다 맡은 큐레이터의 에이전트가 기록을 판정해 반영한다. 절차는 스킬 여섯이 든다 — 에이전트가 기억에 기대지 않는다.
+          관리 문서는 레포마다 맡은 큐레이터의 에이전트가 기록을 판정해 반영한다. 절차는 스킬 일곱이 든다 — 에이전트가 기억에 기대지 않는다.
         </p>
       </header>
 
@@ -93,7 +93,7 @@ export default function Agent() {
       </section>
 
       <section className="st-sec">
-        <h2>스킬 6</h2>
+        <h2>스킬 7</h2>
         <p className="st-p">
           서버 번들에서 <b>역할별로</b> 나간다 — 작업 레포에는 셋(<code>cdp-work</code> · <code>cdp-save</code> · <code>cdp-push</code>), 큐레이터 폴더에는 여섯 전부. 판이 오르면 서버의 갱신이 kit 을 같이 갈고,
           이 PC 의 작업 레포 · 큐레이터 폴더는 <code>--update</code> 한 줄로 같이 받는다. 낡았으면 <code>brief</code> 와 화면 「시작하기」 가 알린다. 지식 레포에는 스킬이 들어가지 않는다 — 레포에는 지식만 둔다.

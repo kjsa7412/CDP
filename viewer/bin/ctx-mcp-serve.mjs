@@ -184,6 +184,10 @@ export function makeStore(root, log, { only = null, formsOpt = null } = {}) {
       if (!v.stats?.scannedAt) {
         if (!loading.has(name)) loading.set(name, v.load().finally(() => loading.delete(name)))
         await loading.get(name)
+      } else if (loading.has(name)) {
+        // save 뒤의 다시 읽기가 도는 중이면 기다린다 — 안 기다리면 방금 커밋한 문서가 빠진 옛 스캔을 낸다
+        // (seed apply — 이관의 마지막 save 바로 뒤 /snapshot 이 그 문서의 섹션 20개를 못 봤다)
+        await loading.get(name)
       }
       return v
     },
@@ -711,7 +715,7 @@ export async function runServe(opt = {}) {
               staging: stagingDir, // assets[].ref 를 여기서 꺼낸다
               log: (m) => log.line(m),
             })
-            store.reload(name) // 화면이 방금 커밋한 것을 봐야 한다
+            if (!out?.dryRun) store.reload(name) // 화면이 방금 커밋한 것을 봐야 한다(view 가 이 다시 읽기를 기다린다)
             // `repo` — **실제로 쓴 레포.** 도구가 `repo` 인자로 주소(/mcp/<레포>)와 다른 레포에 쓰면 로그가 주소 레포를 적어
             // 콘솔 최근 기록이 거짓이었다(실서버 종합 시험 F2)
             if (ctxStore) ctxStore.outcome = { code: null, ms: Date.now() - t0, key: input?.work?.id ?? null, repo: name }

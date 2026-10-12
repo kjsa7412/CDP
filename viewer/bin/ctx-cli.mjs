@@ -62,6 +62,12 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx forms list|show <id>|check [--forms <dir>] [--data <dir>]   서식집 — 목록 · 서식 하나(찍힐 빈 문서까지) · 번들과 팀 서식(<data>/forms) 검사
   ctx migrate <레포> [--dry] [--by <이름>] [--keep-tools]   제자리 이행 — 전환 기록 하나 · 서식 예시 · 도구 층 걷기(서버를 멈추고)
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
+  ctx seed init|check [--from <문서 레포>]          문서 레포에서 세우기 — 지도(cdp-sources.json) 뼈대 · 검사
+  ctx seed plan|apply --server <주소> --repo <레포> [--from …] [--at <sha>] [--stage baseline|managed|snapshot|records] [--only <key|id>] [--date <YYYY-MM-DD>]
+                                            지도대로 세운다(큐레이터 · plan = 전부 dryRun) — 판정은 cdp-curate
+  ctx seed verify --clone <지식 레포 클론> [--from …] [--at <sha>]   섹션 대조 — 같음 · 형식 차이(intent) · 확인 필요 · drift · 대기
+  ctx follow --clone <클론> [--from …] [--since <sha>]   커밋마다 바뀐 섹션 ↔ 그 뒤 위키 기록 — 누락
+  ctx update [--from …] <from sha> [<to sha>]      업데이트 기록 초안(.cdp-updates/) · --save <초안> --server … --repo … [--go]
 
   --repo <경로>             지식 레포 경로 (기본: CDP_REPO 또는 현재 폴더 상위 탐색)
   --root <폴더>             ctx serve -- 그 폴더의 하위를 전부 레포로 본다
@@ -169,6 +175,15 @@ function parseArgs(argv) {
     else if (a === '--ssh') out.ssh = true
     else if (a === '--rotate') out.rotate = true
     else if (a === '--list') out.list = true
+    // 문서 레포에서 세우기(seed · follow · update)
+    else if (a === '--at') out.at = argv[++i]
+    else if (a === '--since') out.since = argv[++i]
+    else if (a === '--clone') out.clone = argv[++i]
+    else if (a === '--stage') out.stage = argv[++i]
+    else if (a === '--only') out.only = argv[++i]
+    else if (a === '--date') out.date = argv[++i]
+    else if (a === '--save') out.saveDraft = argv[++i]
+    else if (a === '--go') out.go = true
     else if (a === '-h' || a === '--help' || a === 'help') out.cmd = out.cmd || 'help'
     else if (!out.cmd) out.cmd = a
     else out.args.push(a)
@@ -715,6 +730,10 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'rebuild') {
     const { runRebuild } = await import('./ctx-rebuild.mjs')
     return runRebuild(opt)
+  }
+  if (opt.cmd === 'seed' || opt.cmd === 'follow' || opt.cmd === 'update') {
+    const { runSeed } = await import('./ctx-seed.mjs')
+    return runSeed(opt)
   }
   if (opt.cmd === 'baseline') {
     const { runBaseline } = await import('./ctx-baseline.mjs')

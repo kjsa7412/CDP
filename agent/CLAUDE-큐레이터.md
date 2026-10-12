@@ -15,6 +15,7 @@
 | `cdp-curate` | 대기열의 기록을 관리 문서에 반영 — 「큐레이션해 줘」 · 화면의 [에이전트 지시 복사] |
 | `cdp-registry` | 등록부 · 문서 구조 — 행 더하기(서식) · 이름 · 합치기 · 폐기 · 지우기 · 서식 예시 · 섹션 밖 글 |
 | `cdp-rebuild` | 시간이 지나 어긋난 관리 문서 — `drift` 로 진단 · 원천 채우기(스냅샷 · 좌표정정) · 묶음으로 다시 세우기(재큐레이션) |
+| `cdp-seed` | 기존 산출물 문서 레포(md · git)에서 세우기 — 지도(`cdp-sources.json`) · `ctx seed check · plan · apply · verify` · 정본 둘이면 `ctx follow` |
 | `cdp-work` · `cdp-save` | 지금 상태 읽기 · 큐레이터 자신의 작업 기록 |
 
 큐레이터에게만 보이는 도구 — `queue`(대기열 · 오래된 순 · `queue({ id })` 판정 재료) · `forms`(서식집 — 새 문서의 서식 ·

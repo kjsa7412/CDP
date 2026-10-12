@@ -112,7 +112,7 @@ export default function Home() {
             <More to="/concept" icon="section" title="개념" text="두 층 · 좌표 · 어휘와 등록부 · 큐레이션과 미반영 · 기준선 · 정정. 쓰는 길은 save 하나." />
             <More to="/screens" icon="image" title="화면 17장" text="읽기 · 큐레이션 · 서버 넷 · 시작하기 · 설명서. 가상 데모 레포를 붙인 진짜 서버를 찍었다." />
             <More to="/examples" icon="work" title="예제 다섯" text="찾기 · 기록 · 미반영 · 큐레이터 둘의 충돌 · 정정 — 녹화한 MCP 요청과 응답." />
-            <More to="/agent" icon="plug" title="에이전트" text="역할이 가르는 도구 13 · 스킬 6 · MCP 가 도는 길 열두 걸음." />
+            <More to="/agent" icon="plug" title="에이전트" text="역할이 가르는 도구 13 · 스킬 7 · MCP 가 도는 길 열두 걸음." />
             <More to="/deploy" icon="server" title="배치 · 설치" text="한 줄 셋 — 개인 서버 · 팀 서버 · 연결과 갱신. 무엇이 PC 를 떠나나." />
             <More to="/releases" icon="list" title="판 이력" text="v0.2 부터 판마다 무엇이 바뀌었나." />
           </div>

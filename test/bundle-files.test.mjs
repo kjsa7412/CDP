@@ -28,12 +28,12 @@ test('copyFileLF — md 는 LF 로 · .cmd 는 CRLF 바이트 그대로 · 이�
   }
 })
 
-test('copyKit — 산출물 kit/ 은 스킬 여섯과 CLAUDE 블록 둘 · core/kit.js 가 그대로 읽어 소스와 같은 해시를 낸다', async () => {
+test('copyKit — 산출물 kit/ 은 스킬 일곱과 CLAUDE 블록 둘 · core/kit.js 가 그대로 읽어 소스와 같은 해시를 낸다', async () => {
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-bf-'))
   try {
     const r = copyKit(ROOT, path.join(d, 'kit'))
     assert.deepEqual(r.missing, [])
-    assert.deepEqual(r.skills, ['cdp-curate', 'cdp-push', 'cdp-rebuild', 'cdp-registry', 'cdp-save', 'cdp-work'])
+    assert.deepEqual(r.skills, ['cdp-curate', 'cdp-push', 'cdp-rebuild', 'cdp-registry', 'cdp-save', 'cdp-seed', 'cdp-work'])
     for (const role of ['writer', 'curator']) {
       const shipped = await kitFiles({ role, explicit: path.join(d, 'kit') })
       const source = await kitFiles({ role, explicit: path.join(ROOT, 'agent') })

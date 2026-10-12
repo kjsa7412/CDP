@@ -4,7 +4,7 @@
 // 더럽거나 origin 이 앞선 레포는 건너뛰어 그 레포의 작업 레포는 옛 스킬을 계속 받았다(배포 조사 C1). v1.0 은 **레포에
 // 지식만** 두고(I9) kit 은 서버 번들에서 낸다 — 판을 올리면 모든 레포의 kit 이 같이 바뀐다.
 //
-// 역할별 — writer 는 기록하는 스킬만(cdp-work · cdp-save · cdp-push) 받는다. 큐레이터는 여섯 전부(+ cdp-curate · cdp-registry · cdp-rebuild)와 큐레이터 블록을 받는다.
+// 역할별 — writer 는 기록하는 스킬만(cdp-work · cdp-save · cdp-push) 받는다. 큐레이터는 일곱 전부(+ cdp-curate · cdp-registry · cdp-rebuild · cdp-seed)와 큐레이터 블록을 받는다.
 // 큐레이션 도구는 서버가 역할로 가리지만(I7 · §5.3), 스킬이 없으면 writer 세션이 그 절차를 흉내 낼 일도 없다.
 //
 // 자리 — 앞에서부터 있는 곳 하나: ① explicit(--kit) ② 환경변수 CDP_KIT ③ 번들 옆 <bin>/../kit ④ 소스 <root>/agent
