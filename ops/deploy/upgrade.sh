@@ -89,6 +89,18 @@ done
 # 설치절차.md 도 — 서버의 /manual 페이지가 <prefix>/deploy/설치절차.md 를 「서버 설치 절차」 책으로 낸다
 if [ -d "$NEW/deploy" ]; then mkdir -p "$PREFIX/deploy" && cp "$NEW"/deploy/*.sh "$NEW"/deploy/cdp-serve.service "$NEW"/deploy/설치절차.md "$PREFIX/deploy/" 2>/dev/null || true; fi
 chmod 755 "$PREFIX/bin/ctx" 2>/dev/null || true
+# 셸 명령 cdp — install.sh 가 놓은 것이 있으면 지금 모양으로 다시 쓴다(못 들어가는 폴더에서 부르면 설치 폴더로 옮겨 부른다)
+if [ -f /usr/local/bin/cdp ] && [ -w /usr/local/bin/cdp ]; then
+  cat > /usr/local/bin/cdp <<EOF
+#!/bin/sh
+# CDP 서버 명령 — install.sh 가 만든다. 설정은 $PREFIX/serve.json
+if [ "\$(id -un)" = "$SVC_USER" ]; then exec "$NODE_BIN" "$PREFIX/bin/ctx.mjs" "\$@"; fi
+# 서비스 계정이 지금 폴더에 못 들어가면(root 의 /root 등) 그 안에서 부르는 git 이 실패한다 — 설치 폴더에서 부른다
+sudo -u "$SVC_USER" test -x . 2>/dev/null || cd "$PREFIX"
+exec sudo -u "$SVC_USER" -H "$NODE_BIN" "$PREFIX/bin/ctx.mjs" "\$@"
+EOF
+  chmod 755 /usr/local/bin/cdp
+fi
 chown -R "$SVC_USER:$SVC_USER" "$PREFIX/bin" "$PREFIX/deploy" 2>/dev/null || true
 for d in $DIRS; do chown -R "$SVC_USER:$SVC_USER" "$PREFIX/$d" 2>/dev/null || true; done
 

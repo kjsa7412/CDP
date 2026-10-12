@@ -147,6 +147,8 @@ if [ "$ROOT_MODE" = 1 ]; then
 #!/bin/sh
 # CDP 서버 명령 — install.sh 가 만든다. 설정은 $CONF
 if [ "\$(id -un)" = "$SVC_USER" ]; then exec "$NODE_BIN" "$PREFIX/bin/ctx.mjs" "\$@"; fi
+# 서비스 계정이 지금 폴더에 못 들어가면(root 의 /root 등) 그 안에서 부르는 git 이 실패한다 — 설치 폴더에서 부른다
+sudo -u "$SVC_USER" test -x . 2>/dev/null || cd "$PREFIX"
 exec sudo -u "$SVC_USER" -H "$NODE_BIN" "$PREFIX/bin/ctx.mjs" "\$@"
 EOF
     chmod 755 "$CDP"

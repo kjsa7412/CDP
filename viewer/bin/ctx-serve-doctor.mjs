@@ -34,7 +34,7 @@ const err = (s = '') => process.stderr.write(s + NL)
 function git(cwd, args, timeout = 10000) {
   return new Promise((resolve) => {
     execFile('git', ['-C', cwd, ...args], { timeout, windowsHide: true, encoding: 'utf8' }, (e, stdout, stderr) => {
-      resolve({ ok: !e, out: String(stdout || '').trim(), err: String(stderr || '').trim(), killed: e?.killed })
+      resolve({ ok: !e, out: String(stdout || '').trim(), err: String(stderr || '').trim(), killed: e?.killed, code: e?.code })
     })
   })
 }
@@ -73,9 +73,12 @@ export async function doctorRows(opt) {
   const major = Number(process.versions.node.split('.')[0])
   if (major >= 20) ok('node', process.version)
   else fail('node', `${process.version} — 20 이상이어야 한다`)
-  const gv = await git(process.cwd(), ['--version'], 5000)
+  // 판 확인은 현재 폴더에 기대지 않는다 — root 가 /root 에서 `cdp serve doctor` 를 부르면 서비스 계정이 그 폴더에
+  // 못 들어가 `git -C /root` 가 실패했고, 그것을 「git 이 없다」 로 냈다(2026-10-12 실서버)
+  const gv = await git(os.tmpdir(), ['--version'], 5000)
   if (gv.ok) ok('git', gv.out)
-  else fail('git', '없다 — 서버가 clone · commit · push 를 직접 한다')
+  else if (gv.code === 'ENOENT') fail('git', '없다 — 서버가 clone · commit · push 를 직접 한다')
+  else fail('git', `실행하지 못했다 — ${gv.err || gv.code || '까닭 모름'}`)
 
   // ── 명부
   if (!opt.auth) {
