@@ -82,9 +82,18 @@ export async function runSelfUpdate(opt) {
     }
     // current 를 옮긴다 — 상대 링크(폴더째 옮겨도 산다). Windows 는 junction(관리자 권한이 필요 없다)
     const next = cur + '.next'
-    await fs.rm(next, { force: true, recursive: true }).catch(() => {})
+    // 링크만 지운다 — 재귀 삭제는 junction 을 따라가 그 판 폴더를 비운다(worktree 에서 실측한 함정)
+    const dropLink = async (p) => {
+      const st = await fs.lstat(p).catch(() => null)
+      if (!st) return
+      if (!st.isSymbolicLink()) throw new Error(`${p} 가 링크가 아니다 — 손으로 본다`)
+      await fs.unlink(p).catch(() => fs.rmdir(p))
+    }
+    await dropLink(next)
     if (process.platform === 'win32') await fs.symlink(dest, next, 'junction')
     else await fs.symlink('v' + ver, next)
+    // Windows 는 있는 junction 위로 rename 하지 못한다(EPERM) — 옛 current 링크를 먼저 걷는다(그 사이 잠깐 비지만 shim 은 다음 실행에 읽는다)
+    if (process.platform === 'win32') await dropLink(cur)
     await fs.rename(next, cur)
     out(`current  → v${ver}`)
     // 명령 자리 — ~/.cdp/bin/ctx 가 늘 current 를 부른다. 처음 한 번 PATH 에 넣으면 판이 바뀌어도 그대로다
