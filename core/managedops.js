@@ -12,14 +12,17 @@
 import { CtxError } from './tools.js'
 import { stampDoc } from './forms.js'
 import { DROPPED_HEAD } from './docrefs.js'
-import { parseRegistry, globContains, globIntersects, patternProblem, docPathProblem, registryRow, outsideFences, ADDED_NOTE } from './managed.js'
+import { parseRegistry, globContains, globIntersects, patternProblem, docPathProblem, registryRow, outsideFences, ADDED_NOTE, KINDS } from './managed.js'
 
 export const MAX_OPS = 10
-export const OPS = ['add', 'rename', 'merge', 'retire', 'drop']
+export const OPS = ['add', 'kind', 'rename', 'merge', 'retire', 'drop']
 // op 마다 받는 키 — 이 밖의 키는 거절한다(오타가 조용히 버려지지 않게)
 const KEYS = {
   // form — 서식집의 서식 id(`public-si/DE_431`). 새 문서를 그 서식의 빈 문서(제목 · 표지 · 첫 문단)로 찍는다(v1.0 §8.1)
-  add: { need: ['pattern', 'doc'], may: ['level', 'title', 'reviewed', 'form'] },
+  // kind — 문서 종류(대상 · 대장 · 정의 · 사건 · 서술). 없으면 서식의 kind. 등록부 「종류」 칸에 적혀 drift 의 잣대가 된다
+  add: { need: ['pattern', 'doc'], may: ['level', 'title', 'reviewed', 'form', 'kind'] },
+  // 이미 있는 행의 「종류」 칸만 바꾼다 — 서식 없이 세운 문서 · 칸이 생기기 전에 세운 문서
+  kind: { need: ['pattern', 'kind'], may: [] },
   rename: { need: ['doc', 'to'], may: [] },
   merge: { need: ['doc', 'into'], may: [] },
   retire: { need: ['pattern'], may: [] },
@@ -43,7 +46,7 @@ export function checkManagedShape(list) {
     const at = `managed[${i}]`
     if (!m || typeof m !== 'object' || Array.isArray(m)) throw new CtxError('E_INPUT', `${at} 는 객체다`, { field: at })
     const op = m.op == null ? 'add' : m.op
-    if (!OPS.includes(op)) throw new CtxError('E_INPUT', `${at}.op 는 add · rename · merge · retire · drop 중 하나다`, { field: at + '.op' })
+    if (!OPS.includes(op)) throw new CtxError('E_INPUT', `${at}.op 는 add · kind · rename · merge · retire · drop 중 하나다`, { field: at + '.op' })
     const k = KEYS[op]
     for (const key of Object.keys(m)) {
       if (key === 'op') continue
@@ -52,6 +55,7 @@ export function checkManagedShape(list) {
     for (const key of k.need) {
       if (typeof m[key] !== 'string' || !m[key]) throw new CtxError('E_INPUT', `${at}.${key} 가 없다`, { field: at + '.' + key })
     }
+    if (m.kind != null && !KINDS.includes(m.kind)) throw new CtxError('E_INPUT', `${at}.kind 는 ${KINDS.join(' · ')} 중 하나다`, { field: at + '.kind' })
     if (m.level != null && !(Number.isInteger(m.level) && m.level >= 0 && m.level <= 6)) {
       throw new CtxError('E_INPUT', `${at}.level 은 0~6 정수다 (0 = 문서 전체)`, { field: at + '.level' })
     }
@@ -69,8 +73,8 @@ export function checkManagedShape(list) {
   })
 }
 
-// 정리(rename · merge · retire · drop)가 하나라도 있는가 — admin 만
-export const needsAdmin = (ops) => (ops || []).some((o) => (o.op ?? 'add') !== 'add')
+// 정리(rename · merge · retire · drop)가 하나라도 있는가 — admin 만. 행 더하기 · 종류 칸은 큐레이터의 일이다
+export const needsAdmin = (ops) => (ops || []).some((o) => !['add', 'kind'].includes(o.op ?? 'add'))
 
 function bad(at, field, msg, detail = {}) {
   return new CtxError('E_INPUT', msg, { field: `managed[${at}].${field}`, ...detail })
@@ -126,6 +130,31 @@ function widenHead(lines, at) {
   const cr = (l) => (l.endsWith('\r') ? '\r' : '')
   lines[top] = head.replace(/\r$/, '').replace(/\s*$/, '') + ' 비고 |' + cr(head)
   lines[top + 1] = sep.replace(/\r$/, '').replace(/\s*$/, '') + '---|' + cr(sep)
+}
+
+// 그 행의 「종류」 칸을 채운다. 그 행이 든 표의 머리에 칸이 없으면 맨 끝에 더한다(머리 · 구분행만 — 다른 행은 그대로 두고
+// 빈 칸으로 읽힌다). 칸 위치는 머리의 이름으로 찾는다(`parseRegistry` 와 같다) — 비고 칸이 넷째로 남는다
+function setRowKind(text, line, kind) {
+  const lines = text.split(NL)
+  const at = line - 1
+  let top = at
+  while (top > 0 && /^\s*\|/.test(lines[top - 1])) top--
+  const cr = (l) => (l.endsWith('\r') ? '\r' : '')
+  const cellsOf = (l) => l.replace(/\r$/, '').trim().split('|').slice(1, -1).map((c) => c.trim())
+  const head = lines[top] || ''
+  const sep = lines[top + 1] || ''
+  if (!RE_REG_HEAD.test(head) || !RE_REG_SEP.test(sep)) return text
+  let k = cellsOf(head).findIndex((c) => c === '종류')
+  if (k < 0) {
+    k = cellsOf(head).length
+    lines[top] = head.replace(/\r$/, '').replace(/\s*$/, '') + ' 종류 |' + cr(head)
+    lines[top + 1] = sep.replace(/\r$/, '').replace(/\s*$/, '') + '---|' + cr(sep)
+  }
+  const cells = cellsOf(lines[at])
+  while (cells.length < k) cells.push('')
+  cells[k] = kind
+  lines[at] = '| ' + cells.join(' | ') + ' |' + cr(lines[at])
+  return lines.join(NL)
 }
 
 function removeRow(text, line) {
@@ -243,8 +272,18 @@ export async function planManaged({ ops, registryText, docPaths, read, workId, f
         warnings.push(`${doc} 은 이미 있는 문서다 — 서식(${op.form})은 새 문서에만 찍는다. 행만 더했다`)
       }
       text = insertRow(text, registryRow({ pattern: op.pattern, doc, level, note: ADDED_NOTE + workId }))
+      const kind = op.kind ?? (KINDS.includes(form?.kind) ? form.kind : null)
+      if (kind) text = setRowKind(text, parseRegistry(text).rules.find((r) => r.pattern === op.pattern).line, kind)
       added.push(op.pattern)
-      events.push({ op: 'add', pattern: op.pattern, doc, level, created: created.has(doc), ...(form ? { form: form.id } : {}) })
+      events.push({ op: 'add', pattern: op.pattern, doc, level, created: created.has(doc), ...(form ? { form: form.id } : {}), ...(kind ? { kind } : {}) })
+      continue
+    }
+
+    if (op.op === 'kind') {
+      const rule = reg.rules.find((r) => r.pattern === op.pattern)
+      if (!rule) throw new CtxError('E_NOT_FOUND', `등록부에 ${op.pattern} 행이 없다`, { pattern: op.pattern })
+      text = setRowKind(text, rule.line, op.kind)
+      events.push({ op: 'kind', pattern: rule.pattern, doc: rule.doc, kind: op.kind, ...(rule.kind ? { was: rule.kind } : {}) })
       continue
     }
 

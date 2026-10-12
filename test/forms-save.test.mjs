@@ -52,6 +52,24 @@ test('planManaged — add { form } 는 새 문서를 서식의 빈 문서로 찍
   )
 })
 
+test('planManaged — 「종류」 칸: add 는 서식의 kind · kind 를 주면 그것 · 칸 없는 옛 머리는 넓힌다 · kind op 는 있는 행만', async () => {
+  const lib = await loadForms()
+  const { parseRegistry } = await import('../core/managed.js')
+  const { needsAdmin, checkManagedShape } = await import('../core/managedops.js')
+  const base = { registryText: '| 좌표 패턴 | 관리 문서 | 섹션 | 비고 |\n|---|---|---|---|\n| `t:*` | `docs/t.md` | `## {값}` | 옛 행 |\n', docPaths: ['docs/t.md'], read: async () => '# t\n', workId: 'w1', forms: lib.byId }
+  const p = await planManaged({ ...base, ops: [{ op: 'add', pattern: '이슈:*', doc: 'docs/이슈.md', form: 'public-si/BM_501' }, { op: 'add', pattern: 'term:*', doc: 'docs/용어집.md', title: '용어집', kind: '정의' }] })
+  const reg = parseRegistry(p.registryText)
+  assert.deepEqual(reg.rules.map((r) => [r.pattern, r.kind, r.note]), [['t:*', null, '옛 행'], ['이슈:*', '대장', '서버 추가 · w1'], ['term:*', '정의', '서버 추가 · w1']])
+  assert.match(p.registryText, /^\| 좌표 패턴 \| 관리 문서 \| 섹션 \| 비고 \| 종류 \|\n\|---\|---\|---\|---\|---\|/)
+  // kind op — 있는 행의 칸만 · 없는 행은 E_NOT_FOUND · 큐레이터의 일(admin 아님) · 모르는 종류는 모양에서 거절
+  const q = await planManaged({ ...base, ops: [{ op: 'kind', pattern: 't:*', kind: '대상' }] })
+  assert.equal(parseRegistry(q.registryText).rules[0].kind, '대상')
+  assert.equal(parseRegistry(q.registryText).rules[0].note, '옛 행')
+  await assert.rejects(planManaged({ ...base, ops: [{ op: 'kind', pattern: 'x:*', kind: '대상' }] }), (e) => e.code === 'E_NOT_FOUND')
+  assert.equal(needsAdmin([{ op: 'kind', pattern: 't:*', kind: '대상' }]), false)
+  assert.throws(() => checkManagedShape([{ op: 'kind', pattern: 't:*', kind: '모름' }]), /kind 는/)
+})
+
 test('save — 큐레이터가 서식으로 문서를 세우고 첫 섹션을 쓴다 · section 의 form · 예시가 섹션으로 잡히지 않는다', { skip: !hasGit && 'git 이 없다' }, async () => {
   const d = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-fs-'))
   const r = path.join(d, 'repo')

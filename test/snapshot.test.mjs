@@ -86,14 +86,19 @@ test('snapshot — 근거 없는 섹션만 원문 그대로 · 날짜는 섹션�
 test('snapshot — 본문의 좌표는 정본 원문의 가리키는 줄이다 · 「본문에만 있는 좌표」 경고를 내지 않는다', { skip: !hasGit && 'git 이 없다' }, async () => {
   const { r, rm } = await repo()
   try {
-    await fs.writeFile(path.join(r, 'docs', 't.md'), T.replace('b 의 지금 — 정본에만 있다.', 'b 의 지금 — 정본에만 있다. 이웃은 `table:c`.'))
+    await fs.writeFile(path.join(r, 'docs', 't.md'), T.replace('b 의 지금 — 정본에만 있다.', 'b 의 지금 — 정본에만 있다. 이웃은 `table:c`. 근거 [a1](../work/2026-0901-a1.md) · 웹 [x](http://x/y.md)'))
     await run('git', ['-C', r, '-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-qam', 'ptr'])
     await save(r, { work: envelope(), snapshot: [{ coord: 'table:b' }] }, curator)
     const r1 = await loadRepo(r)
     const snap = r1.works.find((d) => recordKind(d) === 'snapshot')
-    assert.match(await fs.readFile(path.join(r, snap.path), 'utf8'), /`table:c`/, '스냅샷 본문에 가리키는 좌표가 있다')
+    const text = await fs.readFile(path.join(r, snap.path), 'utf8')
+    assert.match(text, /`table:c`/, '스냅샷 본문에 가리키는 좌표가 있다')
+    // 상대 링크는 기록 자리(work/) 기준으로 다시 잇는다 — 문서 기준 그대로면 work/ 에서 깨진다 · 웹 링크는 그대로
+    assert.match(text, /\[a1\]\(2026-0901-a1\.md\)/)
+    assert.match(text, /\[x\]\(http:\/\/x\/y\.md\)/)
     const f = runBuiltinCheck({ ...r1 }).findings.find((x) => x.kind === 'body-only-coord')
-    assert.ok(!f || !f.items.some((i) => i.id === snap.id), JSON.stringify(f))
+    // 스냅샷도 봉투(뜬 좌표 목록을 백틱으로 적는다)도 이 경고를 내지 않는다
+    assert.ok(!f || !f.items.some((i) => i.id === snap.id || i.id === '2026-1010-스냅샷'), JSON.stringify(f))
   } finally {
     await rm()
   }

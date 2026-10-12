@@ -389,7 +389,7 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
             .array(
               z
                 .object({
-                  op: z.enum(['add', 'rename', 'merge', 'retire', 'drop']).optional(),
+                  op: z.enum(['add', 'kind', 'rename', 'merge', 'retire', 'drop']).optional(),
                   pattern: z.string().max(240).optional(),
                   doc: z.string().max(240).optional(),
                   level: z.number().int().min(0).max(6).optional(),
@@ -402,6 +402,8 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
                   reviewed: z.array(z.string().max(260)).max(50).optional(),
                   // add — 서식집의 서식 id(`public-si/DE_431`). 새 문서를 그 서식의 깨끗한 빈 문서로 찍는다
                   form: z.string().max(120).optional(),
+                  // add · kind — 문서 종류(대상 · 대장 · 정의 · 사건 · 서술). 등록부 「종류」 칸 — drift 의 비대 잣대. add 에서 없으면 서식의 kind
+                  kind: z.enum(['대상', '대장', '정의', '사건', '서술']).optional(),
                 })
                 .strict()
             )

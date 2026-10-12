@@ -32,7 +32,7 @@ import { cmpDateDesc } from './validity.js'
 import { splitBaseline, joinBaseline, renderBlock, hasMark } from './baseline.js'
 import { formsLib } from './formslib.js'
 import { take as takeAsset, checkAssetName, ASSETS_COUNT_MAX, ASSETS_TOTAL_MAX } from './assets.js'
-import { repoPath, mdRefs } from './repopath.js'
+import { repoPath, mdRefs, rebaseLinks } from './repopath.js'
 import { htmlExternal, proseLength } from './visuals.js'
 import { planPurge } from './examples.js'
 import { checkEditsShape, planEdits } from './edits.js'
@@ -943,9 +943,10 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       }
     }
 
-    // 6.9 정본 스냅샷 기록 — 섹션 하나에 하나. 원문 그대로(머리 한 줄만 — 사건이 아니라 그때의 상태라는 표시)
+    // 6.9 정본 스냅샷 기록 — 섹션 하나에 하나. 원문 그대로(머리 한 줄만 — 사건이 아니라 그때의 상태라는 표시).
+    // 상대 링크만 기록 자리(work/) 기준으로 다시 잇는다 — 그대로 옮기면 문서 기준 경로라 work/ 에서 깨진다(dpms_wiki 세팅 — 109곳)
     for (const y of snapshots) {
-      const body = [`> 정본 스냅샷 — \`${y.doc}\` 의 「${String(y.heading).replace(/^#+\s*/, '')}」 를 원문 그대로 떴다(${y.asof} 기준 · 봉투 [\`${w.id}\`](${w.id}.md)). 사건이 아니라 그때의 상태다.`, '', y.text].join(NL)
+      const body = [`> 정본 스냅샷 — \`${y.doc}\` 의 「${String(y.heading).replace(/^#+\s*/, '')}」 를 원문 그대로 떴다(${y.asof} 기준 · 봉투 [\`${w.id}\`](${w.id}.md)). 사건이 아니라 그때의 상태다.`, '', rebaseLinks(y.text, y.doc, `work/${y.id}.md`)].join(NL)
       const rec = { id: y.id, title: `[스냅샷] ${y.coord}`, date: y.asof, source: y.source, touches: [y.coord], snapshot: { source: y.source, asof: y.asof.slice(0, 10) }, tags: ['snapshot'], body }
       await snap.write(`work/${y.id}.md`, renderWork(rec, user))
     }

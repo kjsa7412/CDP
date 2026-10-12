@@ -151,8 +151,10 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
   const kindOf = new Map(works.map((d) => [d.id, recordKind(d)]))
   const curations = works.filter((d) => kindOf.get(d.id) === 'curation').sort(cmpDateAsc)
   // 암묵 전환은 **옛 파생 이력이 있는 레포**만 — 큐레이션 기록이 없고, 작업 기록을 반영한 섹션(applied)이 하나라도 있을 때.
-  // 다시 세운 레포 · 새 레포는 섹션이 없으니 기록 전부가 대기다(그것이 「큐레이션부터 다시」 의 뜻이다)
-  const implicit = curations.length === 0 && sections.some((s) => s.applied)
+  // 다시 세운 레포 · 새 레포는 섹션이 없으니 기록 전부가 대기다(그것이 「큐레이션부터 다시」 의 뜻이다).
+  // 기존 문서 레포에서 세운 레포는 섹션이 있어도 그 applied 가 **이관 · 기준선 · 스냅샷 같은 기계 기록**이다 — 옛 파생이 아니다.
+  // 사람의 기록(또는 레포에 없는 옛 id)을 가리키는 applied 가 있을 때만 옛 파생 이력으로 본다(dpms_wiki 세팅 — 이관 직후 대기 22 가 1 로 보였다)
+  const implicit = curations.length === 0 && sections.some((s) => s.applied && (!kindOf.has(s.applied) || kindOf.get(s.applied) === 'work'))
 
   // 스냅샷은 그 좌표의 섹션이 없을 때만 사람의 기록처럼 대기열에 선다 — 섹션이 있으면 이미 반영된 원문이다(리빌딩 검토 §5.4)
   const live = new Set(sections.filter((s) => s.state !== 'anchor-missing' && s.state !== 'doc-missing').map((s) => s.coord))

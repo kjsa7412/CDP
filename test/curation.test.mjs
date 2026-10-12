@@ -202,6 +202,18 @@ test('materialsOf — 좌표별 자리 · 등록부 없는 타입 · 본문에�
   assert.equal(materialsOf(r, '2026-0101-없음'), null)
 })
 
+test('기존 문서에서 세운 레포 — applied 가 이관(registry) 기록이면 암묵 전환이 아니다: 기록 전부 대기', async () => {
+  const root = await repo({
+    'docs/테이블.md': DOC([['a', '2026-1012-이관-table', 'A'], ['b', '2026-1012-이관-table', 'B']]),
+    'work/2026-1012-이관-table.md': work({ id: '2026-1012-이관-table', date: '2026-10-12 09:00', extra: ['touchesEmpty: 이관'] }).replace('tags: []', 'tags: [registry, 이관]'),
+    'work/2026-0901-a.md': work({ id: '2026-0901-a', date: '2026-09-01 10:00', touches: ['table:a'] }),
+    'work/2026-0902-b.md': work({ id: '2026-0902-b', date: '2026-09-02 10:00', touches: ['table:b'] }),
+  })
+  const r = await loadRepo(root)
+  assert.equal(r.curation.implicit, false)
+  assert.deepEqual(r.curation.queue.map((q) => q.id), ['2026-0901-a', '2026-0902-b'])
+})
+
 test('새 레포 · 다시 세운 레포(섹션 없음) — 큐레이션 기록이 없어도 암묵 전환이 아니다: 기록 전부 대기', async () => {
   const root = await repo({
     '_managed.md': '# 등록부\n\n| 좌표 패턴 | 관리 문서 | 섹션 |\n|---|---|---|\n',

@@ -22,6 +22,7 @@
 import { normValue, lintRegistry, docEscapes } from './managed.js'
 import { isCoordShape } from './vocab.js'
 import { danglingRefs } from './docrefs.js'
+import { SYSTEM_TAGS } from './curation.js'
 
 const AGENDA = new Set(['미결', '제안'])
 const REQUIRED = ['id', 'title', 'date', 'author']
@@ -195,7 +196,8 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       // 큐레이션 · 기준선 기록은 다룬 좌표를 본문에 적는 것이 모양이다(판정표 · 갈아 끼운 블록 목록) — touches 를 갖지 않는다.
       // 정본 스냅샷도 그렇다 — 본문은 섹션 원문이라 그 안의 좌표는 가리키는 줄이지 바꾼 것이 아니다
       // (ezipez_cdp 리빌딩 — 이 경고 236건 중 200건이 스냅샷 11개에서 났다)
-      if (d.curates || d.baseline || d.snapshot) continue
+      // 스냅샷 봉투(태그 snapshot)와 옛 기계 기록(registry 등)도 — 다룬 좌표를 적는 것이 모양이다(dpms_wiki 세팅 — 봉투 하나가 89건)
+      if (d.curates || d.baseline || d.snapshot || (d.tags || []).some((t) => SYSTEM_TAGS.includes(t))) continue
       const text = bodies.get(d.path)
       if (!text) continue
       const inTouches = new Set(d.touches)
