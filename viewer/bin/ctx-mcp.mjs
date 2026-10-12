@@ -428,6 +428,9 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
             .array(z.object({ coord: z.string().max(240) }).strict())
             .max(200)
             .optional(),
+          // 세우기(큐레이터 · ctx seed apply) — 세우는 흔적은 기록이 아니다. 구조면 기록 파일 없이 섹션(applied: null) · 등록부 · 어휘 · 첨부만 쓰고
+          // 좌표를 `_seed.json` 의 sections 에 · record: true 면 함께 들이는 기록 하나를 쓰고 id 를 records 에(판정 없이 반영됨)
+          seed: z.object({ at: z.string().max(10), from: z.string().max(300), note: z.string().max(2000).optional(), record: z.boolean().optional() }).strict().optional(),
           // 첨부 — 올리기 API(`POST /api/<repo>/assets`)가 준 ref 와 파일 이름. 바이트는 여기 싣지 않는다(검토 ㉠)
           assets: z
             .array(z.object({ ref: z.string().max(80), name: z.string().max(120) }).strict())

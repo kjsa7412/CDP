@@ -27,7 +27,7 @@ import { CtxError, checkCoord, checkId, sliceSection } from './tools.js'
 import { withLock } from './lock.js'
 import { enqueuePush, lastPush, describe as mirrorLine } from './mirror.js'
 import { topApplied, normalizeCurates, nfc } from './frontmatter.js'
-import { recordKind, SYSTEM_TAGS } from './curation.js'
+import { recordKind, SYSTEM_TAGS, parseSeed, SEED_FILE } from './curation.js'
 import { cmpDateDesc } from './validity.js'
 import { splitBaseline, joinBaseline, renderBlock, hasMark } from './baseline.js'
 import { formsLib } from './formslib.js'
@@ -469,6 +469,7 @@ function curatorOnly(input, w) {
   if (input.examples != null) why.push('examples')
   if ((input.baseline || []).length) why.push('baseline')
   if ((input.snapshot || []).length) why.push('snapshot')
+  if (input.seed != null) why.push('seed')
   if (w.curates != null) why.push('work.curates')
   if (w.baseline != null) why.push('work.baseline')
   const tags = (w.tags || []).filter((t) => RESERVED_TAGS.includes(t))
@@ -563,6 +564,27 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     if (!(w.tags || []).includes('snapshot')) w.tags = [...(w.tags || []), 'snapshot']
   }
 
+  // 2.45 세우기(문서레포 세우기 검토 S13) — 기존 문서 레포에서 세울 때의 쓰기. **세우는 흔적은 작업 기록이 아니다** —
+  //   구조(seed.record 없음)  등록부 · 어휘 · 섹션(applied: null) · 첨부만 쓰고 기록 파일은 쓰지 않는다. 섹션 좌표는 `_seed.json` 의 sections 로
+  //   기록(seed.record: true)  함께 들이는 작업 기록 하나 — 보통의 기록을 쓰고 id 를 `_seed.json` 의 records 로(판정 없이 반영됨)
+  // `work` 는 커밋 메시지 · 첨부 폴더 이름으로만 쓴다(구조일 때). 판정 · 정리 · 스냅샷과는 섞지 않는다
+  const seedIn = input.seed ?? null
+  let seeding = null // 'structure' | 'record'
+  if (seedIn != null) {
+    if (!seedIn || typeof seedIn !== 'object' || Array.isArray(seedIn)) throw new CtxError('E_INPUT', 'seed 는 { at, from, note?, record? } 다', { field: 'seed' })
+    for (const k of Object.keys(seedIn)) if (!['at', 'from', 'note', 'record'].includes(k)) throw new CtxError('E_INPUT', `seed.${k} 는 받지 않는다`, { field: 'seed.' + k })
+    if (typeof seedIn.at !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(seedIn.at)) throw new CtxError('E_INPUT', 'seed.at 은 세운 날 YYYY-MM-DD 다', { field: 'seed.at' })
+    if (typeof seedIn.from !== 'string' || !seedIn.from.trim() || seedIn.from.length > 300) throw new CtxError('E_INPUT', 'seed.from 은 원천(문서 레포@커밋) 한 줄이다', { field: 'seed.from' })
+    if (seedIn.note != null && (typeof seedIn.note !== 'string' || seedIn.note.length > 2000)) throw new CtxError('E_INPUT', 'seed.note 는 2000자까지의 글이다', { field: 'seed.note' })
+    const mixed = [curates && 'work.curates', snapshotOps.length && 'snapshot', editOps.length && 'edits', input.examples != null && 'examples', managedOps.some((o) => !['add', 'kind'].includes(o.op)) && 'managed(정리)'].filter(Boolean)
+    if (mixed.length) throw new CtxError('E_INPUT', `세우기는 판정 · 정리 · 스냅샷과 한 save 에 섞지 않는다 — ${mixed.join(' · ')} 를 빼고 보낸다`, { field: 'seed', mixed })
+    seeding = seedIn.record ? 'record' : 'structure'
+    if (seeding === 'record') {
+      const extra = [sections.length && 'sections', managedOps.length && 'managed', baselineOps.length && 'baseline', vocabAdds.length && 'vocab'].filter(Boolean)
+      if (extra.length) throw new CtxError('E_INPUT', `seed.record 는 함께 들이는 기록 하나다 — ${extra.join(' · ')} 는 구조 세우기(seed.record 없이)로 따로 보낸다`, { field: 'seed.record', extra })
+    } else if (!(w.touches || []).length && !w.touchesEmpty) w.touchesEmpty = '세우기'
+  }
+
   // 2.5 구조 정리(rename · merge · retire · drop)도 큐레이터의 일이다(v1.0 V2) — 2.1 이 이미 걸렀다
 
   // 3 존재 — 기존 기록은 고치지도 지우지도 않는다. 정정은 supersedes 를 단 새 기록이다.
@@ -573,7 +595,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     .readdir(path.join(root, 'work'))
     .then((names) => names.some((n) => nfc(n) === w.id + '.md'))
     .catch(() => false)
-  if (exists) throw new CtxError('E_EXISTS', '그 id 의 작업 기록이 이미 있다', { id: w.id })
+  if (exists && seeding !== 'structure') throw new CtxError('E_EXISTS', '그 id 의 작업 기록이 이미 있다', { id: w.id })
 
   // 3.5 트리 — **더러우면 거절한다.** 서버가 유일한 작성자라 미커밋 변경은 언제나 사고다
   // (중단된 save · 사람의 손). 전에는 그 위에서 섹션을 치환해 남의 줄이 이 사람의 이름으로
@@ -602,7 +624,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       )
     }
     // 큐레이션 · 기준선 기록은 좌표가 없는 것이 그 기록의 모양이다 — 매번 나오는 경고는 아무것도 알리지 않는다
-    if (w.curates == null && !(input.baseline || []).length && !snapshotOps.length) warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
+    if (w.curates == null && !(input.baseline || []).length && !snapshotOps.length && seeding !== 'structure') warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
   }
 
   // 3.8 첨부 꺼내기 — **파일을 만지기 전에.** 없는 ref · 종류 어긋남 · 상한은 여기서 걸린다. 쓰는 것은 6.5
@@ -689,6 +711,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     // **applied 는 뒤로 가지 않는다** — 원문 날짜를 단 옛 기록(편입)만 반영해도 지금 applied 가 더 늦은 작업 기록이면 그것을 둔다.
     // 뒤로 가면 이미 반영한 늦은 기록이 그 섹션의 미반영(`later`)으로 되살아난다
     const appliedFor = (coord) => {
+      if (seeding === 'structure') return null
       const hits = (curates || []).filter((j) => j.verdict !== 'keep' && j.into.includes(coord)).map((j) => r0.byId.get(j.id)).filter(Boolean)
       if (!hits.length) return w.id
       const cur = r0.sections.find((x) => x.coord === coord)?.applied
@@ -952,7 +975,20 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     }
 
     // 7 기록 — TEMPLATE 순서의 프론트매터. author 는 토큰의 user 다. 첨부는 `attachments` 로 — 화면의 첨부 목록이 이것을 읽는다
-    await snap.write(workRel, renderWork(w, user, assetsOut.map((a) => a.path.slice('work/'.length)), curates))
+    if (seeding !== 'structure') await snap.write(workRel, renderWork(w, user, assetsOut.map((a) => a.path.slice('work/'.length)), curates))
+    if (seeding) {
+      const cur = parseSeed(await fs.readFile(path.join(root, SEED_FILE), 'utf8').catch(() => null))
+      if (cur?.bad) throw new CtxError('E_INPUT', `${cur.bad} — 사람이 고친 뒤 다시`, { field: 'seed' })
+      const uniq = (xs) => [...new Set(xs)]
+      const next = {
+        at: seedIn.at,
+        from: seedIn.from.trim(),
+        ...(seedIn.note ?? cur?.note ? { note: seedIn.note ?? cur.note } : {}),
+        records: uniq([...(cur?.records || []), ...(seeding === 'record' ? [w.id] : [])]),
+        sections: uniq([...(cur?.sections || []), ...(seeding === 'structure' ? [...sections.map((x) => x.coord), ...baselineOps.map((x) => x.coord)] : [])]),
+      }
+      await snap.write(SEED_FILE, JSON.stringify(next, null, 1) + NL)
+    }
 
     // INDEX 두 파일 · 등록부 사본(문서 머리 표 칸 · _vocab.md 생성 블록)은 **더 만들지 않는다**(v1.0 I9 · V4) — 레포에는
     // 지식만 둔다. 목록과 좌표별 색인은 화면 · 도구가 계산하고, 등록부는 `_managed.md` 한 곳이다(사본은 반드시 낡는다).

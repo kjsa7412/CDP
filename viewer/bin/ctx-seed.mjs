@@ -1,12 +1,12 @@
 // ctx seed · follow · update — 기존 문서 레포에서 지식 레포를 세우고, 정본 둘을 잇는다. 문서레포 세우기 검토 v0.1 §4.
 //
 //   ctx seed init|check [--from <문서 레포>]
-//   ctx seed plan|apply --server <주소> --repo <레포> [--from …] [--at <sha>] [--stage …] [--only <key|id>] [--date <YYYY-MM-DD>]
+//   ctx seed plan|apply --server <주소> --repo <레포> [--from …] [--at <sha>] [--stage baseline|managed|records] [--only <key|id>] [--date <YYYY-MM-DD>]
 //   ctx seed verify --clone <지식 레포 클론> [--from …] [--at <sha>]
 //   ctx follow --clone <클론> --since <sha> [--from …]
 //   ctx update [--from …] <from sha> [<to sha>]   ·   ctx update --save <초안> [--server … --repo …] [--go]
 //
-// 원천 문서 레포는 **읽기만** 한다(git ls-tree · show). 쓰는 길은 서버의 기존 길 — MCP save · /assets · /baseline · /snapshot(검토 S3).
+// 원천 문서 레포는 **읽기만** 한다(git ls-tree · show). 쓰는 길은 서버의 기존 길 — MCP save · /assets · /baseline(검토 S3). 세우는 흔적은 기록이 아니라 _seed.json 하나다(S13).
 // 판정(큐레이션)은 하지 않는다(S8) — apply 는 대기열을 세워 두고 끝난다.
 
 import fs from 'node:fs'
@@ -174,9 +174,11 @@ async function runApply(opt, io, dry) {
   const table = linkTable(map, s.files, day)
   const unlinked = new Map()
   const sectionsOf = (d) => docSections(d, s.read(d.src), map, (t) => relink(t, d.src, d.doc, table, unlinked))
-  const stages = opt.stage ? [opt.stage] : ['baseline', 'managed', 'snapshot', 'records']
+  const stages = opt.stage ? [opt.stage] : ['baseline', 'managed', 'records']
+  // 세운 자리(검토 S13) — 세우는 흔적은 작업 기록이 아니다. 구조 save 는 기록 파일 없이 `_seed.json` 의 sections 로,
+  // 함께 들이는 기록은 `_seed.json` 의 records 로(판정 없이 반영됨). 섹션의 근거는 원천(from)이다 — 스냅샷을 뜨지 않는다
+  const seed = { at: day, from: `${path.posix.basename(s.top)}@${sha}` }
   const only = (x) => !opt.only || opt.only === x
-  const tag = dry ? '(미리보기) ' : ''
   const exists = async (coord) => {
     const r = await c.rpc('section', { coord })
     return !r.error && r.value && r.value.state !== 'missing' && r.value.content != null
@@ -186,6 +188,12 @@ async function runApply(opt, io, dry) {
     if (!TYPES[ext]) throw new Error(`첨부 종류를 받지 않는다(${ext}) — ${rel}`)
     const j = await c.post('assets', s.readBuf(rel), TYPES[ext])
     return { ref: j.ref, name: path.posix.basename(rel) }
+  }
+  // 하나씩 — 같은 바이트의 그림 둘을 동시에 올리면 서버 staging 의 같은 이름을 두고 다툰다(Windows EPERM)
+  const uploadAll = async (list) => {
+    const out = []
+    for (const rel of list) out.push(await upload(rel))
+    return out
   }
   const save = async (input, label) => {
     const d = await c.rpc('save', { ...input, dryRun: true })
@@ -222,6 +230,7 @@ async function runApply(opt, io, dry) {
         managed: [{ op: 'add', pattern: `${d.type}:*`, doc: d.doc, ...(d.form ? { form: d.form } : { title: d.title || d.key }), ...(d.kind ? { kind: d.kind } : {}) }],
         vocab: secs.map((x) => ({ coord: x.coord, label: x.label })),
         items: secs.map((x) => ({ coord: x.coord, heading: x.heading, body: x.body })),
+        seed,
       })
       io.out(`   ${d.key} — 커밋 ${j.commit} · 블록 ${j.baseline}`)
     }
@@ -236,7 +245,7 @@ async function runApply(opt, io, dry) {
         continue
       }
       const atts = [...(d.figs ? s.files.filter((f) => f.startsWith(d.figs + '/')) : []), ...(d.attach || [])]
-      const assets = dry ? [] : await Promise.all(atts.map(upload))
+      const assets = dry ? [] : await uploadAll(atts)
       const managed = [
         {
           op: 'add',
@@ -254,15 +263,13 @@ async function runApply(opt, io, dry) {
             title: `이관 — ${path.posix.basename(d.src, '.md')} → ${d.doc}`,
             date: `${day} 09:00`,
             touches: [],
-            touchesEmpty: `문서 레포 이관(${sha})`,
-            tags: ['registry', '이관'],
+            touchesEmpty: `세우기(${sha})`,
             source: srcRef(d.src),
             body: [
-              `원천 문서 레포의 \`${d.src}\`(${sha}) 를 관리 문서 \`${d.doc}\` 로 옮겼다 — ctx seed apply. 섹션 = 원천의 지금(옛 이력 줄 · 「출처」 메모 · 머리말은 걷었다).`,
-              '',
-              `섹션 ${secs.length} · ${d.split === 'whole' ? '문서 전체가 좌표 하나' : d.split === 'chapters' ? '장 하나가 좌표 하나' : '`## 값 — 설명` 하나가 좌표 하나'}${d.form ? ' · 서식 ' + d.form : ' · 서식 없음'}${atts.length ? ` · 첨부 ${atts.length}` : ''}. 섹션의 원천은 이 다음의 정본 스냅샷이다.`,
+              `세우기 — \`${d.src}\`(${sha}) → \`${d.doc}\` · 섹션 ${secs.length}${atts.length ? ` · 첨부 ${atts.length}` : ''}`,
             ].join(NL),
           },
+          seed,
           vocab: secs.map((x) => ({ coord: x.coord, label: x.label, ...(x.aliases ? { aliases: x.aliases } : {}) })),
           managed,
           sections: secs.map((x) => ({ coord: x.coord, applied: null, ...(x.heading ? { heading: x.heading } : {}), body: x.body })),
@@ -270,21 +277,6 @@ async function runApply(opt, io, dry) {
         },
         `${d.key}(섹션 ${secs.length})`
       )
-    }
-  }
-
-  // 스냅샷은 기록보다 먼저 — 기록이 닿은 섹션은 서버가 건너뛰어 원문이 원천에서 빠진다(검토 S7)
-  if (stages.includes('snapshot')) {
-    io.out('[정본 스냅샷]')
-    // 뜰 좌표를 지도에서 직접 준다 — 서버가 진단에서 고르게 두면 방금 커밋한 문서를 옛 스캔으로 못 보는 서버 판이 있다(v1.2.1)
-    const want = map.docs.filter((d) => d.baseline == null && only(d.key)).flatMap((d) => sectionsOf(d).map((x) => x.coord))
-    for (let i = 0; i < want.length; i += 200) {
-      const j = await c.post('snapshot', { coords: want.slice(i, i + 200), ...(dry ? { dryRun: true } : {}) }).catch((e) => ({ error: e.message }))
-      if (j.error) {
-        io.out(`   ${/뜰 (스냅샷|섹션)이 없다|섹션이 없다|등록부에 걸리지 않는/.test(j.error) ? (dry ? '지금은 뜰 섹션 없음 — 이관 뒤에 그 섹션들을 뜬다' : '뜰 섹션 없음(근거가 다 있다)') : j.error}`)
-        continue
-      }
-      io.out(`   ${tag}${j.dryRun ? '' : '커밋 ' + j.commit + ' · '}스냅샷 ${j.snapshots?.length ?? 0} · 건너뜀 ${j.snapshotSkipped?.length ?? 0}`)
     }
   }
 
@@ -309,10 +301,11 @@ async function runApply(opt, io, dry) {
       const extra = atts.filter((a) => !body.includes(path.posix.basename(a))).map((a) => `- 첨부 — [${path.posix.basename(a)}](assets/${r.id}/${path.posix.basename(a)})`)
       if (extra.length) body += NL + NL + '---' + NL + extra.join(NL)
       const touches = expandTouches(r, map, sectionsOf)
-      const assets = dry ? [] : await Promise.all(atts.map(upload))
+      const assets = dry ? [] : await uploadAll(atts)
       await save(
         {
-          work: { id: r.id, title: title.slice(0, 200), date: r.date, touches, ...(touches.length ? {} : { touchesEmpty: '좌표 없음 — 가리키는 곳은 본문' }), tags: ['seed'], source: src, body },
+          work: { id: r.id, title: title.slice(0, 200), date: r.date, touches, ...(touches.length ? {} : { touchesEmpty: '좌표 없음 — 가리키는 곳은 본문' }), source: src, body },
+          seed: { ...seed, record: true },
           ...(assets.length ? { assets } : {}),
         },
         r.id
@@ -322,7 +315,7 @@ async function runApply(opt, io, dry) {
 
   if (unlinked.size) io.out(`글자로 남긴 링크(지도 밖 대상) — ${[...unlinked].map(([k, v]) => `${k}(${v})`).join(' · ')}`)
   const b = await c.rpc('brief', {})
-  if (!b.error) io.out(`끝 — 관리 문서 ${b.value.managedDocs} · 기록 ${b.value.works} · 대기 ${b.value.curation?.queue ?? '?'} · 근거 없음 ${b.value.drift?.unsourced ?? '?'} — 판정은 cdp-curate(큐레이터 폴더)`)
+  if (!b.error) io.out(`끝 — 관리 문서 ${b.value.managedDocs} · 기록 ${b.value.works}(세운 기록은 반영됨) · 대기 ${b.value.curation?.queue ?? '?'} · 근거 없음 ${b.value.drift?.unsourced ?? '?'} — 세운 자리는 _seed.json · 원천과 어긋남을 찾는 큐레이션은 cdp-curate · cdp-rebuild`)
   return 0
 }
 

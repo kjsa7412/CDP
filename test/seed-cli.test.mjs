@@ -1,6 +1,6 @@
 // ctx seed · follow · update — 임시 문서 레포 + 빈 틀 지식 레포 + 서버 하나로 끝까지(문서레포 세우기 검토 v0.1 §7).
 //
-// check → plan → apply(기준선 · 이관 · 스냅샷 · 기록) → verify 같음 → 다시 apply 는 멱등 → 문서를 고치면 follow 가 누락을 내고
+// check → plan → apply(기준선 · 구조 · 기록 — 세운 자리는 _seed.json) → verify 같음 → 다시 apply 는 멱등 → 문서를 고치면 follow 가 누락을 내고
 // update 초안이 바뀐 좌표를 잡고 · 「왜」 없이는 저장 거절 · 채우면 대기열에 선다 → follow 누락 0.
 
 import { test } from 'node:test'
@@ -77,6 +77,7 @@ const io = () => {
   return { lines, out: (t = '') => lines.push(t), err: (t = '') => lines.push('ERR ' + t), text: () => lines.join(NL) }
 }
 const opt = (o) => ({ cmd: 'seed', args: [], ...o })
+const term0 = (t) => t
 
 test('ctx seed · follow · update — 끝까지', { skip: !hasGit && 'git 이 없다', timeout: 180_000 }, async () => {
   const S = await setup()
@@ -95,8 +96,16 @@ test('ctx seed · follow · update — 끝까지', { skip: !hasGit && 'git 이 �
 
     o = io()
     assert.equal(await runSeed(opt({ args: ['apply'], from: S.docs, server: S.server, repo: 'kb', date: '2026-10-12' }), o), 0, o.text())
-    assert.match(o.text(), /스냅샷 5 · 건너뜀 0/)
-    assert.match(o.text(), /대기 1 · 근거 없음 0/)
+    // 세우는 흔적은 기록이 아니다(S13) — 기록 파일은 함께 들인 기록 하나뿐 · 세운 자리는 _seed.json · 대기 0 · 근거 없음 0
+    assert.match(o.text(), /대기 0 · 근거 없음 0/)
+    const works = (await fs.readdir(path.join(S.kb, 'work'))).filter((f) => f.endsWith('.md'))
+    assert.deepEqual(works, ['2026-0901-회의.md'])
+    const seed = JSON.parse(await fs.readFile(path.join(S.kb, '_seed.json'), 'utf8'))
+    assert.equal(seed.at, '2026-10-12')
+    assert.match(seed.from, /^docs@[0-9a-f]+$/)
+    assert.deepEqual(seed.records, ['2026-0901-회의'])
+    assert.deepEqual(seed.sections.sort(), ['게이트웨이설계:개요', '게이트웨이설계:구성', '게이트웨이설계:원칙', 'term:PLC', 'term:SCADA'].sort())
+    assert.match(term0(await fs.readFile(path.join(S.kb, 'docs', '용어집.md'), 'utf8')), /<!-- applied: null -->/)
     const managed = await fs.readFile(path.join(S.kb, '_managed.md'), 'utf8')
     assert.match(managed, /`term:\*` \| `docs\/용어집.md` \| `## \{값\}` \| [^|]+ \| 정의 \|/)
     const term = await fs.readFile(path.join(S.kb, 'docs', '용어집.md'), 'utf8')

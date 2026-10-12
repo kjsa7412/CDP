@@ -63,8 +63,8 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx migrate <레포> [--dry] [--by <이름>] [--keep-tools]   제자리 이행 — 전환 기록 하나 · 서식 예시 · 도구 층 걷기(서버를 멈추고)
   ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
   ctx seed init|check [--from <문서 레포>]          문서 레포에서 세우기 — 지도(cdp-sources.json) 뼈대 · 검사
-  ctx seed plan|apply --server <주소> --repo <레포> [--from …] [--at <sha>] [--stage baseline|managed|snapshot|records] [--only <key|id>] [--date <YYYY-MM-DD>]
-                                            지도대로 세운다(큐레이터 · plan = 전부 dryRun) — 판정은 cdp-curate
+  ctx seed plan|apply --server <주소> --repo <레포> [--from …] [--at <sha>] [--stage baseline|managed|records] [--only <key|id>] [--date <YYYY-MM-DD>]
+                                            지도대로 세운다(큐레이터 · plan = 전부 dryRun) — 세우는 흔적은 _seed.json 하나 · 세운 기록은 반영됨
   ctx seed verify --clone <지식 레포 클론> [--from …] [--at <sha>]   섹션 대조 — 같음 · 형식 차이(intent) · 확인 필요 · drift · 대기
   ctx follow --clone <클론> [--from …] [--since <sha>]   커밋마다 바뀐 섹션 ↔ 그 뒤 위키 기록 — 누락
   ctx update [--from …] <from sha> [<to sha>]      업데이트 기록 초안(.cdp-updates/) · --save <초안> --server … --repo … [--go]

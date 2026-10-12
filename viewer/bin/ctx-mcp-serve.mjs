@@ -1835,6 +1835,8 @@ export async function runServe(opt = {}) {
               baseline: body.items.map((x) => ({ coord: String(x.coord), body: String(x.body ?? ''), ...(x.heading ? { heading: String(x.heading) } : {}) })),
               ...(Array.isArray(body.vocab) && body.vocab.length ? { vocab: body.vocab } : {}),
               ...(Array.isArray(body.managed) && body.managed.length ? { managed: body.managed } : {}),
+              // 세우기(ctx seed apply) — 기준선 기록을 남기지 않고 좌표를 `_seed.json` 에(문서레포 세우기 검토 S13)
+              ...(body.seed && typeof body.seed === 'object' ? { seed: body.seed } : {}),
               ...(body.dryRun ? { dryRun: true } : {}),
             }
             const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: !!a.admin, curate: true, formsDir: opt.forms || null, formsData: dataDir, mirror: !!opt.mirror, log: (m) => log.line(m) })
