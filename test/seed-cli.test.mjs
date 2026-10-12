@@ -129,24 +129,27 @@ test('ctx seed · follow · update — 끝까지', { skip: !hasGit && 'git 이 �
 
     // 문서를 고친다 — 이력 줄만 바꾼 커밋은 섹션 변경이 아니다
     const termSrc = path.join(S.docs, '산출물/공통/용어집.md')
-    await fs.writeFile(termSrc, files['산출물/공통/용어집.md'].replace('PLC 를 감시한다.', 'PLC 를 감시한다. 경보 이력은 ODBC 로 받는다.'))
+    await fs.writeFile(termSrc, files['산출물/공통/용어집.md'].replace('PLC 를 감시한다.', 'PLC 를 감시한다. 경보 이력은 ODBC 로 받는다.') + '\n## HMI — 운영 화면\n\n사람이 보는 화면.\n')
     await S.g(S.docs, 'commit', '-qam', 'SCADA 경보 이력 경로')
     o = io()
     assert.equal(await runSeed({ cmd: 'follow', args: [], from: S.docs, clone: S.kb, since: S.seedSha }, o), 1, o.text())
-    assert.match(o.text(), /✗ 누락 .* SCADA 경보 이력 경로\n\s+term:SCADA — 기록 없음/)
+    assert.match(o.text(), /✗ 누락 .* SCADA 경보 이력 경로\n\s+term:SCADA — 기록 없음\n\s+term:HMI — 기록 없음/)
 
     o = io()
     assert.equal(await runSeed({ cmd: 'update', args: [S.seedSha], from: S.docs }, o), 0, o.text())
+    assert.doesNotMatch(o.text(), /fatal/, 'git 의 stderr 가 새지 않는다')
     const draftPath = o.text().match(/초안 (.+\.json)/)[1]
     const draft = JSON.parse(await fs.readFile(draftPath, 'utf8'))
-    assert.deepEqual(draft.touches, ['term:SCADA'])
-    assert.match(draft.body, /\+ PLC 를 감시한다\. 경보 이력은 ODBC 로 받는다\./)
+    assert.deepEqual(draft.work.touches, ['term:SCADA', 'term:HMI'])
+    // 새 섹션의 좌표는 지도의 이름으로 같이 등재한다 — 어휘에 없으면 기록이 거절된다
+    assert.deepEqual(draft.vocab, [{ coord: 'term:HMI', label: '운영 화면' }])
+    assert.match(draft.work.body, /\+ PLC 를 감시한다\. 경보 이력은 ODBC 로 받는다\./)
     assert.doesNotMatch(o.text(), /gitignore/, '.cdp-updates 가 무시되고 있다')
 
     o = io()
     assert.equal(await runSeed({ cmd: 'update', args: [], saveDraft: draftPath, server: S.server, repo: 'kb' }, o), 1)
     assert.match(o.text(), /「## 왜」 를 채우지 않았다/)
-    draft.body = draft.body.replace(/<!-- 왜:[^\n]*-->/, '경보 링 버퍼를 쓰지 않기로 해서 — 이력은 ODBC 한 경로다.')
+    draft.work.body = draft.work.body.replace(/<!-- 왜:[^\n]*-->/, '경보 링 버퍼를 쓰지 않기로 해서 — 이력은 ODBC 한 경로다.')
     await fs.writeFile(draftPath, JSON.stringify(draft))
     o = io()
     assert.equal(await runSeed({ cmd: 'update', args: [], saveDraft: draftPath, server: S.server, repo: 'kb', go: true }, o), 0, o.text())

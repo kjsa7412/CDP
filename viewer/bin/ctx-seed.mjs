@@ -34,7 +34,7 @@ function source(opt) {
   } catch {
     throw new Error(`${start} 는 git 레포가 아니다 — --from <문서 레포>`)
   }
-  const git = (args, buffer = false) => execFileSync('git', ['-C', top, '-c', 'core.quotePath=false', ...args], { encoding: buffer ? 'buffer' : 'utf8', maxBuffer: 256 << 20 })
+  const git = (args, buffer = false) => execFileSync('git', ['-C', top, '-c', 'core.quotePath=false', ...args], { encoding: buffer ? 'buffer' : 'utf8', maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'pipe'] })
   const mapPath = path.join(top, SEED_FILE)
   const hasMap = fs.existsSync(mapPath)
   const map = hasMap ? parseSeedMap(fs.readFileSync(mapPath, 'utf8')) : null
@@ -379,6 +379,7 @@ function changedCoords(s, map, from, to) {
     rows.push({ st: st[0], f: strip(b || a), old: b ? strip(a) : null })
   }
   const coords = []
+  const vocab = []
   const changed = []
   const records = []
   const outside = []
@@ -391,6 +392,10 @@ function changedCoords(s, map, from, to) {
         if (A.get(k) === B.get(k)) continue
         coords.push(k)
         changed.push({ coord: k, a: A.get(k), b: B.get(k) })
+        if (!A.has(k)) {
+          const x = docSections(d, s.show(to, f), map).find((y) => y.coord === k)
+          if (x) vocab.push({ coord: k, label: x.label, ...(x.aliases ? { aliases: x.aliases } : {}) })
+        }
       }
       continue
     }
@@ -398,7 +403,7 @@ function changedCoords(s, map, from, to) {
     if (rec) records.push({ f, id: rec.id, st })
     else outside.push(`${st} ${f}${old ? ' ← ' + old : ''}`)
   }
-  return { coords: [...new Set(coords)], changed, records, outside }
+  return { coords: [...new Set(coords)], changed, records, outside, vocab }
 }
 
 async function runFollow(opt, io) {
@@ -447,7 +452,9 @@ const lineDiff = (a = '', b = '') => {
 
 async function runUpdate(opt, io) {
   if (opt.saveDraft) {
-    const work = JSON.parse(fs.readFileSync(opt.saveDraft, 'utf8'))
+    const draft = JSON.parse(fs.readFileSync(opt.saveDraft, 'utf8'))
+    const work = draft.work || draft
+    const vocab = draft.work ? draft.vocab || [] : []
     if (work.body.includes(WHY) || !/## 왜\n+\S/.test(work.body)) throw new Error('「## 왜」 를 채우지 않았다 — 초안의 안내 줄을 지우고 이유를 쓴다')
     if (!work.touches?.length && !work.touchesEmpty) throw new Error('touches 가 비었다 — 바뀐 좌표가 없으면 touchesEmpty 에 사유')
     let map = null
@@ -455,14 +462,15 @@ async function runUpdate(opt, io) {
       map = source(opt).map
     } catch {}
     const c = await client(opt, map)
-    const d = await c.rpc('save', { work, dryRun: true })
+    const input = { work, ...(vocab.length ? { vocab } : {}) }
+    const d = await c.rpc('save', { ...input, dryRun: true })
     if (d.error) throw new Error('dryRun 거절 — ' + JSON.stringify(errOf(d.value)).slice(0, 1200))
     io.out(`ctx update --save: dryRun 통과${(d.value.warnings || []).length ? ' · 경고 ' + d.value.warnings.join(' / ').slice(0, 300) : ''}`)
     if (!opt.go) {
       io.out('  저장하려면 --go')
       return 0
     }
-    const o = await c.rpc('save', { work })
+    const o = await c.rpc('save', input)
     if (o.error) throw new Error('거절 — ' + JSON.stringify(errOf(o.value)).slice(0, 1200))
     io.out(`  커밋 ${o.value.commit} — 대기열에 섰다. 반영은 큐레이터(cdp-curate)`)
     return 0
@@ -516,7 +524,7 @@ async function runUpdate(opt, io) {
   const dir = path.join(s.top, '.cdp-updates')
   fs.mkdirSync(dir, { recursive: true })
   const out = path.join(dir, `${to}.json`)
-  fs.writeFileSync(out, JSON.stringify(work, null, 1))
+  fs.writeFileSync(out, JSON.stringify({ work, ...(x.vocab.length ? { vocab: x.vocab } : {}) }, null, 1))
   let ignored = true
   try {
     s.git(['check-ignore', '-q', '.cdp-updates/x.json'])
