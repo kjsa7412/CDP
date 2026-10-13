@@ -1,6 +1,6 @@
 ---
 name: cdp-seed
-description: "큐레이터만 쓴다(그 레포의 curate 권한 · admin). 이미 있는 산출물 문서 레포(md · git)에서 지식 레포의 관리 문서와 작업 기록을 세운다 — 지도(cdp-sources.json)를 쓰고 ctx seed check → plan → apply(기준선 · 관리 문서 · 기록 편입 — 세운 자리는 _seed.json 하나) → ctx seed verify 로 대조 → 원천의 어긋남을 cdp-curate 로. 정본이 둘이면 ctx follow 로 누락을 본다. 「기존 문서로 위키 세워 줘」 · 「산출물 레포에서 관리 문서 만들어 줘」 · 「dpms_docs 로 다시 세워」 같은 요청에. 문서 레포를 고친 writer 의 업데이트 기록은 cdp-save 「원천 문서 레포를 고쳤으면」."
+description: "큐레이터만 쓴다(그 레포의 curate 권한 · admin). 이미 있는 산출물 문서 레포(md · git)에서 지식 레포의 관리 문서와 작업 기록을 세운다 — 지도(cdp-sources.json)를 쓰고 ctx seed check → plan → apply(기준선 · 관리 문서 · 기록 편입 — 세운 자리는 _seed.json 하나) → ctx seed verify 로 대조 → 원천의 어긋남을 cdp-curate 로. 정본이 둘이면 ctx follow 로 누락을 본다. 「기존 문서로 위키 세워 줘」 · 「산출물 레포에서 관리 문서 만들어 줘」 · 「dpms_docs 로 다시 세워」 같은 요청에. 문서 레포를 고친 writer 는 cdp-save 의 보통 기록 하나(「원천 문서 레포를 고쳤으면」) — ctx 를 부르지 않는다."
 ---
 
 # cdp-seed — 문서 레포에서 지식 레포를 세운다
@@ -12,7 +12,7 @@ description: "큐레이터만 쓴다(그 레포의 curate 권한 · admin). 이�
 ④ 세우기   ctx seed apply — 기준선 → 관리 문서 → 기록. 세우는 흔적은 기록이 아니라 _seed.json 하나
 ⑤ 읽기     cdp-curate — 세운 기록을 묶음마다 읽어 원천의 어긋남(작업문서에만 · 모순 · 늦음)을 찾는다
 ⑥ 대조     ctx seed verify — 같음 · 형식 차이 · 확인 필요 · drift. 확인 필요는 원인을 가린다
-⑦ 넘기기   정본이 둘이면 문서 레포의 작업 규칙에 「업데이트 기록」 한 줄 · 주 1회 ctx follow
+⑦ 넘기기   정본이 둘이면 문서 레포의 작업 규칙에 「고쳤으면 cdp-save」 한 줄 · 큐레이터는 주 1회 ctx follow
 ```
 
 **큐레이터만 쓴다.** apply 는 서버 save 를 큐레이터 토큰(`CDP_TOKEN`)으로 부른다. 원천 문서 레포에는 쓰지 않는다 — 지도 파일(`cdp-sources.json`)만 그 레포에 둔다(그 레포의 사람이 커밋한다).
@@ -88,8 +88,8 @@ ctx seed verify --from <문서 레포> --clone <지식 레포 클론(pull 해 �
 
 원천 문서 레포를 계속 쓰면(정본 둘) 위키는 **기록으로만** 따라간다 — 큐레이터가 원천의 diff 를 보고 섹션을 고치지 않는다(「왜」 가 빠진 손 미러가 된다).
 
-- 원천을 고친 세션이 작업 끝에 업데이트 기록 — cdp-save 「원천 문서 레포를 고쳤으면」(`ctx update`). 그 레포의 작업 규칙(CLAUDE.md)에 한 줄 넣어 둔다.
-- 큐레이터는 주 1회 `ctx follow --from … --clone … --since <지난 점검 sha>` — 누락이 있으면 그 커밋 범위로 `ctx update` 초안을 만들어 「왜」 를 아는 사람에게 묻고 남긴다. 누락 비율이 따라가기의 잣대다.
+- 원천을 고친 세션은 작업 끝에 cdp-save 의 보통 기록 하나(「원천 문서 레포를 고쳤으면」 — 바꾼 좌표 · 왜 · `source` 에 커밋). writer 는 ctx 를 부르지 않는다 — 공식 도구(MCP)만 쓴다. 그 레포의 작업 규칙(CLAUDE.md)에 한 줄 넣어 둔다.
+- 큐레이터는 주 1회 `ctx follow --from … --clone … --since <지난 점검 sha>` — 누락이 있으면 큐레이터가 그 커밋 범위로 `ctx update` 초안(바뀐 좌표 · 바뀐 줄)을 만들어 「왜」 를 아는 사람에게 묻고 남긴다. `ctx update` 는 큐레이터의 메우기 도구다. 누락 비율이 따라가기의 잣대다.
 
 ## 하지 않는 것
 

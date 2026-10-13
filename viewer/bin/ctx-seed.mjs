@@ -509,7 +509,7 @@ async function runUpdate(opt, io) {
     tags: ['업데이트'],
     source: `${path.posix.basename(s.top)} ${from}..${to}`,
     body: [
-      `원천 문서 레포를 고친 세션이 지식 레포로 넘기는 업데이트 기록이다(${from}..${to}). 반영은 큐레이터가 한다.`,
+      `원천 문서 레포의 커밋을 지식 레포로 넘기는 업데이트 기록이다(큐레이터가 누락을 메운다)(${from}..${to}). 반영은 큐레이터가 한다.`,
       '',
       '## 왜',
       '',
