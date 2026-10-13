@@ -15,6 +15,10 @@ import { parseSeedMap, docSections, coordMap, SEED_FILE } from './seedmap.js'
 import { recordKind } from './curation.js'
 import { isSsh, sshPaths, sshCommand } from './gitauth.js'
 import { maskUrl } from './git.js'
+import { initMap, checkMap, seedApply, seedVerify } from './seedrun.js'
+import { toolSection, toolBrief } from './tools.js'
+import { baselineInput } from './baseline.js'
+import { loadRepo } from './repo.js'
 
 const NL = '\n'
 
@@ -314,17 +318,18 @@ export function syncSource(dataDir, name, cfg, { timeout = FETCH_MS, env = proce
 
 export const FOLLOW_MAX = 300
 export const RECORD_LINES = 200
+export const APPLY_LINES = 400
 
 const seedSha = (seed) => /@([0-9a-f]{4,40})\s*$/i.exec(String(seed?.from || ''))?.[1] || null
 const nameFromUrl = (u) => String(u).replace(/[\\/]+$/, '').split(/[\\/:]/).pop().replace(/\.git$/, '') || 'source'
 
 // r — 지식 레포(loadRepo · 캐시) · a — { op, since?, from?, to? }
-export async function toolSource(r, a, { dataDir, name, sync = syncSource }) {
+// seed — { save(input), upload(rel, buf, type) } 세우기(plan · apply)의 쓰기 길. 서버가 같은 프로세스의 core/save.js 를 준다(M7)
+export async function toolSource(r, a, { dataDir, name, sync = syncSource, seed = null }) {
   const cfg = await sourceOf(dataDir, name)
   if (!cfg) throw new CtxError('E_NO_SOURCE', '콘솔 레포 설정에서 원천 git 주소를 넣는다', { repo: name })
   const got = await sync(dataDir, name, cfg)
   const s = openSource({ gitDir: got.dir, at: SOURCE_REF, name: nameFromUrl(cfg.url) })
-  if (!s.map) throw new CtxError('E_INPUT', `원천에 ${SEED_FILE} 가 없다 — 지도를 원천 레포 루트에 커밋한다(cdp-seed)`, { at: s.at })
   const head = { source: { url: maskUrl(cfg.url), branch: cfg.branch || null, at: s.at, fetchedAt: got.fetchedAt }, ...(got.warning ? { warnings: [got.warning] } : {}) }
   const git = (fn) => {
     try {
@@ -335,6 +340,7 @@ export async function toolSource(r, a, { dataDir, name, sync = syncSource }) {
       throw new CtxError('E_INPUT', 'git 이 거절했다 — ' + (String(e?.stderr || e?.message || e).split(NL).find((l) => l.trim()) || ''), {})
     }
   }
+  if (['follow', 'update'].includes(a.op) && !s.map) throw new CtxError('E_INPUT', `원천에 ${SEED_FILE} 가 없다 — source({ op: "init" }) 의 뼈대를 고쳐 원천 레포 루트에 커밋한다(cdp-seed)`, { at: s.at })
   if (a.op === 'follow') {
     const since = a.since || seedSha(r.seed)
     if (!since) throw new CtxError('E_INPUT', 'since 가 없고 _seed.json 에 세운 sha(from 의 @sha)도 없다 — since 를 준다', { field: 'since' })
@@ -350,5 +356,47 @@ export async function toolSource(r, a, { dataDir, name, sync = syncSource }) {
     const u = git(() => updateDraft(s, { from: a.from, to: a.to || null, recordLines: RECORD_LINES }))
     return { ...head, draft: { work: u.work, ...(u.vocab.length ? { vocab: u.vocab } : {}) }, coords: u.coords, records: u.records, outside: u.outside, next: '「## 왜」 의 안내 줄을 지우고 이유를 쓴 뒤 save({ work, vocab }) — 안내 줄이 남으면 E_CHECK' }
   }
-  throw new CtxError('E_INPUT', 'op 는 follow · update 다', { field: 'op' })
+  if (a.op === 'init') {
+    // 원천에 쓰지 않는다 — 사람이 이 JSON 을 원천 레포 루트에 cdp-sources.json 으로 커밋한다
+    const map = git(() => initMap(s, { root: a.root ?? '' }))
+    return { ...head, map, exists: !!s.map, next: `원천 레포 루트에 ${SEED_FILE} 로 커밋한다(분류 · 좌표 타입 · 서식 · 종류 · 기록 날짜 · touches 를 고친 뒤) — 서버는 원천에 쓰지 않는다${s.map ? ' · 이미 지도가 있다 — 이것은 비교용 뼈대다' : ''}` }
+  }
+  if (!s.map) throw new CtxError('E_INPUT', `원천에 ${SEED_FILE} 가 없다 — source({ op: "init" }) 의 뼈대를 고쳐 원천 레포 루트에 커밋한다(cdp-seed)`, { at: s.at })
+  if (a.op === 'map') {
+    const check = git(() => checkMap(s))
+    return { ...head, at: s.at, map: s.map, check: { ok: !check.errors.length, errors: check.errors, warnings: check.warnings, docs: check.docs, sections: check.docs.reduce((n, d) => n + d.sections, 0), records: check.records } }
+  }
+  if (a.op === 'verify') {
+    const v = git(() => seedVerify(s, r, { date: a.date || undefined }))
+    return { ...head, ...v }
+  }
+  if (a.op === 'plan' || a.op === 'apply') {
+    if (!seed) throw new CtxError('E_INPUT', '이 서버는 세우기를 받지 않는다', { op: a.op })
+    if (a.stage && !['baseline', 'managed', 'records'].includes(a.stage)) throw new CtxError('E_INPUT', 'stage 는 baseline · managed · records 다', { field: 'stage' })
+    const dry = a.op === 'plan' || a.dryRun !== false
+    const repoNow = () => loadRepo(r.root)
+    const ops = {
+      exists: async (coord) => {
+        if (!coord) return false
+        try {
+          const v = toolSection(await repoNow(), { coord })
+          return v.state !== 'missing' && v.content != null
+        } catch {
+          return false
+        }
+      },
+      upload: (rel, buf, type) => seed.upload(rel, buf, type),
+      save: (input) => seed.save(input),
+      baseline: async (body) => {
+        const o = await seed.save(baselineInput(body))
+        return { commit: o.commit, baseline: o.baseline ?? body.items.length }
+      },
+      brief: async () => toolBrief(await repoNow()),
+    }
+    const lines = []
+    const res = await seedApply(s, ops, { dry, day: a.date || undefined, stage: a.stage || null, only: a.only || null, server: 'mcp', repo: name, out: (t) => lines.push(t) })
+    const shown = lines.length > APPLY_LINES ? [...lines.slice(0, APPLY_LINES), `… ${lines.length - APPLY_LINES}줄 더 — stage · only 로 나눠 부른다`] : lines
+    return { ...head, ...res, lines: shown, ...(dry ? { next: '같은 인자로 op: "apply", dryRun: false — 단계(stage)나 문서 하나(only)씩 나눠 부르면 한 호출이 짧다' } : {}) }
+  }
+  throw new CtxError('E_INPUT', 'op 는 map · init · follow · update · plan · apply · verify 다', { field: 'op' })
 }

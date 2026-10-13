@@ -57,7 +57,7 @@ const CARD = {
   drift:
     '**큐레이터만.** 어긋남 진단 — 반영된 뒤 시간이 지나며 정본이 원천 · 규칙과 어긋난 자리(미반영과 다르다 · 미반영이 0 이어도 생긴다). `totals` 는 레포 합계: `unsourced`(근거 없음 — 그 좌표를 건드린 기록 · 스냅샷 · 기준선이 없는 섹션 · 기록만 옮겨 다시 세우면 사라진다) · `duplicated`(다른 섹션과 같은 산문 줄 — 짝 좌표가 `duplicated` · 표 행 · 경과 · 레포 규약 줄은 뺐다) · `oversize`(경과 앞 본문이 문턱 줄 수를 넘는다 — 서술이 쌓였다) · `diary`(날짜별로 덧붙인 일지형 줄) · `unreachable`(좌표 0 · 좌표정정이 없는 사람의 기록). `doc`(경로 · 관리번호) · `coord` 로 좁힌다 — `coord` 는 그 섹션과 그 섹션의 복제 짝. 다시 세우는 절차는 `cdp-rebuild` — 근거 없음은 스냅샷부터 · 좌표 없는 기록은 좌표정정 · 복제 · 비대 · 일지형은 묶음으로 재유도(재큐레이션)',
   source:
-    '**큐레이터만.** 원천 문서 레포(콘솔 레포 설정의 원천 git 주소 — 서버가 받아 둔다 · 부를 때마다 fetch)와 이 지식 레포를 잇는다. 원천에는 쓰지 않는다. `op: "follow"` — `since`(생략하면 `_seed.json` 의 세운 sha) 뒤 원천 커밋마다 바뀐 좌표 · 그 좌표를 건드리거나 그 커밋을 출처로 가리킨 기록(`by`) · 없으면 `ok: false`(누락) · `miss` 합계. `op: "update"` — `from`..`to?` 를 업데이트 기록 초안 `draft: { work, vocab }` 으로(바뀐 섹션 diff · 새 좌표 어휘). 초안의 「## 왜」 안내 줄을 지우고 이유를 채워 `save` 한다 — 안내 줄이 남으면 E_CHECK. 원천이 없으면 E_NO_SOURCE. fetch 가 실패하면 마지막 받은 것으로 답하고 `warnings` 에 적는다',
+    '**큐레이터만.** 원천 문서 레포(콘솔 레포 설정의 원천 git 주소 — 서버가 받아 둔다 · 부를 때마다 fetch · 실패하면 마지막 받은 것 + `warnings`)와 이 지식 레포를 잇는다. 원천에는 쓰지 않는다. 원천이 없으면 E_NO_SOURCE. **세우기** — `init`(지도 `cdp-sources.json` 뼈대를 JSON 으로 돌려준다 — 고쳐서 사람이 원천 레포 루트에 커밋) · `map`(원천의 지도와 검사 — `check.errors` 가 있으면 세우지 않는다) · `plan`(미리보기 · 쓰지 않는다) · `apply`(`dryRun` 기본 true — 승인 뒤 `dryRun: false` · `stage`(baseline · managed · records) · `only`(문서 key · 기록 id)로 나눠 부른다 · 세운 자리는 `_seed.json` · 판정은 하지 않는다) · `verify`(원천과 섹션 대조 — 같음 · 형식 차이 · 확인 필요 `off` · 위키에 없음). **따라가기** — `follow`(`since` 생략이면 `_seed.json` 의 세운 sha · 원천 커밋마다 바뀐 좌표와 그 좌표를 건드리거나 그 커밋을 출처로 가리킨 기록 `by` · 없으면 `ok: false` 누락 · `miss` 합계) · `update`(`from`..`to?` 를 업데이트 기록 초안 `draft: { work, vocab }` 으로 — 「## 왜」 안내 줄을 지우고 이유를 채워 `save` · 안내 줄이 남으면 E_CHECK)',
   save:
     '작업 기록 하나를 남긴다 — 이 세션에서 한 작업 · 밖에서 온 문서 편입 · 문서를 고치라는 지시. **관리 문서는 쓰지 않는다**: 기록은 큐레이션 대기열에 서고 큐레이터가 반영한다 — 그동안 `section` 이 이 기록을 섹션과 함께 낸다. **기록은 홀로 선다** — 값 · 표 · 결정 · 제약은 본문에 쓴다(큐레이터는 기록만 보고 반영한다). 큰 추출물(DDL · 덤프)은 첨부로. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 새 좌표는 `vocab` 에 같이 보낸다. 밖에서 온 문서면 `source` 에 원문 출처를 적는다. 그림 · pdf · HTML 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(본문에서는 `![설명](assets/<id>/<name>)` · HTML 은 링크). `sections` · `managed` · `edits` · `work.curates` 는 큐레이터만 — 보내면 E_FORBIDDEN(need curate). `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
   saveCurator:
@@ -266,7 +266,17 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
       return { forms: list, total: list.length, groups: lib.groups }
     })
     if (sourcer) {
-      tool('source', { op: z.enum(['follow', 'update']), since: z.string().max(80).optional(), from: z.string().max(80).optional(), to: z.string().max(80).optional() }, (r, a, { name }) => {
+      tool('source', {
+        op: z.enum(['map', 'init', 'follow', 'update', 'plan', 'apply', 'verify']),
+        since: z.string().max(80).optional(),
+        from: z.string().max(80).optional(),
+        to: z.string().max(80).optional(),
+        stage: z.enum(['baseline', 'managed', 'records']).optional(),
+        only: z.string().max(140).optional(),
+        dryRun: z.boolean().optional(),
+        date: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).optional(),
+        root: z.string().max(240).optional(),
+      }, (r, a, { name }) => {
         if (!canCurate(name)) throw new CtxError('E_FORBIDDEN', '그 레포의 큐레이터가 아니다 — 원천과 잇는 것은 큐레이터의 일이다', { repo: name, need: 'curate' })
         return sourcer(r, name, a)
       }, { big: true })

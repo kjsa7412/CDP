@@ -4,8 +4,8 @@
 |---|---|---|
 | 0 | writer 의 `ctx update` 걷기 — cdp-save 보통 기록 · dpms CLAUDE.md | **완료** — f53a255 |
 | 0 | ctx.cmd 한글 홈 결함 | **완료** — 9660022 |
-| ① | 원천 연결(M2 · M3) · `source` 의 `follow` · `update` · `save` 의 「왜」 검사(M6) | **완료** |
-| ② | `source` 의 `map` · `init` · `plan` · `apply` · `verify`(M7) | |
+| ① | 원천 연결(M2 · M3) · `source` 의 `follow` · `update` · `save` 의 「왜」 검사(M6) | **완료** — 0af402d |
+| ② | `source` 의 `map` · `init` · `plan` · `apply` · `verify`(M7) | **완료** |
 | ③ | 스킬 · 큐레이터 규칙 · 설명서의 ctx 줄 걷기 · 하네스 검사 | |
 
 ## ①
@@ -22,3 +22,13 @@
 - [x] `save` — 「왜」 안내 줄 · 태그 `업데이트` 의 빈 `## 왜` 를 E_CHECK
 - [x] 시험 — 임시 원천 레포 · follow 누락/있음 · update 초안 · E_NO_SOURCE · viewer/writer 에 안 보임 — `test/source-tool.test.mjs` · fetch 실패면 마지막 것 + 경고까지
 - [ ] dpms_wiki 실측은 사람(서버 upgrade · 배포 키) — 같은 결과인지 이 PC 의 `ctx follow` 와 대조
+
+## ②
+
+- [x] `runInit` · `runCheck` · `runApply` · `runVerify` 를 core 로 — `core/seedrun.js` `initMap` · `checkMap` · `seedApply(s, ops)` · `seedVerify`. CLI 는 껍데기(HTTP 의 ops) · 출력 그대로(seed-cli 시험 통과)
+- [x] 쓰기는 `ops` 로 — CLI 는 MCP save · /assets · /baseline 을 HTTP 로, 서버는 같은 프로세스의 `core/save.js` · `assets.stage` 를 바로(M7). 기준선 입력은 `core/baseline.js` `baselineInput` 하나(/baseline 핸들러도 그것)
+- [x] MCP `source` 의 op — `init`(뼈대 JSON 만 · 원천에 쓰지 않는다 · 지도가 있어도 비교용으로 낸다) · `map`(지도 + 검사 · `check.ok`) · `plan` · `apply`(`dryRun` 기본 true · `stage` · `only` · `date`) · `verify`(같음 · 형식 차이 · 확인 필요 · 위키에 없음 · 대기 · 검사 오류 · drift)
+- [x] 출력 상한 — apply 의 줄 400(넘으면 「stage · only 로 나눠 부른다」) · 그 위에 guardSize. 한 호출 시간은 stage · only 로 나눈다(MCP 클라이언트 시간 상한은 실측으로 — dpms 리허설 판)
+- [x] 시험 — `test/source-seed.test.mjs` 임시 원천 레포 · init 은 쓰지 않는다 · map 검사 · plan 은 쓰지 않는다 · apply 기본 dryRun · stage 나눠 부르기 · seed-cli 와 같은 관리 문서 · 기록 · _seed.json · verify 같음 5 · 다시 apply 멱등 · follow 기본 since
+- [ ] dpms 리허설 판(ops/out/archive)으로 같은 결과인지 — 사람(서버 upgrade 뒤)
+

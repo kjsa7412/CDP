@@ -12,17 +12,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { checkSeedMap, docSections, appendixOf, linkTable, relink, expandTouches, transferId, normForCompare } from '../../core/seedmap.js'
+import { initMap, checkMap, seedApply, seedVerify, today } from '../../core/seedrun.js'
 import { openSource, changedCoords, followReport, updateDraft, WHY_MARK, whyMissing } from '../../core/sourcerepo.js'
 
 const NL = '\n'
-const TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.html': 'text/html', '.htm': 'text/html' }
-
-const today = () => {
-  const d = new Date()
-  const p = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
 
 // ── 원천 문서 레포 ──────────────────────────────────────────────────────────────
 
@@ -79,57 +72,22 @@ async function client(opt, map) {
 const errOf = (v) => v?.error || v
 const codeOf = (v) => errOf(v)?.code || ''
 
-// ── seed init ───────────────────────────────────────────────────────────────
-
-function nameOf(rel) {
-  return path.posix
-    .basename(rel, '.md')
-    .replace(/^[A-Z]+_[\d.]+_/, '')
-    .replace(/_(초안|v\d[\w.]*)$/g, '')
-    .replace(/_(초안|v\d[\w.]*)$/g, '')
-}
+// ── seed init · check · plan · apply · verify — 계산은 core/seedrun.js(서버의 MCP `source` 와 같은 함수 · M8) ──────
 
 function runInit(opt, io) {
   const s = source(opt)
   if (s.map) throw new Error(`${s.mapPath} 가 이미 있다 — 고치려면 그 파일을 편집한다`)
-  const root = opt.root ?? ''
-  const pre = root ? root.replace(/\/+$/, '') + '/' : ''
-  const files = s.git(['ls-tree', '-r', '-z', '--name-only', 'HEAD', '--', root || '.']).split('\0').filter(Boolean).map((f) => (pre && f.startsWith(pre) ? f.slice(pre.length) : f))
-  const md = files.filter((f) => /\.md$/i.test(f))
-  const isRecord = (f) => /(^|\/)(작업문서|회의록|주간보고|meeting|notes?)\//i.test(f)
-  const docs = []
-  const records = []
-  for (const f of md) {
-    const text = s.git(['show', `HEAD:${pre}${f}`]).replace(/\r\n/g, NL)
-    if (isRecord(f)) {
-      const first = s.git(['log', '--diff-filter=A', '--format=%ci', '--', pre + f]).trim().split(NL).pop() || ''
-      const day = (first || today()).slice(0, 10)
-      records.push({ id: `${day.slice(0, 4)}-${day.slice(5, 7)}${day.slice(8, 10)}-${nameOf(f).replace(/\s+/g, '-')}`, date: day, src: f, touches: [] })
-      continue
-    }
-    const h2 = text.split(NL).filter((l) => /^## /.test(l))
-    const named = h2.filter((l) => /^## \S+\s+[—–]\s+/.test(l)).length
-    const numbered = h2.filter((l) => /^## \d+\.\s/.test(l)).length
-    const name = nameOf(f)
-    const dir = path.posix.dirname(f) === '.' ? '' : path.posix.dirname(f).split('/')[0] + '/'
-    const base = { key: name.replace(/[^\p{L}\p{N}]+/gu, '').slice(0, 24) || 'doc' + docs.length, src: f, doc: `docs/${dir}${name}.md` }
-    if (named >= 2 && named >= h2.length / 2) docs.push({ ...base, split: 'h2', type: name })
-    else if (numbered >= 3) docs.push({ ...base, split: 'chapters', type: name, chapters: h2.filter((l) => /^## \d+\.\s/.test(l)).map((l, i) => `장${i + 1}`), preamble: '개요' })
-    else docs.push({ ...base, split: 'whole', coord: `${name}:${name}`, label: name })
-  }
-  const map = { version: 1, root, docs, records, alias: {}, ignore: [], intent: {} }
+  const map = initMap(s, { root: opt.root ?? '' })
   fs.writeFileSync(s.mapPath, JSON.stringify(map, null, 1) + NL)
-  io.out(`ctx seed init: ${s.mapPath} — 문서 ${docs.length} · 기록 ${records.length} (뼈대다)`)
+  io.out(`ctx seed init: ${s.mapPath} — 문서 ${map.docs.length} · 기록 ${map.records.length} (뼈대다)`)
   io.out('  다음 — 분류(관리 문서 · 기록 · 들이지 않음) · 좌표 타입 · 서식 · 종류 · 기록 날짜 · touches 를 고친다(cdp-seed 스킬) → ctx seed check')
   return 0
 }
 
-// ── seed check ──────────────────────────────────────────────────────────────
-
 function runCheck(opt, io) {
   const s = source(opt)
   if (!s.map) throw new Error(`${s.mapPath} 가 없다 — ctx seed init`)
-  const res = checkSeedMap(s.map, s.files, s.read)
+  const res = checkMap(s)
   io.out(`ctx seed check: ${s.top} @${s.at} — 문서 ${res.docs.length} · 섹션 ${res.docs.reduce((a, d) => a + d.sections, 0)} · 기록 ${res.records}`)
   for (const d of res.docs) io.out(`   ${d.key.padEnd(10)} 섹션 ${d.sections}`)
   for (const e of res.errors) io.out('   오류: ' + e)
@@ -137,213 +95,54 @@ function runCheck(opt, io) {
   return res.errors.length ? 1 : 0
 }
 
-// ── seed plan · apply ───────────────────────────────────────────────────────
-
+// 서버의 HTTP 길 — MCP save · section · brief · /assets · /baseline
 async function runApply(opt, io, dry) {
   const s = source(opt)
   if (!s.map) throw new Error(`${s.mapPath} 가 없다 — ctx seed init`)
-  const map = s.map
-  const chk = checkSeedMap(map, s.files, s.read)
+  const chk = checkMap(s)
   if (chk.errors.length) {
     for (const e of chk.errors) io.err('   오류: ' + e)
     throw new Error('지도 검사에 오류가 있다 — ctx seed check')
   }
-  const c = await client(opt, map)
-  const day = opt.date || today()
-  const sha = s.at
-  const srcRef = (rel) => `${path.posix.basename(s.top)}@${sha}/${map.root ? map.root + '/' : ''}${rel}`
-  const table = linkTable(map, s.files, day)
-  const unlinked = new Map()
-  const sectionsOf = (d) => docSections(d, s.read(d.src), map, (t) => relink(t, d.src, d.doc, table, unlinked))
-  const stages = opt.stage ? [opt.stage] : ['baseline', 'managed', 'records']
-  // 세운 자리(검토 S13) — 세우는 흔적은 작업 기록이 아니다. 구조 save 는 기록 파일 없이 `_seed.json` 의 sections 로,
-  // 함께 들이는 기록은 `_seed.json` 의 records 로(판정 없이 반영됨). 섹션의 근거는 원천(from)이다 — 스냅샷을 뜨지 않는다
-  const seed = { at: day, from: `${path.posix.basename(s.top)}@${sha}` }
-  const only = (x) => !opt.only || opt.only === x
-  const exists = async (coord) => {
-    const r = await c.rpc('section', { coord })
-    return !r.error && r.value && r.value.state !== 'missing' && r.value.content != null
+  const c = await client(opt, s.map)
+  const fail = (v) => Object.assign(new Error(errOf(v)?.message || ''), { code: codeOf(v), detail: errOf(v)?.detail, json: errOf(v) })
+  const ops = {
+    exists: async (coord) => {
+      const r = await c.rpc('section', { coord })
+      return !r.error && r.value && r.value.state !== 'missing' && r.value.content != null
+    },
+    upload: (rel, buf, type) => c.post('assets', buf, type),
+    save: async (input) => {
+      const r = await c.rpc('save', input)
+      if (r.error) throw fail(r.value)
+      return r.value
+    },
+    baseline: (body) => c.post('baseline', body),
+    brief: async () => {
+      const b = await c.rpc('brief', {})
+      return b.error ? null : b.value
+    },
   }
-  const upload = async (rel) => {
-    const ext = path.posix.extname(rel).toLowerCase()
-    if (!TYPES[ext]) throw new Error(`첨부 종류를 받지 않는다(${ext}) — ${rel}`)
-    const j = await c.post('assets', s.readBuf(rel), TYPES[ext])
-    return { ref: j.ref, name: path.posix.basename(rel) }
-  }
-  // 하나씩 — 같은 바이트의 그림 둘을 동시에 올리면 서버 staging 의 같은 이름을 두고 다툰다(Windows EPERM)
-  const uploadAll = async (list) => {
-    const out = []
-    for (const rel of list) out.push(await upload(rel))
-    return out
-  }
-  const save = async (input, label) => {
-    const d = await c.rpc('save', { ...input, dryRun: true })
-    if (d.error) {
-      if (codeOf(d.value) === 'E_EXISTS') return io.out(`   ${label} — 이미 있다(건너뜀)`)
-      // 미리보기는 앞 단계를 쓰지 않는다 — 기록의 좌표는 이관이 어휘를 세운 뒤에야 등재된다
-      if (dry && /어휘에 없는 좌표/.test(errOf(d.value)?.message || '')) return io.out(`   ${label} — 앞 단계(이관) 뒤에 통과할 것(${errOf(d.value)?.detail?.coord || ''} 가 아직 어휘에 없다)`)
-      throw new Error(`${label} dryRun 거절 — ${JSON.stringify(errOf(d.value)).slice(0, 1200)}`)
-    }
-    const warn = (d.value.warnings || []).filter((w) => !/touches 가 비어|새 어휘 타입|없는 관리 문서를 가리키는 줄|그림 \d+개가 레포에 없다/.test(w))
-    if (dry) return io.out(`   ${label} — dryRun 통과${warn.length ? ' · 경고 ' + warn.join(' / ').slice(0, 300) : ''}`)
-    const o = await c.rpc('save', input)
-    if (o.error) throw new Error(`${label} 거절 — ${JSON.stringify(errOf(o.value)).slice(0, 1200)}`)
-    io.out(`   ${label} — 커밋 ${o.value.commit}${warn.length ? ' · 경고 ' + warn.join(' / ').slice(0, 300) : ''}`)
-  }
-
-  io.out(`ctx seed ${dry ? 'plan' : 'apply'}: ${s.top} @${sha} → ${c.server} ${c.repo} · 날 ${day}`)
-
-  if (stages.includes('baseline')) {
-    io.out('[기준선]')
-    for (const d of map.docs.filter((x) => x.baseline != null && only(x.key))) {
-      const secs = sectionsOf(d)
-      if (!opt.stage && (await exists(secs[0]?.coord))) {
-        io.out(`   ${d.key} — 이미 있다(건너뜀 · 다시 밀려면 --stage baseline)`)
-        continue
-      }
-      if (dry) {
-        io.out(`   ${d.key} — 블록 ${secs.length}(기준선은 dryRun 이 없다 — 숫자만)`)
-        continue
-      }
-      const j = await c.post('baseline', {
-        source: `${d.baseline} (${srcRef(d.src)})`,
-        asof: day,
-        managed: [{ op: 'add', pattern: `${d.type}:*`, doc: d.doc, ...(d.form ? { form: d.form } : { title: d.title || d.key }), ...(d.kind ? { kind: d.kind } : {}) }],
-        vocab: secs.map((x) => ({ coord: x.coord, label: x.label })),
-        items: secs.map((x) => ({ coord: x.coord, heading: x.heading, body: x.body })),
-        seed,
-      })
-      io.out(`   ${d.key} — 커밋 ${j.commit} · 블록 ${j.baseline}`)
-    }
-  }
-
-  if (stages.includes('managed')) {
-    io.out('[관리 문서 이관]')
-    for (const d of map.docs.filter((x) => x.baseline == null && only(x.key))) {
-      const secs = sectionsOf(d)
-      if (await exists(secs[0]?.coord)) {
-        io.out(`   ${d.key} — 이미 있다(건너뜀)`)
-        continue
-      }
-      const atts = [...(d.figs ? s.files.filter((f) => f.startsWith(d.figs + '/')) : []), ...(d.attach || [])]
-      const assets = dry ? [] : await uploadAll(atts)
-      const managed = [
-        {
-          op: 'add',
-          pattern: d.split === 'whole' ? d.coord : `${d.type}:*`,
-          doc: d.doc,
-          ...(d.split === 'whole' ? { level: 0 } : {}),
-          ...(d.form ? { form: d.form } : { title: d.title || d.key }),
-          ...(d.kind ? { kind: d.kind } : {}),
-        },
-      ]
-      await save(
-        {
-          work: {
-            id: transferId(d, day),
-            title: `이관 — ${path.posix.basename(d.src, '.md')} → ${d.doc}`,
-            date: `${day} 09:00`,
-            touches: [],
-            touchesEmpty: `세우기(${sha})`,
-            source: srcRef(d.src),
-            body: [
-              `세우기 — \`${d.src}\`(${sha}) → \`${d.doc}\` · 섹션 ${secs.length}${atts.length ? ` · 첨부 ${atts.length}` : ''}`,
-            ].join(NL),
-          },
-          seed,
-          vocab: secs.map((x) => ({ coord: x.coord, label: x.label, ...(x.aliases ? { aliases: x.aliases } : {}) })),
-          managed,
-          sections: secs.map((x) => ({ coord: x.coord, applied: null, ...(x.heading ? { heading: x.heading } : {}), body: x.body })),
-          ...(assets.length ? { assets } : {}),
-        },
-        `${d.key}(섹션 ${secs.length})`
-      )
-    }
-  }
-
-  if (stages.includes('records')) {
-    io.out('[작업 기록]')
-    for (const r of map.records.filter((x) => only(x.id))) {
-      let body
-      let title = r.title
-      let src
-      if (r.src) {
-        const raw = s.read(r.src)
-        title ||= (raw.split(NL).find((l) => /^# /.test(l)) || '').replace(/^#\s+/, '').trim() || path.posix.basename(r.src, '.md')
-        body = relink(raw.split(NL).filter((l, i) => !(i < 3 && /^# /.test(l))).join(NL).trim(), r.src, `work/${r.id}.md`, table, unlinked)
-        src = srcRef(r.src)
-      } else {
-        const d = map.docs.find((x) => x.key === r.from)
-        const a = appendixOf(s.read(d.src), map)
-        body = relink(a.body, d.src, `work/${r.id}.md`, table, unlinked)
-        src = `${srcRef(d.src)} 의 「${a.raw}」`
-      }
-      const atts = [...(r.attachDir ? s.files.filter((f) => f.startsWith(r.attachDir + '/')) : []), ...(r.attach || [])]
-      const extra = atts.filter((a) => !body.includes(path.posix.basename(a))).map((a) => `- 첨부 — [${path.posix.basename(a)}](assets/${r.id}/${path.posix.basename(a)})`)
-      if (extra.length) body += NL + NL + '---' + NL + extra.join(NL)
-      const touches = expandTouches(r, map, sectionsOf)
-      const assets = dry ? [] : await uploadAll(atts)
-      await save(
-        {
-          work: { id: r.id, title: title.slice(0, 200), date: r.date, touches, ...(touches.length ? {} : { touchesEmpty: '좌표 없음 — 가리키는 곳은 본문' }), source: src, body },
-          seed: { ...seed, record: true },
-          ...(assets.length ? { assets } : {}),
-        },
-        r.id
-      )
-    }
-  }
-
-  if (unlinked.size) io.out(`글자로 남긴 링크(지도 밖 대상) — ${[...unlinked].map(([k, v]) => `${k}(${v})`).join(' · ')}`)
-  const b = await c.rpc('brief', {})
-  if (!b.error) io.out(`끝 — 관리 문서 ${b.value.managedDocs} · 기록 ${b.value.works}(세운 기록은 반영됨) · 대기 ${b.value.curation?.queue ?? '?'} · 근거 없음 ${b.value.drift?.unsourced ?? '?'} — 세운 자리는 _seed.json · 원천과 어긋남을 찾는 큐레이션은 cdp-curate · cdp-rebuild`)
+  await seedApply(s, ops, { dry, day: opt.date || today(), stage: opt.stage || null, only: opt.only || null, server: c.server, repo: c.repo, out: io.out })
   return 0
 }
-
-// ── seed verify ─────────────────────────────────────────────────────────────
 
 async function runVerify(opt, io) {
   const s = source(opt)
   if (!s.map) throw new Error(`${s.mapPath} 가 없다`)
   if (!opt.clone) throw new Error('--clone <지식 레포 클론> 이 필요하다(git pull 해 둔 것)')
   const { loadRepo } = await import('../../core/repo.js')
-  const { sliceSection } = await import('../../core/tools.js')
-  const { splitBaseline } = await import('../../core/baseline.js')
-  const { buildDrift } = await import('../../core/drift.js')
-  const { runBuiltinCheck } = await import('../../core/check.js')
   const r = await loadRepo(path.resolve(opt.clone))
-  const map = s.map
-  const table = linkTable(map, s.files, opt.date || today())
-  let same = 0
-  const intent = []
-  const off = []
-  const missing = []
-  for (const d of map.docs) {
-    if (!s.files.includes(d.src)) continue
-    for (const x of docSections(d, s.read(d.src), map, (t) => relink(t, d.src, d.doc, table))) {
-      const cut = sliceSection(r, x.coord)
-      if (!cut || cut.missing) {
-        missing.push(x.coord)
-        continue
-      }
-      const sb = splitBaseline(cut.content)
-      if (normForCompare([sb.block?.body || '', sb.curated].join(NL)) === normForCompare(x.body)) same++
-      else if (map.intent[x.coord]) intent.push(x.coord)
-      else off.push(x.coord)
-    }
-  }
-  const c = r.curation
-  const chk = runBuiltinCheck({ ...r })
-  const errs = chk.findings.filter((f) => f.sev === 'error')
-  const dr = buildDrift(r, { sliceSection }).totals
+  const v = seedVerify(s, r, { date: opt.date || today() })
+  const dr = v.drift
   io.out(`ctx seed verify: ${s.top} @${s.at} ↔ ${opt.clone}`)
-  io.out(`  섹션 — 같음 ${same} · 형식 차이 ${intent.length} · 확인 필요 ${off.length} · 위키에 없음 ${missing.length}`)
-  for (const k of intent) io.out(`    형식 ${k} — ${map.intent[k]}`)
-  for (const k of off) io.out(`    확인 ${k} — 늦음(기록 없음 · ctx follow) 또는 틀림`)
-  for (const k of missing) io.out(`    없음 ${k}`)
-  io.out(`  대기 ${c.stats.queue} · 미반영 섹션 ${c.stats.pendingSections} · 검사 오류 ${errs.reduce((a, f) => a + f.items.length, 0)}`)
+  io.out(`  섹션 — 같음 ${v.same} · 형식 차이 ${v.intent.length} · 확인 필요 ${v.off.length} · 위키에 없음 ${v.missing.length}`)
+  for (const k of v.intent) io.out(`    형식 ${k.coord} — ${k.why}`)
+  for (const k of v.off) io.out(`    확인 ${k} — 늦음(기록 없음 · ctx follow) 또는 틀림`)
+  for (const k of v.missing) io.out(`    없음 ${k}`)
+  io.out(`  대기 ${v.queue} · 미반영 섹션 ${v.pendingSections} · 검사 오류 ${v.checkErrors}`)
   io.out(`  drift — 근거 없음 ${dr.unsourced} · 복제 ${dr.duplicated} · 비대 ${dr.oversize} · 큼 ${dr.big} · 일지형 ${dr.diary} · 좌표 없는 기록 ${dr.unreachable}`)
-  return off.length || missing.length || errs.length ? 1 : 0
+  return v.ok ? 0 : 1
 }
 
 // ── follow ─────────────────────────────────────────────────────────────────

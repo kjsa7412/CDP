@@ -126,3 +126,29 @@ export function stripHistory(text) {
   }
   return out.join(NL).replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')
 }
+
+// 기준선 save 의 입력 — `/api/<repo>/baseline` 의 몸통 { source, asof?, items, vocab?, managed?, seed?, dryRun? } 을 기록 하나로.
+// 서버의 HTTP 길과 MCP `source` 의 apply(같은 프로세스)가 같은 함수를 부른다(MCP 만으로 검토 M7)
+export function baselineInput(body, d = new Date()) {
+  if (!body || !Array.isArray(body.items) || !body.items.length) throw Object.assign(new Error('items 가 없다 — [{ coord, body }]'), { code: 'E_INPUT', detail: { field: 'items' } })
+  const source = String(body.source || '').trim()
+  if (!source) throw Object.assign(new Error('source 가 없다 — 어디서 뽑았나(DB · 커밋 · 파일)'), { code: 'E_INPUT', detail: { field: 'source' } })
+  const p2 = (n) => String(n).padStart(2, '0')
+  const id = `${d.getFullYear()}-${p2(d.getMonth() + 1)}${p2(d.getDate())}-기준선-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`
+  return {
+    work: {
+      id,
+      title: `기준선 — ${source}`.slice(0, 200),
+      date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`,
+      touches: [],
+      baseline: { source, ...(body.asof ? { asof: String(body.asof) } : {}) },
+      body: [`기계로 뽑은 기준선 블록 ${body.items.length}개를 갈아 끼웠다 — 출처 ${source}${body.asof ? ' · 기준 ' + body.asof : ''}.`, '', ...body.items.slice(0, 200).map((x) => `- \`${x.coord}\``), ''].join(NL),
+    },
+    baseline: body.items.map((x) => ({ coord: String(x.coord), body: String(x.body ?? ''), ...(x.heading ? { heading: String(x.heading) } : {}) })),
+    ...(Array.isArray(body.vocab) && body.vocab.length ? { vocab: body.vocab } : {}),
+    ...(Array.isArray(body.managed) && body.managed.length ? { managed: body.managed } : {}),
+    // 세우기(ctx seed apply · MCP source apply) — 기준선 기록을 남기지 않고 좌표를 `_seed.json` 에(문서레포 세우기 검토 S13)
+    ...(body.seed && typeof body.seed === 'object' ? { seed: body.seed } : {}),
+    ...(body.dryRun ? { dryRun: true } : {}),
+  }
+}

@@ -34,6 +34,7 @@ import { withLock } from '../../core/lock.js'
 import * as assets from '../../core/assets.js'
 import * as gitauth from '../../core/gitauth.js'
 import { toolSource, loadSources, setSource } from '../../core/sourcerepo.js'
+import { baselineInput } from '../../core/baseline.js'
 import { findFormsDir } from '../../core/formslib.js'
 import { parseCidrs, ipInCidrs, makeLimiter } from '../../core/net.js'
 import { appVersion } from '../../core/appinfo.js'
@@ -695,7 +696,20 @@ export async function runServe(opt = {}) {
         formsOpt: { explicit: opt.forms || null, dataDir },
         kitDir: opt.kit || null,
         // 원천 문서 레포(MCP 만으로 검토 M2 · M4) — <data>/sources.json · <data>/sources/<레포>.git
-        sourcer: (r, name, args) => toolSource(r, args, { dataDir, name }),
+        // 세우기(plan · apply)는 같은 프로세스에서 save 를 바로 부른다(M7 — HTTP 를 돌지 않는다). 잠금 · 검사 · 커밋 · 미러는 MCP save 와 같은 길
+        sourcer: (r, name, args) =>
+          toolSource(r, args, {
+            dataDir,
+            name,
+            seed: {
+              save: async (input) => {
+                const out = await doSave(r.root, input, { user: a.user, write: a.write, admin: !!a.admin, curate: true, formsDir: opt.forms || null, formsData: dataDir, mirror: !!opt.mirror, staging: stagingDir, log: (m) => log.line(m) })
+                if (!out?.dryRun) await store.reload(name)
+                return out
+              },
+              upload: (rel, buf) => assets.stage(stagingDir, buf),
+            },
+          }),
         // `save` 는 토큰의 사용자로 author 를 채운다. 클라이언트가 보내면
         // 거절한다 — 보낼 수 있으면 남의 이름으로 기록이 남는다(§4.5).
         // viewer 에게는 등록하지 않는다 — 역할에 없는 도구는 보이지도 않는다(v1.0 §5.3)
@@ -1851,28 +1865,8 @@ export async function runServe(opt = {}) {
             body = got?.tooLarge ? null : JSON.parse(got.toString('utf8') || '{}')
           } catch {}
           try {
-            if (!body || !Array.isArray(body.items) || !body.items.length) throw new CtxError('E_INPUT', 'items 가 없다 — [{ coord, body }]', { field: 'items' })
-            const source = String(body.source || '').trim()
-            if (!source) throw new CtxError('E_INPUT', 'source 가 없다 — 어디서 뽑았나(DB · 커밋 · 파일)', { field: 'source' })
-            const d = new Date()
-            const p2 = (n) => String(n).padStart(2, '0')
-            const id = `${d.getFullYear()}-${p2(d.getMonth() + 1)}${p2(d.getDate())}-기준선-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`
-            const input = {
-              work: {
-                id,
-                title: `기준선 — ${source}`.slice(0, 200),
-                date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`,
-                touches: [],
-                baseline: { source, ...(body.asof ? { asof: String(body.asof) } : {}) },
-                body: [`기계로 뽑은 기준선 블록 ${body.items.length}개를 갈아 끼웠다 — 출처 ${source}${body.asof ? ' · 기준 ' + body.asof : ''}.`, '', ...body.items.slice(0, 200).map((x) => `- \`${x.coord}\``), ''].join('\n'),
-              },
-              baseline: body.items.map((x) => ({ coord: String(x.coord), body: String(x.body ?? ''), ...(x.heading ? { heading: String(x.heading) } : {}) })),
-              ...(Array.isArray(body.vocab) && body.vocab.length ? { vocab: body.vocab } : {}),
-              ...(Array.isArray(body.managed) && body.managed.length ? { managed: body.managed } : {}),
-              // 세우기(ctx seed apply) — 기준선 기록을 남기지 않고 좌표를 `_seed.json` 에(문서레포 세우기 검토 S13)
-              ...(body.seed && typeof body.seed === 'object' ? { seed: body.seed } : {}),
-              ...(body.dryRun ? { dryRun: true } : {}),
-            }
+            // 몸통 → 기록 하나 — MCP source 의 apply 도 같은 함수(core/baseline.js)
+            const input = baselineInput(body)
             const out = await doSave(found.root, input, { user: a.user, write: a.write, admin: !!a.admin, curate: true, formsDir: opt.forms || null, formsData: dataDir, mirror: !!opt.mirror, log: (m) => log.line(m) })
             if (!out.dryRun) await store.reload(name)
             log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/baseline', key: body.items.length + '블록', ms: Date.now() - t0, status: 200 })
