@@ -12,10 +12,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { parseSeedMap, checkSeedMap, docSections, appendixOf, coordMap, linkTable, relink, expandTouches, transferId, normForCompare, SEED_FILE } from '../../core/seedmap.js'
+import { checkSeedMap, docSections, appendixOf, linkTable, relink, expandTouches, transferId, normForCompare } from '../../core/seedmap.js'
+import { openSource, changedCoords, followReport, updateDraft, WHY_MARK, whyMissing } from '../../core/sourcerepo.js'
 
 const NL = '\n'
-const WHY = '<!-- 왜: 세션이 채운다 — 왜 바꿨나 · 버린 안 · 근거(회의 · 회신 · 실측). 이 줄을 지워야 저장된다 -->'
 const TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.html': 'text/html', '.htm': 'text/html' }
 
 const today = () => {
@@ -26,35 +26,16 @@ const today = () => {
 
 // ── 원천 문서 레포 ──────────────────────────────────────────────────────────────
 
+// 읽기는 core/sourcerepo.js 하나 — 서버의 MCP `source` 와 같은 함수(MCP 만으로 검토 M8). 여기는 작업 트리를 찾을 뿐
 function source(opt) {
   const start = path.resolve(opt.from || process.cwd())
   let top
   try {
-    top = execFileSync('git', ['-C', start, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+    top = execFileSync('git', ['-C', start, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   } catch {
     throw new Error(`${start} 는 git 레포가 아니다 — --from <문서 레포>`)
   }
-  const git = (args, buffer = false) => execFileSync('git', ['-C', top, '-c', 'core.quotePath=false', ...args], { encoding: buffer ? 'buffer' : 'utf8', maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'pipe'] })
-  const mapPath = path.join(top, SEED_FILE)
-  const hasMap = fs.existsSync(mapPath)
-  const map = hasMap ? parseSeedMap(fs.readFileSync(mapPath, 'utf8')) : null
-  const at = git(['rev-parse', '--short', opt.at || 'HEAD']).trim()
-  const root = map?.root ?? ''
-  const pre = root ? root + '/' : ''
-  const list = (sha) =>
-    git(['ls-tree', '-r', '-z', '--name-only', sha, '--', root || '.'])
-      .split('\0')
-      .filter(Boolean)
-      .map((f) => (pre && f.startsWith(pre) ? f.slice(pre.length) : f))
-  const show = (sha, rel) => {
-    try {
-      return git(['show', `${sha}:${pre}${rel}`]).replace(/\r\n/g, NL)
-    } catch {
-      return null
-    }
-  }
-  const showBuf = (sha, rel) => git(['show', `${sha}:${pre}${rel}`], true)
-  return { top, git, map, mapPath, at, files: list(at), list, read: (rel) => show(at, rel), show, readBuf: (rel) => showBuf(at, rel) }
+  return openSource({ top, at: opt.at || null })
 }
 
 // ── 서버 ──────────────────────────────────────────────────────────────────────
@@ -367,105 +348,37 @@ async function runVerify(opt, io) {
 
 // ── follow ─────────────────────────────────────────────────────────────────
 
-function changedCoords(s, map, from, to) {
-  const files = s.git(['diff', '--name-status', '-z', from, to, '--', map.root || '.']).split('\0').filter(Boolean)
-  const pre = map.root ? map.root + '/' : ''
-  const rows = []
-  for (let i = 0; i < files.length; ) {
-    const st = files[i++]
-    const a = files[i++]
-    const b = /^[RC]/.test(st) ? files[i++] : null
-    const strip = (f) => (pre && f.startsWith(pre) ? f.slice(pre.length) : f)
-    rows.push({ st: st[0], f: strip(b || a), old: b ? strip(a) : null })
-  }
-  const coords = []
-  const vocab = []
-  const changed = []
-  const records = []
-  const outside = []
-  for (const { st, f, old } of rows) {
-    const d = map.docs.find((x) => x.src === f || x.src === old)
-    if (d) {
-      const A = coordMap(d, s.show(from, old || f), map)
-      const B = coordMap(d, s.show(to, f), map)
-      for (const k of new Set([...A.keys(), ...B.keys()])) {
-        if (A.get(k) === B.get(k)) continue
-        coords.push(k)
-        changed.push({ coord: k, a: A.get(k), b: B.get(k) })
-        if (!A.has(k)) {
-          const x = docSections(d, s.show(to, f), map).find((y) => y.coord === k)
-          if (x) vocab.push({ coord: k, label: x.label, ...(x.aliases ? { aliases: x.aliases } : {}) })
-        }
-      }
-      continue
-    }
-    const rec = map.records.find((x) => x.src === f || x.src === old)
-    if (rec) records.push({ f, id: rec.id, st })
-    else outside.push(`${st} ${f}${old ? ' ← ' + old : ''}`)
-  }
-  return { coords: [...new Set(coords)], changed, records, outside, vocab }
-}
-
 async function runFollow(opt, io) {
   const s = source(opt)
   if (!s.map) throw new Error(`${s.mapPath} 가 없다`)
   if (!opt.since) throw new Error('--since <지난 점검 sha> 가 필요하다(처음은 세운 sha)')
   if (!opt.clone) throw new Error('--clone <지식 레포 클론> 이 필요하다')
   const { loadRepo } = await import('../../core/repo.js')
-  const { recordKind } = await import('../../core/curation.js')
   const r = await loadRepo(path.resolve(opt.clone))
-  const human = r.works.filter((w) => recordKind(w) === 'work')
-  const commits = s
-    .git(['log', '--reverse', '--format=%h%x09%ci%x09%s', `${opt.since}..${s.at}`, '--', s.map.root || '.'])
-    .trim()
-    .split(NL)
-    .filter(Boolean)
-    .map((l) => l.split('\t'))
-  let miss = 0
-  let skipped = 0
-  // 지도의 skip — 원천을 위키에 맞춘 커밋 · 기록을 일부러 두지 않은 커밋(sha 앞자리가 같으면 같은 커밋)
-  const skipOf = (h) => Object.entries(s.map.skip || {}).find(([k]) => k.startsWith(h) || h.startsWith(k))?.[1]
-  io.out(`ctx follow: ${opt.since}..${s.at} — 커밋 ${commits.length}`)
-  for (const [h, when, subj] of commits) {
-    const why = skipOf(h)
-    if (why) {
-      skipped++
-      io.out(`− 뺌 ${h} ${when.slice(0, 16)} ${subj}\n    ${why}`)
+  const f = followReport(s, { since: opt.since, works: r.works })
+  io.out(`ctx follow: ${opt.since}..${s.at} — 커밋 ${f.total}`)
+  for (const c of f.commits) {
+    if (c.skip) {
+      io.out(`− 뺌 ${c.sha} ${c.date} ${c.subject}\n    ${c.skip}`)
       continue
     }
-    const x = changedCoords(s, s.map, `${h}^`, h)
-    const after = human.filter((w) => String(w.date || '') >= when.slice(0, 10))
-    // 출처로 잇는 것은 그 커밋을 **가리킨** 기록만 — `커밋 <sha>` · `@<sha>` · 범위의 끝 `..<sha>`. 범위의 시작(`<sha>..`)은 그 커밋을 빼는 쪽이다
-    const cites = new RegExp(`(커밋 |@|\\.\\.)${h}`)
-    const found = x.coords.map((c) => ({ c, by: after.filter((w) => (w.touches || []).includes(c) || cites.test(String(w.source || ''))).map((w) => w.id) }))
-    const ok = x.coords.length ? found.every((y) => y.by.length) : !x.records.length
-    if (!ok) miss++
-    io.out(`${ok ? '○' : '✗ 누락'} ${h} ${when.slice(0, 16)} ${subj}`)
-    for (const y of found) io.out(`    ${y.c}${y.by.length ? ' ← ' + y.by.join(', ') : ' — 기록 없음'}`)
-    if (x.records.length) io.out(`    판단 문서가 바뀜(새 기록 거리): ${x.records.map((y) => y.id).join(', ')}`)
-    if (x.outside.length) io.out(`    지도 밖 파일: ${x.outside.join(' · ')}`)
+    io.out(`${c.ok ? '○' : '✗ 누락'} ${c.sha} ${c.date} ${c.subject}`)
+    for (const y of c.coords) io.out(`    ${y.coord}${y.by.length ? ' ← ' + y.by.join(', ') : ' — 기록 없음'}`)
+    if (c.records.length) io.out(`    판단 문서가 바뀜(새 기록 거리): ${c.records.join(', ')}`)
+    if (c.outside.length) io.out(`    지도 밖 파일: ${c.outside.join(' · ')}`)
   }
-  const counted = commits.length - skipped
-  io.out(`커밋 ${commits.length} · 누락 ${miss}${counted ? ` (${Math.round((miss / counted) * 100)}%)` : ''}${skipped ? ` · 뺌 ${skipped}(지도의 skip)` : ''} — 누락은 같은 모양의 업데이트 기록으로 메운다(ctx update)`)
-  return miss ? 1 : 0
+  io.out(`커밋 ${f.total} · 누락 ${f.miss}${f.rate != null ? ` (${f.rate}%)` : ''}${f.skipped ? ` · 뺌 ${f.skipped}(지도의 skip)` : ''} — 누락은 같은 모양의 업데이트 기록으로 메운다(ctx update)`)
+  return f.miss ? 1 : 0
 }
 
 // ── update ─────────────────────────────────────────────────────────────────
-
-const lineDiff = (a = '', b = '') => {
-  const A = String(a).split(NL).filter((l) => l.trim())
-  const B = String(b).split(NL).filter((l) => l.trim())
-  const sa = new Set(A)
-  const sb = new Set(B)
-  return [...A.filter((l) => !sb.has(l)).map((l) => '- ' + l), ...B.filter((l) => !sa.has(l)).map((l) => '+ ' + l)]
-}
 
 async function runUpdate(opt, io) {
   if (opt.saveDraft) {
     const draft = JSON.parse(fs.readFileSync(opt.saveDraft, 'utf8'))
     const work = draft.work || draft
     const vocab = draft.work ? draft.vocab || [] : []
-    if (work.body.includes(WHY) || !/## 왜\n+\S/.test(work.body)) throw new Error('「## 왜」 를 채우지 않았다 — 초안의 안내 줄을 지우고 이유를 쓴다')
+    if (work.body.includes(WHY_MARK) || !/## 왜\n+\S/.test(work.body) || whyMissing(work)) throw new Error('「## 왜」 를 채우지 않았다 — 초안의 안내 줄을 지우고 이유를 쓴다')
     if (!work.touches?.length && !work.touchesEmpty) throw new Error('touches 가 비었다 — 바뀐 좌표가 없으면 touchesEmpty 에 사유')
     let map = null
     try {
@@ -489,52 +402,12 @@ async function runUpdate(opt, io) {
   if (!s.map) throw new Error(`${s.mapPath} 가 없다`)
   const [from, to0] = opt.args.slice(1)
   if (!from) throw new Error('ctx update <작업 전 sha> [<작업 뒤 sha>]')
-  const to = s.git(['rev-parse', '--short', to0 || 'HEAD']).trim()
-  const commits = s
-    .git(['log', '--reverse', '--format=%h%x09%ci%x09%s', `${from}..${to}`, '--', s.map.root || '.'])
-    .trim()
-    .split(NL)
-    .filter(Boolean)
-    .map((l) => l.split('\t'))
-  if (!commits.length) throw new Error(`${from}..${to} 에 문서 커밋이 없다`)
-  const x = changedCoords(s, s.map, from, to)
-  const last = commits[commits.length - 1]
-  const date = last[1].slice(0, 16)
-  const work = {
-    id: `${date.slice(0, 4)}-${date.slice(5, 7)}${date.slice(8, 10)}-업데이트-${to}`,
-    title: `[업데이트] ${path.posix.basename(s.top)} ${to} — ${last[2]}`.slice(0, 200),
-    date,
-    touches: x.coords,
-    ...(x.coords.length ? {} : { touchesEmpty: '관리 문서 섹션은 그대로 — 작업문서만 바뀌었다' }),
-    tags: ['업데이트'],
-    source: `${path.posix.basename(s.top)} ${from}..${to}`,
-    body: [
-      `원천 문서 레포의 커밋(${from}..${to})을 지식 레포로 넘기는 업데이트 기록이다 — 큐레이터가 누락을 메운다. 반영은 큐레이터가 한다.`,
-      '',
-      '## 왜',
-      '',
-      WHY,
-      '',
-      '## 커밋',
-      '',
-      ...commits.map(([h, c, sj]) => `- ${h} ${c.slice(0, 16)} ${sj}`),
-      '',
-      '## 바뀐 섹션',
-      '',
-      ...(x.changed.length
-        ? x.changed.flatMap((y) => {
-            const lines = lineDiff(y.a, y.b)
-            return [`### \`${y.coord}\`${y.a == null ? ' (새 섹션)' : y.b == null ? ' (없어짐)' : ''}`, '', '```diff', ...lines.slice(0, 80), ...(lines.length > 80 ? [`… ${lines.length - 80}줄 더`] : []), '```', '']
-          })
-        : ['(없음)', '']),
-      ...(x.records.length ? ['## 바뀐 작업문서(그 판의 원문)', '', ...x.records.flatMap((y) => [`### ${y.f} — 앞 판은 \`${y.id}\``, '', s.show(to, y.f) ?? '(지워짐)', ''])] : []),
-      ...(x.outside.length ? ['## 지도 밖 파일 — 분류가 필요하면 큐레이터에게(cdp-sources.json)', '', ...x.outside.map((y) => '- ' + y), ''] : []),
-    ].join(NL),
-  }
+  const u = updateDraft(s, { from, to: to0 || 'HEAD' })
+  const x = u
   const dir = path.join(s.top, '.cdp-updates')
   fs.mkdirSync(dir, { recursive: true })
-  const out = path.join(dir, `${to}.json`)
-  fs.writeFileSync(out, JSON.stringify({ work, ...(x.vocab.length ? { vocab: x.vocab } : {}) }, null, 1))
+  const out = path.join(dir, `${u.to}.json`)
+  fs.writeFileSync(out, JSON.stringify({ work: u.work, ...(u.vocab.length ? { vocab: u.vocab } : {}) }, null, 1))
   let ignored = true
   try {
     s.git(['check-ignore', '-q', '.cdp-updates/x.json'])

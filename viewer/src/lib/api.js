@@ -290,6 +290,8 @@ export const admin = {
   repoRestore: (name) => A(`/repos/${encodeURIComponent(name)}/restore`, { ...J('POST', {}), allowStatus: [409] }),
   // 원격에 잇는다 — 세울 때 빠뜨린 origin. push 거절(409)도 답이다(사유 · 문장). 강제 push 는 없다
   repoOrigin: (name, url) => A(`/repos/${encodeURIComponent(name)}/origin`, { ...J('POST', { url }), allowStatus: [409] }),
+  // 원천 문서 레포(MCP 만으로 검토 M2) — url · branch. 빈 url 이면 끊는다. 답의 test 는 ls-remote 결과
+  repoSource: (name, url, branch) => A(`/repos/${encodeURIComponent(name)}/source`, J('POST', { url, branch })),
   // 치운다 — 휴지통(<data>/trash)으로 옮긴다. 확인 이름이 레포 이름과 같아야 한다
   repoDelete: (name, confirm) => A(`/repos/${encodeURIComponent(name)}`, J('DELETE', { confirm })),
   // git 자격 — 공개 키 · 지문 · 결과만 오간다(비밀 없음). PAT 는 여기 없다 — 셸의 `ctx serve git-auth`(D8)

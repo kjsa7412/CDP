@@ -56,6 +56,8 @@ const CARD = {
     '**큐레이터만.** 큐레이션 대기열 — 아직 아무도 판정하지 않은 작업 기록, 오래된 순. 기록마다 좌표를 셋으로 나눈다: `section`(섹션 있음 · 반영 후보) · `anchor`(등록부 행은 있는데 섹션 · 문서가 없음) · `unregistered`(등록부 없음 · 새 문서 후보 또는 기록으로 둠). `zero` 는 좌표 0개. `id` 를 주면 그 기록 하나의 **판정 재료** — 좌표별 문서 · 상태 · applied · 미반영 수, 등록부 없는 타입(`forms` 로 서식을 찾는다), 본문에만 있는 좌표, 같은 좌표를 건드린 다른 대기 기록(`together` — 묶어서 한 번에 다룬다). 판정 · 반영은 `cdp-curate` 절차로 `save` 의 `work.curates` 와 `sections` 를 한 번에',
   drift:
     '**큐레이터만.** 어긋남 진단 — 반영된 뒤 시간이 지나며 정본이 원천 · 규칙과 어긋난 자리(미반영과 다르다 · 미반영이 0 이어도 생긴다). `totals` 는 레포 합계: `unsourced`(근거 없음 — 그 좌표를 건드린 기록 · 스냅샷 · 기준선이 없는 섹션 · 기록만 옮겨 다시 세우면 사라진다) · `duplicated`(다른 섹션과 같은 산문 줄 — 짝 좌표가 `duplicated` · 표 행 · 경과 · 레포 규약 줄은 뺐다) · `oversize`(경과 앞 본문이 문턱 줄 수를 넘는다 — 서술이 쌓였다) · `diary`(날짜별로 덧붙인 일지형 줄) · `unreachable`(좌표 0 · 좌표정정이 없는 사람의 기록). `doc`(경로 · 관리번호) · `coord` 로 좁힌다 — `coord` 는 그 섹션과 그 섹션의 복제 짝. 다시 세우는 절차는 `cdp-rebuild` — 근거 없음은 스냅샷부터 · 좌표 없는 기록은 좌표정정 · 복제 · 비대 · 일지형은 묶음으로 재유도(재큐레이션)',
+  source:
+    '**큐레이터만.** 원천 문서 레포(콘솔 레포 설정의 원천 git 주소 — 서버가 받아 둔다 · 부를 때마다 fetch)와 이 지식 레포를 잇는다. 원천에는 쓰지 않는다. `op: "follow"` — `since`(생략하면 `_seed.json` 의 세운 sha) 뒤 원천 커밋마다 바뀐 좌표 · 그 좌표를 건드리거나 그 커밋을 출처로 가리킨 기록(`by`) · 없으면 `ok: false`(누락) · `miss` 합계. `op: "update"` — `from`..`to?` 를 업데이트 기록 초안 `draft: { work, vocab }` 으로(바뀐 섹션 diff · 새 좌표 어휘). 초안의 「## 왜」 안내 줄을 지우고 이유를 채워 `save` 한다 — 안내 줄이 남으면 E_CHECK. 원천이 없으면 E_NO_SOURCE. fetch 가 실패하면 마지막 받은 것으로 답하고 `warnings` 에 적는다',
   save:
     '작업 기록 하나를 남긴다 — 이 세션에서 한 작업 · 밖에서 온 문서 편입 · 문서를 고치라는 지시. **관리 문서는 쓰지 않는다**: 기록은 큐레이션 대기열에 서고 큐레이터가 반영한다 — 그동안 `section` 이 이 기록을 섹션과 함께 낸다. **기록은 홀로 선다** — 값 · 표 · 결정 · 제약은 본문에 쓴다(큐레이터는 기록만 보고 반영한다). 큰 추출물(DDL · 덤프)은 첨부로. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 새 좌표는 `vocab` 에 같이 보낸다. 밖에서 온 문서면 `source` 에 원문 출처를 적는다. 그림 · pdf · HTML 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(본문에서는 `![설명](assets/<id>/<name>)` · HTML 은 링크). `sections` · `managed` · `edits` · `work.curates` 는 큐레이터만 — 보내면 E_FORBIDDEN(need curate). `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
   saveCurator:
@@ -153,8 +155,9 @@ export function makeRepoCache(root) {
 // curate   (name) => boolean   그 레포의 큐레이터인가(v1.0 V2). 없으면 아무도 아니다
 // curateAny  큐레이터 도구(queue)를 등록할지 — 한 레포라도 큐레이터면. 역할에 없는 도구는 보이지도 않는다(개편안 §5.3)
 
+// sourcer  (r, name, args) => 결과   원천 문서 레포 도구(MCP 만으로 검토 M4) — 서버가 <data>/sources 를 든다. 없으면 `source` 를 등록하지 않는다
 // kitDir   서버의 --kit(없으면 번들 옆 · 소스) — brief 의 kit 해시와 프롬프트의 스킬이 `/kit` 과 같은 자리를 본다
-export function buildServer({ repos = [], fallback = null, mode = 'server', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT, curate = null, curateAny = null, formsOpt = null, kitDir = null } = {}) {
+export function buildServer({ repos = [], fallback = null, mode = 'server', prompts = 'auto', allow = null, notice = null, saver = null, built = BUILT, curate = null, curateAny = null, formsOpt = null, kitDir = null, sourcer = null } = {}) {
   if (!repos.length) throw new CtxError('E_REPO', '지식 레포가 하나도 없다', {})
 
   const caches = new Map()
@@ -262,6 +265,12 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
       const list = searchForms(lib, a.q).map((f) => formRow(f, used))
       return { forms: list, total: list.length, groups: lib.groups }
     })
+    if (sourcer) {
+      tool('source', { op: z.enum(['follow', 'update']), since: z.string().max(80).optional(), from: z.string().max(80).optional(), to: z.string().max(80).optional() }, (r, a, { name }) => {
+        if (!canCurate(name)) throw new CtxError('E_FORBIDDEN', '그 레포의 큐레이터가 아니다 — 원천과 잇는 것은 큐레이터의 일이다', { repo: name, need: 'curate' })
+        return sourcer(r, name, a)
+      }, { big: true })
+    }
   }
 
   // match 만 레포를 가로지른다 (§2.9).

@@ -38,6 +38,7 @@ import { planPurge } from './examples.js'
 import { checkEditsShape, planEdits } from './edits.js'
 import { checkDrop, dropVocab, dropRefs, refsError } from './docdrop.js'
 import { suggestEdit } from './docrefs.js'
+import { whyMissing } from './sourcerepo.js'
 
 const NL = String.fromCharCode(10)
 const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
@@ -158,6 +159,10 @@ function checkSchema(input) {
   if (w.body.includes(APPLIED_MARK)) {
     throw new CtxError('E_INPUT', `body 에 ${APPLIED_MARK} 를 쓸 수 없다`, { field: 'work.body' })
   }
+  // 「왜」 — 업데이트 초안(MCP source · ctx update)의 안내 줄이 남았거나 태그 업데이트의 「## 왜」 가 비었다(MCP 만으로 검토 M6).
+  // CLI 의 --save 에만 있던 검사를 서버로 — 어느 길로 와도 같다
+  const noWhy = whyMissing(w)
+  if (noWhy) throw new CtxError('E_CHECK', noWhy, { field: 'work.body', check: 'why' })
   for (const c of w.touches || []) checkCoord(c)
   if (w.source != null && (typeof w.source !== 'string' || !w.source.trim())) {
     throw new CtxError('E_INPUT', 'source 가 비었다 — 원문이 어디서 왔는지 적거나 빼고 보낸다', { field: 'work.source' })

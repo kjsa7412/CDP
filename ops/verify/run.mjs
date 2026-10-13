@@ -547,11 +547,11 @@ await check(41, 'POST /mcp 와 /mcp/<name> 이 같은 도구 목록 (writer 10)'
   return '10건 동일'
 })
 
-await check(118, '역할별 도구 목록 — viewer 9(save 없음) · writer 10(queue · forms 없음) · 큐레이터 12 · derive · apply · sync · version 은 없다', async () => {
+await check(118, '역할별 도구 목록 — viewer 9(save 없음) · writer 10(queue · forms 없음) · 큐레이터 14 · derive · apply · sync · version 은 없다', async () => {
   const BASE10 = ['brief', 'check', 'docs', 'match', 'repos', 'save', 'search', 'section', 'where', 'work']
   eq(await toolNames(TQ), BASE10.filter((t) => t !== 'save'), 'viewer')
   eq(await toolNames(TW), BASE10, 'writer')
-  eq(await toolNames(TC), [...BASE10, 'drift', 'forms', 'queue'].sort(), '큐레이터')
+  eq(await toolNames(TC), [...BASE10, 'drift', 'forms', 'queue', 'source'].sort(), '큐레이터')
   for (const gone of ['derive', 'apply', 'sync', 'version']) {
     const r = await H.rpc('/mcp/alpha', 'tools/call', { name: gone, arguments: {} }, TC)
     must(r.j?.error || r.j?.result?.isError, `${gone} 가 아직 불린다`)
@@ -559,7 +559,7 @@ await check(118, '역할별 도구 목록 — viewer 9(save 없음) · writer 10
   // 명함도 역할별 — writer 의 save 는 기록만, 큐레이터의 save 는 판정 · 섹션을 말한다
   const card = async (tk) => (await H.rpc('/mcp/alpha', 'tools/list', {}, tk)).j.result.tools.find((t) => t.name === 'save').description
   must(/E_FORBIDDEN/.test(await card(TW)) && /큐레이터의 save/.test(await card(TC)), 'save 명함이 역할과 맞지 않는다')
-  return 'viewer 9 · writer 10 · 큐레이터 13 · 옛 넷 없음 · save 명함 둘'
+  return 'viewer 9 · writer 10 · 큐레이터 14 · 옛 넷 없음 · save 명함 둘'
 })
 
 await check(113, 'docs 도구 — 관리 문서 목록 · 등록부 여부 / match 의 문서 이름 대조 / brief({ repo }) 가 이 연결의 기본 레포와 다르면 경고', async () => {

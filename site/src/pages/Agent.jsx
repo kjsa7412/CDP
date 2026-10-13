@@ -1,4 +1,4 @@
-// 에이전트 — Claude Code 가 MCP 로 붙는 법 · 역할이 가르는 도구 13 · 스킬 7 · 「MCP 가 도는 길」.
+// 에이전트 — Claude Code 가 MCP 로 붙는 법 · 역할이 가르는 도구 14 · 스킬 7 · 「MCP 가 도는 길」.
 // 「MCP 가 도는 길」 은 서버 소개 얼굴의 것을 그대로 쓴다 — 예의 값은 둘 다 데모 레포의 것이고, host 만 `<서버>` 로 넘긴다.
 
 import McpFlow from '../../../viewer/src/site/McpFlow.jsx'
@@ -65,7 +65,7 @@ export default function Agent() {
       </section>
 
       <section className="st-sec">
-        <h2>도구 13</h2>
+        <h2>도구 14</h2>
         <p className="st-p">
           읽기 아홉 · 큐레이터만 보는 셋 · 쓰기 하나. viewer 에게는 아홉, writer 에게는 <code>save</code> 까지 열, 큐레이터에게는 열셋 전부가 보인다. 도구의 설명 문장이 모델이 도구를 부를지 말지를 정한다 —
           그 문장이 서버 설계의 실체다.

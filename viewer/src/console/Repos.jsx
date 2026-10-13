@@ -5,6 +5,7 @@
 // 세우면서 접근을 준다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다. 같은 함수(`buildRepo`)를 CLI `ctx repo new` 도 쓴다.
 // **세우는 자리는 여기 하나다** — 레포 화면의 관리 › 지식 레포(`POST /repos` · writer)는 없앴다(화면 · 권한 검토 v0.1 R1).
 // 세운 뒤의 둘도 여기다 — 「origin 연결」(세울 때 빠뜨린 원격 · 강제 push 없음) · 「삭제」(휴지통으로 옮김 · 이름을 쳐야 열림).
+// 「원천」 — 이 지식 레포가 따라가는 원천 문서 레포(git 주소 · 브랜치). 큐레이터의 MCP `source`(follow · update)가 서버의 사본을 본다(MCP 만으로 검토 M2).
 // 표에는 레포마다 큐레이션 대기 · 가장 오래된(개편안 S7) — 서버가 값을 낼 때만 열이 선다. 연결 · 삭제 · 내려받기 TODO K1~K7.
 // **작업 레포 대장은 펼침 열이다**(제품화 2 ⑥ · 옛 「작업 레포 대장」 페이지) — 레포마다 등록 수 · 낡음, 누르면 그 레포의 등록이 펼쳐진다.
 // `?wr=1`(옛 `/console/workrepos`)이면 전부 편다. 지식 레포가 없어진 등록(고아)은 표 아래 한 절 — 지울 자리가 여기뿐이다(F5).
@@ -64,6 +65,7 @@ export default function Repos({ say, route }) {
   // 세운 뒤의 둘 — 원격 잇기 · 치우기
   const [linking, setLinking] = useState(null)
   const [removing, setRemoving] = useState(null)
+  const [sourcing, setSourcing] = useState(null)
   const [gone, setGone] = useState(null)
   // `--mirror` 가 꺼져 있으면 이어도 save 뒤 자동 push 는 없다 — 창이 그 한 줄을 낸다
   const { data: srv } = useResource('/admin/server', admin.server)
@@ -169,6 +171,23 @@ export default function Repos({ say, route }) {
       } else say(`${name} — 원격은 적었지만 push 가 안 됐다: ${r.reasonText || r.reason || ''}${r.message ? ' — ' + r.message : ''}`, 14000)
       invalidate('/admin/')
       invalidate('/next')
+      await load()
+    } catch (e) {
+      if (e.message !== CANCELLED) say(e.message, 8000)
+    } finally {
+      setActing(null)
+    }
+  }
+  // 원천 — 적고 연결 시험(ls-remote). 안 닿아도 적어 둔다 — 자격을 고친 뒤 MCP source 가 받는다
+  const saveSource = async (name, url, branch) => {
+    setActing(name + ':source')
+    try {
+      const r = await withSudo(() => admin.repoSource(name, url, branch))
+      if (!r.source) say(`${name} — 원천 연결을 끊었다`)
+      else if (r.ok) say(`${name} — 원천을 적었다 · 연결 시험 통과${r.test?.head ? ' · ' + r.test.head : ''}`, 6000)
+      else say(`${name} — 원천은 적었지만 닿지 않는다: ${r.test?.reasonText || r.test?.reason || ''}${r.test?.message ? ' — ' + r.test.message : ''}`, 14000)
+      setSourcing(null)
+      invalidate('/admin/')
       await load()
     } catch (e) {
       if (e.message !== CANCELLED) say(e.message, 8000)
@@ -341,6 +360,9 @@ export default function Repos({ say, route }) {
                         <button className="abtn" disabled={!!acting} onClick={() => setLinking(r)} title={r.remote ? `origin: ${r.remote} — 바꾸거나 다시 보낸다` : '원격 저장소에 잇고 첫 push 를 한다'}>
                           {acting === r.name + ':origin' ? '잇는 중…' : r.remote ? 'origin' : 'origin 연결'}
                         </button>
+                        <button className="abtn" disabled={!!acting} onClick={() => setSourcing(r)} title={r.source ? `원천: ${r.source.url}${r.source.branch ? ' @' + r.source.branch : ''}` : '원천 문서 레포(git)를 잇는다 — 큐레이터의 source 도구가 따라간다'}>
+                          {acting === r.name + ':source' ? '적는 중…' : r.source ? '원천' : '원천 연결'}
+                        </button>
                         <button className="abtn" disabled={!!acting} onClick={() => setRemoving(r)} title="휴지통(서버 data/trash)으로 옮긴다 — 영구 삭제는 없다">
                           삭제
                         </button>
@@ -419,6 +441,7 @@ export default function Repos({ say, route }) {
         />
       )}
       {linking && <Origin repo={linking} busy={acting === linking.name + ':origin'} mirrorOn={srv ? !!srv.mirror : null} onClose={() => setLinking(null)} onOk={(url) => link(linking.name, url)} />}
+      {sourcing && <Source repo={sourcing} busy={acting === sourcing.name + ':source'} onClose={() => setSourcing(null)} onOk={(url, branch) => saveSource(sourcing.name, url, branch)} />}
       {removing && <Remove repo={removing} busy={acting === removing.name + ':delete'} onClose={() => setRemoving(null)} onOk={() => remove(removing.name)} />}
       {adding && <NewRepo data={data} busy={busy} onClose={() => setAdding(false)} onOk={create} />}
       {orphanDel && (
@@ -593,6 +616,56 @@ function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
       {mirrorOn === false && (
         <div className="anote anote--warn" style={{ fontSize: 12 }}>
           이 서버는 <code>--mirror</code> 없이 떠 있다 — 첫 push 는 지금 되지만 그 뒤 <code>save</code> 의 커밋은 자동으로 가지 않는다(「다시 보내기」 로 민다).
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+// 원천 문서 레포 — 주소 · 브랜치(선택). 서버가 <data>/sources/<레포>.git 로 받는다 · 원천에는 쓰지 않는다
+function Source({ repo, busy, onClose, onOk }) {
+  const [url, setUrl] = useState('')
+  const [branch, setBranch] = useState(repo.source?.branch || '')
+  const u = url.trim()
+  const ok = !u || originOk(u)
+  const { data: g } = useResource('/admin/gitauth', admin.gitauth)
+  const miss = u && ok ? missingFor(u, g) : null
+  return (
+    <Modal
+      title={`${repo.name} — 원천 문서 레포`}
+      onClose={onClose}
+      wide
+      foot={
+        <>
+          <span className="amuted" style={{ fontSize: 11.5 }}>연결 시험(ls-remote) · 읽기만 · auth.log · 재인증</span>
+          <span className="sp" />
+          <button className="abtn" onClick={onClose}>취소</button>
+          <button className="abtn abtn--accent" disabled={busy || !ok || (!u && !repo.source)} onClick={() => onOk(u, branch.trim())}>
+            {busy ? '적는 중…' : u ? '적고 시험' : '연결 끊기'}
+          </button>
+        </>
+      }
+    >
+      {repo.source && (
+        <div className="anote" style={{ fontSize: 12 }}>
+          지금 원천 — <Mono>{repo.source.url}</Mono>
+          {repo.source.branch ? <> @ <Mono>{repo.source.branch}</Mono></> : null}. 주소를 다시 넣으면 바꾸고, 비우고 누르면 끊는다.
+        </div>
+      )}
+      <Field label="원천 git 주소" hint="이 지식 레포가 따라가는 문서 레포. 루트에 cdp-sources.json(지도)이 있어야 한다. 원천이 git 서버에 없으면 먼저 올린다.">
+        <input className="mono" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} autoFocus placeholder={ORIGIN_EX[1]} />
+        {u && !ok && <span className="field__h field__h--bad">http(s)://… 또는 ssh://git@… 모양이어야 한다</span>}
+      </Field>
+      <Field label="브랜치 (선택)" hint="비우면 원천의 기본 브랜치(HEAD).">
+        <input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} spellCheck={false} placeholder="main" />
+      </Field>
+      <div className="anote" style={{ fontSize: 12, lineHeight: 1.7 }}>
+        자격은 origin 과 같다 — ssh 주소는 서버의 <b>SSH 배포 키</b>(GitLab 에 <b>읽기 전용</b>으로 등록), http 는 서버에 넣은 <b>PAT</b>. 큐레이터는 MCP <code>source</code>(follow · update)로 원천을 본다.
+      </div>
+      {miss && (
+        <div className="anote anote--warn" style={{ fontSize: 12 }}>
+          {miss}.{' '}
+          <Link className="abtn" to="/console/server#gitauth" onClick={onClose}>git 자격</Link>
         </div>
       )}
     </Modal>

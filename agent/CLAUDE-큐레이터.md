@@ -19,7 +19,7 @@
 | `cdp-work` · `cdp-save` | 지금 상태 읽기 · 큐레이터 자신의 작업 기록 |
 
 큐레이터에게만 보이는 도구 — `queue`(대기열 · 오래된 순 · `queue({ id })` 판정 재료) · `forms`(서식집 — 새 문서의 서식 ·
-guide · example · 서버가 찍을 빈 문서) · `drift`(어긋남 진단 — 근거 없음 · 복제 · 비대 · 일지형 · 좌표 없는 기록). `save` 는 큐레이션 기록(`work.curates`)과 `sections` · `managed` · `vocab` · `edits` 를 한 커밋에 받는다.
+guide · example · 서버가 찍을 빈 문서) · `drift`(어긋남 진단 — 근거 없음 · 복제 · 비대 · 일지형 · 좌표 없는 기록) · `source`(원천 문서 레포 — `follow` 커밋마다 기록 있음/누락 · `update` 업데이트 기록 초안. 원천은 콘솔 레포 설정에서). `save` 는 큐레이션 기록(`work.curates`)과 `sections` · `managed` · `vocab` · `edits` 를 한 커밋에 받는다.
 
 ### 지킬 것
 

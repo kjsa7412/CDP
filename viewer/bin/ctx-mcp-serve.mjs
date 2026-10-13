@@ -33,6 +33,7 @@ import { newRepo, cloneRepo, connectOrigin, trashRepo, REPO_NAME_RE } from '../.
 import { withLock } from '../../core/lock.js'
 import * as assets from '../../core/assets.js'
 import * as gitauth from '../../core/gitauth.js'
+import { toolSource, loadSources, setSource } from '../../core/sourcerepo.js'
 import { findFormsDir } from '../../core/formslib.js'
 import { parseCidrs, ipInCidrs, makeLimiter } from '../../core/net.js'
 import { appVersion } from '../../core/appinfo.js'
@@ -693,6 +694,8 @@ export async function runServe(opt = {}) {
         curateAny: !!a.admin || (a.curateRepos || []).length > 0,
         formsOpt: { explicit: opt.forms || null, dataDir },
         kitDir: opt.kit || null,
+        // 원천 문서 레포(MCP 만으로 검토 M2 · M4) — <data>/sources.json · <data>/sources/<레포>.git
+        sourcer: (r, name, args) => toolSource(r, args, { dataDir, name }),
         // `save` 는 토큰의 사용자로 author 를 채운다. 클라이언트가 보내면
         // 거절한다 — 보낼 수 있으면 남의 이름으로 기록이 남는다(§4.5).
         // viewer 에게는 등록하지 않는다 — 역할에 없는 도구는 보이지도 않는다(v1.0 §5.3)
@@ -1316,6 +1319,9 @@ export async function runServe(opt = {}) {
                 users: visibleTo(r.name),
               })
             }
+            // 원천 문서 레포(MCP 만으로 검토 M2) — 주소(가림) · 브랜치. 큐레이터의 MCP `source` 가 이것을 받는다
+            const srcs = (await loadSources(dataDir)).repos
+            for (const row of rows) row.source = srcs[row.name] ? { url: git.maskUrl(srcs[row.name].url), branch: srcs[row.name].branch || null } : null
             okLog('/repos', '-')
             return json(res, 200, { repos: rows, users: db.users.filter((u) => u.active !== false).map((u) => ({ name: u.name, label: u.label ?? null, all: (u.repos || []).includes('*') })) })
           }
@@ -1413,6 +1419,34 @@ export async function runServe(opt = {}) {
             if (!r.pushed && r.reason) log.line(`origin 연결 ${name}: push 실패 — ${mirror.REASON_TEXT[r.reason] || r.reason}${r.message ? ' — ' + r.message : ''}`)
             okLog('/repos/origin', name, r.pushed || body.push === false ? 200 : 409)
             return json(res, r.pushed || body.push === false ? 200 : 409, { ok: r.pushed || body.push === false, ...r, reasonText: r.reason ? mirror.REASON_TEXT[r.reason] || r.reason : null, mirror: await mirror.summary(found.root) })
+          }
+          // ── 원천 문서 레포 — 지식 레포 하나에 `source: { url, branch }`(MCP 만으로 검토 M2 · M3). 재인증 뒤 · auth.log.
+          // 넣기 전에 `testRemote`(ls-remote · 아무것도 안 보낸다)로 닿는지 본다 — 안 닿아도 적어는 둔다(자격을 나중에 고칠 수 있다). url 이 비면 끊는다
+          const sm = /^\/repos\/([^/]+)\/source$/.exec(sub)
+          if (sm && req.method === 'POST') {
+            const name = decodeURIComponent(sm[1])
+            await store.ensure(name)
+            const found = (await store.list()).find((x) => x.name === name)
+            if (!found) return fail(new auth.AuthError('E_NOT_FOUND', '그런 레포가 없다', { name }))
+            const body = await readJson()
+            if (!body) return fail(new auth.AuthError('E_INPUT', '본문이 JSON 이 아니다'))
+            const url = String(body.url || '').trim()
+            let saved
+            let test = null
+            try {
+              if (url) test = await gitauth.testRemote(url, { dataDir })
+              saved = await setSource(dataDir, name, { url, branch: body.branch })
+            } catch (e) {
+              okLog('/repos/source', name, 400)
+              return json(res, 400, { error: { code: e?.code || 'E_INPUT', message: e.message, detail: e.detail } })
+            }
+            await auth.audit(dataDir, `admin repo source · ${a.user} · ${name} · ${saved ? git.maskUrl(saved.url) + (saved.branch ? ' @' + saved.branch : '') + ' · ' + (test?.ok ? 'ok' : 'fail=' + (test?.reason || '?')) : '끊음'}`)
+            okLog('/repos/source', name)
+            return json(res, 200, {
+              ok: !saved || !!test?.ok,
+              source: saved ? { url: git.maskUrl(saved.url), branch: saved.branch } : null,
+              test: test ? { ...test, reasonText: test.reason ? (test.reason === 'hostkey' ? '호스트 키를 믿지 않았다 — 「호스트 키 받기」' : mirror.REASON_TEXT[test.reason] || test.reason) : null } : null,
+            })
           }
           // ── 레포 하나를 치운다 — **휴지통으로 옮긴다**(`<data>/trash/<이름>-<시각>/` · K5~K7). 영구 삭제는 없다.
           // 본문 `{ confirm: <이름> }` 이 맞아야 한다. 명부의 할당에서 그 이름을 뺀다(`*` 는 그대로) · 작업 레포 대장 행은 기록이라 남긴다.

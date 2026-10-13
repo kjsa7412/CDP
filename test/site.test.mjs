@@ -88,11 +88,11 @@ test('예제 다섯 — 녹화의 끝이 시나리오대로다(v1.0 — writer �
   }
 })
 
-test('도구 13 · 스킬 7 — 사이트의 이름이 코드와 같다', () => {
+test('도구 14 · 스킬 7 — 사이트의 이름이 코드와 같다', () => {
   const src = rd('viewer/bin/ctx-mcp.mjs')
   const reg = new Set([...src.matchAll(/(?:[^a-zA-Z]tool\(|registerTool\(\s*)'([a-z]+)'/g)].map((m) => m[1]))
   assert.deepEqual([...TOOLS.map((t) => t[0])].sort(), [...reg].sort())
-  assert.equal(TOOLS.length, 13)
+  assert.equal(TOOLS.length, 14)
   const dirs = fs.readdirSync(path.join(ROOT, 'agent/skills')).filter((d) => fs.existsSync(path.join(ROOT, 'agent/skills', d, 'SKILL.md')))
   assert.deepEqual(SKILLS.map((s) => s[0]).sort(), dirs.sort())
 })
