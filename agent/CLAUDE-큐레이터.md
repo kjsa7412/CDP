@@ -15,11 +15,11 @@
 | `cdp-curate` | 대기열의 기록을 관리 문서에 반영 — 「큐레이션해 줘」 · 화면의 [에이전트 지시 복사] |
 | `cdp-registry` | 등록부 · 문서 구조 — 행 더하기(서식) · 이름 · 합치기 · 폐기 · 지우기 · 서식 예시 · 섹션 밖 글 |
 | `cdp-rebuild` | 시간이 지나 어긋난 관리 문서 — `drift` 로 진단 · 원천 채우기(스냅샷 · 좌표정정) · 묶음으로 다시 세우기(재큐레이션) |
-| `cdp-seed` | 기존 산출물 문서 레포(md · git)에서 세우기 — 지도(`cdp-sources.json`) · `ctx seed check · plan · apply · verify` · 정본 둘이면 `ctx follow` |
+| `cdp-seed` | 기존 산출물 문서 레포(md · git)에서 세우기 — 지도(`cdp-sources.json`) · `source` 의 `init · map · plan · apply · verify` · 정본 둘이면 `follow` · `update` |
 | `cdp-work` · `cdp-save` | 지금 상태 읽기 · 큐레이터 자신의 작업 기록 |
 
 큐레이터에게만 보이는 도구 — `queue`(대기열 · 오래된 순 · `queue({ id })` 판정 재료) · `forms`(서식집 — 새 문서의 서식 ·
-guide · example · 서버가 찍을 빈 문서) · `drift`(어긋남 진단 — 근거 없음 · 복제 · 비대 · 일지형 · 좌표 없는 기록) · `source`(원천 문서 레포 — `follow` 커밋마다 기록 있음/누락 · `update` 업데이트 기록 초안. 원천은 콘솔 레포 설정에서). `save` 는 큐레이션 기록(`work.curates`)과 `sections` · `managed` · `vocab` · `edits` 를 한 커밋에 받는다.
+guide · example · 서버가 찍을 빈 문서) · `drift`(어긋남 진단 — 근거 없음 · 복제 · 비대 · 일지형 · 좌표 없는 기록) · `source`(원천 문서 레포 — 세우기 `init · map · plan · apply · verify` · 따라가기 `follow` 커밋마다 기록 있음/누락 · `update` 업데이트 기록 초안. 원천은 admin 이 콘솔에서 잇는다). `save` 는 큐레이션 기록(`work.curates`)과 `sections` · `managed` · `vocab` · `edits` 를 한 커밋에 받는다.
 
 ### 지킬 것
 
@@ -28,4 +28,4 @@ guide · example · 서버가 찍을 빈 문서) · `drift`(어긋남 진단 —
 - **사실 하나에 정본 섹션 하나** — 다른 섹션은 `` `좌표` `` 로 건다. 본문은 현재형 · 경과는 끝 `**경과**` 목록에 한 줄씩.
 - 기준선 블록(`<!-- cdp:baseline -->`)은 생성기의 자리다 — 손대지 않는다.
 - 확신이 없으면 판정하지 않는다 — 대기열에 남기면 섹션 옆에 계속 실린다. 틀리게 반영한 것은 아무도 모른다.
-- 옛 레포를 기록만으로 다시 세우는 것은 admin 의 일이다(콘솔 「새 지식 레포」 · `ctx repo new --records-from`).
+- 옛 레포를 기록만으로 다시 세우는 것은 admin 의 일이다(콘솔 「새 지식 레포」 의 「기록만 옮겨 오기」).

@@ -1480,6 +1480,7 @@ await check(75, '스킬이 부르는 이름이 전부 v1.0 도구다 — derive 
     prompts: 'never',
     saver: () => ({}),
     curateAny: true, // 큐레이터 도구(queue · forms)까지 — cdp-curate 가 부른다
+    sourcer: () => ({}), // source — cdp-seed 가 부른다(MCP 만으로 검토 ②)
   })
   const GONE = ['derive', 'apply', 'sync', 'version']
   const all = Object.keys(srv._registeredTools || {})
@@ -1496,7 +1497,7 @@ await check(75, '스킬이 부르는 이름이 전부 v1.0 도구다 — derive 
     for (const f of (await fs.readdir(path.join(dir, n))).filter((x) => x.endsWith('.md'))) {
       const text = await fs.readFile(path.join(dir, n, f), 'utf8')
       files++
-      for (const s of ['도구가 없을 때', '모드 A', '모드 B', 'bin/ctx', 'ctx apply', 'C:/cdp/bin']) if (text.includes(s)) bad.push(`${n}/${f}: 「${s}」`)
+      for (const s of ['도구가 없을 때', '모드 A', '모드 B', 'bin/ctx', 'ctx apply', 'C:/cdp/bin', 'ctx seed', 'ctx follow', 'ctx update', 'ctx repo', 'ctx rebuild']) if (text.includes(s)) bad.push(`${n}/${f}: 「${s}」`)
       for (const m of text.matchAll(/(?<![\w.])(derive|apply|sync|version)\(/g)) bad.push(`${n}/${f}: ${m[1]}(`)
       if (n === 'cdp-push') continue // 코드 레포용 — 지식 도구를 부르지 않는다
       for (const m of text.matchAll(/^\s*([a-z][a-z_]{2,15})\(/gm)) if (!known.has(m[1])) bad.push(`${n}/${f}: ${m[1]}(`)

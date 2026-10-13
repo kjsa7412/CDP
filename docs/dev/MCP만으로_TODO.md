@@ -5,8 +5,8 @@
 | 0 | writer 의 `ctx update` 걷기 — cdp-save 보통 기록 · dpms CLAUDE.md | **완료** — f53a255 |
 | 0 | ctx.cmd 한글 홈 결함 | **완료** — 9660022 |
 | ① | 원천 연결(M2 · M3) · `source` 의 `follow` · `update` · `save` 의 「왜」 검사(M6) | **완료** — 0af402d |
-| ② | `source` 의 `map` · `init` · `plan` · `apply` · `verify`(M7) | **완료** |
-| ③ | 스킬 · 큐레이터 규칙 · 설명서의 ctx 줄 걷기 · 하네스 검사 | |
+| ② | `source` 의 `map` · `init` · `plan` · `apply` · `verify`(M7) | **완료** — 1773613 |
+| ③ | 스킬 · 큐레이터 규칙 · 설명서의 ctx 줄 걷기 · 하네스 검사 | **완료** |
 
 ## ①
 
@@ -31,4 +31,13 @@
 - [x] 출력 상한 — apply 의 줄 400(넘으면 「stage · only 로 나눠 부른다」) · 그 위에 guardSize. 한 호출 시간은 stage · only 로 나눈다(MCP 클라이언트 시간 상한은 실측으로 — dpms 리허설 판)
 - [x] 시험 — `test/source-seed.test.mjs` 임시 원천 레포 · init 은 쓰지 않는다 · map 검사 · plan 은 쓰지 않는다 · apply 기본 dryRun · stage 나눠 부르기 · seed-cli 와 같은 관리 문서 · 기록 · _seed.json · verify 같음 5 · 다시 apply 멱등 · follow 기본 since
 - [ ] dpms 리허설 판(ops/out/archive)으로 같은 결과인지 — 사람(서버 upgrade 뒤)
+
+## ③
+
+- [x] cdp-seed — 전부 `source` 로(⓪ 콘솔 「원천 연결」 · ① init 뼈대 → 사람이 원천에 커밋 · ② map · ③ plan · ④ apply(dryRun · stage · only) · ⑥ verify · ⑦ follow · update 초안 → 「## 왜」 채워 save)
+- [x] cdp-rebuild 의 `ctx rebuild snapshot` 셸 줄 → `drift` 의 unsourced 에서 좌표를 골라 `save` 의 snapshot · cdp-curate · cdp-rebuild · cdp-registry 의 `ctx repo new --records-from` → 콘솔 「새 지식 레포」 의 「기록만 옮겨 오기」
+- [x] CLAUDE-큐레이터 — cdp-seed 줄 · source 도구 줄 · 다시 세우기 줄
+- [x] 큐레이터 설명서 — §11.2 스냅샷(에이전트는 save 의 snapshot) · §12 세우기(원천 연결 · source 의 op) · 정본 둘(follow · update) · 부록 표. 남긴 것 — 설치(`ctx up`) · `ctx forms check · list · show` · `ctx baseline push · extract` · `ctx migrate`(사람이 셸에서 돌리는 도구 — 에이전트 절차가 아니다)
+- [x] 시험 — `test/agent-no-ctx.test.mjs`(agent/skills/**/*.md · agent/CLAUDE-*.md 에 `ctx <명령>` 없음 · 예외 `ctx up`) · 하네스 75 에 ctx seed · follow · update · repo · rebuild 금지 문자열과 source 등록 · 사이트 스킬 설명
+- [ ] 사람 — 서버 upgrade 뒤 dpms_wiki 에 원천(dpms_docs) 연결 · GitLab 에 서버 배포 키(읽기 전용) · source follow 를 이 PC 의 옛 `ctx follow` 결과와 대조 · 큐레이터 PC 의 kit 갱신(스킬이 바뀌었다)
 
