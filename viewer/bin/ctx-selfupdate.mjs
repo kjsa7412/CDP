@@ -124,10 +124,15 @@ export async function writeShim({ home = os.homedir(), platform = process.platfo
   await fs.mkdir(dir, { recursive: true })
   const target = path.join(home, '.cdp', 'server', 'current', 'bin', 'ctx.mjs')
   const file = path.join(dir, platform === 'win32' ? 'ctx.cmd' : 'ctx')
-  const text = platform === 'win32' ? `@node "${target}" %*\r\n` : `#!/bin/sh\nexec node "${target}" "$@"\n`
+  // cmd.exe 는 .cmd 를 OEM 코드 페이지로 읽는다 — 홈이 한글(C:\Users\세정…)이면 UTF-8 로 적은 절대경로가 깨져
+  // 「Cannot find module」. 경로를 적지 않고 껍데기 자리(%~dp0)에서 찾는다 — 파일은 ASCII 만
+  const text = platform === 'win32' ? `@node "%~dp0..\\server\\current\\bin\\ctx.mjs" %*\r\n` : `#!/bin/sh\nexec node "${target}" "$@"\n`
   const had = await fs.readFile(file, 'utf8').catch(() => null)
   if (had !== text) await fs.writeFile(file, text, { mode: 0o755 })
   const onPath = String(env.PATH || '').split(path.delimiter).some((p) => path.resolve(p || '.') === dir)
-  const pathLine = platform === 'win32' ? `setx PATH "%PATH%;${dir}"` : `echo 'export PATH="$HOME/.cdp/bin:$PATH"' >> ~/${/zsh$/.test(env.SHELL || '') ? '.zshrc' : '.bashrc'}`
+  // setx PATH "%PATH%;…" 는 시스템 PATH 까지 사용자 PATH 에 붙이고 1024 자에서 자른다 — 사용자 PATH 에만 더한다
+  const pathLine = platform === 'win32'
+    ? `powershell -NoProfile -Command "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:USERPROFILE + '\\.cdp\\bin', 'User')"`
+    :`echo 'export PATH="$HOME/.cdp/bin:$PATH"' >> ~/${/zsh$/.test(env.SHELL || '') ? '.zshrc' : '.bashrc'}`
   return { file, added: had !== text, onPath, pathLine }
 }

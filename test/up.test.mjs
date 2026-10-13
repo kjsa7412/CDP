@@ -41,3 +41,14 @@ test('writeShim — ~/.cdp/bin/ctx 가 current 를 부른다 · PATH 에 없으�
   assert.equal(b.onPath, true)
   await fs.rm(home, { recursive: true, force: true })
 })
+
+test('writeShim — Windows 껍데기는 ASCII 만(한글 홈에서 cmd 가 경로를 깨뜨렸다) · 사용자 PATH 에만 더한다', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'cdp-shim-세정-'))
+  const a = await writeShim({ home, platform: 'win32', env: { PATH: '' } })
+  const text = await fs.readFile(a.file, 'utf8')
+  assert.match(text, /^[\x00-\x7f]*$/)
+  assert.match(text, /%~dp0\.\.\\server\\current\\bin\\ctx\.mjs/)
+  assert.doesNotMatch(a.pathLine, /setx/)
+  assert.match(a.pathLine, /'User'\)/)
+  await fs.rm(home, { recursive: true, force: true })
+})
