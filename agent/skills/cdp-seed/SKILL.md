@@ -1,6 +1,6 @@
 ---
 name: cdp-seed
-description: "큐레이터만 쓴다(그 레포의 curate 권한 · admin). 이미 있는 산출물 문서 레포(md · git)에서 지식 레포의 관리 문서와 작업 기록을 세운다 — MCP 도구 source 하나로 — 지도(cdp-sources.json) 뼈대 init → 사람이 원천에 커밋 → map(검사) → plan → apply(기준선 · 관리 문서 · 기록 편입 — 세운 자리는 _seed.json 하나) → verify 로 대조 → 원천의 어긋남을 cdp-curate 로. 정본이 둘이면 source follow 로 누락을 보고 update 초안으로 메운다. 「기존 문서로 위키 세워 줘」 · 「산출물 레포에서 관리 문서 만들어 줘」 · 「dpms_docs 로 다시 세워」 같은 요청에. 원천은 admin 이 콘솔 레포 설정에서 잇는다. 문서 레포를 고친 writer 는 cdp-save 의 보통 기록 하나(「원천 문서 레포를 고쳤으면」)."
+description: "큐레이터만 쓴다(그 레포의 curate 권한 · admin). 이미 있는 산출물 문서 레포(md · git)에서 지식 레포의 관리 문서와 작업 기록을 세운다 — MCP 도구 source 하나로 — 지도(cdp-sources.json) 뼈대 init → 사람이 원천에 커밋 → map(검사) → plan → apply — 기준선 · 관리 문서 · 기록 편입 — 세운 자리는 _seed.json 하나 → verify 로 대조 → 원천의 어긋남을 cdp-curate 로. 정본이 둘이면 source follow 로 누락을 보고 update 초안으로 메운다. 「기존 문서로 위키 세워 줘」 · 「산출물 레포에서 관리 문서 만들어 줘」 · 「dpms_docs 로 다시 세워」 같은 요청에. 원천은 admin 이 콘솔 레포 설정에서 잇는다. 문서 레포를 고친 writer 는 cdp-save 의 보통 기록 하나(「원천 문서 레포를 고쳤으면」)."
 ---
 
 # cdp-seed — 문서 레포에서 지식 레포를 세운다
@@ -59,7 +59,7 @@ source({ repo, op: "plan", date?: "<이관 날>" })            # 전 단계 dryR
 source({ repo, op: "apply", dryRun: false, date?, stage?, only? })
 ```
 
-plan 의 표(문서 · 섹션 수 · 기록 수 · 첨부 · 글자로 남는 링크)를 사람에게 보이고 승인받은 뒤 apply(`dryRun` 을 빼면 미리보기다). 큰 원천은 `stage`(`baseline` · `managed` · `records`)나 `only`(문서 key · 기록 id)로 나눠 부른다 — 한 호출이 짧아야 한다. 반쯤 멈추면 같은 호출을 다시 — 이미 있는 문서 · 기록은 건너뛴다(멱등).
+plan 의 표(문서 · 섹션 수 · 기록 수 · 첨부 · 글자로 남는 링크)를 사람에게 보이고 승인받은 뒤 apply — `dryRun: false` 를 줘야 쓴다(기본은 미리보기). 큰 원천은 `stage`(`baseline` · `managed` · `records`)나 `only`(문서 key · 기록 id)로 나눠 부른다 — 한 호출이 짧아야 한다. 반쯤 멈추면 같은 호출을 다시 — 이미 있는 문서 · 기록은 건너뛴다(멱등).
 
 기록 파일은 편입한 판단 기록만 생긴다. 구조(등록부 · 어휘 · 섹션 `applied: null` · 첨부)는 기록 없이 커밋되고, 좌표가 `_seed.json` 의 sections 에 붙는다.
 

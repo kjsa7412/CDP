@@ -3,6 +3,18 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## v1.4.0
+
+**MCP 만으로.** 에이전트(스킬 · 작업 규칙)는 MCP 도구만 부른다 — ctx 는 설치 · 서버 셸 · 시험의 도구다. 검토 `docs/design/CDP_MCP만으로_검토_v0.1.md` · 실행 `docs/dev/MCP만으로_TODO.md`.
+
+- **원천 연결** — 콘솔 지식 레포 표의 「원천 연결」(git 주소 · 브랜치 · 연결 시험 · 감사 기록). 서버가 `<data>/sources/<레포>.git` 로 받고 부를 때마다 fetch(30초 · 실패하면 마지막 받은 것 + 경고). 자격은 SSH 배포 키 · 저장된 PAT 그대로
+- **큐레이터 도구 `source`**(도구 14) — `follow`(커밋마다 기록 있음 / 누락 · since 기본은 `_seed.json` 의 원천 sha) · `update`(업데이트 기록 초안) · `init`(지도 뼈대 — 원천에 쓰지 않는다) · `map` · `plan` · `apply`(기본 미리보기 · 서버 안에서 core 를 바로) · `verify`. 미연결이면 `E_NO_SOURCE`
+- **writer 는 ctx 를 부르지 않는다** — 원천 문서 레포를 고친 작업도 cdp-save 의 보통 기록 하나(바꾼 좌표 · 왜 · `source` 에 커밋)
+- **save 가 「왜」 빈 업데이트 기록을 거절**(E_CHECK) — 안내 줄이 남았거나 태그 `업데이트` 인데 `## 왜` 가 비었다
+- 스킬 cdp-seed 를 `source` 로 다시 · cdp-rebuild · curate · registry · 큐레이터 규칙 · 큐레이터 설명서에서 ctx 줄을 걷었다(스냅샷은 save · 다시 세우기는 콘솔). 스킬 · CLAUDE-*.md 에 ctx 명령이 없다는 시험
+- `ctx seed · follow · update` 는 같은 core 를 부르는 껍데기로 남는다(`core/sourcerepo.js` · `core/seedrun.js`)
+- **고침 — 한글 홈에서 `ctx.cmd` 가 「Cannot find module」 로 죽었다** — 껍데기가 절대경로 대신 `%~dp0` 로 찾는다. PATH 안내는 `setx` 대신 사용자 PATH 에만 더하는 한 줄
+
 ## v1.3.2
 
 - **고침 — 서버 셸 명령 `cdp` 를 서비스 계정이 못 들어가는 폴더(root 의 `/root`)에서 부르면 `serve doctor` 가 「git 없다」 로 실패했다** — 래퍼가 그때는 설치 폴더에서 부른다. `upgrade.sh` 가 있는 래퍼를 새 모양으로 다시 쓴다. doctor 의 git 확인은 현재 폴더에 기대지 않고, 없음(ENOENT) 밖의 실패는 까닭을 그대로 낸다

@@ -115,7 +115,7 @@ const exists = (p) => fs.access(p).then(() => true, () => false)
 
 // v1.1 스킬 여섯(개편안 §6.1 + cdp-rebuild)과 SKILL.md 줄 수 상한 — 111 · 117 이 보고, 설치 항목(106 · 125 · 126)은 깔린 것이 이 안에 있는지 본다.
 // writer 몫은 work · save · push — 역할별 kit(W5)이라 작업 레포에는 그 셋만 간다
-const SKILL_LINES = { 'cdp-curate': 350, 'cdp-push': 180, 'cdp-rebuild': 200, 'cdp-registry': 200, 'cdp-save': 300, 'cdp-work': 250 }
+const SKILL_LINES = { 'cdp-curate': 350, 'cdp-push': 180, 'cdp-rebuild': 200, 'cdp-registry': 200, 'cdp-save': 300, 'cdp-seed': 200, 'cdp-work': 250 }
 const SKILL_SET = Object.keys(SKILL_LINES)
 const WRITER_SKILLS = ['cdp-push', 'cdp-save', 'cdp-work']
 const kitSkillsOk = (names) => WRITER_SKILLS.every((n) => names.includes(n)) && names.every((n) => SKILL_SET.includes(n))
@@ -2558,7 +2558,7 @@ await check(131, '개인 서버 — ctx serve --personal <레포>: 명부(나 �
     eq([me.role, me.curate, me.repos.map((x) => x.name)], ['admin', ['*'], ['pfx']], '/me')
     const bad = await fetch(`${base}/login?auto=nope`, { redirect: 'manual' })
     must(bad.status === 200 && !/cdp_s=/.test(bad.headers.get('set-cookie') || ''), '틀린 토큰 — ' + bad.status)
-    eq((await http(base).rpc('/mcp/pfx', 'tools/list', {}, tok)).j?.result?.tools?.length, 13, 'MCP 도구')
+    eq((await http(base).rpc('/mcp/pfx', 'tools/list', {}, tok)).j?.result?.tools?.length, 14, 'MCP 도구')
     // 다른 서버에는 이 길이 없다 — 맞는 토큰이어도 화면만 낸다
     const o = await fetch(`${BASE}/login?auto=${encodeURIComponent(TKA)}`, { redirect: 'manual' })
     must(o.status === 200 && !/cdp_s=/.test(o.headers.get('set-cookie') || ''), '공용 서버가 auto 로 로그인시켰다')
