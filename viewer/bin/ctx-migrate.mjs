@@ -4,7 +4,8 @@
 //
 //   1 전환 기록 — 지금 섹션이 최신인 기록은 반영됨 · 실을 섹션이 없던 기록은 기록으로 둠 · 옛 판정이 남긴 기록은 대기열에
 //   2 서식 예시 — `example:` 좌표 · 짝 섹션이 남았으면 지운다(save 의 examples: "purge")
-//   3 도구 층 — bin · .githooks · .claude · MANUAL* · CLAUDE.md · TEMPLATE-work.md · INDEX* 를 걷고 core.hooksPath 를 푼다(커밋 하나)
+//   3 도구 층 — bin · .githooks · .claude · MANUAL* · CLAUDE.md · TEMPLATE-work.md · INDEX* 를 걷고 core.hooksPath 를 푼다(커밋 하나).
+//      추적하지 않는 사본(무시된 .claude/ · tools/)은 디스크에서만 지운다 — 남기면 serve doctor 가 계속 경고한다
 //
 // **서버가 그 레포에 쓰는 동안 돌리지 않는다** — 서버의 save 뮤텍스는 이 프로세스와 공유되지 않는다. 서버를 멈추거나
 // 사람이 쓰지 않는 때에. 레포를 다시 세우는 것(기록만 옮겨 빈 레포로)은 `ctx repo new --records-from` 이다(dpms_wiki).
@@ -72,6 +73,18 @@ export async function runMigrate(opt, io = {}) {
       // git 이 추적하는 것만 — 무시된 사본(로컬형의 tools/ 처럼 .gitignore 에 든 것)까지 넣으면 git rm 전체가 실패한다
       for (const rel of TOOL_LAYER) if ((await git(root, ['ls-files', '--', rel])).out) present.push(rel)
       out(`  도구 층 — ${present.length ? present.join(' · ') : '없다'}`)
+      // 추적하지 않는 사본(무시된 .claude/ · 로컬형 tools/ 같은 것) — 진단(serve doctor)은 디스크를 보므로 이것도 걷는다.
+      // 커밋할 것이 없다. 못 지우는 것(돌고 있는 tools/cdp.exe 등)은 알리고 넘어간다 — 이행 전체를 멈추지 않는다
+      const stray = []
+      for (const rel of TOOL_LAYER) if (!present.includes(rel) && (await fs.stat(path.join(root, rel)).catch(() => null))) stray.push(rel)
+      if (stray.length) out(`  도구 층(추적 안 함) — ${stray.join(' · ')}`)
+      if (stray.length && !opt.dry) {
+        for (const rel of stray) {
+          const e = await fs.rm(path.join(root, rel), { recursive: true, force: true }).then(() => null, (x) => x)
+          out(e ? `    ${rel} — 못 지웠다(${e.code || e.message}) · 손으로 지운다` : `    ${rel} — 지웠다`)
+        }
+        if (!present.length) await git(root, ['config', '--unset', 'core.hooksPath'])
+      }
       if (present.length && !opt.dry) {
         const rm = await git(root, ['rm', '-r', '-q', '--', ...present])
         if (!rm.ok) throw new Error('git rm 실패 — ' + rm.err)

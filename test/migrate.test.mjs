@@ -118,8 +118,11 @@ test('ctx migrate — 전환 기록 커밋 · 대기열은 옛 판정이 남긴 
 
   for (const rel of ['MANUAL.md', 'CLAUDE.md', 'INDEX.md', 'bin', '.githooks']) assert.equal(await fs.stat(path.join(root, rel)).catch(() => null), null, rel)
   assert.ok(await fs.stat(path.join(root, 'README.md')))
-  assert.ok(await fs.stat(path.join(root, 'tools/cdp')), '무시된 파일은 git 의 것이 아니다 — 두고 간다')
+  // 무시된 사본은 git rm 에 넣지 않되(넣으면 전체가 실패한다) 디스크에서는 걷는다 — serve doctor 는 디스크를 본다
+  assert.equal(await fs.stat(path.join(root, 'tools')).catch(() => null), null, '무시된 tools/ 도 걷는다')
   assert.doesNotMatch(text, /도구 층 — .*tools/)
+  assert.match(text, /도구 층\(추적 안 함\) — tools/)
+  assert.match(text, /tools — 지웠다/)
   assert.equal((await g('config', '--get', 'core.hooksPath').catch((e) => e)).stdout?.trim() || '', '')
   const log = (await g('log', '--format=%an|%s')).stdout.trim().split('\n')
   assert.equal(log.length, 3)
@@ -140,6 +143,32 @@ test('ctx migrate — 전환 기록 커밋 · 대기열은 옛 판정이 남긴 
     save(root, { work: { id: '2026-1007-전환-v2', title: '또', date: '2026-10-07 09:00', touches: [], tags: ['transition'], curates: [{ id: '2026-0903-b2', verdict: 'reflect', into: ['table:b'] }], body: '또.' } }, { user: 'kjsa', write: true, curate: true }),
     (e) => e.code === 'E_INPUT' && /한 번/.test(e.message)
   )
+})
+
+test('ctx migrate — 추적하지 않는 도구 층만 남은 레포(서버 gdi 처럼): 디스크에서 걷고 hooksPath 를 푼다 · 커밋은 없다', { skip: !hasGit && 'git 이 없다' }, async () => {
+  const root = await repo({ ...LEGACY, '.gitignore': '.claude/*\n', '.claude/skills/x/SKILL.md': '# 옛 스킬\n', '.claude/settings.local.json': '{}\n' })
+  const g = (...a) => run('git', ['-C', root, ...a])
+  await g('init', '-q')
+  await g('add', '-A')
+  await g('-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-qm', 'seed')
+  await g('config', 'core.hooksPath', '.githooks')
+  const lines = []
+  const io = { out: (s = '') => lines.push(s), err: (s = '') => lines.push('ERR ' + s) }
+
+  // --dry 는 알리기만 한다
+  assert.equal(await runMigrate({ args: [root], dry: true }, io), 0)
+  assert.match(lines.join('\n'), /도구 층 — 없다/)
+  assert.match(lines.join('\n'), /도구 층\(추적 안 함\) — \.claude/)
+  assert.ok(await fs.stat(path.join(root, '.claude')))
+
+  lines.length = 0
+  assert.equal(await runMigrate({ args: [root], by: 'kjsa' }, io), 0)
+  assert.match(lines.join('\n'), /\.claude — 지웠다/)
+  assert.equal(await fs.stat(path.join(root, '.claude')).catch(() => null), null)
+  assert.equal((await g('config', '--get', 'core.hooksPath').catch((e) => e)).stdout?.trim() || '', '')
+  // 전환 기록 · 서식 예시 커밋만 — 도구 층 커밋은 없다
+  assert.doesNotMatch((await g('log', '--format=%s')).stdout, /레포에는 지식만/)
+  assert.equal((await g('status', '--porcelain')).stdout.trim(), '')
 })
 
 test('ctx migrate --dry — 아무것도 쓰지 않는다', { skip: !hasGit && 'git 이 없다' }, async () => {
