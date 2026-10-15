@@ -59,7 +59,7 @@ function guarded(file, text, { registry, vocabCoords }) {
   if (b) for (let i = b.open; i <= b.close; i++) mark(i, '생성 블록(cdp:registry) 속이다 — 등록부에서 찍는다')
 
   if (file === '_vocab.md') {
-    for (const i of vocabStructLines(lines)) mark(i, '어휘 줄이다 — 더하는 것은 vocab[] · 예시 정리는 examples: "purge" · 폐기 표시는 admin 이')
+    for (const i of vocabStructLines(lines)) mark(i, '어휘 줄이다 — vocab[] 로: 더하기 · op "update"(label · aliases) · "retire"(폐기 · 후속) · "restore" · "rename"(큐레이터) · 예시 정리는 examples: "purge"')
     return out
   }
   if (file === '_managed.md') {

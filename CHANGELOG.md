@@ -3,6 +3,16 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## (다음 판)
+
+**큐레이터가 어휘를 고친다.** 검토 `docs/dev/어휘_큐레이터_검토.md` · 실행 `docs/dev/어휘_큐레이터_TODO.md`.
+
+- **`save` 의 `vocab[].op`** — `update`(label · aliases) · `retire`(폐기 표시 + 후속 · 줄은 남는다) · `restore` · `rename`(새 좌표 · 섹션 헤딩 · 다른 문서의 `` `좌표` `` 참조 · `_seed.json` · 옛 좌표 폐기 + 후속을 한 커밋에). 그 레포의 큐레이터(`curate`) 권한 — writer · viewer 는 `E_FORBIDDEN` `need: curate`. 후속은 있어야 하고 고리는 거절 · `update` · `rename` 의 alias 가 다른 좌표와 겹치면 `E_INPUT` `detail.clashes`
+- **고침 — 이미 있는 좌표를 `vocab` 에 보내면 조용히 `vocab: 0`** — 이제 `vocabSkipped` 와 경고(label · aliases 가 다르면 「op: update」)
+- `match` · `where` — 폐기 좌표에 `deprecated` · `successor` · 사슬이면 `successorLatest`. alias 색인은 살아 있는 좌표가 먼저
+- `check` 의 deprecated 좌표 사용 — 폐기한 날 뒤에 쓴 기록만(그 전의 불변 기록은 세지 않는다)
+- 어휘 연산이 든 save 의 기록은 태그 `registry`(대기열에 서지 않는다) · 스킬 `cdp-registry` 「좌표(어휘)」 절 — 등록부 행 폐기와 좌표 폐기를 가른다
+
 ## v1.4.1
 
 - **고침 — `ctx migrate` 뒤에도 serve doctor 의 「옛 도구 층이 남았다」 가 남았다** — 진단은 디스크를 보는데 이행은 git 이 추적하는 것만 걷었다. 무시된 `.claude/` · `tools/` 같은 추적하지 않는 사본도 디스크에서 지운다(커밋 없음 · `--dry` 는 알리기만 · 못 지우는 것은 알리고 넘어간다). 추적분이 없어도 `core.hooksPath` 를 푼다

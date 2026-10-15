@@ -35,9 +35,9 @@ const NL = String.fromCharCode(10)
 
 const CARD = {
   match:
-    '이름·alias·자유 표현을 정본 좌표로 대조한다. 테이블·화면·API·팩터·원천·용어를 말로 가리켰으면 좌표를 짐작하지 말고 먼저 이것으로 확정한다. `미등재` 는 어휘에 없다는 뜻이다 — 다른 좌표로 바꾸지 말고 그대로 보고한다. 기록(`save` · 편입)하는 중이면 "레포와 관계없는 말" 이 아니라 **등재 후보**다 — 그 기록이 정의하거나 바꾼 대상이면 좌표에서 빼지 말고 `vocab` 에 같이 보낸다. 폐기 좌표면 후속 좌표를 준다. `repo` 를 주지 않으면 **든 레포를 전부 대조**하고 결과마다 `repo` 를 적는다 — 그 값을 이후 도구에 그대로 넘긴다. 두 레포에 다 있으면 둘 다 보고한다(고르지 않는다)',
+    '이름·alias·자유 표현을 정본 좌표로 대조한다. 테이블·화면·API·팩터·원천·용어를 말로 가리켰으면 좌표를 짐작하지 말고 먼저 이것으로 확정한다. `미등재` 는 어휘에 없다는 뜻이다 — 다른 좌표로 바꾸지 말고 그대로 보고한다. 기록(`save` · 편입)하는 중이면 "레포와 관계없는 말" 이 아니라 **등재 후보**다 — 그 기록이 정의하거나 바꾼 대상이면 좌표에서 빼지 말고 `vocab` 에 같이 보낸다. 폐기 좌표면 후속 좌표를 준다. `repo` 를 주지 않으면 **든 레포를 전부 대조**하고 결과마다 `repo` 를 적는다 — 그 값을 이후 도구에 그대로 넘긴다. 두 레포에 다 있으면 둘 다 보고한다(고르지 않는다). 폐기 좌표는 `deprecated` · `successor`(사슬이면 끝 `successorLatest`) — 새 기록에는 후속을 쓴다',
   where:
-    '좌표의 지금 상태가 어느 관리 문서 어느 섹션에 있나, 마지막으로 반영된 작업, 그 좌표를 건드린 작업들. "지금 어떻게 돼 있나"는 이것. alias 를 주면 정본으로 바꾸고 `normalized` 에 적는다. `state` 가 `pending` 이면 그 좌표를 건드린 **미반영 기록**이 `pending` 건 있다 — `section` 으로 섹션과 그 기록을 함께 읽고, 답에 그 사실을 적는다. 등록부에 없는 타입(`registry: null`)은 관리 문서가 없는 것이 정상이고 작업 기록이 유일한 근거다 — 그래서 기록할 때 `touches` 가 그 좌표로 닿는 유일한 길이다. 채울 섹션이 없다는 것은 좌표를 뺄 이유가 아니다',
+    '좌표의 지금 상태가 어느 관리 문서 어느 섹션에 있나, 마지막으로 반영된 작업, 그 좌표를 건드린 작업들. "지금 어떻게 돼 있나"는 이것. alias 를 주면 정본으로 바꾸고 `normalized` 에 적는다. `state` 가 `pending` 이면 그 좌표를 건드린 **미반영 기록**이 `pending` 건 있다 — `section` 으로 섹션과 그 기록을 함께 읽고, 답에 그 사실을 적는다. 등록부에 없는 타입(`registry: null`)은 관리 문서가 없는 것이 정상이고 작업 기록이 유일한 근거다 — 그래서 기록할 때 `touches` 가 그 좌표로 닿는 유일한 길이다. 채울 섹션이 없다는 것은 좌표를 뺄 이유가 아니다. 폐기 좌표(옛 기록의 `touches` 로 왔을 때)면 `deprecated` · `successor`(사슬이면 `successorLatest`)가 붙는다 — 지금은 후속 좌표를 `where` 로 다시 본다',
   section:
     '관리 문서에서 그 좌표의 섹션 본문만 돌려준다. 문서 전체를 읽지 않는다. 섹션이 없으면 `body: null` 로 알린다. **섹션은 큐레이터가 반영한 데까지만 지금이다** — `state: pending` 이면 그 뒤에 그 좌표를 건드린 미반영 기록의 본문이 `pendingRecords` 로 같이 온다. 섹션과 그 기록을 **둘 다** 읽어야 지금을 안다(섹션이 없는 좌표도 대기 기록이 오면 그것이 근거다). 본문이 가리키는 좌표의 정본 섹션은 `refs` 로 한 단계 같이 온다. `content` 가 헤딩 줄과 applied 주석을 뺀 본문이다 — 큐레이터가 `save` 의 `sections[].body` 에 이것을 고쳐 넣는다(헤딩을 넣으면 E_INPUT). `body` 는 헤딩부터 실린 원문. `form` 은 그 문서의 서식 id',
   work:
@@ -59,9 +59,9 @@ const CARD = {
   source:
     '**큐레이터만.** 원천 문서 레포(콘솔 레포 설정의 원천 git 주소 — 서버가 받아 둔다 · 부를 때마다 fetch · 실패하면 마지막 받은 것 + `warnings`)와 이 지식 레포를 잇는다. 원천에는 쓰지 않는다. 원천이 없으면 E_NO_SOURCE. **세우기** — `init`(지도 `cdp-sources.json` 뼈대를 JSON 으로 돌려준다 — 고쳐서 사람이 원천 레포 루트에 커밋) · `map`(원천의 지도와 검사 — `check.errors` 가 있으면 세우지 않는다) · `plan`(미리보기 · 쓰지 않는다) · `apply`(`dryRun` 기본 true — 승인 뒤 `dryRun: false` · `stage`(baseline · managed · records) · `only`(문서 key · 기록 id)로 나눠 부른다 · 세운 자리는 `_seed.json` · 판정은 하지 않는다) · `verify`(원천과 섹션 대조 — 같음 · 형식 차이 · 확인 필요 `off` · 위키에 없음). **따라가기** — `follow`(`since` 생략이면 `_seed.json` 의 세운 sha · 원천 커밋마다 바뀐 좌표와 그 좌표를 건드리거나 그 커밋을 출처로 가리킨 기록 `by` · 없으면 `ok: false` 누락 · `miss` 합계) · `update`(`from`..`to?` 를 업데이트 기록 초안 `draft: { work, vocab }` 으로 — 「## 왜」 안내 줄을 지우고 이유를 채워 `save` · 안내 줄이 남으면 E_CHECK)',
   save:
-    '작업 기록 하나를 남긴다 — 이 세션에서 한 작업 · 밖에서 온 문서 편입 · 문서를 고치라는 지시. **관리 문서는 쓰지 않는다**: 기록은 큐레이션 대기열에 서고 큐레이터가 반영한다 — 그동안 `section` 이 이 기록을 섹션과 함께 낸다. **기록은 홀로 선다** — 값 · 표 · 결정 · 제약은 본문에 쓴다(큐레이터는 기록만 보고 반영한다). 큰 추출물(DDL · 덤프)은 첨부로. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 새 좌표는 `vocab` 에 같이 보낸다. 밖에서 온 문서면 `source` 에 원문 출처를 적는다. 그림 · pdf · HTML 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(본문에서는 `![설명](assets/<id>/<name>)` · HTML 은 링크). `sections` · `managed` · `edits` · `work.curates` 는 큐레이터만 — 보내면 E_FORBIDDEN(need curate). `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
+    '작업 기록 하나를 남긴다 — 이 세션에서 한 작업 · 밖에서 온 문서 편입 · 문서를 고치라는 지시. **관리 문서는 쓰지 않는다**: 기록은 큐레이션 대기열에 서고 큐레이터가 반영한다 — 그동안 `section` 이 이 기록을 섹션과 함께 낸다. **기록은 홀로 선다** — 값 · 표 · 결정 · 제약은 본문에 쓴다(큐레이터는 기록만 보고 반영한다). 큰 추출물(DDL · 덤프)은 첨부로. **부르기 전에 【좌표 판정】(넣은 것 · 뺀 것)을 사람에게 보이고 승인을 받는다 — 승인 없이 부르지 않는다.** `touches` 가 비면 거부된다 — 정말 0개면 `touchesEmpty` 에 사유를 적는다. 새 좌표는 `vocab` 에 같이 보낸다 — 이미 있는 좌표는 건너뛰고 `vocabSkipped` · 경고로 알린다(label · aliases 고치기 · 폐기 · 이름 바꾸기는 큐레이터 — 요청문을 남긴다). 밖에서 온 문서면 `source` 에 원문 출처를 적는다. 그림 · pdf · HTML 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(본문에서는 `![설명](assets/<id>/<name>)` · HTML 은 링크). `sections` · `managed` · `edits` · `work.curates` 는 큐레이터만 — 보내면 E_FORBIDDEN(need curate). `repo` 는 필수다 — 쓰기에서 기본값은 사고다',
   saveCurator:
-    '**큐레이터의 save.** 작업 기록 하나 + 관리 문서 섹션 · 등록부 · 어휘를 한 커밋에. 큐레이션이면 `work.curates: [{ id, verdict, into, reason }]` — 다룬 대기 기록과 판정(`reflect` 반영 · `new` 새 문서를 세워 반영 — `into` 는 반영한 좌표로 **이 save 의 `sections` 에 있어야 한다** · `keep` 기록으로 둠 — `reason`). 큐레이션 기록은 `touches` 를 갖지 않는다(서버가 `touchesEmpty: 큐레이션` · 태그 `curate` 를 붙인다). 섹션의 `applied` 는 서버가 쓴다 — 반영한 기록 중 그 좌표의 가장 늦은 것. 섹션 쓰기 규칙(cdp-curate): 사실 하나에 정본 섹션 하나 · 다른 섹션은 좌표를 건다 · 본문은 현재형으로 다시 쓰고 경과는 끝 목록 한 줄씩. **부르기 전에 판정표와 섹션 diff(`dryRun: true`)를 사람에게 보이고 승인을 받는다.** 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 E_CONFLICT(`detail.content` 위에 다시). 큐레이터가 아닌 사람의 기록은 이 도구로 남기되 sections 없이. 등록부에 안 걸리는 새 타입이면 `managed: [{ pattern: "term:*", doc: "docs/용어집.md" }]` 로 행 · 관리 문서를 같이 만든다(섹션은 `sections` 에 같이 · 만들기 · 붙이기 · 정리는 판정표에 **【등록부 변경】** 으로 보이고 같은 승인을 받는다 · rename · merge · retire · drop 은 `cdp-registry` 절차). **안 쓰는 관리 문서 지우기**는 `managed: [{ op: "drop", doc, reason }]` — 파일 · 그 문서를 가리키는 등록부 행 · 그 문서로만 가던 예시 좌표를 한 커밋에 지우고 `_managed.md` 「지운 관리 문서」 표에 남긴다. 작업 기록이 쓴 섹션이나 touches 가 있는 문서는 거절된다(merge · retire 로). 그 문서를 가리키는 다른 문서의 줄은 E_INPUT `detail.refs`(줄마다 `suggest`: drop-row · unlink · review)로 온다 — 같은 save 의 `edits` 로 고치거나 알고 두면 `managed[].reviewed` 에. 먼저 `dryRun: true` 로 부르면 커밋 없이 `dropped.refs` 를 본다. 밖에서 온 문서를 들이면 `source` 에 원문 출처를 적는다. **좌표 섹션 밖**(문서 머리말 · 등록부 비대상 문서 · `_vocab.md` · `_managed.md` 의 산문)은 `edits: [{ file, old, new }]` — `docs({ doc })` 의 `text` 에서 떼어 온 `old` 가 정확히 한 번 나오는 자리를 바꾼다(좌표 섹션 · applied · 어휘 줄 · 등록부 행은 못 건드린다 · `old` 가 없으면 E_CONFLICT 로 다시 읽는다). 서식 예시는 `examples: "purge"` 한 번으로 어휘 줄과 짝 섹션을 같이 지운다(작업 기록은 `touchesEmpty: "서식 예시 정리"` · 태그 `registry`). 그림 · pdf · HTML 시각 자료 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(`work/assets/<id>/<name>` 에 같은 커밋으로 들어간다 · 관리 문서에서는 `![설명](../work/assets/<id>/<name>)` · HTML 은 그림이 아니라 링크 `[설명](…html)` 이고 요지 · 확인 목록은 본문에 md 로 — 검색 · 파생은 md 만 본다). **정본 스냅샷**(리빌딩 · `cdp-rebuild`)은 `snapshot: [{ coord }]` — 근거 없는 섹션(`drift` 의 `unsourced`)을 서버가 원문 그대로 기록 하나씩으로 뜬다(날짜 = 섹션 줄의 마지막 커밋 · 대기열에 서지 않는다). 이 save 의 `work` 는 봉투(`touchesEmpty` · 태그 `snapshot` 은 서버가)이고 다른 쓰기와 섞지 않는다 · 200 개씩. `repo` 는 필수다 — 쓰기에서 기본값은 사고다'
+    '**큐레이터의 save.** 작업 기록 하나 + 관리 문서 섹션 · 등록부 · 어휘를 한 커밋에. 큐레이션이면 `work.curates: [{ id, verdict, into, reason }]` — 다룬 대기 기록과 판정(`reflect` 반영 · `new` 새 문서를 세워 반영 — `into` 는 반영한 좌표로 **이 save 의 `sections` 에 있어야 한다** · `keep` 기록으로 둠 — `reason`). 큐레이션 기록은 `touches` 를 갖지 않는다(서버가 `touchesEmpty: 큐레이션` · 태그 `curate` 를 붙인다). 섹션의 `applied` 는 서버가 쓴다 — 반영한 기록 중 그 좌표의 가장 늦은 것. 섹션 쓰기 규칙(cdp-curate): 사실 하나에 정본 섹션 하나 · 다른 섹션은 좌표를 건다 · 본문은 현재형으로 다시 쓰고 경과는 끝 목록 한 줄씩. **부르기 전에 판정표와 섹션 diff(`dryRun: true`)를 사람에게 보이고 승인을 받는다.** 섹션은 `section` 으로 읽었을 때의 `applied` 를 그대로 보내야 하며, 그 사이 바뀌었으면 E_CONFLICT(`detail.content` 위에 다시). 큐레이터가 아닌 사람의 기록은 이 도구로 남기되 sections 없이. 등록부에 안 걸리는 새 타입이면 `managed: [{ pattern: "term:*", doc: "docs/용어집.md" }]` 로 행 · 관리 문서를 같이 만든다(섹션은 `sections` 에 같이 · 만들기 · 붙이기 · 정리는 판정표에 **【등록부 변경】** 으로 보이고 같은 승인을 받는다 · rename · merge · retire · drop 은 `cdp-registry` 절차). **안 쓰는 관리 문서 지우기**는 `managed: [{ op: "drop", doc, reason }]` — 파일 · 그 문서를 가리키는 등록부 행 · 그 문서로만 가던 예시 좌표를 한 커밋에 지우고 `_managed.md` 「지운 관리 문서」 표에 남긴다. 작업 기록이 쓴 섹션이나 touches 가 있는 문서는 거절된다(merge · retire 로). 그 문서를 가리키는 다른 문서의 줄은 E_INPUT `detail.refs`(줄마다 `suggest`: drop-row · unlink · review)로 온다 — 같은 save 의 `edits` 로 고치거나 알고 두면 `managed[].reviewed` 에. 먼저 `dryRun: true` 로 부르면 커밋 없이 `dropped.refs` 를 본다. 밖에서 온 문서를 들이면 `source` 에 원문 출처를 적는다. **좌표 섹션 밖**(문서 머리말 · 등록부 비대상 문서 · `_vocab.md` · `_managed.md` 의 산문)은 `edits: [{ file, old, new }]` — `docs({ doc })` 의 `text` 에서 떼어 온 `old` 가 정확히 한 번 나오는 자리를 바꾼다(좌표 섹션 · applied · 어휘 줄 · 등록부 행은 못 건드린다 · `old` 가 없으면 E_CONFLICT 로 다시 읽는다). **어휘(좌표 체계)** 는 `vocab[].op` — 없으면 더하기(있는 좌표는 건너뛰고 `vocabSkipped`) · `update`(label · aliases — aliases 는 통째로) · `retire`(폐기 표시 `deprecated: 날짜 → successor — reason` · 줄은 남는다 — 옛 기록의 touches 가 끊기지 않게 · 후속은 어휘에 있어야 하고 고리는 거절) · `restore`(폐기 걷기) · `rename`(`to` — 새 좌표 등재 · 섹션 헤딩 · 다른 문서의 `` `좌표` `` 참조 · `_seed.json` 을 옮기고 옛 좌표는 폐기 + 후속. 작업 기록은 안 고친다). alias 는 한 좌표에만 — 겹치면 E_INPUT `detail.clashes`. 등록부 행 폐기(`managed` retire)와 다르다 — cdp-registry 「좌표(어휘)」. 서식 예시는 `examples: "purge"` 한 번으로 어휘 줄과 짝 섹션을 같이 지운다(작업 기록은 `touchesEmpty: "서식 예시 정리"` · 태그 `registry`). 그림 · pdf · HTML 시각 자료 첨부는 **바이트를 도구 인자로 보내지 않는다** — 셸에서 `curl -H "Authorization: Bearer $CDP_TOKEN" --data-binary @파일 <서버>/api/<repo>/assets` 로 올리고 받은 `ref` 를 `assets: [{ ref, name }]` 에 싣는다(`work/assets/<id>/<name>` 에 같은 커밋으로 들어간다 · 관리 문서에서는 `![설명](../work/assets/<id>/<name>)` · HTML 은 그림이 아니라 링크 `[설명](…html)` 이고 요지 · 확인 목록은 본문에 md 로 — 검색 · 파생은 md 만 본다). **정본 스냅샷**(리빌딩 · `cdp-rebuild`)은 `snapshot: [{ coord }]` — 근거 없는 섹션(`drift` 의 `unsourced`)을 서버가 원문 그대로 기록 하나씩으로 뜬다(날짜 = 섹션 줄의 마지막 커밋 · 대기열에 서지 않는다). 이 save 의 `work` 는 봉투(`touchesEmpty` · 태그 `snapshot` 은 서버가)이고 다른 쓰기와 섞지 않는다 · 200 개씩. `repo` 는 필수다 — 쓰기에서 기본값은 사고다'
 }
 
 // ── 레포 캐시 (§2.6) ────────────────────────────────────────────────────────
@@ -392,18 +392,29 @@ export function buildServer({ repos = [], fallback = null, mode = 'server', prom
             )
             .max(50)
             .optional(),
+          // 어휘 — op 없으면 더하기(있는 좌표는 건너뛰고 vocabSkipped · 경고). update · retire · restore · rename 은 큐레이터.
+          // 모르는 키는 거절한다 — 전에는 조용히 버려 「고쳤다」 고 답하게 됐다(어휘 큐레이터 검토 V1)
           vocab: z
             .array(
-              z.object({
-                coord: z.string().max(240),
-                label: z.string().max(200),
-                aliases: z.array(z.string().max(100)).max(30).optional(),
-              })
+              z
+                .object({
+                  op: z.enum(['add', 'update', 'retire', 'restore', 'rename']).optional(),
+                  coord: z.string().max(240),
+                  label: z.string().max(200).optional(),
+                  aliases: z.array(z.string().max(100)).max(30).optional(),
+                  // retire — 후속 좌표(이미 있거나 같은 save 에서 더하는 좌표)
+                  successor: z.string().max(240).optional(),
+                  // retire · restore · rename — 사유 한 줄(폐기 표시에 남는다)
+                  reason: z.string().max(200).optional(),
+                  // rename — 새 좌표
+                  to: z.string().max(240).optional(),
+                })
+                .strict()
             )
             .max(50)
             .optional(),
           // 관리 문서(등록부 행 · 문서)를 만들고 붙이고 정리한다. 없으면 옛 입력 그대로다.
-          // add(기본) 는 writer · rename · merge · retire · drop 은 admin. 모르는 키는 거절한다 — 오타가 조용히 버려지지 않게
+          // 전부 큐레이터(v1.0). 모르는 키는 거절한다 — 오타가 조용히 버려지지 않게
           managed: z
             .array(
               z

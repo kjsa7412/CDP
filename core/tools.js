@@ -16,7 +16,7 @@ import { repoStatus } from './repo.js'
 import { runBuiltinCheck } from './check.js'
 import { buildDrift, driftLine } from './drift.js'
 import { buildIndex, fullText, tokenize } from './search.js'
-import { reconcile, RE_COORD } from './vocab.js'
+import { reconcile, RE_COORD, successorChain } from './vocab.js'
 import { resolveCoord } from './managed.js'
 import { docNo } from './docrefs.js'
 import { docUsage } from './docusage.js'
@@ -206,12 +206,21 @@ export function toolMatch(r, { names } = {}) {
     }
     // 폐기 좌표는 **후속을 같이 준다.** 명함이 "다른 좌표로 바꾸지 말라"고
     // 말하는 자리라, 바꿔도 되는 유일한 경우를 값으로 알려야 한다.
-    if (e?.deprecated) {
-      row.deprecated = e.deprecated
-      row.successor = e.supersededBy ?? null
-    }
+    Object.assign(row, retiredOf(r, e))
     return row
   })
+}
+
+// 폐기 좌표의 표시 — `match` · `where` 가 같은 모양을 낸다. 날짜가 없는 폐기(`deprecated: 산문`)도 폐기다 —
+// 전에는 날짜가 있을 때만 실어 산문으로 적은 폐기가 정상 좌표로 나갔다. 사슬이면 끝(`successorLatest`)도
+function retiredOf(r, e) {
+  if (!e || !(e.deprecated || e.supersededBy || e.deprecatedNote)) return {}
+  const chain = successorChain(r.vocab, e.coord)
+  return {
+    deprecated: e.deprecated || e.deprecatedNote || true,
+    successor: e.supersededBy ?? null,
+    ...(chain.length > 1 ? { successorLatest: chain[chain.length - 1], successorChain: chain } : {}),
+  }
 }
 
 // ── where ───────────────────────────────────────────────────────────────────
@@ -255,6 +264,8 @@ export function toolWhere(r, { coord, limit = 5 } = {}) {
     total: works.length,
   }
   if (normalized) out.normalized = normalized
+  // 폐기 좌표 — 옛 기록의 touches 로 온 사람에게 후속을 알린다. 기록 목록은 그대로(작업 기록은 옛 좌표를 계속 가리킨다)
+  Object.assign(out, retiredOf(r, r.vocab.coords.get(c)))
   return out
 }
 

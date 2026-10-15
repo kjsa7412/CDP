@@ -158,7 +158,10 @@ export function parseVocab(text) {
     if (!k) return
     if (!aliasIndex.has(k)) aliasIndex.set(k, { coord, kind, aliasText })
   }
-  for (const c of coords.values()) {
+  // **살아 있는 좌표가 먼저 자리를 잡는다**(어휘 큐레이터 검토 R10) — 폐기 좌표와 후속이 같은 열쇠(alias · label)를
+  // 가지면 답은 후속이어야 한다. 폐기 좌표는 그 뒤에 남은 열쇠만 갖는다 — 제 이름 · 값으로는 여전히 찾아진다
+  const retired = (c) => !!(c.deprecated || c.supersededBy || c.deprecatedNote)
+  for (const c of [...coords.values()].sort((a, b) => retired(a) - retired(b))) {
     put(c.coord, c.coord, 'canonical', c.coord)
     // 좌표의 값 부분만으로도 걸리게 한다 (tb_biz_plan)
     const v = c.coord.slice(c.coord.indexOf(':') + 1)
@@ -202,4 +205,14 @@ export function reconcile(vocab, query) {
     if (nq.includes(k) && (!best || k.length > best.key.length)) best = { key: k, ...v }
   }
   return best ? { coord: best.coord, kind: best.kind, aliasText: best.aliasText, matched: best.aliasText, exact: false } : null
+}
+
+// 폐기 사슬 — 후속을 따라간다(A → B → C 면 [B, C]). 고리 · 없는 좌표에서 멈춘다. `match` · `where` 가 `successorLatest` 를 낸다
+export function successorChain(vocab, coord) {
+  const out = []
+  for (let x = vocab.coords.get(coord)?.supersededBy; x && x !== coord && !out.includes(x); x = vocab.coords.get(x)?.supersededBy) {
+    out.push(x)
+    if (!vocab.coords.has(x)) break
+  }
+  return out
 }

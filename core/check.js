@@ -116,11 +116,14 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
     units.filter((d) => d.id !== d.fileId).map((d) => ({ id: d.id, path: d.path, detail: `파일명은 ${d.fileId}` }))
   )
 
-  // deprecated 좌표 사용
+  // deprecated 좌표 사용 — **폐기한 날 뒤에 쓴 기록만**(어휘 큐레이터 검토 R12). 그 전의 기록은 그때 맞는 좌표를 썼고
+  // 고칠 수도 없다(불변) — 전에는 좌표 하나를 폐기하면 그 좌표를 쓴 옛 기록 전부가 영원히 경고였다. 날짜가 없는 기록은 센다
   const deprecatedUse = []
   for (const d of units) {
+    const day = String(d.date || '').slice(0, 10)
     for (const c of d.touches) {
       const e = vocab.coords.get(c)
+      if (e?.deprecated && day && day <= e.deprecated) continue
       if (e?.deprecated) deprecatedUse.push({ id: d.id, coord: c, suggest: e.supersededBy, detail: e.deprecated })
     }
   }

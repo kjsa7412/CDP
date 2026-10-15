@@ -37,7 +37,8 @@ import { htmlExternal, proseLength } from './visuals.js'
 import { planPurge } from './examples.js'
 import { checkEditsShape, planEdits } from './edits.js'
 import { checkDrop, dropVocab, dropRefs, refsError } from './docdrop.js'
-import { suggestEdit } from './docrefs.js'
+import { suggestEdit, isRefFile } from './docrefs.js'
+import { checkVocabShape, planVocab } from './vocabops.js'
 import { whyMissing } from './sourcerepo.js'
 
 const NL = String.fromCharCode(10)
@@ -204,10 +205,8 @@ function checkSchema(input) {
       seen.add(x.coord)
     }
   }
-  for (const v of input.vocab || []) {
-    checkCoord(v.coord)
-    if (!v.label) throw new CtxError('E_INPUT', 'vocab[].label 이 없다', { coord: v.coord })
-  }
+  // 어휘 — op 별 모양(어휘 큐레이터 검토 R1). op 가 없으면 더하기다
+  input.vocab = checkVocabShape(input.vocab, checkCoord)
   // 예시 정리(등록부 사본 검토 X10) — 값은 하나다. 다른 값이 조용히 무시되면 「지웠다」 고 답하게 된다
   if (input.examples != null && input.examples !== 'purge') throw new CtxError('E_INPUT', 'examples 는 "purge" 하나다', { field: 'examples' })
   // 미리보기(관리문서 정리 검토 N10) — 계획 · 거절 · 검사까지 돌고 쓰지 않는다. 화면이 계획을 따로 세우지 않게
@@ -226,49 +225,81 @@ function checkSchema(input) {
   return w
 }
 
-// ── 어휘 등재 (4단계) ───────────────────────────────────────────────────────
+// ── 어휘 (4단계) ────────────────────────────────────────────────────────────
 //
-// 타입 섹션(`## table`) 끝에 한 줄을 붙인다. **타입 섹션이 없으면 문서 끝에 만든다** —
-// 전에는 거절하고 "타입은 사람이 먼저 만든다" 로 답했는데, 지식 레포가 서버에만 있으면
-// 사람이 커밋할 작업 트리가 없고(클라이언트에 clone 이 없다) 초기에는 새 타입이 계속 는다
-// (dpms_wiki 에 `term:` 이 없어 도메인 지식 문서 편입이 막혔다 · 2026-09-30).
-// 통제는 타입이 아니라 **좌표 하나하나의 등재**가 한다 — 그것은 그대로 save 안에서 검사되고
-// (형식은 `checkCoord` — ASCII 타입은 소문자만이라 `Term` ↔ `term` 은 못 갈라진다) 커밋은 git 에
-// 남아 사람이 되돌릴 수 있다. 오타로 만든 타입은 지워지지 않으니 만들었으면 경고로 알린다.
-//
-// 삭제는 없다(`deprecated` 표기는 사람이).
+// 더하기 · 고치기 · 폐기 · 되살리기 · 이름 바꾸기는 `core/vocabops.js` 가 글로 계획한다. **타입 섹션이 없으면 문서 끝에
+// 만든다** — 지식 레포가 서버에만 있으면 사람이 커밋할 작업 트리가 없고 초기에는 새 타입이 계속 는다(dpms_wiki ·
+// 2026-09-30). 통제는 좌표 하나하나의 등재가 한다. 줄을 지우는 연산은 없다 — 폐기가 그 자리다(작업 기록의 touches 가
+// 옛 좌표를 계속 가리킨다).
 
-function addVocab(text, entries) {
-  if (!entries.length) return { text, added: 0, newTypes: [] }
-  const lines = text.split(NL)
-  const newTypes = []
-  let added = 0
-  for (const v of entries) {
-    const type = v.coord.slice(0, v.coord.indexOf(':'))
-    if (text.includes('`' + v.coord + '`')) continue // 이미 있다
-    let head = lines.findIndex((l) => l.trim() === '## ' + type)
-    const fresh = head < 0
-    if (fresh) {
-      while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
-      lines.push('', '## ' + type, '')
-      head = lines.length - 2
-      newTypes.push(type)
-    }
-    let end = lines.length
-    for (let i = head + 1; i < lines.length; i++) {
-      if (/^##\s/.test(lines[i])) {
-        end = i
-        break
+const lc = (s) => String(s).toLowerCase()
+
+// 좌표 이름 바꾸기의 문서 쪽(어휘 큐레이터 검토 R6 · R7) — 섹션 헤딩의 값 · 다른 문서의 `` `옛 좌표` `` 참조 · `_seed.json`.
+// 작업 기록은 고치지 않는다(불변). 지금 디스크의 글(등록부 정리 · edits 뒤)을 읽어 `snap` 으로 쓴다
+async function renameDocs(root, snap, { renames, registry, files }) {
+  const texts = new Map()
+  const read = async (rel) => {
+    if (!texts.has(rel)) texts.set(rel, await fs.readFile(path.join(root, rel), 'utf8').catch(() => null))
+    return texts.get(rel)
+  }
+  const out = []
+  for (const { coord, to } of renames) {
+    const was = resolveCoord(registry, coord)
+    const now = resolveCoord(registry, to)
+    let section = null
+    if (was && !docEscapes(was.doc)) {
+      const text = await read(was.doc)
+      const lines = text == null ? null : text.split(NL)
+      const span = !lines ? { at: -1 } : was.level === 0 ? { at: 0 } : sectionSpan(lines, was.value, was.level)
+      if (span.at >= 0) {
+        // 섹션이 문서 사이를 몰래 건너가지 않게 — 새 좌표가 같은 문서 · 같은 레벨에 걸려야 헤딩만 바꿔 옮길 수 있다
+        if (!now || lc(now.doc) !== lc(was.doc) || now.level !== was.level) {
+          throw new CtxError('E_INPUT', `이름을 바꿀 ${coord} 의 섹션이 ${was.doc} 에 있는데 ${to} 는 ${now ? now.doc + ' (레벨 ' + now.level + ')' : '등록부에 걸리지 않는다'} — 같은 문서 · 레벨에 걸리는 좌표로 바꾸거나 managed 로 행을 같이 보낸다`, {
+            field: 'vocab',
+            coord,
+            to,
+            doc: was.doc,
+          })
+        }
+        if (was.level > 0) {
+          if (sectionSpan(lines, now.value, now.level).at >= 0) throw new CtxError('E_INPUT', `${to} 의 섹션이 ${was.doc} 에 이미 있다 — 이름 바꾸기가 아니라 합치기다(섹션을 정리한 뒤 retire · successor)`, { field: 'vocab', coord, to })
+          const esc = was.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          lines[span.at] = lines[span.at].replace(new RegExp('^(#{' + was.level + '}\\s+)' + esc), (_, h) => h + now.value)
+          texts.set(was.doc, lines.join(NL))
+        }
+        section = was.doc
       }
     }
-    while (!fresh && end > head + 1 && !lines[end - 1].trim()) end--
-    const row = ['- `' + v.coord + '` — ' + v.label]
-    if (v.aliases?.length) row.push('  aliases: ' + v.aliases.join(', '))
-    lines.splice(end, 0, ...row)
-    added++
+    out.push({ coord, to, section, refs: 0 })
   }
-  if (newTypes.length && lines[lines.length - 1] !== '') lines.push('')
-  return { text: lines.join(NL), added, newTypes }
+  // 다른 문서의 참조 — 백틱으로 감싼 좌표만(산문 속 같은 글자는 좌표가 아닐 수 있다). 등록부 · 어휘 · 작업 기록은 뺀다
+  const tick = (c) => '`' + c + '`'
+  for (const rel of files) {
+    if (rel === '_vocab.md' || rel === '_managed.md' || !isRefFile(rel) || docEscapes(rel)) continue
+    let text = await read(rel)
+    if (text == null) continue
+    for (const r of out) {
+      const parts = text.split(tick(r.coord))
+      if (parts.length < 2) continue
+      text = parts.join(tick(r.to))
+      r.refs += parts.length - 1
+    }
+    texts.set(rel, text)
+  }
+  for (const [rel, text] of texts) {
+    if (text == null) continue
+    const before = await fs.readFile(path.join(root, rel), 'utf8').catch(() => null)
+    if (before !== text) await snap.write(rel, text)
+  }
+  // 세운 섹션 목록 — 옛 좌표를 새 좌표로
+  const seed = await fs.readFile(path.join(root, SEED_FILE), 'utf8').catch(() => null)
+  const cur = seed ? parseSeed(seed) : null
+  if (cur && !cur.bad && cur.sections.some((c) => renames.some((r) => r.coord === c))) {
+    const j = JSON.parse(seed)
+    j.sections = j.sections.map((c) => renames.find((r) => r.coord === c)?.to ?? c)
+    await snap.write(SEED_FILE, JSON.stringify(j, null, 1) + NL)
+  }
+  return out
 }
 
 // ── 섹션 치환 (6단계) ───────────────────────────────────────────────────────
@@ -370,6 +401,8 @@ export async function save(root, input, { user, write = false, admin = false, cu
         sections: r.sections,
         ...(r.snapshots ? { snapshots: r.snapshots, snapshotSkipped: r.snapshotSkipped } : {}),
         vocab: r.vocab,
+        ...(r.vocabOps ? { vocabOps: r.vocabOps } : {}),
+        ...(r.vocabSkipped.length ? { vocabSkipped: r.vocabSkipped } : {}),
         managed: r.managedChanges.length,
         ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
         ...(r.edits.length ? { edits: r.edits } : {}),
@@ -423,6 +456,8 @@ export async function save(root, input, { user, write = false, admin = false, cu
       ...(r.baseline ? { baseline: r.baseline } : {}),
       ...(r.snapshots ? { snapshots: r.snapshots, snapshotSkipped: r.snapshotSkipped } : {}),
       vocab: r.vocab,
+      ...(r.vocabOps ? { vocabOps: r.vocabOps } : {}),
+      ...(r.vocabSkipped.length ? { vocabSkipped: r.vocabSkipped } : {}),
       managed: r.managedChanges.length,
       ...(r.managedChanges.length ? { managedChanges: r.managedChanges } : {}),
       ...(r.assets.length ? { assets: r.assets } : {}),
@@ -472,6 +507,8 @@ function curatorOnly(input, w) {
   if ((input.managed || []).length) why.push('managed')
   if ((input.edits || []).length) why.push('edits')
   if (input.examples != null) why.push('examples')
+  const vops = [...new Set((Array.isArray(input.vocab) ? input.vocab : []).map((v) => v?.op).filter((op) => op && op !== 'add'))]
+  if (vops.length) why.push(`vocab(${vops.join(' · ')})`)
   if ((input.baseline || []).length) why.push('baseline')
   if ((input.snapshot || []).length) why.push('snapshot')
   if (input.seed != null) why.push('seed')
@@ -483,8 +520,11 @@ function curatorOnly(input, w) {
 }
 
 async function run(root, input, { user, write, admin, curate, mirror, now, staging, formsDir = null, formsData = null }) {
-  // 1 권한
-  if (!write) throw new CtxError('E_FORBIDDEN', '쓰기 권한이 없다', { user })
+  // 1 권한 — 큐레이터 입력이면 무엇이 모자라는지 같이 말한다(viewer 도 writer 와 같은 `need: curate` — 검토 R14)
+  if (!write) {
+    const why = curatorOnly(input || {}, input?.work || {})
+    throw new CtxError('E_FORBIDDEN', '쓰기 권한이 없다', { user, need: why.length ? 'curate' : 'write', ...(why.length ? { fields: why } : {}) })
+  }
 
   // 2 스키마
   const w = checkSchema(input)
@@ -535,6 +575,13 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
   const editOps = checkEditsShape(input.edits)
   const sections = input.sections || []
   const vocabAdds = input.vocab || []
+  // 어휘 연산(고치기 · 폐기 · 되살리기 · 이름) — 큐레이션이 아닌 save 면 그 기록은 등록부 정리와 같은 시스템 기록이다(대기열에 서지 않는다 · 검토 R13).
+  // touches 에 바꾼 좌표를 적으면 where 가 이 기록을 찾는다 — 비었으면 사유를 서버가 채운다
+  const vocabEdits = vocabAdds.filter((v) => v.op !== 'add')
+  if (vocabEdits.length && !curates) {
+    if (!(w.tags || []).includes('registry')) w.tags = [...(w.tags || []), 'registry']
+    if (!(w.touches || []).length && !w.touchesEmpty) w.touchesEmpty = '어휘 정리'
+  }
 
   const snap = new Snap(root)
   const warnings = []
@@ -629,7 +676,7 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       )
     }
     // 큐레이션 · 기준선 기록은 좌표가 없는 것이 그 기록의 모양이다 — 매번 나오는 경고는 아무것도 알리지 않는다
-    if (w.curates == null && !(input.baseline || []).length && !snapshotOps.length && seeding !== 'structure') warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
+    if (w.curates == null && !(input.baseline || []).length && !snapshotOps.length && seeding !== 'structure' && !vocabEdits.length) warnings.push(`touches 가 비어 있다 — 이 기록은 좌표로 찾을 수 없다 (사유: ${w.touchesEmpty.trim()})`)
   }
 
   // 3.8 첨부 꺼내기 — **파일을 만지기 전에.** 없는 ref · 종류 어긋남 · 상한은 여기서 걸린다. 쓰는 것은 6.5
@@ -653,14 +700,19 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
     // 4 어휘 (메모리 → 파일)
     const vocabPath = '_vocab.md'
     const vocabText = await fs.readFile(path.join(root, vocabPath), 'utf8')
-    const { text: nextVocab, added, newTypes } = addVocab(vocabText, vocabAdds)
-    if (added) await snap.write(vocabPath, nextVocab)
+    const vp = planVocab(vocabText, vocabAdds, { today: fmtLocal(now).slice(0, 10) })
+    const { added, newTypes } = vp
+    if (added || vp.updated.length || vp.retired.length || vp.restored.length || vp.renamed.length) await snap.write(vocabPath, vp.text)
+    warnings.push(...vp.warnings)
+    // 이미 있는 좌표를 op 없이 보냈다 — 전에는 조용히 `vocab: 0` 이었다(검토 R8). 거절하지 않는다 — 기록 · 세우기 재실행이 같이 보내는 것은 정상이다
+    const differ = vp.skipped.filter((x) => x.why !== '이미 있다')
+    if (differ.length) warnings.push(`이미 있는 좌표 ${differ.length}개는 건너뛰었다 — label · aliases 가 지금과 다르다. 고치려면 vocab 에 op: "update"(큐레이터): ${differ.slice(0, 5).map((x) => x.coord).join(' · ')}${differ.length > 5 ? ' …' : ''}`)
     // 타입을 만들었으면 말한다 — 오타면 사람이 _vocab.md 에서 고친다. 등록부에 없으면 섹션은 못 쓴다(6단계).
     // 같은 save 가 그 타입의 등록부 행을 더하면(큐레이터가 새 문서를 세운다) 등록부 안내는 붙이지 않는다
     const rowFor = (t) => managedOps.some((o) => (o.op ?? 'add') === 'add' && String(o.pattern || '').startsWith(t + ':'))
     for (const t of newTypes) {
       warnings.push(
-        `새 어휘 타입 "${t}" 을 만들었다 (_vocab.md 끝) — 의도한 타입이 맞는지 본다 · 오타면 admin 이 _vocab.md 를 고친다(지우는 연산은 없다)` +
+        `새 어휘 타입 "${t}" 을 만들었다 (_vocab.md 끝) — 의도한 타입이 맞는지 본다 · 오타면 큐레이터가 vocab op: "rename" 으로 좌표를 옮긴다(타입 머리글은 남는다)` +
           (rowFor(t) ? '' : ' · 이 타입의 관리 문서는 큐레이터가 세운다(대기열의 「등록부 없음」 → managed 로 등록부 행)')
       )
     }
@@ -818,6 +870,12 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       // 새 행이 걸리는 기존 좌표의 섹션을 **같이 받지 않아도 된다**(v1.0 · H1). 전에는 그 좌표가 앵커 없음(error)이 되어
       // 레포의 다음 save 가 전부 막혔다(실측 P4). 이제 섹션이 없는 좌표는 오류가 아니라 대기열의 「등록부 있음 · 섹션 없음」
       // 이고, `section` 은 섹션 대신 그 좌표의 미반영 기록을 낸다. 문서를 세우고 섹션은 차례로 채운다.
+    }
+
+    // 5.8 좌표 이름 바꾸기의 문서 쪽 — 등록부 정리(5.5) 뒤의 등록부 · 파일로, 섹션 쓰기(6) 앞에서. 같은 save 의 sections 가 새 좌표로 쓸 수 있다
+    let renamedOut = []
+    if (vp.renamed.length) {
+      renamedOut = await renameDocs(root, snap, { renames: vp.renamed, registry, files: [...new Set([...r0.bodies.keys(), ...snap.paths()])] })
     }
 
     // 6 섹션
@@ -1023,6 +1081,8 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
       ...(baselineOps.length ? { baseline: baselineOps.length } : {}),
       ...(snapshotOps.length ? { snapshots: snapshots.map(({ coord, id, asof }) => ({ coord, id, date: asof })), snapshotSkipped } : {}),
       vocab: added,
+      vocabOps: vp.updated.length || vp.retired.length || vp.restored.length || vp.renamed.length ? { updated: vp.updated, retired: vp.retired, restored: vp.restored, renamed: renamedOut } : null,
+      vocabSkipped: vp.skipped,
       managedChanges: plan?.events || [],
       assets: assetsOut.map(({ path: p, size }) => ({ path: p, size })),
       edits: editsDone,
