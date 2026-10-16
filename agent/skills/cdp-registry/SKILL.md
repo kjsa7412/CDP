@@ -78,11 +78,12 @@ description: "큐레이터만 쓴다(그 레포의 curate 권한 · admin). 등�
 | label · alias 고치기 | `{ op: "update", coord, label?, aliases? }` | label 을 바꾸고 aliases 를 **통째로** 갈아 끼운다(`[]` 면 지운다) | |
 | 좌표 폐기 · 후속 지정 | `{ op: "retire", coord, successor?, reason? }` | `deprecated: <오늘> → <successor> — <reason>` 한 줄. **줄은 남는다** — 옛 기록의 `touches` 가 끊기지 않는다 | 섹션 · 작업 기록을 고치지 않는다 |
 | 폐기 되돌리기 | `{ op: "restore", coord }` | 폐기 표시를 걷는다 | |
-| 좌표 이름 바꾸기 | `{ op: "rename", coord, to, label?, aliases? }` | 한 커밋에 — 새 좌표 등재(label · aliases 를 옮긴다) · 섹션 헤딩의 값(`applied` 그대로) · 다른 문서의 `` `옛 좌표` `` 참조 · `_seed.json` · 옛 좌표는 폐기 + 후속 = 새 좌표 | 작업 기록 본문 · `touches`(불변) · 산문 속 백틱 없는 글자 · `_managed.md` |
+| 좌표 이름 바꾸기 | `{ op: "rename", coord, to, label?, aliases?, heading? }` | 한 커밋에 — 새 좌표 등재(label · aliases 를 옮긴다) · 섹션 헤딩의 값(`applied` 그대로) · 다른 문서의 `` `옛 좌표` `` 참조 · `_seed.json` · 옛 좌표는 폐기 + 후속 = 새 좌표 | 작업 기록 본문 · `touches`(불변) · 산문 속 백틱 없는 글자 · `_managed.md` |
 
 - **후속은 이미 있는 좌표**여야 한다 — 없으면 같은 save 에 op 없이 더한다. 사슬(A → B → C)은 되지만 고리면 `E_INPUT`. `match` · `where` 는 폐기 좌표에 `deprecated` · `successor`(사슬이면 끝 `successorLatest`)를 붙인다.
 - **alias 는 한 좌표에만** — `update` · `rename` 이 다른 좌표의 좌표 · 값 · alias 와 겹치면 `E_INPUT` `detail.clashes`(겹친 좌표). 옮길 때는 옛 좌표의 aliases 를 같은 save 에서 `update` 로 걷는다(판정은 저장 뒤의 어휘로 하므로 순서는 상관없다). `add` 의 겹침은 경고다.
 - **이름 바꾸기는 섹션이 같은 문서 · 같은 레벨에 걸릴 때만** — 새 좌표가 다른 문서에 걸리면 거절된다(섹션이 몰래 문서를 건너가지 않게). 그때는 `managed` 로 행을 같이 보내거나, 새 좌표를 더하고 섹션을 큐레이션으로 옮긴 뒤 옛 좌표를 `retire` 한다. 새 좌표의 섹션이 이미 있으면 이름 바꾸기가 아니라 합치기다(`retire` · `successor`).
+- 헤딩의 설명(`## 값 — 설명` 의 뒤)도 낡았으면 `heading: "새값 — 새 설명"`(줄 전체 · 새 값으로 시작) — 헤딩은 좌표 섹션이라 `edits` 로는 못 고친다. 안 주면 값만 바뀐다.
 - 같은 save 의 `sections` 는 **새 좌표**로 보낸다 — 헤딩은 섹션 쓰기 전에 옮겨진다. `applied` 는 옛 섹션의 것 그대로.
 - **기록** — 큐레이션이면 그 큐레이션 기록이, 아니면 `tags: ["registry"]`(서버가 붙인다) 기록이 사유다. `touches` 에 바꾼 좌표(옛 · 새)를 적으면 `where` 가 그 기록을 찾는다 — 비우면 서버가 `touchesEmpty: "어휘 정리"`.
 - 【등록부 변경】 에 「어휘」 줄로 싣는다 — `폐기 term:SCADA링크 → term:PLC링크 · 이름 게이트웨이설계:SCADA마스터 → …:현장연계(참조 n) · alias 「링크」 SCADA링크 → PLC링크`. 먼저 `dryRun: true` — 응답 `vocabOps` 를 보인다.

@@ -274,6 +274,20 @@ test('③ 이름 바꾸기 — 같은 save 의 sections 가 새 좌표로 쓴다
   }
 })
 
+test('③ 이름 바꾸기 — heading 을 주면 헤딩 설명까지 · 새 값으로 시작하지 않으면 E_INPUT', { skip: !hasGit }, async () => {
+  const R = await repo()
+  try {
+    await assert.rejects(
+      save(R.r, { work: work('2026-1015-헤딩-틀림'), vocab: [{ op: 'rename', coord: '게이트웨이설계:SCADA마스터', to: '게이트웨이설계:현장연계', heading: '4. 현장 연계' }] }, cur()),
+      (e) => e.code === 'E_INPUT' && /새 값으로 시작/.test(e.message)
+    )
+    await save(R.r, { work: work('2026-1015-헤딩'), vocab: [{ op: 'rename', coord: '게이트웨이설계:SCADA마스터', to: '게이트웨이설계:현장연계', heading: '현장연계 — 4. 현장 연계 (PLC 연계 규격)' }] }, cur())
+    assert.match(await read(R.r, 'docs/gw.md'), /\n## 현장연계 — 4\. 현장 연계 \(PLC 연계 규격\)\n<!-- applied: 2026-0901-옛 -->/)
+  } finally {
+    await R.rm()
+  }
+})
+
 test('되살리기 — 폐기 표시를 걷는다 · 폐기가 아니면 E_INPUT', { skip: !hasGit }, async () => {
   const R = await repo()
   try {

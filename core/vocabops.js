@@ -17,7 +17,7 @@ import { parseVocab, normKey } from './vocab.js'
 
 const NL = '\n'
 export const VOCAB_OPS = ['add', 'update', 'retire', 'restore', 'rename']
-const KEYS = ['op', 'coord', 'label', 'aliases', 'successor', 'reason', 'to']
+const KEYS = ['op', 'coord', 'label', 'aliases', 'successor', 'reason', 'to', 'heading']
 const ITEM = /^(\s*[-*]\s+)`([^`]+)`\s*(?:[—–-]\s*(.*))?$/
 const SUB = /^\s+(aliases|deprecated|superseded[-_]by|example)\s*:/i
 
@@ -39,7 +39,7 @@ export function checkVocabShape(list, checkCoord = (c) => c) {
     }
     if (v.reason != null && (typeof v.reason !== 'string' || v.reason.length > 200 || v.reason.includes(NL))) throw bad(i, 'vocab[].reason 은 200자까지의 한 줄이다', { coord: v.coord })
     const only = (ks) => {
-      for (const k of ['label', 'aliases', 'successor', 'reason', 'to']) if (v[k] != null && !ks.includes(k)) throw bad(i, `vocab[].${k} 는 op: ${op} 에서 받지 않는다`, { coord: v.coord })
+      for (const k of ['label', 'aliases', 'successor', 'reason', 'to', 'heading']) if (v[k] != null && !ks.includes(k)) throw bad(i, `vocab[].${k} 는 op: ${op} 에서 받지 않는다`, { coord: v.coord })
     }
     if (op === 'add') {
       only(['label', 'aliases'])
@@ -54,7 +54,9 @@ export function checkVocabShape(list, checkCoord = (c) => c) {
     } else if (op === 'restore') {
       only(['reason'])
     } else if (op === 'rename') {
-      only(['to', 'label', 'aliases', 'reason'])
+      only(['to', 'label', 'aliases', 'reason', 'heading'])
+      // 섹션 헤딩 줄 전체(`값 — 설명`) — 이름을 바꾸면 설명도 낡는다. 헤딩은 좌표 섹션이라 edits 로 못 고친다
+      if (v.heading != null && (typeof v.heading !== 'string' || !v.heading.trim() || v.heading.length > 200 || /[\r\n]/.test(v.heading))) throw bad(i, 'vocab[].heading 은 200자까지의 한 줄이다(헤딩 줄 전체 — "값 — 설명")', { coord: v.coord })
       if (typeof v.to !== 'string' || !v.to) throw bad(i, 'op: rename 은 to(새 좌표)를 보낸다', { coord: v.coord })
       checkCoord(v.to)
       if (v.to === v.coord) throw bad(i, 'op: rename 의 to 가 coord 와 같다', { coord: v.coord })
@@ -214,7 +216,7 @@ export function planVocab(text, ops, { today }) {
     setAliases(lines, span, [])
     setRetired(lines, span, { today, successor: v.to, reason: '이름 바꿈' + (v.reason ? ' — ' + v.reason : '') })
     strict.set(v.to, aliases)
-    out.renamed.push({ coord: c, to: v.to })
+    out.renamed.push({ coord: c, to: v.to, ...(v.heading ? { heading: v.heading.trim() } : {}) })
   })
 
   // 저장 뒤의 어휘로 본다 — 후속은 있어야 하고 사슬에 고리가 없어야 한다(R4)

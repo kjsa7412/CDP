@@ -243,7 +243,7 @@ async function renameDocs(root, snap, { renames, registry, files }) {
     return texts.get(rel)
   }
   const out = []
-  for (const { coord, to } of renames) {
+  for (const { coord, to, heading } of renames) {
     const was = resolveCoord(registry, coord)
     const now = resolveCoord(registry, to)
     let section = null
@@ -265,11 +265,19 @@ async function renameDocs(root, snap, { renames, registry, files }) {
           if (sectionSpan(lines, now.value, now.level).at >= 0) throw new CtxError('E_INPUT', `${to} 의 섹션이 ${was.doc} 에 이미 있다 — 이름 바꾸기가 아니라 합치기다(섹션을 정리한 뒤 retire · successor)`, { field: 'vocab', coord, to })
           const esc = was.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
           lines[span.at] = lines[span.at].replace(new RegExp('^(#{' + was.level + '}\\s+)' + esc), (_, h) => h + now.value)
+          // 헤딩 설명까지 바꾼다 — 값으로 시작해야 이 좌표의 섹션으로 읽힌다(sections[].heading 과 같은 규칙)
+          if (heading) {
+            if (normValue(heading.split(/\s+[—–-]\s+/)[0]) !== normValue(now.value)) {
+              throw new CtxError('E_INPUT', `vocab[].heading 은 헤딩 줄 전체다 — "${now.value} — 설명" 처럼 새 값으로 시작한다`, { field: 'vocab', coord, heading: heading.slice(0, 80) })
+            }
+            lines[span.at] = '#'.repeat(was.level) + ' ' + heading
+          }
           texts.set(was.doc, lines.join(NL))
         }
         section = was.doc
       }
     }
+    if (heading && !section) throw new CtxError('E_INPUT', `vocab[].heading — ${coord} 에 섹션이 없다(바꿀 헤딩이 없다)`, { field: 'vocab', coord })
     out.push({ coord, to, section, refs: 0 })
   }
   // 다른 문서의 참조 — 백틱으로 감싼 좌표만(산문 속 같은 글자는 좌표가 아닐 수 있다). 등록부 · 어휘 · 작업 기록은 뺀다
