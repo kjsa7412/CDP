@@ -101,7 +101,7 @@ export default function Landing({ info }) {
             <div className="fcard">
               <h3>화면</h3>
               <p>
-                찾기 → 뻗어나가기 → 읽기. 좌표 그래프. 아직 반영 안 된 기록은 섹션 옆 <b>「미반영」</b> · 큐레이터는 <b>큐레이션 › 대기열</b>. 편집은 없다 — 쓰기는 <code>save</code> 하나다.
+                찾기 → 뻗어나가기 → 읽기. 좌표 그래프. 아직 반영 안 된 기록은 섹션 옆 <b>「미반영」</b> · 큐레이터는 <b>작업실 › 대기열</b>. 편집은 없다 — 쓰기는 <code>save</code> 하나다.
               </p>
             </div>
             <div className="fcard">

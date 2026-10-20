@@ -14,7 +14,7 @@
 // 둘이 같은 자리를 쓰므로 각각이 **세로 전체**를 받는다. 폭도 따로 기억한다 —
 // 목록은 좁아도 되고 뻗어나가기는 열이 여럿이라 넓어야 한다.
 //
-// 화면을 고르는 것은 왼쪽 메뉴다(`shell/nav.js` — 문서 · 작업 기록 · 좌표 · 그래프 · 큐레이션 · 레포 관리). 전에는 상단 세그
+// 화면을 고르는 것은 왼쪽 메뉴다(`shell/nav.js` — 영역 셋: 보기 · 작업실 · 서버). 전에는 상단 세그
 // (문서 · 그래프 · 관리)와 `Esc → 문서` 가 그 일을 했다 — 메뉴와 같은 일을 하는 단추를 두지 않는다(개편안 §7.2).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -25,7 +25,6 @@ import { useSession } from './lib/session.jsx'
 import { useSlots, useScreen } from './lib/slots.js'
 import { useToast } from './shell/toast.jsx'
 import { repoBase } from './shell/nav.js'
-import { can } from './lib/roles.js'
 import { load, peek } from './lib/cache.js'
 import { buildCoordIndex } from './lib/markdown.js'
 import { summaryText } from './lib/format.js'
@@ -126,7 +125,7 @@ export default function App() {
   // 화면은 **주소다**(화면 · 권한 검토 v0.1 R9 · P8) — 셸이 읽은 화면(`shell/routes.js` 의 screenOf)을 그대로 받는다.
   //   문서 · 작업 기록  `/r/<레포>/` · `/w` · `/d/<id>` — 왼쪽 목록은 finder(주소 · 고른 사람이 히스토리에 남긴 것)
   //   그래프           `/graph`
-  //   관리             `/manage/…` — 큐레이션 · 레포 관리(item.tab). 없는 탭 · 권한 밖 탭은 셸이 이미 바꿔 썼다
+  //   작업실           `/manage/…` — 만든다 · 정리한다 · 세운다(item.tab). 없는 탭 · 권한 밖 탭은 셸이 이미 바꿔 썼다
   // 뒤로 가기 · 새로고침 · 링크 · 서버 묶음 → 「레포」 가 그 자리로 온다.
   const route = useRoute()
   const scr = useScreen()
@@ -690,7 +689,6 @@ export default function App() {
           tab={adminTab}
           repo={repo}
           me={me}
-          onCheck={() => setCheckOpen(true)}
           onChanged={() => reload().catch(() => {})}
           say={(m) => say(m, 6000)}
         />
@@ -845,8 +843,6 @@ export default function App() {
                 onToggleToc={() => patch({ panes: { toc: state.panes?.toc === false } })}
                 visual={routeDoc?.id === docId ? routeDoc.v : null}
                 onVisual={openVisual}
-                curator={can(me, 'curate', currentRepo())}
-                driftHref={repoBase(currentRepo()) + 'manage/drift'}
               />
             ) : (
               <Landing repo={repo} docs={docs} managed={managedList.length} onOpen={openDoc} />
@@ -908,7 +904,7 @@ function Landing({ repo, docs, managed = 0, onOpen }) {
     <div className="docpane">
       <div className="docwrap">
         <h1 style={{ fontSize: 20, margin: '32px 0 12px' }}>{repo.root.split(/[\\/]/).pop()}</h1>
-        <Start repo={currentRepo()} empty={empty ? <p style={{ color: 'var(--text-2)' }}>아직 기록도 관리 문서도 없다.</p> : null} />
+        <Start repo={currentRepo()} who={['any']} empty={empty ? <p style={{ color: 'var(--text-2)' }}>아직 기록도 관리 문서도 없다.</p> : null} />
         {!empty && (
           <>
             <p style={{ color: 'var(--text-2)', marginTop: 16 }}>

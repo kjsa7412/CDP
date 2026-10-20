@@ -3,8 +3,8 @@
 //
 //   ┌ C CDP              « ┐  접기 · 펴기(⌘B / Ctrl B) — 사람마다 · 브라우저마다 기억(`cdp.nav`)
 //   │ [레포 ▾]             │  레포 고르기(옛 상단 「레포 ▾」 메뉴 그대로)
-//   │ 지식 · 큐레이션 ·     │  묶음 넷 — 항목마다 need(V18) · 보이는 항목이 있는 묶음만
-//   │ 레포 관리 · 서버      │
+//   │ [보기|작업실|서버]   │  영역 스위치 — 고를 수 있는 영역이 둘 이상일 때만(viewer 는 없다 · 지식 생성 · 작업실 검토 G1)
+//   │ 지금 영역의 묶음      │  보기 = 지식 · 작업실 = 만든다 · 정리한다 · 세운다 · 서버 = 서버 — 항목마다 need(V18)
 //   │ 설명서 · 내 계정      │
 //   └──────────────────────┘
 //
@@ -18,7 +18,7 @@ import { admin, gotoRepo, repoApi } from '../lib/api.js'
 import { load, useResource } from '../lib/cache.js'
 import { kbd } from '../lib/keys.js'
 import { can } from '../lib/roles.js'
-import { navGroups } from './nav.js'
+import { navGroups, navAreas, areaNow, areaHome } from './nav.js'
 import AccountMenu from './AccountMenu.jsx'
 
 const NAV_KEY = 'cdp.nav'
@@ -54,8 +54,20 @@ function useQueue(face, repo, me) {
   return typeof cur?.queue === 'number' ? cur.queue : null
 }
 
+// 영역마다 마지막으로 본 주소 — 스위치를 누르면 그 자리로 돌아간다(처음이면 `areaHome`). 레포 영역은 레포마다.
+// 탭 하나의 기억이다 — 새로고침하면 영역의 첫 주소부터(주소가 상태다 · 기억은 편의일 뿐)
+const lastAt = new Map()
+const lastKey = (area, repo) => (area === 'server' ? 'server' : area + ':' + (repo || ''))
+
 export default function SideNav({ face, me, info, repo, item, rail, onRail, onNavigate, onLogout }) {
-  const groups = navGroups({ face, me, repo })
+  const area = areaNow(face, item)
+  const groups = navGroups({ face, me, repo, area })
+  const areas = navAreas({ face, me, repo })
+  // 지금 주소를 그 영역의 마지막 주소로 — 없는 주소(item 없음)는 기억하지 않는다
+  useEffect(() => {
+    if (item && typeof window !== 'undefined') lastAt.set(lastKey(area, repo), window.location.pathname + window.location.search)
+  }, [item, area, repo])
+  const areaTo = (a) => lastAt.get(lastKey(a, repo)) || areaHome(a, { me, repo })
   const queue = useQueue(face, repo, me)
   const badgeOf = (it) => (it.badge === 'queue' && queue > 0 ? queue : null)
 
@@ -80,6 +92,24 @@ export default function SideNav({ face, me, info, repo, item, rail, onRail, onNa
       </div>
 
       <RepoPicker face={face} me={me} repo={repo} onNavigate={onNavigate} />
+
+      {areas.length > 1 && (
+        <nav className="snav__areas" aria-label="영역">
+          {areas.map((a) => (
+            <Link
+              key={a.key}
+              to={areaTo(a.key)}
+              className="snav__area"
+              aria-current={a.key === area ? 'true' : undefined}
+              title={rail ? a.label : undefined}
+              onClick={onNavigate}
+              data-area={a.key}
+            >
+              {rail ? a.label.slice(0, 1) : a.label}
+            </Link>
+          ))}
+        </nav>
+      )}
 
       <nav className="snav__nav" aria-label="화면">
         {groups.map((g) => {

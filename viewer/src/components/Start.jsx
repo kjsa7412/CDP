@@ -7,6 +7,8 @@
 //   끝난 줄 · 권한 밖 줄은 서버가 이미 뺐다 — 빈 배열이면 **카드가 없다**(불변조건 7). 그 자리에 `empty` 를 그린다
 //   읽는 동안은 아무것도 그리지 않는다 — 「읽는 중…」 으로 자리를 잡았다 사라지면 그것이 깜빡임이다
 //   옛 서버(404)는 카드가 없다 · 그 밖의 실패는 한 줄로 말한다(조용히 지우지 않는다)
+//   `who` — 자리마다 거른다(지식 생성 · 작업실 검토 G2). 보기의 빈 상태는 누구에게나 할 일(`any`)만 — write · curate 줄은
+//   작업실 › 현황에서 낸다. 보기에서 작업실로 보내는 단추를 두지 않는다
 
 import { useState } from 'react'
 import { steps as readSteps, stepsKey } from '../lib/api.js'
@@ -16,11 +18,11 @@ import { installCommand, guessShell } from '../lib/install.js'
 import { Card, Note, Cmd, ShellTabs, Mark } from './admin/ui.jsx'
 import HelpLink from './HelpLink.jsx'
 
-export default function Start({ repo = null, empty = null }) {
+export default function Start({ repo = null, empty = null, who = null }) {
   const r = useResource(stepsKey(repo), () => readSteps(repo), { ttl: 30_000 })
   if (r.error) return r.error.status === 404 ? empty : <Note tone="warn">다음 할 일을 읽지 못했다 — {r.error.message}</Note>
   if (!r.data) return null
-  const list = r.data.steps || []
+  const list = (r.data.steps || []).filter((s) => !who || who.includes(s.who))
   if (!list.length) return empty
   return (
     <Card title="시작하기" hint={`할 일 ${list.length}`}>

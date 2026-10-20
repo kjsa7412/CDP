@@ -20,8 +20,6 @@ import { useEffect } from 'react'
 import { api, currentRepo } from '../lib/api.js'
 import { useResource } from '../lib/cache.js'
 import { navigate } from '../lib/router.jsx'
-import { useSession } from '../lib/session.jsx'
-import { can } from '../lib/roles.js'
 import { repoBase } from '../shell/nav.js'
 import Icon from './Icon.jsx'
 
@@ -41,7 +39,6 @@ function mirrorLine(m) {
 }
 
 export default function StatusBar({ repo, onCheck = () => {} }) {
-  const me = useSession()?.me || null
   // 이 레포의 미러 한 값은 `/repos` 의 자기 행. **관리 현황과 같은 키**라 요청 하나를 나눠 받는다(화면 · 권한 검토 v0.1 R8)
   const { data: rows, refresh } = useResource('/repos', api.repos, { ttl: 15_000 })
   const mine = (rows || []).find((r) => r.name === currentRepo()) || null
@@ -71,14 +68,15 @@ export default function StatusBar({ repo, onCheck = () => {} }) {
         좌표 <b className="num">{repo.coords}</b>
       </span>
 
-      {/* 큐레이션 대기 — 섹션 뒤에 아직 반영 안 된 기록이 있다(개편안 S9). 값이 없으면(옛 서버) 그리지 않는다. 큐레이터는
-          대기열로, 나머지는 작업 기록의 「대기」 거름으로 — 갈 수 있는 곳으로만 보낸다(못 할 일을 띄우지 않는다) */}
+      {/* 큐레이션 대기 — 섹션 뒤에 아직 반영 안 된 기록이 있다(개편안 S9). 값이 없으면(옛 서버) 그리지 않는다. 누구든
+          작업 기록의 「대기」 거름으로 — 보기 안에서 끝난다. 큐레이터의 대기열은 작업실 메뉴의 배지가 든다(G2 — 보기에서
+          작업실로 보내는 단추를 두지 않는다) */}
       {typeof repo.curation?.queue === 'number' && repo.curation.queue > 0 && (
         <button
           className={'is-pending' + (repo.curation.oldestDays > STALE_DAYS ? ' is-old' : '')}
           onClick={() => {
             const r = currentRepo()
-            navigate(repoBase(r) + (can(me, 'curate', r) ? 'manage/curation' : 'w?only=pending'))
+            navigate(repoBase(r) + 'w?only=pending')
           }}
           title={`큐레이션 대기 ${repo.curation.queue}건${repo.curation.pendingSections != null ? ` · 미반영 섹션 ${repo.curation.pendingSections}곳` : ''}`}
         >

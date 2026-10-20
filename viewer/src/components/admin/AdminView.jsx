@@ -1,10 +1,10 @@
-// 레포 관리 — 이 레포 하나의 것. **창 전체를 쓰는 화면이다**(그래프를 패널에서 화면으로 올린 것과 같은 이유).
+// 작업실 — 이 레포 하나의 것(만든다 · 정리한다 · 세운다 · write 이상). **창 전체를 쓰는 화면이다**(그래프를 패널에서 화면으로 올린 것과 같은 이유).
 //
 // **메뉴는 왼쪽 메뉴다**(좌측 메뉴 셸 설계 v0.1 · 개편안 §7.2) — 안쪽 메뉴(`admin__menu`)를 지웠고 탭은 주소로만 고른다
 // (`shell/nav.js` 의 tab). 묶음은 작업의 성격으로 갈린다 —
 //
 //   큐레이션     대기열(탭 — 대기열 · 이력) · 진단 — 매일 바꾼다(큐레이터)
-//   레포 관리    현황 · 관리 문서(탭 — 목록 · 문서 추가 › 서식집) · 연결된 작업 레포 — 보고 · 가끔 바꾼다
+//   세운다 · 만든다   현황 · 관리 문서(탭 — 목록 · 문서 추가 › 서식집) · 작업 레포 연결 — 가끔 바꾼다
 //                (읽기면 보인다 · 쓰는 단추만 write · 지우기 · 서식집은 curate)
 // 탭은 주소다(`shell/routes.js` 의 sub) — 메뉴 항목을 늘리지 않고 한 화면에 둘(화면 22 → 16).
 //
@@ -29,7 +29,6 @@ import Docs from './Docs.jsx'
 export default function AdminView({
   tab,
   repo,
-  onCheck,
   say,
   me = null,
   // 관리에서 레포를 바꾼 뒤(관리 문서 지우기 · 기록으로 둠) — 상단 「검증 N」 · 문서 목록이 옛 값으로 남지 않게 레포를 다시 읽는다(F9)
@@ -60,7 +59,7 @@ export default function AdminView({
             </>
           )}
           {cur === 'drift' && <Drift say={say} onChanged={onChanged} />}
-          {cur === 'overview' && <Overview repo={repo} me={me} onCheck={onCheck} />}
+          {cur === 'overview' && <Overview repo={repo} me={me} />}
           {cur === 'docs' && (
             <>
               {/* 서식집 탭은 큐레이터만 — 문서를 들이는 사람이 서식을 볼 때뿐이다. 아니면 탭 줄째 없다(셸이 주소도 바꿔 쓴다) */}

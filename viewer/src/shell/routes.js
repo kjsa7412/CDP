@@ -6,10 +6,10 @@
 //              /r/<레포>/d/<id>[?at=&v=]                         문서 하나(왼쪽 = 고른 목록 · 없으면 문서 종류로)
 //              /r/<레포>/w[?only=pending|mine]                   작업 기록(왼쪽 = 기록 목록 · 거름)
 //              /r/<레포>/graph                                   좌표 · 그래프
-//              /r/<레포>/manage[/overview|docs|work]             레포 관리
-//              /r/<레포>/manage/curation[/log[/<id>]]            큐레이션 › 대기열 — 탭 둘(대기열 · 이력)
-//              /r/<레포>/manage/drift                           큐레이션 › 진단(리빌딩)
-//              /r/<레포>/manage/forms[/<묶음>/<id>][?tab=]       레포 관리 › 관리 문서 › 문서 추가 › 서식집(탭 · curate)
+//              /r/<레포>/manage[/overview|docs|work]             작업실 › 현황 · 관리 문서 · 작업 레포 연결(write 이상)
+//              /r/<레포>/manage/curation[/log[/<id>]]            작업실 › 대기열 — 탭 둘(대기열 · 이력)
+//              /r/<레포>/manage/drift                           작업실 › 진단(리빌딩)
+//              /r/<레포>/manage/forms[/<묶음>/<id>][?tab=]       작업실 › 관리 문서 › 문서 추가 › 서식집(탭 · curate)
 //              /r/<레포>/manage/docs?add=forms                   → 위 서식집 탭(다음 할 일의 주소)
 //   콘솔       /console[/repos|people|server]                    서버 묶음 넷 · 옛 페이지(workrepos · users · tokens · audit)는 바꿔 쓴다
 //   사이트     그 밖 전부(/ · /manual · /login · /setup · /r)    소개 · 설명서 · 로그인 · 마법사 · 레포 고르기
@@ -18,7 +18,7 @@
 // 서버는 `/r/<레포>/` 아래 아무 주소에나 같은 index.html 을 낸다 — 새 주소에 서버 고칠 것이 없다(개편안 §7.3).
 // React 를 import 하지 않는다(`lib/router.jsx` 의 modeOf 도 이것을 쓴다).
 
-import { NAV, groupOf, currentItem, repoBase, isRecordRest } from './nav.js'
+import { NAV, AREAS, groupOf, areaOf, currentItem, repoBase, isRecordRest } from './nav.js'
 import { can, canRead } from '../lib/roles.js'
 
 const dec = (s) => {
@@ -104,7 +104,8 @@ export function navRepoOf(face, repo, me, last = null) {
   return first ? (typeof first === 'string' ? first : first.name) : null
 }
 
-// 빵부스러기 — [{ label, to? }]. 레포 › 묶음 › 화면(› 이력 id · 서식 id). 콘솔은 서버 › 화면
+// 빵부스러기 — [{ label, to? }]. 레포 › 묶음 › 화면(› 이력 id · 서식 id). 콘솔은 서버 › 화면.
+// 작업실은 묶음(만든다 · 정리한다 · 세운다) 대신 영역 이름 — 「alpha › 작업실 › 대기열」
 // 화면 이름 — 메뉴 항목 이름. 읽기는 왼쪽 목록으로(문서 · 작업 기록), 탭은 그 탭 이름까지
 const SUB_LABEL = { log: '이력', forms: '서식집' }
 const screenLabel = (s) => (s.item.key === 'docs' ? (s.finder?.list === 'records' ? '작업 기록' : '문서') : s.item.label)
@@ -113,7 +114,8 @@ export function crumbOf(s) {
   if (!s || !s.item) return []
   const g = groupOf(s.item.group)
   if (s.face === 'console') return [{ label: g.label }, { label: s.item.label, to: s.item.to() }]
-  const out = [{ label: s.repo, to: repoBase(s.repo) }, { label: g.label }, { label: screenLabel(s), to: s.item.to(s.repo) }]
+  const mid = areaOf(s.item) === 'studio' ? AREAS.find((a) => a.key === 'studio').label : g.label
+  const out = [{ label: s.repo, to: repoBase(s.repo) }, { label: mid }, { label: screenLabel(s), to: s.item.to(s.repo) }]
   if (SUB_LABEL[s.sub]) out.push({ label: SUB_LABEL[s.sub], to: s.item.key === 'queue' ? repoBase(s.repo) + 'manage/curation/log' : repoBase(s.repo) + 'manage/forms' })
   if (s.logId) out.push({ label: s.logId })
   if (s.form) out.push({ label: `${s.form.group}/${s.form.id}` })
@@ -129,7 +131,7 @@ export function titleOf(s) {
 
 // 없는 주소 · 권한 밖 주소 — **그리지 않고 바꿔 쓴다**(replace · D4 — 「권한이 필요합니다」 로 존재를 알리지 않는다).
 //   옛 · 별칭 주소 → 새 주소(alias) · 없는 관리 주소 → 현황 · 그 밖의 없는 주소 → 문서 · 권한 밖 → 문서
-//   관리 문서의 서식집 탭은 큐레이터만 — 아니면 관리 문서 목록으로
+//   작업실은 write 이상 · 관리 문서 · 서식집은 큐레이터 — 아니면 보기로(작업실 검토 G3)
 //   볼 수 없는 레포는 여기서 고치지 않는다 — 서버가 404 를 주고 App 이 `/r?from=` 으로 보낸다(없는 레포와 같은 길)
 //   콘솔의 비관리자는 Console 이 서버의 403 과 같은 문장을 낸다(명부에 관리자가 0명인 서버를 세우는 길을 그 문장이 든다)
 export function redirectOf(s, me = null) {
@@ -137,10 +139,10 @@ export function redirectOf(s, me = null) {
   if (s.alias) return s.alias
   if (s.face === 'repo') {
     const base = repoBase(s.repo)
-    if (!s.item) return s.rest[0] === 'manage' ? base + 'manage' : base
+    // 없는 작업실 주소 → 현황 — 작업실이 없는 사람(viewer)은 곧장 보기로(두 번 바꿔 쓰지 않게)
+    if (!s.item) return s.rest[0] === 'manage' && (!me || can(me, 'write', s.repo)) ? base + 'manage' : base
     if (!me || !canRead(me, s.repo)) return null
     if (!can(me, s.item.need, s.repo)) return base
-    if (s.sub === 'forms' && !can(me, 'curate', s.repo)) return base + 'manage/docs'
     return null
   }
   if (s.face === 'console') return s.item ? null : '/console'

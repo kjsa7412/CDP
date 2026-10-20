@@ -216,7 +216,7 @@ export const api = {
   // 누구인가 · 무엇을 볼 수 있는가 · 역할. `probe` 면 비로그인(401)을 null 로 — 로그인으로 보내지 않는다
   me: ({ probe = false } = {}) => req('/me', { absolute: true, allowStatus: probe ? [401] : [] }).then((j) => (j && !j.error ? j : null)),
 
-  // ── 설치 대장 (§6.7.2) — 등록과 추적. 레포 관리 › 연결된 작업 레포가 이 레포의 행만 그린다
+  // ── 설치 대장 (§6.7.2) — 등록과 추적. 작업실 › 작업 레포 연결이 이 레포의 행만 그린다
   registry: () => req('/workrepos', { absolute: true }),
   // ── 지식 레포 — 볼 수 있는 것의 목록(미러 상태 · 수). 세우기(`POST /repos`)는 없앴다 — 콘솔 `admin.repoNew` 만(화면 · 권한 검토 v0.1 R1)
   repos: () => req('/repos', { absolute: true }),

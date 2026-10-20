@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { can, canRead, curateOf } from '../viewer/src/lib/roles.js'
-import { NAV, navGroups, navItems, currentItem, isRecordId, repoBase } from '../viewer/src/shell/nav.js'
+import { NAV, navGroups, navItems, navAreas, areaNow, areaHome, areaOf, currentItem, isRecordId, repoBase } from '../viewer/src/shell/nav.js'
 import { faceOf, finderOf, screenOf, crumbOf, titleOf, redirectOf, navRepoOf, consoleHref, CONSOLE_PAGES } from '../viewer/src/shell/routes.js'
 
 const repos = (...n) => n.map((name) => ({ name, title: '' }))
@@ -43,14 +43,16 @@ test('can — 판정 하나 · 모르는 값은 거짓', () => {
 
 test('보이는 묶음 — 역할 × 레포 얼굴(V18 · 묶음은 보이는 항목이 있을 때만)', () => {
   const know = '지식:읽기·좌표 · 그래프'
-  const repo = '레포 관리:현황·관리 문서·연결된 작업 레포'
-  const cur = '큐레이션:대기열·진단'
+  const make = '만든다:작업 레포 연결'
+  const tidy = '정리한다:대기열·진단'
+  const build = '세운다:관리 문서 · 서식집·현황'
+  const buildW = '세운다:현황'
   const srv = '서버:현황·지식 레포·사람·서버'
-  assert.deepEqual(groups({ face: 'repo', me: VIEWER, repo: 'alpha' }), [know, repo], 'viewer — 큐레이션 · 서버 묶음은 제목째 없다')
-  assert.deepEqual(groups({ face: 'repo', me: WRITER, repo: 'alpha' }), [know, repo], 'writer — 같다')
-  assert.deepEqual(groups({ face: 'repo', me: CURATOR, repo: 'alpha' }), [know, cur, repo], '그 레포의 큐레이터')
-  assert.deepEqual(groups({ face: 'repo', me: CURATOR, repo: 'gamma' }), [know, repo], '다른 레포에서는 아니다')
-  assert.deepEqual(groups({ face: 'repo', me: ADMIN, repo: 'alpha' }), [know, cur, repo, srv], 'admin — 넷')
+  assert.deepEqual(groups({ face: 'repo', me: VIEWER, repo: 'alpha' }), [know], 'viewer — 보기 하나(작업실 묶음은 제목째 없다 · V18 정정)')
+  assert.deepEqual(groups({ face: 'repo', me: WRITER, repo: 'alpha' }), [know, make, buildW], 'writer — 작업 레포 연결 · 현황')
+  assert.deepEqual(groups({ face: 'repo', me: CURATOR, repo: 'alpha' }), [know, make, tidy, build], '그 레포의 큐레이터')
+  assert.deepEqual(groups({ face: 'repo', me: CURATOR, repo: 'gamma' }), [know, make, buildW], '다른 레포에서는 writer 와 같다')
+  assert.deepEqual(groups({ face: 'repo', me: ADMIN, repo: 'alpha' }), [know, make, tidy, build, srv], 'admin — 전부')
   assert.deepEqual(groups({ face: 'repo', me: null, repo: 'alpha' }), [], '세션이 없으면 아무것도')
   // 로컬 전용 셋(지식 레포 · 동기화 · 진단)은 v1.0 에 없앴다 — 표에 그 항목도 그 표지도 없다
   assert.ok(!NAV.some((it) => it.key.startsWith('local-') || 'local' in it || 'server' in it), '로컬 · 서버 얼굴 표지 없음')
@@ -60,17 +62,43 @@ test('보이는 묶음 — 역할 × 레포 얼굴(V18 · 묶음은 보이는 �
   }
 })
 
+test('영역 셋 — 보기 · 작업실 · 서버(지식 생성 · 작업실 검토 G1~G3)', () => {
+  const areas = (me, face = 'repo', repo = 'alpha') => navAreas({ face, me, repo }).map((a) => a.key)
+  assert.deepEqual(areas(VIEWER), ['read'], 'viewer — 보기 하나 · 스위치 없음')
+  assert.deepEqual(areas(WRITER), ['read', 'studio'])
+  assert.deepEqual(areas(CURATOR), ['read', 'studio'])
+  assert.deepEqual(areas(ADMIN), ['read', 'studio', 'server'])
+  assert.deepEqual(areas(ADMIN, 'console', null), ['server'], '콘솔에 레포가 없으면 서버만')
+  // 왼쪽 메뉴는 지금 영역의 묶음만
+  const at = (area, me = ADMIN) => navGroups({ face: 'repo', me, repo: 'alpha', area }).map((g) => g.label)
+  assert.deepEqual(at('read'), ['지식'])
+  assert.deepEqual(at('studio'), ['만든다', '정리한다', '세운다'])
+  assert.deepEqual(at('server'), ['서버'])
+  assert.deepEqual(at('studio', VIEWER), [], 'viewer 는 작업실 항목 0')
+  // 모든 항목은 영역이 있다 · 보기 영역에는 쓰는 화면이 없다(need 가 read 뿐)
+  for (const it of NAV) assert.ok(['read', 'studio', 'server'].includes(areaOf(it)), it.key)
+  assert.ok(NAV.filter((it) => areaOf(it) === 'read').every((it) => it.need === 'read'), '보기는 read 만')
+  assert.ok(NAV.filter((it) => areaOf(it) === 'studio').every((it) => it.need === 'write' || it.need === 'curate'), '작업실은 write 이상')
+  // 지금 영역
+  assert.equal(areaNow('repo', screenOf({ path: '/r/alpha/d/README.md' }).item), 'read')
+  assert.equal(areaNow('repo', screenOf({ path: '/r/alpha/manage/curation' }).item), 'studio')
+  assert.equal(areaNow('repo', null), 'read', '없는 주소는 보기')
+  assert.equal(areaNow('console', null), 'server')
+  // 영역의 첫 주소 — 큐레이터는 대기열 · writer 는 작업실 첫 항목
+  assert.equal(areaHome('studio', { me: CURATOR, repo: 'alpha' }), '/r/alpha/manage/curation')
+  assert.equal(areaHome('studio', { me: WRITER, repo: 'alpha' }), '/r/alpha/manage/work')
+  assert.equal(areaHome('read', { me: WRITER, repo: 'alpha' }), '/r/alpha/')
+  assert.equal(areaHome('server', { me: ADMIN }), '/console')
+})
+
 test('보이는 묶음 — 콘솔 얼굴 · 메뉴 없는 얼굴', () => {
   // 콘솔 — 메뉴의 레포는 마지막으로 본 레포. 없으면 레포 묶음 없이 서버만
   assert.deepEqual(
     navGroups({ face: 'console', me: ADMIN, repo: null }).map((g) => g.label),
     ['서버']
   )
-  assert.deepEqual(
-    navGroups({ face: 'console', me: ADMIN, repo: 'alpha' }).map((g) => g.label),
-    ['지식', '큐레이션', '레포 관리', '서버']
-  )
-  assert.deepEqual(navGroups({ face: 'console', me: WRITER, repo: 'alpha' }).map((g) => g.label), ['지식', '레포 관리'], '비관리자는 서버 묶음 없음')
+  assert.deepEqual(navGroups({ face: 'console', me: ADMIN, repo: 'alpha', area: 'server' }).map((g) => g.label), ['서버'], '콘솔의 왼쪽 메뉴는 서버 영역')
+  assert.deepEqual(navGroups({ face: 'console', me: WRITER, repo: 'alpha', area: 'server' }), [], '비관리자는 서버 묶음 없음')
   // 사이트 얼굴에는 메뉴가 없다 · 모르는 얼굴(옛 로컬)도 없다 — 판정 없이 다 보이던 갈래가 남지 않게
   assert.deepEqual(navGroups({ face: 'site', me: ADMIN, repo: 'alpha' }), [])
   assert.deepEqual(navGroups({ face: 'local', me: null, repo: null }), [])
@@ -104,10 +132,10 @@ test('주소 — 메뉴의 to 와 match 가 짝이다(눌러 간 곳이 그 항�
   assert.deepEqual(CONSOLE_PAGES, ['overview', 'repos', 'people', 'server'])
 })
 
-test('메뉴 수 — 화면 22 → 16(제품화 2 ⑥ · D6): viewer 5 · writer 5 · curator 7 · admin 11', () => {
+test('메뉴 수 — viewer 2 · writer 4 · curator 7 · admin 11(작업실 검토 G3 — 작업실은 write 이상)', () => {
   const n = (me) => navItems({ face: 'repo', me, repo: 'alpha' }).length
-  assert.equal(n(VIEWER), 5)
-  assert.equal(n(WRITER), 5)
+  assert.equal(n(VIEWER), 2)
+  assert.equal(n(WRITER), 4)
   assert.equal(n(CURATOR), 7)
   assert.equal(n(ADMIN), 11)
   assert.equal(new Set(NAV.map((it) => it.key)).size, NAV.length, '키는 하나씩')
@@ -186,8 +214,12 @@ test('없는 주소 · 권한 밖 주소 — 그리지 않고 바꿔 쓴다(D4)'
   const at = (path) => screenOf({ path })
   assert.equal(redirectOf(at('/r/alpha/manage/curation'), WRITER), '/r/alpha/', 'writer 가 대기열 주소 → 문서')
   assert.equal(redirectOf(at('/r/alpha/manage/drift'), WRITER), '/r/alpha/', 'writer 가 진단 주소 → 문서(어긋남 진단은 큐레이터의 것)')
-  assert.equal(redirectOf(at('/r/alpha/manage/forms/public-si/DE_431'), VIEWER), '/r/alpha/manage/docs', 'viewer 가 서식집 탭 → 관리 문서 목록')
-  assert.equal(redirectOf(at('/r/alpha/manage/forms'), WRITER), '/r/alpha/manage/docs', 'writer 도 — 서식집은 문서를 들이는 큐레이터의 것')
+  assert.equal(redirectOf(at('/r/alpha/manage/forms/public-si/DE_431'), VIEWER), '/r/alpha/', 'viewer 가 서식집 탭 → 보기(작업실이 없다)')
+  assert.equal(redirectOf(at('/r/alpha/manage/forms'), WRITER), '/r/alpha/', 'writer 도 — 관리 문서 · 서식집은 큐레이터의 것')
+  assert.equal(redirectOf(at('/r/alpha/manage'), VIEWER), '/r/alpha/', 'viewer 가 현황 → 보기(V18 정정)')
+  assert.equal(redirectOf(at('/r/alpha/manage/work'), VIEWER), '/r/alpha/', 'viewer 가 작업 레포 연결 → 보기')
+  assert.equal(redirectOf(at('/r/alpha/manage/work'), WRITER), null, 'writer 는 작업 레포 연결')
+  assert.equal(redirectOf(at('/r/alpha/manage/docs'), WRITER), '/r/alpha/', 'writer 가 관리 문서 → 보기(읽기는 보기의 「읽기」)')
   assert.equal(redirectOf(at('/r/alpha/manage/forms'), CURATOR), null)
   assert.equal(redirectOf(at('/r/alpha/manage/curation/log'), WRITER), '/r/alpha/', 'writer 가 이력 주소 → 문서')
   assert.equal(redirectOf(at('/r/alpha/manage/curation'), CURATOR), null, '큐레이터는 그대로')
@@ -207,14 +239,14 @@ test('없는 주소 · 권한 밖 주소 — 그리지 않고 바꿔 쓴다(D4)'
 
 test('빵부스러기 · 탭 제목 · 메뉴의 레포', () => {
   const s = screenOf({ path: '/r/alpha/manage/curation/log/2026-1007-c' })
-  assert.deepEqual(crumbOf(s).map((c) => c.label), ['alpha', '큐레이션', '대기열', '이력', '2026-1007-c'])
+  assert.deepEqual(crumbOf(s).map((c) => c.label), ['alpha', '작업실', '대기열', '이력', '2026-1007-c'])
   assert.equal(crumbOf(s)[0].to, '/r/alpha/')
   assert.equal(titleOf(s), '이력 · alpha · CDP')
   const c = screenOf({ path: '/console/people' })
   assert.deepEqual(crumbOf(c).map((x) => x.label), ['서버', '사람'])
   assert.equal(titleOf(c), '서버 › 사람 · CDP')
   const f = screenOf({ path: '/r/alpha/manage/forms/public-si/DE_431' })
-  assert.deepEqual(crumbOf(f).map((x) => x.label), ['alpha', '레포 관리', '관리 문서', '서식집', 'public-si/DE_431'])
+  assert.deepEqual(crumbOf(f).map((x) => x.label), ['alpha', '작업실', '관리 문서 · 서식집', '서식집', 'public-si/DE_431'])
   assert.deepEqual(crumbOf(screenOf({ path: '/r/alpha/zzz' })), [], '없는 주소는 빵부스러기 없음')
   assert.equal(titleOf(screenOf({ path: '/r/alpha/w' })), '작업 기록 · alpha · CDP', '읽기 — 왼쪽 목록의 이름')
   assert.equal(titleOf(screenOf({ path: '/r/alpha/' })), '문서 · alpha · CDP')

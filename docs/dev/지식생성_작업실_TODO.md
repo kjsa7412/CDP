@@ -6,12 +6,12 @@
 
 ## v1.6.0 영역 분리 — 기능 없이 경계만 옮긴다(G1~G4)
 
-- [ ] A1 `viewer/src/shell/nav.js` — 항목에 `area: read|studio|server` 를 단다. 작업실 묶음을 만든다 / 정리한다 / 세운다로 나누고 「레포 관리」 이름을 없앤다. 작업실 항목의 need 를 write 이상으로 올린다(G3)
-- [ ] A2 왼쪽 메뉴의 영역 스위치(write 이상만) · 영역마다 마지막 주소를 history state 로 기억 · 권한 밖 주소는 `redirectOf` 가 보기 `/` 로
-- [ ] A3 보기에서 관리 입구 걷기 — `DocView.jsx` 의 어긋남 칩(X1) · `StatusBar.jsx` 의 「대기 n」 · 「미등재」 를 글자로만(X4) · `Overview.jsx:79` 의 검증 단추(X3)
-- [ ] A4 `core/nextsteps.js` 의 `who` 거름 — 보기의 「시작하기」 는 read 줄만, 작업실 현황은 write · curate 줄(X2)
-- [ ] A5 시험 — `test/nav.test.mjs` 로 역할 × 영역 항목 수를 고정(viewer 보기 2 · 작업실 0) · 보기 화면 `[data-ui=drift]` 0 · 얼굴 순회의 전체 새로고침 0
-- [ ] A6 문서 — 화면 설계서 §4.2 V18 정정 상자 · 좌측메뉴 셸 L1 정정 · 사용자 · 큐레이터 설명서의 메뉴 이름
+- [x] A1 `viewer/src/shell/nav.js` — 항목에 `area: read|studio|server` 를 단다. 작업실 묶음을 만든다 / 정리한다 / 세운다로 나누고 「레포 관리」 이름을 없앤다. 작업실 항목의 need 를 write 이상으로 올린다(G3)
+- [x] A2 왼쪽 메뉴의 영역 스위치(write 이상만) · 영역마다 마지막 주소를 history state 로 기억 · 권한 밖 주소는 `redirectOf` 가 보기 `/` 로
+- [x] A3 보기에서 관리 입구 걷기 — `DocView.jsx` 의 어긋남 칩(X1) · `StatusBar.jsx` 의 「대기 n」 · 「미등재」 를 글자로만(X4) · `Overview.jsx:79` 의 검증 단추(X3)
+- [x] A4 `core/nextsteps.js` 의 `who` 거름 — 보기의 「시작하기」 는 read 줄만, 작업실 현황은 write · curate 줄(X2)
+- [x] A5 시험 — `test/nav.test.mjs` 로 역할 × 영역 항목 수를 고정(viewer 보기 2 · 작업실 0) · 보기 화면 `[data-ui=drift]` 0 · 얼굴 순회의 전체 새로고침 0
+- [x] A6 문서 — 화면 설계서 §4.2 V18 정정 상자 · 좌측메뉴 셸 L1 정정 · 사용자 · 큐레이터 설명서의 메뉴 이름
 
 ## v1.7.0 ingest 1 — 결정론 · save 경로(G5 · G10~G12 · G14~G16)
 

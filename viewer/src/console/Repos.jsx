@@ -312,7 +312,7 @@ export default function Repos({ say, route }) {
                         {!r.curation ? (
                           <span className="dim">—</span>
                         ) : r.curation.queue > 0 ? (
-                          <Link className="cchip cchip--queued" to={'/r/' + encodeURIComponent(r.name) + '/manage/curation'} title={`${r.name} › 큐레이션 › 대기열`}>
+                          <Link className="cchip cchip--queued" to={'/r/' + encodeURIComponent(r.name) + '/manage/curation'} title={`${r.name} › 작업실 › 대기열`}>
                             {r.curation.queue}
                           </Link>
                         ) : (
@@ -539,7 +539,7 @@ function NewRepo({ data, busy, onClose, onOk }) {
               {f.origin.trim() && !originOk(f.origin.trim()) && <span className="field__h field__h--bad">http(s)://… 또는 ssh://git@… 모양이어야 한다 — 비우면 origin 없이 세운다</span>}
             </Field>
             <div className="anote">
-              <b>빈 레포로 시작한다</b> — 사용자는 작업 기록만 쌓고, 관리 문서는 큐레이터가 기록을 보고 <b>큐레이션 › 서식집</b>에서 골라 세운다. 서식에서
+              <b>빈 레포로 시작한다</b> — 사용자는 작업 기록만 쌓고, 관리 문서는 큐레이터가 기록을 보고 <b>작업실 › 관리 문서 · 서식집</b>에서 골라 세운다. 서식에서
               가져온 문서는 제목과 머리말뿐이다(예시 · 작성지침은 서식집에 남는다).
             </div>
           </>

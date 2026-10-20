@@ -112,6 +112,36 @@ button.snav__repobtn[aria-expanded='true'] {
   min-width: 280px;
 }
 
+/* 영역 스위치 — 보기 · 작업실 · 서버(지식 생성 · 작업실 검토 G1). 세그 하나 · 무채색 · 지금 영역만 떠 보인다 */
+.snav__areas {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 4px;
+  padding: 2px;
+  background: var(--surface-3);
+  border-radius: var(--r-md);
+}
+.snav__area {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  height: 26px;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  border-radius: var(--r-sm, 6px);
+}
+.snav__area:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.snav__area[aria-current='true'] {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--raised);
+  box-shadow: var(--shadow-thumb);
+}
+
 /* 묶음 · 항목 */
 .snav__nav {
   flex: 1;
@@ -395,6 +425,9 @@ button.snav__repobtn[aria-expanded='true'] {
   }
   html[data-nav='rail'] .snav__fold {
     margin: 0;
+  }
+  html[data-nav='rail'] .snav__areas {
+    flex-direction: column;
   }
   html[data-nav='rail'] .snav__repobtn {
     justify-content: center;

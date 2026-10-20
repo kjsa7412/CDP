@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom'
 import { api, currentRepo } from '../lib/api.js'
 import { load, peek } from '../lib/cache.js'
 import { renderMarkdown, enhance, sectionSlug, bindImages } from '../lib/markdown.js'
-import { PendingChip, PendingBlock, DriftChips } from '../features/curation/marks.jsx'
+import { PendingChip, PendingBlock } from '../features/curation/marks.jsx'
 import { kbd } from '../lib/keys.js'
 import { repoPath } from '../../../core/repopath.js'
 import { summaryText } from '../lib/format.js'
@@ -33,9 +33,6 @@ export default function DocView({
   onToggleToc,
   visual = null,
   onVisual = () => {},
-  // 큐레이터면 섹션 제목에 어긋남 칩(근거 없음 · 복제 · 비대 · 일지형)을 같이 그린다 — 「진단」 과 같은 계산
-  curator = false,
-  driftHref = null,
 }) {
   // 본문은 캐시(화면 · 권한 검토 v0.1 R8) — 관리 · 그래프 · 콘솔에 갔다 돌아오면 「불러오는 중…」 없이 그 자리다
   const docKey = (id) => 'api:' + currentRepo() + '/docs/' + id
@@ -126,35 +123,6 @@ export default function DocView({
     ]
   })
 
-  // ── 어긋남 — 큐레이터에게만 섹션 제목에 칩(리빌딩 검토 §5.1). 미반영 칩과 같은 방식(자리를 만들어 포털) ──
-  const [driftHosts, setDriftHosts] = useState([])
-  useLayoutEffect(() => {
-    const root = bodyRef.current
-    const secs = curator ? (doc?.sectionStates || []).filter((s) => s && s.drift) : []
-    if (!root || !rendered || !secs.length) {
-      setDriftHosts((h) => (h.length ? [] : h))
-      return
-    }
-    const hosts = []
-    const seen = new Set()
-    for (const s of secs) {
-      const slug = sectionSlug(rendered.toc, s.value)
-      if (!slug || seen.has(slug)) continue
-      const h = root.querySelector('#' + CSS.escape(slug))
-      if (!h) continue
-      seen.add(slug)
-      const el = document.createElement('span')
-      el.dataset.ui = 'drift'
-      el.className = 'dchip-host'
-      h.appendChild(el)
-      hosts.push({ key: slug, el, sec: s })
-    }
-    setDriftHosts(hosts)
-    return () => {
-      for (const x of hosts) x.el.remove()
-    }
-  }, [rendered, doc?.sectionStates, curator])
-  const driftPortals = driftHosts.map((x) => createPortal(<DriftChips d={x.sec.drift} to={driftHref} />, x.el, x.key + ':d'))
 
   // 렌더 후처리 — 하이라이팅·4섹션 마킹·좌표 링크(§19 · §27.8)
   useEffect(() => {
@@ -400,7 +368,6 @@ export default function DocView({
 
           <article className="doc" ref={bodyRef} dangerouslySetInnerHTML={{ __html: rendered.html }} />
           {pendPortals}
-          {driftPortals}
 
           {/* 첨부 — 프로토콜 §8.5 의 3계층 중 가장 긴 읽기가 여기서 일어난다 */}
           {doc.attachments.length > 0 && (

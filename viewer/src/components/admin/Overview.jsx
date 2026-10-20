@@ -1,4 +1,4 @@
-// 레포 관리 › 현황 — **질문은 하나다: 지금 CDP 를 쓸 수 있는 상태인가.**
+// 작업실 › 현황 — **질문은 하나다: 지금 CDP 를 쓸 수 있는 상태인가.**
 //
 // 맨 위는 「시작하기」(다음 할 일 — 서버가 역할 × 상태로 계산 · 다 끝나면 없다). 카드마다 답이 있고, 각 카드는 자기 메뉴로 간다.
 // 여기서 고치지 않는다. 큐레이션은 대기열로 가는 한 줄 · 작업 레포 카드는 등록이 있을 때만(없으면 시작하기가 말한다).
@@ -6,7 +6,7 @@
 // **큐레이션 카드**(개편안 S6) — 대기 · 가장 오래된 · 미반영 섹션 · 마지막. 옛 「문서 상태 › 파생 남은 섹션」(오류였다)이 이것으로
 // 바뀌었다 — 관리 문서는 큐레이션으로만 바뀌고(I6) 늦은 반영은 막는 오류가 아니라 **상태**다(I7). 서버가 값을 안 내면 카드가 없다.
 // 깨진 섹션 · 미등재는 `/api/status` 그대로 「문서 상태」 에 남는다.
-// 내려받기(zip)는 읽기 화면의 빈 상태로 갔다 — 읽는 사람의 일이라 레포 관리에 둘 것이 아니었다.
+// 내려받기(zip)는 읽기 화면의 빈 상태로 갔다 — 읽는 사람의 일이라 작업실에 둘 것이 아니었다.
 // 없는 상태를 그리지 않는다(불변조건 7). 알림을 만들지 않는다(설계서 제4부) — 그 근거는 설계서에 있고 화면에는 없다(안내 글 규칙 ④).
 
 import { api, currentRepo } from '../../lib/api.js'
@@ -24,7 +24,7 @@ const STALE_DAYS = 14
 // 미러 상태 다섯 — 사실만(동시 기록 검토 v0.1 §5.7). 고치는 것은 서버 › 지식 레포.
 const MIRROR = { ok: [null, '최신 — origin 과 같다'], lag: ['warn', 'origin 에 못 보냄'], diverged: ['bad', 'origin 과 갈림'], behind: ['warn', 'origin 이 앞서 있다'], off: [null, '원격 없음'] }
 
-export default function Overview({ repo, me = null, onCheck }) {
+export default function Overview({ repo, me = null }) {
   // 전부 캐시(화면 · 권한 검토 v0.1 R8) — 탭을 오가도 「읽는 중…」 이 다시 뜨지 않는다. 키는 레포 + 경로.
   // 이 레포의 미러 상태는 `/repos` 의 자기 행(사유 포함 · 상태바와 **같은 키** — 요청 하나).
   // 작업 레포는 **대장**(`/workrepos`)의 이 레포 것 — 연결된 작업 레포 화면과 같은 키.
@@ -76,7 +76,7 @@ export default function Overview({ repo, me = null, onCheck }) {
         </Card>
 
         {/* save 는 **그 save 가 새로 만든 오류**로만 막힌다 — 레포에 원래 있던 오류는 경고로 싣는다(v1.0 V21) */}
-        <Card title="검증" hint="오류를 새로 만드는 save 는 거절된다" actions={<Btn onClick={onCheck}>검사 결과</Btn>}>
+        <Card title="검증" hint="오류를 새로 만드는 save 는 거절된다 · 결과는 상단 「검증」">
           <Row label="오류" mark={c.error > 0 ? 'bad' : null}>
             <b className="num">{c.error}</b> 건
           </Row>
@@ -105,7 +105,7 @@ export default function Overview({ repo, me = null, onCheck }) {
       {repo?.curation?.queue > 0 && !can(me, 'curate', rk) && <CurationLine cur={repo.curation} />}
 
       {repos.length > 0 && (
-        <Card title="연결된 작업 레포" actions={<Btn onClick={() => navigate(repoBase(rk) + 'manage/work')}>자세히</Btn>}>
+        <Card title="작업 레포 연결" actions={<Btn onClick={() => navigate(repoBase(rk) + 'manage/work')}>자세히</Btn>}>
           {/* 대장의 상태 이름 셋 — 최신 · 낡음 · 미설치(§6.7.2) */}
           <Row label="설치 상태" mark={cnt('낡음') || cnt('미설치') ? 'warn' : null}>
             등록 <b className="num">{repos.length}</b>곳 · 최신 <b className="num">{cnt('최신')}</b>

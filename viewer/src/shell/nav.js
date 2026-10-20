@@ -2,6 +2,10 @@
 // 전부 이 표를 본다. 전에는 TopBar 의 `items` · `AdminView.MENU` · `Console.MENU` 셋이 따로 있었고 역할 판정이 열 곳에
 // 흩어져 있어 역할별 메뉴를 지킬 자리가 없었다.
 //
+// **영역 셋**(지식 생성 · 작업실 검토 v0.1 G1) — 보기(읽는다 · 쓰는 단추 없음) · 작업실(만들고 고친다 · write 이상) · 서버(admin).
+// 영역은 묶음이 정하고(`GROUPS[].area`), 왼쪽 메뉴는 지금 영역의 묶음만 그린다 — 영역은 메뉴 맨 위 스위치로 고른다.
+// 주소는 그대로다(L2) — 보기 `/r/<레포>/…` · 작업실 `/r/<레포>/manage/…` · 서버 `/console/…`.
+//
 // 항목 하나 — { key, group, label, icon, need, scope, to(repo), match(rest, ctx), tab?, page?, badge? }
 //   need    'read' · 'write' · 'curate' · 'admin' — 판정은 `lib/roles.js` 의 `can` 하나(V18 — 묶음이 아니라 항목마다)
 //   scope   'repo'   레포 하나의 것 — 주소 `/r/<레포>/…` · rest 는 레포 뒤 조각
@@ -14,10 +18,19 @@
 
 import { can } from '../lib/roles.js'
 
+// 작업실 묶음은 **작업의 성격**으로 가른다(G4) — 만든다 · 정리한다(매일) · 세운다(가끔). 옛 「레포 관리」 는 viewer 가 들어가는
+// 「관리」 였다(X8) — 이름째 없앴다
 export const GROUPS = [
-  { key: 'know', label: '지식' },
-  { key: 'curation', label: '큐레이션' },
-  { key: 'repo', label: '레포 관리' },
+  { key: 'know', label: '지식', area: 'read' },
+  { key: 'make', label: '만든다', area: 'studio' },
+  { key: 'tidy', label: '정리한다', area: 'studio' },
+  { key: 'build', label: '세운다', area: 'studio' },
+  { key: 'server', label: '서버', area: 'server' },
+]
+
+export const AREAS = [
+  { key: 'read', label: '보기' },
+  { key: 'studio', label: '작업실' },
   { key: 'server', label: '서버' },
 ]
 
@@ -58,36 +71,39 @@ export const NAV = [
     match: (rest) => rest[0] === 'graph' && rest.length === 1,
   },
 
-  // ── 큐레이션 — 매일 바꾼다 · 큐레이터(레포별 curate) ──
+  // ── 작업실 › 만든다 — 지식을 들이는 쪽 · write ──
+  {
+    key: 'linked', group: 'make', label: '작업 레포 연결', icon: 'plug', need: 'write', scope: R, tab: 'work',
+    to: (r) => repoBase(r) + 'manage/work',
+    match: (rest) => manage(rest, 'work'),
+  },
+
+  // ── 작업실 › 정리한다 — 매일 · 큐레이터(레포별 curate) ──
   // 대기열 — 탭 둘(대기열 · 이력). 이력의 펼친 기록이 주소다(`log/<id>`)
   {
-    key: 'queue', group: 'curation', label: '대기열', icon: 'hourglass', need: 'curate', scope: R, badge: 'queue', tab: 'curation',
+    key: 'queue', group: 'tidy', label: '대기열', icon: 'hourglass', need: 'curate', scope: R, badge: 'queue', tab: 'curation',
     to: (r) => repoBase(r) + 'manage/curation',
     match: (rest) => manage(rest, 'curation') || (manageAny(rest, 'curation') && rest[2] === 'log' && rest.length <= 4),
   },
   // 진단 — 반영된 뒤 어긋난 정본(리빌딩 검토 §5.1). 미반영(대기열)과 다르다 · 매일이 아니라 가끔이라 묶음의 아래
   {
-    key: 'drift', group: 'curation', label: '진단', icon: 'warn', need: 'curate', scope: R, tab: 'drift',
+    key: 'drift', group: 'tidy', label: '진단', icon: 'warn', need: 'curate', scope: R, tab: 'drift',
     to: (r) => repoBase(r) + 'manage/drift',
     match: (rest) => manage(rest, 'drift'),
   },
 
-  // ── 레포 관리 — 이 레포 하나 · 읽기면 보인다(쓰는 단추만 write · 지우기 · 서식집은 curate — 화면 안에서) ──
+  // ── 작업실 › 세운다 — 가끔 · 문서의 틀(관리 문서 · 서식집)은 큐레이터 · 현황은 write ──
+  // 관리 문서 — 탭 둘(목록 · 문서 추가 › 서식집). 읽기는 보기의 「읽기」 가 한다 — 여기는 문서를 고르고 · 더하고 · 지우는 곳
   {
-    key: 'overview', group: 'repo', label: '현황', icon: 'check', need: 'read', scope: R, tab: 'overview',
-    to: (r) => repoBase(r) + 'manage',
-    match: (rest) => rest[0] === 'manage' && (rest.length === 1 || manage(rest, 'overview')),
-  },
-  // 관리 문서 — 탭 둘(목록 · 문서 추가 › 서식집). 서식집 탭은 큐레이터만(routes.redirectOf)
-  {
-    key: 'managed', group: 'repo', label: '관리 문서', icon: 'managed', need: 'read', scope: R, tab: 'docs',
+    key: 'managed', group: 'build', label: '관리 문서 · 서식집', icon: 'managed', need: 'curate', scope: R, tab: 'docs',
     to: (r) => repoBase(r) + 'manage/docs',
     match: (rest) => manage(rest, 'docs') || (manageAny(rest, 'forms') && (rest.length === 2 || rest.length === 4)),
   },
+  // 현황 — 미러 · 검증 · 문서 상태 · 「시작하기」(write · curate 줄). viewer 의 숫자는 보기 첫 화면이 그린다(V18 정정)
   {
-    key: 'linked', group: 'repo', label: '연결된 작업 레포', icon: 'plug', need: 'read', scope: R, tab: 'work',
-    to: (r) => repoBase(r) + 'manage/work',
-    match: (rest) => manage(rest, 'work'),
+    key: 'overview', group: 'build', label: '현황', icon: 'check', need: 'write', scope: R, tab: 'overview',
+    to: (r) => repoBase(r) + 'manage',
+    match: (rest) => rest[0] === 'manage' && (rest.length === 1 || manage(rest, 'overview')),
   },
 
   // ── 서버 — 서버 전부 · admin(주소는 `/console/…`) ──
@@ -112,10 +128,37 @@ export function navItems({ face, me = null, repo = null }) {
   return NAV.filter((it) => can(me, it.need, it.scope === R ? repo : null))
 }
 
-// 묶음 — **보이는 항목이 하나라도 있을 때만** 제목째 그린다. 권한 밖 묶음을 회색으로 보이지 않는다(D4)
-export function navGroups(args) {
+// 항목의 영역 — 묶음이 정한다
+export const areaOf = (it) => (it ? groupOf(it.group)?.area || null : null)
+
+// 묶음 — **보이는 항목이 하나라도 있을 때만** 제목째 그린다. 권한 밖 묶음을 회색으로 보이지 않는다(D4).
+// `area` 를 주면 그 영역의 묶음만(왼쪽 메뉴) · 안 주면 전부(빵부스러기 · 시험)
+export function navGroups({ area = null, ...args }) {
   const items = navItems(args)
-  return GROUPS.map((g) => ({ ...g, items: items.filter((it) => it.group === g.key) })).filter((g) => g.items.length > 0)
+  return GROUPS.filter((g) => !area || g.area === area)
+    .map((g) => ({ ...g, items: items.filter((it) => it.group === g.key) }))
+    .filter((g) => g.items.length > 0)
+}
+
+// 이 사람이 고를 수 있는 영역 — 항목이 하나라도 보이는 영역만. **둘 이상일 때만 스위치를 그린다**(viewer 는 보기 하나라 스위치가 없다)
+export function navAreas(args) {
+  const items = navItems(args)
+  return AREAS.filter((a) => items.some((it) => areaOf(it) === a.key))
+}
+
+// 지금 영역 — 콘솔은 서버 · 레포는 항목의 영역(없는 주소는 보기)
+export function areaNow(face, item) {
+  if (face === 'console') return 'server'
+  return areaOf(item) || 'read'
+}
+
+// 영역의 첫 주소 — 처음 들어갈 때(기억한 주소가 없을 때). 작업실은 큐레이터면 대기열 · 아니면 첫 항목
+export function areaHome(area, { me = null, repo = null } = {}) {
+  if (area === 'server') return '/console'
+  if (area === 'read') return repoBase(repo)
+  const items = navItems({ face: 'repo', me, repo }).filter((it) => areaOf(it) === 'studio')
+  const first = items.find((it) => it.key === 'queue') || items[0]
+  return first ? first.to(repo) : repoBase(repo)
 }
 
 // 지금 주소의 항목 — 레포 얼굴은 레포 뒤 조각, 콘솔은 `console` 뒤 조각
