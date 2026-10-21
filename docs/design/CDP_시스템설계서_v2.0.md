@@ -395,13 +395,13 @@ writer 가 큐레이터만 받는 입력(위 표에서 writer 칸이 — 인 줄
 - 커밋 상한 120초 — 넘으면 git 을 **프로세스 나무째** 죽이고 돌아온 뒤 `index.lock` 이 풀리기를 기다려 **HEAD 로** 판정한다(커밋이 이미 됐으면 성공 · 남이 쥔 잠금이면 두 번까지 다시 · 5분이 지나도 잠겨 있으면 파일을 둔 채 `E_GIT { reason: 'locked' }`).
 - **뮤텍스는 레포당 하나**(`core/lock.js`) — save · 미러 push 큐 · 「origin 과 맞추기」 · 「트리 되돌리기」 가 같은 줄에 선다. 미러 push 는 뮤텍스 밖이다.
 
-### 5.7 들이기 — 묶음 save · 같은 원본(v1.7.0 · [지식 생성 · 작업실 검토](CDP_지식생성_작업실_검토_v0.1.md) G10 · G12)
+### 5.7 들이기 — 묶음 save · 같은 원본(v1.9.0 · [지식 생성 · 작업실 검토](CDP_지식생성_작업실_검토_v0.1.md) G10 · G12)
 
 - **묶음 `saveRecords`** — `records[] { work, assets? }` ≤ 20 · `vocab`(더하기만) · `dryRun` · `skipExisting`. 뮤텍스 한 번 · `loadRepo` 두 번 · 커밋 하나로 N 건을 쓴다(단건을 300 번 부르면 뮤텍스를 수십 분 쥔다 — 실측 585건 3.6초/회). 섹션 · 등록부 · 어휘 연산 · 큐레이션 · 기준선 · 스냅샷 · 세우기는 받지 않는다 — 관리 문서 층은 큐레이터의 단건 save 다(applied 대조가 생기지 않는다). **전부 또는 전무** — 검사 오류는 `E_CHECK { ids }`. 미러는 기다리지 않는다(`queued`).
 - **같은 원본** — 정형 출처 `<이름>@<commit|->/<경로>#blob:<git blob sha>`(`core/provenance.js`). 같은 blob 의 기록이 있으면 단건 save 도 묶음도 뮤텍스 안에서 `E_EXISTS { existing }` — 두 사람이 같은 폴더를 동시에 들여도 하나만 들어간다. `skipExisting` 이면 묶음은 건너뛰고 `skipped` 로 답한다(다시 돌리기). 손으로 적은 출처(blob 없음)는 비교하지 않는다.
 - 원본이 바뀌면 **새 기록**이다 — 머리줄에 「이전 판 `<id>`」. `supersedes` 는 쓰지 않는다(정정 전용 · G11).
 - 들인 기록의 대기 나이는 태그 `ingest/<YYYYMMDD>-<해시>` 의 날부터 잰다(원문 날짜가 아니다 · `curation.ingestedOf`). 대기열 줄에 `run` — 화면이 run 으로 접는다.
-- **판단 단계(v1.8.0)** — `ctx ingest --analyze` 가 사람 PC 의 `claude -p` 를 파일마다 부른다(`core/judge.js`). 허용 도구는 MCP 읽기(match · where · docs · search · term) · Read 뿐 · save · 편집 · 셸은 금지 목록. 초안은 줄 범위 · 날짜 · 좌표 후보와 인용 — 본문을 쓰지 않는다. touches 는 사람이 `review.md` 에서 체크한 것만이고 그 기록에 태그 `ingest-llm`. 나눈 문서는 조각마다 출처 `…#blob:<sha>:<n>`(중복 열쇠도 조각마다).
+- **판단 단계** — `ctx ingest --analyze` 가 사람 PC 의 `claude -p` 를 파일마다 부른다(`core/judge.js`). 허용 도구는 MCP 읽기(match · where · docs · search · term) · Read 뿐 · save · 편집 · 셸은 금지 목록. 초안은 줄 범위 · 날짜 · 좌표 후보와 인용 — 본문을 쓰지 않는다. touches 는 사람이 `review.md` 에서 체크한 것만이고 그 기록에 태그 `ingest-llm`. 나눈 문서는 조각마다 출처 `…#blob:<sha>:<n>`(중복 열쇠도 조각마다).
 - **LLM 판단을 막는 레포** — `ctx serve --no-llm-ingest <레포,…|*>` · serve.json `noLlmIngest`. 묶음 save 가 `ingest-llm` 기록을 `E_FORBIDDEN { need: 'llm' }` 로 거절하고 `/sources` 의 `policy.llm` 이 false · 잡도 판단 옵션으로는 만들지 않는다.
 - **변환** — `core/convert.js`. docx · xlsx · pptx · hwpx 는 Node 로(zip 안 XML — 의존성 없음) · pdf 는 `pdftotext` · doc · xls · ppt · hwp 는 `soffice` 가 사람 PC 에 있을 때. 실패하면 들이지 않는다.
 

@@ -3,9 +3,11 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
-## (다음 판) — v1.9.0
+## v1.9.0
 
-**작업실 마무리.** 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md`(G4 · G16 · G17) · 실행 `docs/dev/지식생성_작업실_TODO.md`.
+**화면을 보기 · 작업실 · 서버로 나누고, 문서 · 폴더 · 레포에서 지식을 들인다(`ctx ingest`).** v1.6 ~ v1.9 의 네 단계를 한 판으로 낸다. 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md` · 실행 `docs/dev/지식생성_작업실_TODO.md`.
+
+### 작업실 마무리(G4 · G16 · G17)
 
 - **화면에서 승인** — 작업실 › 지식 생성 › 잡에서 판단한 파일을 펴 좌표 후보 · 어휘 제안을 체크하고 「승인 저장」. 다음 `ctx ingest --apply` 가 그 승인으로 들인다(review.md 보다 먼저). 서버가 대신 들이지 않는다 — 원문은 그 사람 PC 에 있다
 - **작업실 › 출처**(큐레이터) — 원천 문서 레포 · 지도 검사(`cdp-sources.json`) · 따라가기 누락. 「원천 연결」 은 여기로 옮겼다(관리자 · 재인증) — 콘솔 › 지식 레포의 표에는 「원천 ›」 링크만
@@ -13,7 +15,7 @@
 - `GET /api/<레포>/upstream?op=map|follow`(curate) · `POST /api/<레포>/jobs/<id>/approve`(잡의 주인)
 - **`ctx import-dir` 를 없앴다** — 부르면 `ctx ingest` 로 안내하고 exit 2
 
-## (다음 판) — v1.8.0
+### 들이기 — 변환 · 판단 · 진행
 
 **들이기 — 변환 · 판단 · 진행.** 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md`(G6~G9 · G13 · G19) · 실행 `docs/dev/지식생성_작업실_TODO.md`.
 
@@ -27,7 +29,7 @@
 - **`ctx serve --no-llm-ingest <레포,…|*>`**(serve.json `noLlmIngest`) — 그 레포는 판단을 거친 기록을 받지 않는다
 - serve doctor — 같은 원본의 기록 둘 · 멈춘 잡 · 첨부 staging 크기
 
-## (다음 판) — v1.7.0
+### 들이기 — 결정론 · save 경로
 
 **문서 · 폴더 · 레포에서 지식을 들인다 — `ctx ingest`.** 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md`(G5 · G10~G16) · 실행 `docs/dev/지식생성_작업실_TODO.md`.
 
@@ -41,7 +43,7 @@
 - `ctx import-dir` — 다음 판에 없앤다(첫 줄에 안내 · 같은 일은 `ingest` 가 서버 save 로)
 - 스킬 `cdp-curate` — 들인 기록(태그 `ingest/…`) 판정 절
 
-## (다음 판) — v1.6.0
+### 화면 영역 셋 — 보기 · 작업실 · 서버
 
 **화면을 보기 · 작업실 · 서버 세 영역으로 나눈다.** 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md`(G1~G4) · 실행 `docs/dev/지식생성_작업실_TODO.md`.
 
