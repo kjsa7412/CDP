@@ -78,7 +78,8 @@ test('planIngest — id · 날짜 근거 · 원문 좌표는 tags · 그림은 �
     assert.equal(txt.dateSource, 'mtime')
     const why = Object.fromEntries(p.files.filter((f) => f.kind !== 'record').map((f) => [f.rel, f.reason]))
     assert.match(why['빈.md'], /빈 파일/)
-    assert.match(why['표.xlsx'], /변환 전/)
+    assert.match(why['표.xlsx'], /변환하지 못했다 — zip/, '깨진 xlsx 는 들이지 않는다')
+    assert.match(why['그림/명세.pdf'], /첨부로 간다\(따로는 — 변환하지 못했다/, 'pdf 변환기가 없어도 md 의 첨부로')
     assert.match(why['그림/안씀.png'], /가리키지 않는/)
     assert.match(why['그림/구성 도.png'], /첨부로/)
     assert.equal(p.summary.records, 2)
@@ -281,5 +282,31 @@ test('ctx login · whoami · logout — 토큰을 /me 로 확인 · 서버 주�
     assert.equal(who2.code, 2)
   } finally {
     await S.rm()
+  }
+})
+
+test('planIngest — docx 를 변환해 들인다 · 그림은 그 기록의 첨부 · 머리에 「변환 docx → md」', async () => {
+  const { zip } = await import('../core/zip.js')
+  const W = 'xmlns:w="w" xmlns:r="r" xmlns:a="a"'
+  const doc = `<w:document ${W}><w:body><w:p><w:r><w:t>결정 — 한도 10MB</w:t></w:r></w:p><w:p><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p></w:body></w:document>`
+  const rels = '<Relationships><Relationship Id="rId1" Target="media/image1.png"/></Relationships>'
+  const buf = await zip([
+    { name: 'word/document.xml', data: Buffer.from(doc) },
+    { name: 'word/_rels/document.xml.rels', data: Buffer.from(rels) },
+    { name: 'word/media/image1.png', data: PNG },
+  ])
+  const s = await srcDir({ '2026-09-01 회의.docx': buf })
+  try {
+    const p = await planIngest([s.root], { runId: RUN })
+    const r = p.files[0]
+    assert.equal(r.kind, 'record', r.reason)
+    assert.equal(r.dateSource, 'filename')
+    assert.deepEqual(r.assets.map((a) => [a.name, !!a.buf]), [['image1.png', true]])
+    assert.ok(r.work.body.includes(`![](assets/${r.id}/image1.png)`))
+    assert.match(r.work.body.split('\n')[0], / · 변환 docx → md/)
+    assert.ok(r.work.body.includes('결정 — 한도 10MB'))
+    assert.equal(parseSource(r.work.source).blob, blobSha(buf), '출처는 원본(docx)의 blob')
+  } finally {
+    await s.rm()
   }
 })

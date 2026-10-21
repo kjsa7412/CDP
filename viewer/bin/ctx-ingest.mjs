@@ -17,6 +17,7 @@ import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 import { planIngest, runHash, runIdOf } from '../../core/ingest.js'
+import { tools as convTools } from '../../core/convert.js'
 import { RECORDS_MAX } from '../../core/save.js'
 import { toError } from '../../core/errors.js'
 import { resolveClient, client } from './ctx-login.mjs'
@@ -99,7 +100,9 @@ export async function runIngest(opt, env = process.env) {
 
   let plan
   try {
-    plan = await planIngest(inputs, { include, exclude, maxFiles: opt.maxFiles ? Number(opt.maxFiles) : undefined, runId, known })
+    // 변환기 — docx · xlsx · pptx · hwpx 는 Node 로 늘 · pdf(pdftotext) · doc · hwp(soffice) 는 이 PC 에 있을 때
+    const have = await convTools(env)
+    plan = await planIngest(inputs, { include, exclude, maxFiles: opt.maxFiles ? Number(opt.maxFiles) : undefined, runId, known, have })
   } catch (e) {
     err('ctx ingest: ' + toError(e).message)
     return 2
@@ -109,7 +112,7 @@ export async function runIngest(opt, env = process.env) {
   if (opt.status) return status(plan, { api, base, runId, ledger, serverNote, dir })
 
   if (opt.json && !opt.apply) {
-    out(JSON.stringify({ ...plan, files: plan.files.map(({ work, ...f }) => ({ ...f, assets: (f.assets || []).map(({ abs, ...a }) => a) })) }, null, 2))
+    out(JSON.stringify({ ...plan, files: plan.files.map(({ work, ...f }) => ({ ...f, assets: (f.assets || []).map(({ abs, buf, ...a }) => a) })) }, null, 2))
     return 0
   }
   printPlan(plan, { runId, dir, serverNote, llm: !opt.noLlm })
@@ -206,7 +209,7 @@ async function apply(todo, { api, base, ledger, dir, runId, repo }) {
       const assets = []
       let bad = null
       for (const a of f.assets) {
-        const up = await api.postBin(base + '/assets', await fs.readFile(a.abs))
+        const up = await api.postBin(base + '/assets', a.buf || (await fs.readFile(a.abs)))
         if (!up.ok) {
           bad = `첨부 ${a.rel} 를 올리지 못했다 — ${up.body?.error?.message || 'HTTP ' + up.status}`
           break

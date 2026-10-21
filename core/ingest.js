@@ -4,7 +4,8 @@
 // (`/api/<레포>/records`)로 한다(I2 — 쓰는 길은 save 하나). 옛 `import-dir` 는 로컬 클론에 직접 썼다.
 //
 //   대상       파일 · 폴더(하위를 편다) · git 작업 트리(커밋 · 첫 커밋 날짜 · 작성자를 이력에서)
-//   받는 글    md · markdown · txt — 그 밖(docx · pdf · xlsx · hwp …)은 「변환 전」 으로 건너뛴다(변환은 다음 판 · G8)
+//   받는 글    md · markdown · txt · 그리고 변환한 것(core/convert.js — docx · xlsx · pptx · hwpx 는 늘 · pdf · doc · hwp 는 이 PC 의
+//              도구가 있을 때). 변환에 실패하면 들이지 않는다(까닭을 남긴다) — 그림은 그 기록의 첨부로
 //   id         YYYY-MMDD-<원천 이름>-<경로 조각>-<blob 앞 7자> — **원본에서 정한다**(같은 원본이면 같은 id · 결정론)
 //   date       원문의 날 — 프론트매터 → 파일명 → git 첫 커밋 → mtime. 근거를 남긴다(importdir 와 같은 규칙)
 //   source     `<이름>@<commit|->/<경로>#blob:<sha>` — 중복 판정의 열쇠(core/provenance.js · save 가 판정한다)
@@ -26,6 +27,7 @@ import { CtxError } from './errors.js'
 import { walk, splitFrontmatter, normDate, slugOf, stripLeadingDate, firstH1, toArr, COORD, KNOWN, SKIP_DIRS } from './importdir.js'
 import { blobSha, formatSource } from './provenance.js'
 import { ASSET_EXTS, ASSET_MAX, ASSETS_COUNT_MAX } from './assets.js'
+import { convertFile, CONVERT_EXTS } from './convert.js'
 
 const NL = String.fromCharCode(10)
 export const TEXT_EXTS = ['.md', '.markdown', '.txt']
@@ -183,6 +185,34 @@ async function attachOf(body, { root, rel, id }) {
   return { assets: out, body: rewritten, warnings }
 }
 
+// 변환한 글의 그림 → 그 기록의 첨부(바이트를 들고 간다) · `](<이름>)` 을 `assets/<id>/<이름>` 으로. pdf 는 원본을 같이 싣는다
+function convAssets(c, { abs, rel, id, size }) {
+  const assets = []
+  const warnings = [...(c.warnings || [])]
+  let body = c.md
+  for (const im of c.images || []) {
+    if (assets.length >= ASSETS_COUNT_MAX) {
+      warnings.push(`그림이 ${ASSETS_COUNT_MAX}개를 넘어 나머지는 뺐다`)
+      body = body.split(`](${im.name})`).join('](#)')
+      continue
+    }
+    if (im.buf.length > ASSET_MAX) {
+      warnings.push(`그림 ${im.name} 이 첨부 상한을 넘어 뺐다`)
+      body = body.split(`](${im.name})`).join('](#)')
+      continue
+    }
+    assets.push({ rel: rel + '#' + im.name, name: im.name, buf: im.buf, size: im.buf.length })
+    body = body.split(`](${im.name})`).join(`](assets/${id}/${im.name})`)
+  }
+  if (c.attachSelf && size <= ASSET_MAX && assets.length < ASSETS_COUNT_MAX) {
+    const name = path.posix.basename(rel).replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
+    assets.push({ abs, rel, name, size })
+    const to = `assets/${id}/${name}`
+    body = `원본 — [${name}](${/\s/.test(to) ? `<${to}>` : to})` + NL + NL + body
+  }
+  return { assets, body, warnings }
+}
+
 /**
  * 계획 — 파일을 쓰지 않는다.
  * @param {string[]} inputs  파일 · 폴더
@@ -190,7 +220,7 @@ async function attachOf(body, { root, rel, id }) {
  *           known?: { name: string, path: string, blob: string, id: string }[] }} opt
  *   known — 이미 들인 것(서버의 `/sources` · 이 PC 의 원장). 같은 blob 이면 「있음」 · 같은 경로 다른 blob 이면 이전 판
  */
-export async function planIngest(inputs, { include = [], exclude = [], maxFiles = MAX_FILES, maxChars = MAX_CHARS, now = Date.now(), runId, known = [] } = {}) {
+export async function planIngest(inputs, { include = [], exclude = [], maxFiles = MAX_FILES, maxChars = MAX_CHARS, now = Date.now(), runId, known = [], have = {} } = {}) {
   if (!Array.isArray(inputs) || !inputs.length) throw new CtxError('E_INPUT', '들일 파일 · 폴더를 하나 이상 준다', { field: 'inputs' })
   if (!runId) throw new CtxError('E_INPUT', 'runId 가 없다', { field: 'runId' })
   const inc = include.map(globRe)
@@ -220,9 +250,10 @@ export async function planIngest(inputs, { include = [], exclude = [], maxFiles 
         row.reason = '제외(--exclude)'
         continue
       }
-      if (!TEXT_EXTS.includes(ext)) {
+      const conv = CONVERT_EXTS.includes(ext)
+      if (!TEXT_EXTS.includes(ext) && !conv) {
         // 다른 md 가 그림으로 가리키면 그 기록의 첨부로 간다 — 따로 세지 않는다
-        row.reason = ASSET_EXTS.includes(ext) ? '그림 · 첨부 — 가리키는 md 의 첨부로' : '변환 전 — md · txt 만 들인다(docx · pdf · xlsx 는 다음 판)'
+        row.reason = ASSET_EXTS.includes(ext) ? '그림 · 첨부 — 가리키는 md 의 첨부로' : '받지 않는 형식 — md · txt · docx · xlsx · pptx · hwpx · pdf · doc · hwp 만'
         row.kind = ASSET_EXTS.includes(ext) ? 'asset' : 'skip'
         continue
       }
@@ -233,11 +264,21 @@ export async function planIngest(inputs, { include = [], exclude = [], maxFiles 
       const abs = path.join(t.root, ...rel.split('/'))
       const raw = await fs.readFile(abs)
       const blob = blobSha(raw)
-      const text = readText(raw.toString('utf8').replace(/^﻿/, ''))
       row.blob = blob
       row.size = raw.length
-      if (!text.trim()) {
-        row.reason = '빈 파일'
+      // 변환 — 같은 원본(blob)을 이미 들였으면 변환하지 않는다(soffice 는 느리다)
+      let c = null
+      if (conv && !knownBlob.has(blob)) {
+        try {
+          c = await convertFile(abs, { have })
+        } catch (e) {
+          row.reason = `변환하지 못했다 — ${e.message}`
+          continue
+        }
+      }
+      const text = c ? readText(c.md) : conv ? '' : readText(raw.toString('utf8').replace(/^﻿/, ''))
+      if (!text.trim() && !(conv && knownBlob.has(blob))) {
+        row.reason = c ? '변환했더니 글이 없다' : '빈 파일'
         continue
       }
       if (text.length > maxChars) {
@@ -253,7 +294,7 @@ export async function planIngest(inputs, { include = [], exclude = [], maxFiles 
         continue
       }
       const md = ext !== '.txt'
-      const { fm, body } = md ? splitFrontmatter(text) : { fm: {}, body: text }
+      const { fm, body } = md && !c ? splitFrontmatter(text) : { fm: {}, body: text }
       const base = path.posix.basename(rel).replace(/\.(md|markdown|txt)$/i, '')
       const lead = stripLeadingDate(base)
       const gitRel = g ? g.prefix + rel : null
@@ -275,7 +316,7 @@ export async function planIngest(inputs, { include = [], exclude = [], maxFiles 
       for (let n = 2; ids.has(id); n++) id = idOf(date, t.name, rel, blob) + '-' + n
       ids.add(id)
 
-      const title = String(fm.title || '').trim() || (md ? firstH1(body) : null) || lead.rest || base
+      const title = String(fm.title || '').trim() || c?.title || (md ? firstH1(body) : null) || lead.rest || base
       const writer = fm.author ? String(fm.author).trim() : fc?.author || null
 
       // 좌표 — 추측하지 않는다. 원문이 적은 좌표는 tags 로 보존(큐레이터가 판정)
@@ -291,12 +332,13 @@ export async function planIngest(inputs, { include = [], exclude = [], maxFiles 
       const source = formatSource({ name: t.name, commit, path: rel, blob })
       const prev = knownPath.get(t.name + '\n' + rel) || null
 
-      const att = md ? await attachOf(body, { root: t.root, rel, id }) : { assets: [], body, warnings: [] }
+      const att = c ? convAssets(c, { abs, rel, id, size: raw.length }) : md ? await attachOf(body, { root: t.root, rel, id }) : { assets: [], body, warnings: [] }
       row.warnings.push(...att.warnings)
       const head = [
         `> 들임 — 원문 \`${rel}\`${commit ? ` @ ${commit}` : ''}`,
         writer ? ` · 원문 작성 ${writer}` : '',
         ` · 들인 날 ${today}`,
+        c ? ` · 변환 ${ext.slice(1)} → md` : '',
         dateSource !== 'frontmatter' ? ` · 날짜 근거 ${dateSource}` : '',
         prev ? ` · 이전 판 [\`${prev.id}\`](${prev.id}.md)` : '',
       ].join('')
@@ -333,6 +375,13 @@ export async function planIngest(inputs, { include = [], exclude = [], maxFiles 
   // 그림 · 첨부 — 어느 md 도 가리키지 않으면 건너뜀으로(들이지 않는다)
   const pointed = new Set(files.filter((f) => f.kind === 'record').flatMap((f) => f.assets.map((a) => f.name + '\n' + a.rel)))
   for (const f of files) {
+    if (f.kind === 'record' || f.kind === 'have') continue
+    // 따로는 못 들여도(변환 실패) md 가 가리키면 그 기록의 첨부로 간다
+    if (pointed.has(f.name + '\n' + f.rel)) {
+      f.reason = f.kind === 'asset' ? '가리키는 md 의 첨부로 간다' : `가리키는 md 의 첨부로 간다(따로는 — ${f.reason})`
+      f.kind = 'asset'
+      continue
+    }
     if (f.kind !== 'asset') continue
     if (pointed.has(f.name + '\n' + f.rel)) f.reason = '가리키는 md 의 첨부로 간다'
     else {
