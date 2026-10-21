@@ -356,6 +356,10 @@ ctx ingest list                           이 PC 의 run
 
 ### 6.4 잡 API(`/api/<레포>/jobs`)
 
+> **구현에서 바꿨다(v1.8.0)** — 파일마다 따로 부르는 `plan` · `files/<n>` 대신 **`POST /jobs/<id>/report { phase, files: [{ rel, status, … }] }` 하나**로 모았다(한 번에 여럿 · 같은 rel 은 나중 것이 이긴다).
+> 파일 상태는 planned · drafted · saved · exists · have · skipped · asset · failed. 승인(`approve`)은 v1.9 그대로다 — 지금 승인은 CLI 의 `review.md`.
+> 잡은 `ctx ingest --analyze · --apply` 가 처음 돌 때 스스로 만들고(run.json 에 기억), 화면 「새 들이기」 가 만든 잡은 `--job <id>` 로 잇는다.
+
 | 요청 | 누가 | 하는 것 |
 |---|---|---|
 | `POST /jobs` `{ kind, path, options }` | write | `{ id }` |

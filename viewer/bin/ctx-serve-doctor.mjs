@@ -15,6 +15,8 @@
 // 덮지 않는다. 첫 사용자는 **admin** 이다. 브라우저 `/setup` 이 같은 일을 한다.
 
 import { execFile } from 'node:child_process'
+import { blobOf } from '../../core/provenance.js'
+import { STALL_MS } from '../../core/jobs.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
@@ -30,6 +32,46 @@ import { hereDir } from '../server/runtime.js'
 const NL = String.fromCharCode(10)
 const out = (s = '') => process.stdout.write(s + NL)
 const err = (s = '') => process.stderr.write(s + NL)
+
+
+// 들이기의 흔적(지식 생성 · 작업실 검토 C10) — 같은 원본(blob)이 두 기록에 · 멈춘 잡. 레포를 다 읽지 않고 프론트매터의 source 줄만 본다
+async function ingestHealth(repoPath, name, dataDir, now = Date.now()) {
+  const out = { dup: [], ingested: 0, stopped: 0 }
+  const seen = new Map()
+  for (const n of await fs.readdir(path.join(repoPath, 'work')).catch(() => [])) {
+    if (!n.endsWith('.md')) continue
+    const head = (await fs.readFile(path.join(repoPath, 'work', n), 'utf8').catch(() => '')).slice(0, 4000)
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(head)?.[1] || ''
+    const src = /^source:\s*"?(.+?)"?\s*$/m.exec(fm)?.[1]
+    const key = src ? blobOf(src) : null
+    if (/^tags:.*ingest\//m.test(fm)) out.ingested++
+    if (!key) continue
+    if (seen.has(key)) out.dup.push([seen.get(key), n.replace(/\.md$/, '')])
+    else seen.set(key, n.replace(/\.md$/, ''))
+  }
+  if (dataDir) {
+    const dir = path.join(dataDir, 'jobs', encodeURIComponent(name))
+    for (const n of await fs.readdir(dir).catch(() => [])) {
+      const j = await fs.readFile(path.join(dir, n), 'utf8').then(JSON.parse).catch(() => null)
+      if (j?.state === 'running' && now - Date.parse(j.updated) > STALL_MS) out.stopped++
+    }
+  }
+  return out
+}
+
+// 첨부 staging — 올려 두고 save 에 아직 안 실린 것(24시간 뒤 지워진다)
+async function stagingUse(dataDir) {
+  let bytes = 0
+  let files = 0
+  for (const n of await fs.readdir(path.join(dataDir, 'staging')).catch(() => [])) {
+    if (!n.endsWith('.json')) continue
+    const m = await fs.readFile(path.join(dataDir, 'staging', n), 'utf8').then(JSON.parse).catch(() => null)
+    if (!m) continue
+    bytes += Number(m.size || 0)
+    files++
+  }
+  return { bytes, files }
+}
 
 function git(cwd, args, timeout = 10000) {
   return new Promise((resolve) => {
@@ -204,8 +246,19 @@ export async function doctorRows(opt) {
         const left = []
         for (const rel of TOOL_LAYER) if (await fs.stat(path.join(r.path, rel)).catch(() => null)) left.push(rel)
         if (left.length) warn(`레포 ${r.name} 도구 층`, `옛 도구 층이 남았다(${left.slice(0, 4).join(' · ')}${left.length > 4 ? ' …' : ''}) — 서버를 멈추고 sudo -u cdp -H node <prefix>/bin/ctx.mjs migrate ${r.path}`)
+        // 들이기 — 같은 원본이 두 기록(save 가 막으니 손으로 넣은 것) · 멈춘 잡
+        const ih = await ingestHealth(r.path, r.name, opt.data ? path.resolve(opt.data) : null)
+        if (ih.dup.length) warn(`레포 ${r.name} 들이기`, `같은 원본의 기록 ${ih.dup.length}쌍 — ${ih.dup.slice(0, 3).map((p) => p.join(' = ')).join(' · ')}${ih.dup.length > 3 ? ' …' : ''}. 하나는 정정 기록(supersedes)으로 덮는다`)
+        if (ih.stopped) warn(`레포 ${r.name} 들이기`, `멈춘 잡 ${ih.stopped} — 15분 넘게 보고가 없다. 그 사람이 같은 명령(ctx ingest …)을 다시 돌리면 이어진다`)
       }
     }
+  }
+
+  // ── 첨부 staging — 한 사람 500 MB 상한(assets.js)과 별개로 디스크 전체를 본다
+  if (opt.data) {
+    const st = await stagingUse(path.resolve(opt.data))
+    if (st.bytes > 2 * 1024 * 1024 * 1024) warn('첨부 staging', `${Math.round(st.bytes / 1024 / 1024)} MB · ${st.files}개 — 올리고 save 에 안 실린 것이 많다(24시간 뒤 지워진다)`)
+    else if (st.files) ok('첨부 staging', `${Math.round(st.bytes / 1024 / 1024)} MB · ${st.files}개(24시간 뒤 지워진다)`)
   }
 
   // ── git 자격 스코프 — 평문 PAT 가 넓은 스코프(api)일 수 있다는 것만 말한다

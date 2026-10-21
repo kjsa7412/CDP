@@ -243,6 +243,11 @@ export const api = {
   // ── 리빌딩(리빌딩 검토 §5.1 · §5.2) — 어긋남 진단 · 정본 스냅샷. 둘 다 그 레포의 큐레이터(서버가 막는다)
   drift: (doc = null) => req('/drift' + (doc ? '?doc=' + encodeURIComponent(doc) : '')),
   snapshot: (body) => req('/snapshot', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 409] }),
+  // ── 지식 생성(지식 생성 · 작업실 검토 §6.4) — 잡은 보고일 뿐 · 실행은 사람 PC 의 `ctx ingest`. 남의 잡은 404
+  jobs: (mine = true) => req('/jobs' + (mine ? '?mine=1' : '')),
+  job: (id) => req('/jobs/' + encodeURIComponent(id)),
+  jobNew: (body) => req('/jobs', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 403] }),
+  jobCancel: (id) => req('/jobs/' + encodeURIComponent(id) + '/cancel', { method: 'POST', body: '{}' }),
 }
 
 // ── 레포를 이름으로 — 주소의 레포가 아니라(개편안 §7.1 「api.base() 가 주소의 레포에 묶임」) ─────────

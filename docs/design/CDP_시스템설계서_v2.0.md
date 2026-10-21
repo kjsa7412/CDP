@@ -400,7 +400,10 @@ writer 가 큐레이터만 받는 입력(위 표에서 writer 칸이 — 인 줄
 - **묶음 `saveRecords`** — `records[] { work, assets? }` ≤ 20 · `vocab`(더하기만) · `dryRun` · `skipExisting`. 뮤텍스 한 번 · `loadRepo` 두 번 · 커밋 하나로 N 건을 쓴다(단건을 300 번 부르면 뮤텍스를 수십 분 쥔다 — 실측 585건 3.6초/회). 섹션 · 등록부 · 어휘 연산 · 큐레이션 · 기준선 · 스냅샷 · 세우기는 받지 않는다 — 관리 문서 층은 큐레이터의 단건 save 다(applied 대조가 생기지 않는다). **전부 또는 전무** — 검사 오류는 `E_CHECK { ids }`. 미러는 기다리지 않는다(`queued`).
 - **같은 원본** — 정형 출처 `<이름>@<commit|->/<경로>#blob:<git blob sha>`(`core/provenance.js`). 같은 blob 의 기록이 있으면 단건 save 도 묶음도 뮤텍스 안에서 `E_EXISTS { existing }` — 두 사람이 같은 폴더를 동시에 들여도 하나만 들어간다. `skipExisting` 이면 묶음은 건너뛰고 `skipped` 로 답한다(다시 돌리기). 손으로 적은 출처(blob 없음)는 비교하지 않는다.
 - 원본이 바뀌면 **새 기록**이다 — 머리줄에 「이전 판 `<id>`」. `supersedes` 는 쓰지 않는다(정정 전용 · G11).
-- 들인 기록의 대기 나이는 태그 `ingest/<YYYYMMDD>-<해시>` 의 날부터 잰다(원문 날짜가 아니다 · `curation.ingestedOf`).
+- 들인 기록의 대기 나이는 태그 `ingest/<YYYYMMDD>-<해시>` 의 날부터 잰다(원문 날짜가 아니다 · `curation.ingestedOf`). 대기열 줄에 `run` — 화면이 run 으로 접는다.
+- **판단 단계(v1.8.0)** — `ctx ingest --analyze` 가 사람 PC 의 `claude -p` 를 파일마다 부른다(`core/judge.js`). 허용 도구는 MCP 읽기(match · where · docs · search · term) · Read 뿐 · save · 편집 · 셸은 금지 목록. 초안은 줄 범위 · 날짜 · 좌표 후보와 인용 — 본문을 쓰지 않는다. touches 는 사람이 `review.md` 에서 체크한 것만이고 그 기록에 태그 `ingest-llm`. 나눈 문서는 조각마다 출처 `…#blob:<sha>:<n>`(중복 열쇠도 조각마다).
+- **LLM 판단을 막는 레포** — `ctx serve --no-llm-ingest <레포,…|*>` · serve.json `noLlmIngest`. 묶음 save 가 `ingest-llm` 기록을 `E_FORBIDDEN { need: 'llm' }` 로 거절하고 `/sources` 의 `policy.llm` 이 false · 잡도 판단 옵션으로는 만들지 않는다.
+- **변환** — `core/convert.js`. docx · xlsx · pptx · hwpx 는 Node 로(zip 안 XML — 의존성 없음) · pdf 는 `pdftotext` · doc · xls · ppt · hwp 는 `soffice` 가 사람 PC 에 있을 때. 실패하면 들이지 않는다.
 
 ---
 
@@ -461,7 +464,8 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 | `GET /forms` · `/forms/<묶음>/<번호>` | read | 서식 목록(이 레포가 쓰는 서식은 `used`) · 서식 하나(`stamp` 포함) |
 | `POST /assets` | write | 첨부 올리기(10 MB · png · jpg · gif · webp · pdf · html — 내용으로 가린다 · 24시간 staging · 한 사람이 들고 있는 합 500 MB · 넘으면 413) → `ref` |
 | `POST /records` | write | 들이기의 묶음 save(§5.7) — `ctx ingest --apply` 가 부른다 |
-| `GET /sources[?run=]` | write | 정형 출처를 가진 기록 `{ id, path, blob, state }` — 이전 판 찾기 · `ctx ingest --status` |
+| `GET /sources[?run=]` | write | 정형 출처를 가진 기록 `{ id, path, blob, part, state }` · `policy: { llm }` — 이전 판 찾기 · `ctx ingest --status` |
+| `GET · POST /jobs` · `GET /jobs/<id>` · `POST /jobs/<id>/report · done · cancel` | write | 들이기 잡(§5.7) — 보고일 뿐(실행은 사람 PC) · `<data>/jobs/<레포>/` · 주인과 그 레포의 큐레이터만 본다(남의 것은 404) · 멈춤(15분 무보고)은 읽을 때 센다 |
 | `POST /curate` | **curate** | `{ verdict: 'keep', ids(1~50), reason }` → 큐레이션 기록을 지어 save |
 | `POST /docs-drop` | **curate** | `{ docs(1~10), reason, edits?, reviewed?, dryRun? }` → 정리 기록(`docs-prune`)을 지어 save |
 | `POST /baseline` | **curate** | `{ source, asof?, items, vocab?, managed?, dryRun? }` → 기준선 기록을 지어 save |
@@ -551,7 +555,7 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 | `ctx baseline extract <옛 레포> --doc <문서> [--src --asof --form --to]` · `baseline push <json> --server <주소> --repo <레포>` | 기준선 뽑기 · 올리기(`CDP_TOKEN` = 큐레이터) |
 | `ctx migrate <레포> [--dry --by <이름> --keep-tools]` | 제자리 이행(§10.2) |
 | `ctx login --server <주소> [--token-stdin]` · `whoami` · `logout` | 이 PC 의 CLI 가 붙을 서버 · 토큰(`/me` 로 확인). logout 은 서버 주소만 잊는다(토큰은 작업 레포 MCP 가 쓴다) |
-| `ctx ingest <파일 · 폴더>… --repo <레포> [--glob --exclude --max-files] [--apply [--yes] \| --status]` · `ingest list` | 문서를 작업 기록으로 들이기 — 계획(기본 · 쓰지 않는다) → 묶음 save(§5.7). 상태는 이 PC 의 `~/.cdp/ingest/<run>/` |
+| `ctx ingest <파일 · 폴더>… --repo <레포> [--glob --exclude --max-files] [--analyze [--budget] \| --review \| --apply [--approve registered] [--yes] \| --status]` · `ingest list` · `ingest doctor [--live]` | 문서를 작업 기록으로 들이기 — 계획(기본 · 쓰지 않는다) → 묶음 save(§5.7). 상태는 이 PC 의 `~/.cdp/ingest/<run>/` |
 | `ctx import-dir <원본> --repo <지식레포>` | (곧 없앤다 → `ingest`) md 폴더를 로컬 클론의 `work/` 로 — save 를 비껴간다 |
 
 **없앤 명령** — `mcp`(stdio) · `setup` · `index` · `derive` · `apply` · `sync` · `examples` · `docs drop` · `package`. 부르면 무엇으로 바뀌었는지 한 줄로 답하고 exit 2 다(e252f40).

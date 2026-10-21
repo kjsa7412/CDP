@@ -220,6 +220,22 @@
 .wr-form input:first-child {
   flex: 1 1 200px;
 }
+/* 지식 생성 › 새 들이기 — 줄마다 이름 · 값(Row) · 칸은 등록 칸과 같은 모양 */
+.aform .aform__input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.aform textarea.aform__input {
+  font-family: var(--font-mono);
+  resize: vertical;
+}
 .howto {
   margin-top: 12px;
   padding-top: 12px;

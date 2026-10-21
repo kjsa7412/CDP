@@ -70,6 +70,15 @@ export function ingestedOf(d) {
   return null
 }
 
+// 들인 기록의 run — 태그 `ingest/<runId>`. 대기열이 run 으로 접는다(지식 생성 · 작업실 검토 §5.4)
+export function ingestRunOf(d) {
+  for (const t of d.tags || []) {
+    const m = /^ingest\/(\d{8}-[0-9a-f]+)$/.exec(String(t))
+    if (m) return m[1]
+  }
+  return null
+}
+
 function daysSince(date, today) {
   if (!date) return null
   const at = Date.parse(String(date).slice(0, 10) + 'T00:00:00Z')
@@ -253,6 +262,7 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
     ...slim(d),
     // 대기 나이 — 들인 기록은 들인 날부터(원문 날짜가 아니라)
     ageDays: daysSince(ingestedOf(d) || d.date, today),
+    run: ingestRunOf(d),
     zero: !(d.touches || []).length,
     coords: (d.touches || []).map((c) => ({ coord: c, cls: coordClass(managedIndex, c) })),
   }))

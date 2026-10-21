@@ -43,7 +43,7 @@ test('can — 판정 하나 · 모르는 값은 거짓', () => {
 
 test('보이는 묶음 — 역할 × 레포 얼굴(V18 · 묶음은 보이는 항목이 있을 때만)', () => {
   const know = '지식:읽기·좌표 · 그래프'
-  const make = '만든다:작업 레포 연결'
+  const make = '만든다:지식 생성·작업 레포 연결'
   const tidy = '정리한다:대기열·진단'
   const build = '세운다:관리 문서 · 서식집·현황'
   const buildW = '세운다:현황'
@@ -86,7 +86,7 @@ test('영역 셋 — 보기 · 작업실 · 서버(지식 생성 · 작업실 �
   assert.equal(areaNow('console', null), 'server')
   // 영역의 첫 주소 — 큐레이터는 대기열 · writer 는 작업실 첫 항목
   assert.equal(areaHome('studio', { me: CURATOR, repo: 'alpha' }), '/r/alpha/manage/curation')
-  assert.equal(areaHome('studio', { me: WRITER, repo: 'alpha' }), '/r/alpha/manage/work')
+  assert.equal(areaHome('studio', { me: WRITER, repo: 'alpha' }), '/r/alpha/manage/ingest')
   assert.equal(areaHome('read', { me: WRITER, repo: 'alpha' }), '/r/alpha/')
   assert.equal(areaHome('server', { me: ADMIN }), '/console')
 })
@@ -132,12 +132,12 @@ test('주소 — 메뉴의 to 와 match 가 짝이다(눌러 간 곳이 그 항�
   assert.deepEqual(CONSOLE_PAGES, ['overview', 'repos', 'people', 'server'])
 })
 
-test('메뉴 수 — viewer 2 · writer 4 · curator 7 · admin 11(작업실 검토 G3 — 작업실은 write 이상)', () => {
+test('메뉴 수 — viewer 2 · writer 5 · curator 8 · admin 12(작업실 검토 G3 — 작업실은 write 이상)', () => {
   const n = (me) => navItems({ face: 'repo', me, repo: 'alpha' }).length
   assert.equal(n(VIEWER), 2)
-  assert.equal(n(WRITER), 4)
-  assert.equal(n(CURATOR), 7)
-  assert.equal(n(ADMIN), 11)
+  assert.equal(n(WRITER), 5)
+  assert.equal(n(CURATOR), 8)
+  assert.equal(n(ADMIN), 12)
   assert.equal(new Set(NAV.map((it) => it.key)).size, NAV.length, '키는 하나씩')
 })
 
@@ -194,6 +194,19 @@ test('주소 — 옛 주소는 그대로 열린다 · 탭 주소 · 거름 주�
   assert.equal(consoleHref('overview'), '/console')
   // 옛 로컬 전용 탭 — 레포 얼굴에서도 없는 주소다(셸이 현황으로 바꿔 쓴다)
   for (const tab of ['repo', 'sync', 'diag']) assert.equal(at('/r/alpha/manage/' + tab).item, null, tab)
+})
+
+test('지식 생성 — 목록 · 새 들이기 · 잡 하나의 주소 · viewer 는 보기로', () => {
+  const at = (p) => screenOf({ path: p })
+  assert.equal(at('/r/alpha/manage/ingest').sub, 'list')
+  assert.equal(at('/r/alpha/manage/ingest/new').sub, 'new')
+  const j = at('/r/alpha/manage/ingest/20261021-abc123')
+  assert.equal(j.sub, 'job')
+  assert.equal(j.jobId, '20261021-abc123')
+  assert.deepEqual(crumbOf(j).map((c) => c.label), ['alpha', '작업실', '지식 생성', '20261021-abc123'])
+  assert.equal(at('/r/alpha/manage/ingest/a/b').item, null, '그 아래는 없는 주소')
+  assert.equal(redirectOf(at('/r/alpha/manage/ingest'), VIEWER), '/r/alpha/')
+  assert.equal(redirectOf(at('/r/alpha/manage/ingest/new'), WRITER), null)
 })
 
 test('왼쪽 목록 — 주소가 정한다(범위 칩을 지웠다)', () => {

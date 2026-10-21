@@ -371,6 +371,11 @@ test('ctx ingest --analyze · review · apply — 가짜 claude 로 끝까지: �
     assert.equal(detail.files['a.md'].status, 'saved')
     assert.equal(detail.files['c.md'].status, 'skipped', '판단 「제외」')
     assert.equal(detail.counts.queued, 4, '들인 기록이 대기열에')
+    const queue = await (await fetch(S.url + '/api/kb/queue', { headers: H })).json()
+    const runs = new Set(queue.items.filter((x) => x.run).map((x) => x.run))
+    assert.equal(runs.size, 1, '대기열 줄에 run — 화면이 run 으로 접는다')
+    assert.equal(queue.items.filter((x) => x.run).length, 4)
+    assert.ok(queue.items.find((x) => !x.run), '사람의 기록(씨앗)은 run 이 없다')
     const W = { authorization: 'Bearer ' + S.writerToken, 'content-type': 'application/json' }
     assert.equal((await fetch(S.url + '/api/kb/jobs/' + j.id, { headers: W })).status, 404, '남의 잡은 없는 것')
     assert.equal((await (await fetch(S.url + '/api/kb/jobs', { headers: W })).json()).jobs.length, 0)

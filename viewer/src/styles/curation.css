@@ -506,3 +506,8 @@ button.kpi:hover {
 .fd__seg a[aria-selected='true'] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
 .fd__segn { font-size: 11px; color: var(--text-3); font-weight: 400; }
 .fd__segq { font-size: 10.5px; font-weight: 700; color: var(--pending); background: var(--pending-bg); border-radius: 9px; padding: 0 6px; line-height: 16px; }
+
+/* 대기열 — 들인 기록의 run 머리줄 · 펼친 안쪽 줄(지식 생성 · 작업실 검토 §5.4) */
+.qrun td { background: var(--surface-2, var(--surface)); cursor: pointer; }
+.qrun .qtable__title { font-weight: 600; }
+.qrun__item td:nth-child(2) { padding-left: 28px; }

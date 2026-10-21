@@ -7,6 +7,7 @@
 //              /r/<레포>/w[?only=pending|mine]                   작업 기록(왼쪽 = 기록 목록 · 거름)
 //              /r/<레포>/graph                                   좌표 · 그래프
 //              /r/<레포>/manage[/overview|docs|work]             작업실 › 현황 · 관리 문서 · 작업 레포 연결(write 이상)
+//              /r/<레포>/manage/ingest[/new|/<잡 id>]            작업실 › 지식 생성 — 목록 · 새 들이기 · 잡 하나
 //              /r/<레포>/manage/curation[/log[/<id>]]            작업실 › 대기열 — 탭 둘(대기열 · 이력)
 //              /r/<레포>/manage/drift                           작업실 › 진단(리빌딩)
 //              /r/<레포>/manage/forms[/<묶음>/<id>][?tab=]       작업실 › 관리 문서 › 문서 추가 › 서식집(탭 · curate)
@@ -78,10 +79,14 @@ export function screenOf({ path = '/', query = null, hist = null } = {}) {
   const rest = m.face === 'console' ? m.rest.slice(1) : m.rest
   const finder = m.face === 'repo' ? finderOf(rest, query, hist) : null
   const item = currentItem(m.face, rest)
-  const out = { ...m, rest, item, finder, tab: item?.tab || null, page: item?.page || null, sub: null, logId: null, form: null, formTab: null, alias: null }
+  const out = { ...m, rest, item, finder, tab: item?.tab || null, page: item?.page || null, sub: null, logId: null, jobId: null, form: null, formTab: null, alias: null }
   if (item?.key === 'queue') {
     out.sub = rest[2] === 'log' ? 'log' : 'queue'
     if (out.sub === 'log' && rest[3]) out.logId = rest[3]
+  }
+  if (item?.key === 'ingest') {
+    out.sub = rest[2] === 'new' ? 'new' : rest[2] ? 'job' : 'list'
+    if (out.sub === 'job') out.jobId = rest[2]
   }
   if (item?.key === 'managed') {
     out.sub = rest[1] === 'forms' ? 'forms' : 'list'
@@ -107,7 +112,7 @@ export function navRepoOf(face, repo, me, last = null) {
 // 빵부스러기 — [{ label, to? }]. 레포 › 묶음 › 화면(› 이력 id · 서식 id). 콘솔은 서버 › 화면.
 // 작업실은 묶음(만든다 · 정리한다 · 세운다) 대신 영역 이름 — 「alpha › 작업실 › 대기열」
 // 화면 이름 — 메뉴 항목 이름. 읽기는 왼쪽 목록으로(문서 · 작업 기록), 탭은 그 탭 이름까지
-const SUB_LABEL = { log: '이력', forms: '서식집' }
+const SUB_LABEL = { log: '이력', forms: '서식집', new: '새 들이기' }
 const screenLabel = (s) => (s.item.key === 'docs' ? (s.finder?.list === 'records' ? '작업 기록' : '문서') : s.item.label)
 
 export function crumbOf(s) {
@@ -116,7 +121,8 @@ export function crumbOf(s) {
   if (s.face === 'console') return [{ label: g.label }, { label: s.item.label, to: s.item.to() }]
   const mid = areaOf(s.item) === 'studio' ? AREAS.find((a) => a.key === 'studio').label : g.label
   const out = [{ label: s.repo, to: repoBase(s.repo) }, { label: mid }, { label: screenLabel(s), to: s.item.to(s.repo) }]
-  if (SUB_LABEL[s.sub]) out.push({ label: SUB_LABEL[s.sub], to: s.item.key === 'queue' ? repoBase(s.repo) + 'manage/curation/log' : repoBase(s.repo) + 'manage/forms' })
+  if (SUB_LABEL[s.sub]) out.push({ label: SUB_LABEL[s.sub], to: s.item.key === 'queue' ? repoBase(s.repo) + 'manage/curation/log' : s.item.key === 'ingest' ? repoBase(s.repo) + 'manage/ingest/new' : repoBase(s.repo) + 'manage/forms' })
+  if (s.jobId) out.push({ label: s.jobId })
   if (s.logId) out.push({ label: s.logId })
   if (s.form) out.push({ label: `${s.form.group}/${s.form.id}` })
   return out

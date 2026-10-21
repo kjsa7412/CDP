@@ -25,6 +25,7 @@ import FormLibrary from '../../features/forms/FormLibrary.jsx'
 import Overview from './Overview.jsx'
 import LinkedWorkRepos from './LinkedWorkRepos.jsx'
 import Docs from './Docs.jsx'
+import Ingest from './Ingest.jsx'
 
 export default function AdminView({
   tab,
@@ -40,7 +41,7 @@ export default function AdminView({
 
   const base = repoBase(currentRepo())
   const sub = scr?.sub || null
-  const wide = cur === 'curation' || cur === 'drift' || (cur === 'docs' && sub === 'forms')
+  const wide = cur === 'curation' || cur === 'drift' || cur === 'ingest' || (cur === 'docs' && sub === 'forms')
   return (
     <div className="admin">
       <div className="admin__body">
@@ -77,6 +78,7 @@ export default function AdminView({
             </>
           )}
           {cur === 'work' && <LinkedWorkRepos me={me} say={say} />}
+          {cur === 'ingest' && <Ingest me={me} say={say} sub={sub || 'list'} jobId={scr?.jobId || null} />}
         </div>
       </div>
     </div>

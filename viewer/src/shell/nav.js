@@ -72,6 +72,13 @@ export const NAV = [
   },
 
   // ── 작업실 › 만든다 — 지식을 들이는 쪽 · write ──
+  // 지식 생성 — 문서 · 폴더 · 레포를 작업 기록으로(`ctx ingest` · 지식 생성 · 작업실 검토 §6.3). 서버는 LLM 을 부르지 않는다 —
+  // 화면은 잡을 만들고 명령을 복사하게 하고, 사람 PC 의 CLI 가 보고한 진행을 그린다. 탭 주소 — `new` · `<잡 id>`
+  {
+    key: 'ingest', group: 'make', label: '지식 생성', icon: 'plus', need: 'write', scope: R, tab: 'ingest',
+    to: (r) => repoBase(r) + 'manage/ingest',
+    match: (rest) => rest[0] === 'manage' && rest[1] === 'ingest' && rest.length <= 3,
+  },
   {
     key: 'linked', group: 'make', label: '작업 레포 연결', icon: 'plug', need: 'write', scope: R, tab: 'work',
     to: (r) => repoBase(r) + 'manage/work',

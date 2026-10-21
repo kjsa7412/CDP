@@ -40,6 +40,44 @@ export default function Queue({ repo, me = null, say, onChanged }) {
   const [copied, setCopied] = useState(false)
 
   const items = q.data?.items || []
+  const [openRun, setOpenRun] = useState(() => new Set())
+  // 줄 — 사람의 기록이 먼저(오래된 순 그대로) · 들인 기록은 run 으로 접는다(지식 생성 · 작업실 검토 §5.4 — 수백 건이 한 번에 서면
+  // 사람의 기록이 밀린다). run 의 머리줄 체크는 그 run 전부를 고른다 — 「기록으로 둠」 은 50 건씩 나눠 보낸다
+  const rows = useMemo(() => {
+    const human = items.filter((r) => !r.run)
+    const runs = new Map()
+    for (const r of items) if (r.run) runs.set(r.run, [...(runs.get(r.run) || []), r])
+    return [...human.map((r) => ({ r })), ...[...runs].map(([run, list]) => ({ run, list }))]
+  }, [items])
+  // 한 줄 — 사람의 기록 · 펼친 run 안의 기록(들여 쓴다)
+  const line = (r, nested = false) => {
+    const n = coordCounts(r.coords)
+    return (
+      <tr key={r.id} className={[focus === r.id ? 'is-picked' : '', nested ? 'qrun__item' : ''].join(' ').trim() || undefined} onClick={() => setFocus(r.id)}>
+        <td onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} aria-label={`${r.title || r.id} 고르기`} />
+        </td>
+        <td>
+          <button type="button" className="qtable__title" onClick={() => setFocus(r.id)} title={r.id}>
+            {r.title || r.id}
+          </button>
+          <div className="amuted qtable__sub">
+            {String(r.date || '').slice(0, 16)}
+            {r.ageDays != null && <> · <span className={r.ageDays > STALE_DAYS ? 'awarn' : undefined}>{r.ageDays}일</span></>}
+          </div>
+        </td>
+        <td>
+          <span className="qtable__coords">
+            {r.zero ? <span className="cchip">좌표 0</span> : null}
+            {n.section > 0 && <span className="cchip" title="섹션 있음 — 반영 후보">섹션 {n.section}</span>}
+            {n.anchor > 0 && <span className="cchip" title="등록부에 패턴은 있고 섹션이 없다 — 섹션을 세운다">섹션 없음 {n.anchor}</span>}
+            {n.unregistered > 0 && <span className="cchip cchip--new" title="등록부에 패턴이 없다 — 새 문서 후보 · 또는 기록으로 둠">등록부 없음 {n.unregistered}</span>}
+          </span>
+        </td>
+        <td className="amuted">{r.author || '—'}</td>
+      </tr>
+    )
+  }
   // 고른 것 — 체크한 것, 없으면 지금 보고 있는 줄 하나
   const ids = useMemo(() => (picked.size ? items.filter((r) => picked.has(r.id)).map((r) => r.id) : focus ? [focus] : []), [picked, focus, items])
   const cmd = curateCommand(rk, ids)
@@ -72,12 +110,19 @@ export default function Queue({ repo, me = null, say, onChanged }) {
     if (!why) return say?.('사유를 적는다 — 왜 섹션에 반영하지 않나')
     setBusy(true)
     try {
-      const r = await withSudo(() => api.curate({ verdict: 'keep', ids, reason: why }))
-      if (r?.error) {
-        say?.(`기록으로 두지 못했다 — ${r.error.message || r.error.code || ''}${r.error.hint ? ' · ' + r.error.hint : ''}`, 10000)
-        return
+      // 서버는 한 번에 50건까지 — 판정 하나가 기록 하나라는 뜻을 지키려고 상한을 올리지 않고 나눠 보낸다
+      let r = null
+      let done = 0
+      for (let i = 0; i < ids.length; i += 50) {
+        const part = ids.slice(i, i + 50)
+        r = await withSudo(() => api.curate({ verdict: 'keep', ids: part, reason: why }))
+        if (r?.error) {
+          say?.(`기록으로 두지 못했다${done ? `(앞의 ${done}건은 뒀다)` : ''} — ${r.error.message || r.error.code || ''}${r.error.hint ? ' · ' + r.error.hint : ''}`, 10000)
+          return
+        }
+        done += part.length
       }
-      say?.(`기록 ${ids.length}건을 기록으로 뒀다${r?.id ? ' · ' + r.id : ''}${r?.commit ? ' · 커밋 ' + String(r.commit).slice(0, 7) : ''}`, 6000)
+      say?.(`기록 ${ids.length}건을 기록으로 뒀다${ids.length > 50 ? ` · 큐레이션 기록 ${Math.ceil(ids.length / 50)}건` : r?.id ? ' · ' + r.id : ''}${r?.commit ? ' · 커밋 ' + String(r.commit).slice(0, 7) : ''}`, 6000)
       setKeeping(false)
       setPicked(new Set())
       setFocus(null)
@@ -103,7 +148,7 @@ export default function Queue({ repo, me = null, say, onChanged }) {
       </div>
 
       <div className={focus ? 'qsplit' : 'qsplit qsplit--one'}>
-        <Card title="대기열" hint="오래된 순">
+        <Card title="대기열" hint="오래된 순 · 들인 기록은 run 으로 접었다">
           <table className="atable qtable">
               <thead>
                 <tr>
@@ -114,33 +159,38 @@ export default function Queue({ repo, me = null, say, onChanged }) {
                 </tr>
               </thead>
               <tbody>
-                {items.map((r) => {
-                  const n = coordCounts(r.coords)
-                  return (
-                    <tr key={r.id} className={focus === r.id ? 'is-picked' : undefined} onClick={() => setFocus(r.id)}>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} aria-label={`${r.title || r.id} 고르기`} />
-                      </td>
-                      <td>
-                        <button type="button" className="qtable__title" onClick={() => setFocus(r.id)} title={r.id}>
-                          {r.title || r.id}
-                        </button>
-                        <div className="amuted qtable__sub">
-                          {String(r.date || '').slice(0, 16)}
-                          {r.ageDays != null && <> · <span className={r.ageDays > STALE_DAYS ? 'awarn' : undefined}>{r.ageDays}일</span></>}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="qtable__coords">
-                          {r.zero ? <span className="cchip">좌표 0</span> : null}
-                          {n.section > 0 && <span className="cchip" title="섹션 있음 — 반영 후보">섹션 {n.section}</span>}
-                          {n.anchor > 0 && <span className="cchip" title="등록부에 패턴은 있고 섹션이 없다 — 섹션을 세운다">섹션 없음 {n.anchor}</span>}
-                          {n.unregistered > 0 && <span className="cchip cchip--new" title="등록부에 패턴이 없다 — 새 문서 후보 · 또는 기록으로 둠">등록부 없음 {n.unregistered}</span>}
-                        </span>
-                      </td>
-                      <td className="amuted">{r.author || '—'}</td>
-                    </tr>
-                  )
+                {rows.map((row) => {
+                  if (row.run) {
+                    const open = openRun.has(row.run)
+                    const all = row.list.every((r) => picked.has(r.id))
+                    const flip = () =>
+                      setOpenRun((s) => {
+                        const n = new Set(s)
+                        n.has(row.run) ? n.delete(row.run) : n.add(row.run)
+                        return n
+                      })
+                    const pickAll = () =>
+                      setPicked((s) => {
+                        const n = new Set(s)
+                        for (const r of row.list) all ? n.delete(r.id) : n.add(r.id)
+                        return n
+                      })
+                    return [
+                      <tr key={'run:' + row.run} className="qrun" data-ui="queue-run" onClick={flip}>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" checked={all} onChange={pickAll} aria-label={`들인 기록 ${row.run} 전부 고르기`} />
+                        </td>
+                        <td colSpan={3}>
+                          <button type="button" className="qtable__title" aria-expanded={open} onClick={(e) => (e.stopPropagation(), flip())}>
+                            {open ? '▾' : '▸'} 들인 기록 · {row.list.length}건
+                          </button>
+                          <span className="amuted qtable__sub"> run {row.run} · 들인 날 {row.run.slice(0, 4)}-{row.run.slice(4, 6)}-{row.run.slice(6, 8)}{row.list[0]?.author ? ' · ' + row.list[0].author : ''}</span>
+                        </td>
+                      </tr>,
+                      ...(open ? row.list.map((r) => line(r, true)) : []),
+                    ]
+                  }
+                  return line(row.r)
                 })}
               </tbody>
             </table>

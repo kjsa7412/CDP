@@ -3,6 +3,20 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## (다음 판) — v1.8.0
+
+**들이기 — 변환 · 판단 · 진행.** 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md`(G6~G9 · G13 · G19) · 실행 `docs/dev/지식생성_작업실_TODO.md`.
+
+- **변환** — docx · xlsx · pptx · hwpx 는 ctx 가 직접 md 로(제목 · 문단 · 목록 · 표 · 그림 · 의존성 없음) · pdf 는 `pdftotext` · doc · xls · ppt · hwp 는 `soffice` 가 그 PC 에 있을 때. 실패하면 들이지 않고 까닭. 변환한 문서 안의 그림은 그 기록의 첨부 · pdf 는 원본도 첨부
+- **판단 `ctx ingest --analyze`** — 그 PC 의 `claude -p`(사용자의 로그인 · 비용)가 파일마다 성격 · 날짜 · 나눌 자리 · 좌표 후보와 인용을 낸다. 쓰지 않는다(save · 편집 · 셸 금지 · 본문은 줄 범위로만). `--budget` · `--concurrency` · `--redo` · `--model`
+- **승인 `review.md`** — 체크한 좌표 · 어휘만 touches 로(기본은 등재 + 인용) · 나머지는 태그 `touches?/…` · 「제외」 판단은 들이지 않는다 · `--approve registered` · 나눈 문서는 조각마다 기록(출처 `#blob:<sha>:<n>`)
+- **`ctx ingest doctor [--live]`** — node · git · claude · 서버 · 토큰 · 변환기 · 편입 규칙
+- **잡** — `/api/<레포>/jobs`(만들기 · 목록 · 상세 · report · done · cancel · 주인과 큐레이터만 · 남의 것은 404 · 15분 무보고는 멈춤). CLI 가 판단 · 적용 때 스스로 보고한다
+- **화면 작업실 › 지식 생성** — 새 들이기(유형 · 경로 · 거름 · 판단 → 잡을 만들고 셸 셋의 명령) · 목록(내 것 · 큐레이터는 모두) · 잡 하나(파일마다 결과 · 판단 · 들어간 기록과 대기열 상태 · 다시 돌릴 명령 · 취소)
+- **대기열** — 들인 기록을 run 으로 접는다(사람의 기록이 먼저) · run 째 고르기 · 「기록으로 둠」 은 50건씩 나눠 보낸다
+- **`ctx serve --no-llm-ingest <레포,…|*>`**(serve.json `noLlmIngest`) — 그 레포는 판단을 거친 기록을 받지 않는다
+- serve doctor — 같은 원본의 기록 둘 · 멈춘 잡 · 첨부 staging 크기
+
 ## (다음 판) — v1.7.0
 
 **문서 · 폴더 · 레포에서 지식을 들인다 — `ctx ingest`.** 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md`(G5 · G10~G16) · 실행 `docs/dev/지식생성_작업실_TODO.md`.

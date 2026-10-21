@@ -29,17 +29,17 @@
 
 ## v1.8.0 ingest 2 — 변환 · 판단 · 진행(G6~G9 · G13 · G19)
 
-- [ ] C1 `core/zip.js` 읽기 · `core/convert.js` — docx · pptx · xlsx · hwpx 를 Node 로 직접 md 로 · 외부 `pdftotext` · `soffice` · `pandoc` 감지 · 변환 경고 · 실패는 들이지 않는다
-- [ ] C2 `kit/ingest/prompt.md` — `편입.md` 를 포함해 생성 · draft JSON 스키마 · 줄 범위 계약(본문 생성 금지)
-- [ ] C3 `--analyze` — `claude -p` 자식 프로세스 · 임시 MCP 설정 · 허용 목록과 금지 목록 · 스키마 검증과 1회 재시도 · `--budget` · `--concurrency 2` · `--redo`
-- [ ] C4 `--review` — 【좌표 판정】 표 · registered 만 미리 체크 · 미등재는 `touches?/` 태그 · `--approve registered`
-- [ ] C5 `ctx ingest doctor [--live]` — claude 경로 · 판 · 로그인 · 서버 · 토큰 역할 · 변환기
-- [ ] C6 잡 API `/api/<레포>/jobs`(만들기 · 목록 · 상세 · plan · files/<n> · done · cancel) · 저장 `<data>/jobs/` · 남의 잡 404 · 15분 무보고는 멈춤
-- [ ] C7 화면 작업실 › 지식 생성 — 새 수집(명령 복사 셸 셋) · 목록 · 상세(읽기)
-- [ ] C8 대기열 — `ingest/<runId>` 로 접기 · 사람 기록 먼저 · 일괄 「기록으로 둠」 50건씩
-- [ ] C9 서버 설정 레포별 `llmIngest: false` — 잡 만들기와 `ingest-llm` 태그 save 거절(G19)
-- [ ] C10 doctor — 멈춘 잡 · staging 총량 · 같은 blob 기록 둘 이상 · 대기열 중 수집 비율
-- [ ] C11 시험 — docx · xlsx · hwpx 픽스처 → md 표 · `claude` 를 흉내 내는 가짜 실행 파일로 analyze/review 흐름 · 잡 상태 전이
+- [x] C1 `core/zip.js` 읽기 · `core/convert.js` — docx · pptx · xlsx · hwpx 를 Node 로 직접 md 로 · 외부 `pdftotext` · `soffice` · `pandoc` 감지 · 변환 경고 · 실패는 들이지 않는다
+- [x] C2 프롬프트는 `core/judge.js` 의 `buildPrompt`(kit 에는 `skills/cdp-*` 만 실리므로 파일로 두지 않았다) — kit 의 `편입.md` 를 그대로 싣는다 · 원래 문구: `kit/ingest/prompt.md` — `편입.md` 를 포함해 생성 · draft JSON 스키마 · 줄 범위 계약(본문 생성 금지)
+- [x] C3 `--analyze` — `claude -p` 자식 프로세스 · 임시 MCP 설정 · 허용 목록과 금지 목록 · 스키마 검증과 1회 재시도 · `--budget` · `--concurrency 2` · `--redo`
+- [x] C4 `--review` — 【좌표 판정】 표 · registered 만 미리 체크 · 미등재는 `touches?/` 태그 · `--approve registered`
+- [x] C5 `ctx ingest doctor [--live]` — claude 경로 · 판 · 로그인 · 서버 · 토큰 역할 · 변환기
+- [x] C6 잡 API `/api/<레포>/jobs`(만들기 · 목록 · 상세 · plan · files/<n> · done · cancel) · 저장 `<data>/jobs/` · 남의 잡 404 · 15분 무보고는 멈춤
+- [x] C7 화면 작업실 › 지식 생성 — 새 수집(명령 복사 셸 셋) · 목록 · 상세(읽기)
+- [x] C8 대기열 — `ingest/<runId>` 로 접기 · 사람 기록 먼저 · 일괄 「기록으로 둠」 50건씩
+- [x] C9 서버 설정 레포별 `llmIngest: false` — 잡 만들기와 `ingest-llm` 태그 save 거절(G19)
+- [x] C10 doctor — 멈춘 잡 · staging 총량 · 같은 blob 기록 둘 이상(**대기열 중 수집 비율은 넣지 않았다** — 대기열은 화면이 run 으로 접는다)
+- [x] C11 시험 — docx · xlsx · hwpx 픽스처 → md 표 · `claude` 를 흉내 내는 가짜 실행 파일로 analyze/review 흐름 · 잡 상태 전이
 
 ## v1.9.0 작업실 마무리(G17 · G4)
 
@@ -63,4 +63,11 @@
 | logout | 서버 주소만 잊는다 · 토큰은 남긴다 | 같은 토큰을 작업 레포의 MCP 가 쓴다 |
 | `/sources` | write 이상 | 원천 경로(PC 경로 조각)가 실린다 |
 | 링크 | 공백 든 대상도 잡는다(꺾쇠 없이) · 코드 안은 그대로 | 실제 문서가 그렇게 쓴다(importdir 실측) |
+| 판단 프롬프트 | `core/judge.js` 가 짓는다 · 규칙은 kit 의 `cdp-save/편입.md` 를 그대로 | kit 에는 `skills/cdp-*` 만 실린다 — 규칙 원문을 한 곳에 |
+| claude 호출 | 프롬프트는 표준 입력 · `--output-format json --strict-mcp-config --allowedTools … --disallowedTools …` · MCP 설정(토큰)은 상태 폴더에 두고 끝나면 지운다 | 명령줄에 원문이 뜨지 않게 · 토큰이 남지 않게 |
+| 나눔 | 줄 범위로 · 조각마다 id `<id>-<n>` · 출처 `#blob:<sha>:<n>` · 첨부는 그 조각이 가리키는 것만 | 중복 열쇠가 조각마다 |
+| 승인 | `review.md` 의 체크 · 기본은 등재 + 인용 · 미등재는 어휘 제안도 체크해야 · 다시 판단해도 체크가 남는다 | 좌표 추측 금지(R8) · 사람의 손이 판정 |
+| 잡 API | `report` 하나로 모았다(검토의 `plan` · `files/<n>` 대신) | 여러 파일을 한 번에 · 단순 |
+| 시험 | `test/fixtures/fake-claude.mjs`(CDP_CLAUDE) — 금지 목록 · MCP 설정을 확인하고 정해진 초안을 낸다 | 진짜 claude 없이 끝까지 |
+| 진짜 claude | **이 판에서 진짜 `claude -p` 로는 돌려 보지 않았다** — 플래그 · 출력 모양은 Claude Code 설명서대로다 | 남은 것 — 실제 PC 에서 `ctx ingest doctor --live` 와 문서 몇 개로 |
 
