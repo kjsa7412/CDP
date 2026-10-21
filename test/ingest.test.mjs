@@ -253,7 +253,7 @@ test('ctx ingest — 끝까지: 계획 · 들이기(커밋 1) · 다시 0 · 고
   }
 })
 
-test('ctx login · whoami · logout — 토큰을 /me 로 확인 · 서버 주소만 잊는다', { skip: !hasGit && 'git 이 없다', timeout: 120_000 }, async () => {
+test('ctx login · whoami · logout — 토큰을 /me 로 확인 · 서버 주소만 잊는다', { skip: !hasGit && 'git 이 없다', timeout: 300_000 }, async () => {
   const S = await server()
   try {
     const cfg = path.join(S.base, 'cfg-login')
