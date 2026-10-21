@@ -182,7 +182,8 @@ export async function runIngest(opt, env = process.env) {
     }
     const code = await analyze(records, { opt, env, dir, server, token, repo: opt.repo, job })
     await writeReview(records, dir)
-    out(NL + `다음 — ${path.join(dir, 'review.md')} 에서 체크를 고친 뒤 --apply(그대로 두면 등재된 좌표 + 인용 있는 것만 들어간다)`)
+    if (records.some((f) => f.draft)) out(NL + `다음 — ${path.join(dir, 'review.md')} 에서 체크를 고친 뒤 --apply(그대로 두면 등재된 좌표 + 인용 있는 것만 들어간다)`)
+    else out(NL + '다음 — 판단한 것이 없다. 위 까닭(claude 로그인 · 설치)을 고치고 같은 명령을 다시 돌린다 · 판단 없이 들이려면 --apply --no-llm')
     await job?.done(code ? 'partial' : 'review')
     return code
   }

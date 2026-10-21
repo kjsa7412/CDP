@@ -69,5 +69,5 @@
 | 승인 | `review.md` 의 체크 · 기본은 등재 + 인용 · 미등재는 어휘 제안도 체크해야 · 다시 판단해도 체크가 남는다 | 좌표 추측 금지(R8) · 사람의 손이 판정 |
 | 잡 API | `report` 하나로 모았다(검토의 `plan` · `files/<n>` 대신) | 여러 파일을 한 번에 · 단순 |
 | 시험 | `test/fixtures/fake-claude.mjs`(CDP_CLAUDE) — 금지 목록 · MCP 설정을 확인하고 정해진 초안을 낸다 | 진짜 claude 없이 끝까지 |
-| 진짜 claude | **이 판에서 진짜 `claude -p` 로는 돌려 보지 않았다** — 플래그 · 출력 모양은 Claude Code 설명서대로다 | 남은 것 — 실제 PC 에서 `ctx ingest doctor --live` 와 문서 몇 개로 |
+| 진짜 claude | 2026-10-21 이 PC(Claude Code 2.1.92)로 한 번 — 플래그는 받아들였고 `--output-format json` 의 오류 답을 읽어 「로그인되어 있지 않다」 로 냈다(이 PC 의 OAuth 토큰 만료 · 401). **판단 결과까지는 못 봤다** | 남은 것 — 그 사람이 `claude` 를 켜서 로그인한 뒤 `ctx ingest doctor --live` · 문서 몇 개로 `--analyze` |
 
