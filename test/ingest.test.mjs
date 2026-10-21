@@ -344,6 +344,14 @@ test('ctx ingest --analyze · review · apply — 가짜 claude 로 끝까지: �
     assert.match(an2.text, /판단 1건/, '깨진 d.md 만 다시')
     assert.match(await fs.readFile(reviewPath, 'utf8'), /- \[x\] `term:새것` \(미등재\)/)
 
+    // 화면의 승인 — b.md 첫 조각의 term:PLC 를 끈다(기본은 켜짐). 남(writer)은 승인하지 못한다
+    const jobId = JSON.parse(await fs.readFile(path.join(dir, run, 'run.json'), 'utf8')).job
+    const jd = await (await fetch(S.url + '/api/kb/jobs/' + jobId, { headers: H })).json()
+    assert.ok(jd.files['b.md'].draft?.records?.[0]?.touches?.some((t) => t.coord === 'term:PLC'), '잡에 초안이 실렸다')
+    const WT = { authorization: 'Bearer ' + S.writerToken, 'content-type': 'application/json' }
+    assert.equal((await fetch(S.url + '/api/kb/jobs/' + jobId + '/approve', { method: 'POST', headers: WT, body: JSON.stringify({ files: {} }) })).status, 404)
+    const appr = await fetch(S.url + '/api/kb/jobs/' + jobId + '/approve', { method: 'POST', headers: H, body: JSON.stringify({ files: { 'b.md': { coords: { '0|term:PLC': false }, vocab: {} } } }) })
+    assert.equal(appr.status, 200, await appr.text())
     const ap = await S.ctx(['ingest', s.root, '--apply'], { extra })
     assert.equal(ap.code, 0, ap.text)
     assert.match(ap.text, /들임 4 · /, ap.text) // a · b 둘 · d(판단 없이) — c 는 제외
@@ -357,6 +365,10 @@ test('ctx ingest --analyze · review · apply — 가짜 claude 로 끝까지: �
     assert.equal(parts.length, 2, 'b 는 둘로')
     assert.ok(parts.some(([n]) => n.startsWith('2026-0301-')), '판단의 날짜')
     assert.ok(parts.every(([, t]) => /나눔 [12]\/2/.test(t)))
+    assert.match(ap.text, /화면의 승인 1건/)
+    const b1 = parts.find(([n]) => /-1\.md$/.test(n))[1]
+    assert.ok(!/touches:\n {2}- term:PLC/.test(b1), '화면에서 끈 좌표는 올리지 않는다')
+    assert.match(b1, /touches\?\/term:PLC/)
     assert.ok(!texts.some(([, t]) => t.includes('(빈칸)')), '제외는 들이지 않는다')
     const d = texts.find(([, t]) => t.includes('깨짐'))[1]
     assert.ok(!d.includes('ingest-llm'), '판단이 깨진 것은 판단 없이')
@@ -381,6 +393,11 @@ test('ctx ingest --analyze · review · apply — 가짜 claude 로 끝까지: �
     assert.equal((await (await fetch(S.url + '/api/kb/jobs', { headers: W })).json()).jobs.length, 0)
     assert.equal((await fetch(S.url + '/api/kb/jobs/' + j.id + '/report', { method: 'POST', headers: W, body: '{"files":[]}' })).status, 404)
     assert.equal((await fetch(S.url + '/api/kb/jobs', { headers: { authorization: 'Bearer ' + S.viewerToken } })).status, 403)
+    assert.equal((await fetch(S.url + '/api/kb/jobs', { method: 'POST', headers: { authorization: 'Bearer ' + S.viewerToken, 'content-type': 'application/json' }, body: '{"kind":"folder","path":"x"}' })).status, 403, 'viewer 는 잡을 만들지 못한다')
+    // 출처 — 큐레이터만 · 원천이 없으면 source: null
+    assert.equal((await fetch(S.url + '/api/kb/upstream', { headers: W })).status, 403, 'writer 는 출처를 보지 않는다')
+    const up = await (await fetch(S.url + '/api/kb/upstream', { headers: H })).json()
+    assert.equal(up.source, null)
   } finally {
     await S.rm()
     await s.rm()

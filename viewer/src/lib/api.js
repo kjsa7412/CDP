@@ -248,6 +248,10 @@ export const api = {
   job: (id) => req('/jobs/' + encodeURIComponent(id)),
   jobNew: (body) => req('/jobs', { method: 'POST', body: JSON.stringify(body), allowStatus: [400, 403] }),
   jobCancel: (id) => req('/jobs/' + encodeURIComponent(id) + '/cancel', { method: 'POST', body: '{}' }),
+  // 출처 — 원천 문서 레포의 지도 검사(map) · 따라가기 누락(follow). 큐레이터 · 읽기만(MCP source 와 같은 계산)
+  upstream: (op = 'map') => req('/upstream?op=' + op),
+  // 승인 — 파일마다 체크한 좌표 · 어휘(G17). 적용은 그 PC 의 `ctx ingest --apply` 가 이것을 읽어 한다
+  jobApprove: (id, files) => req('/jobs/' + encodeURIComponent(id) + '/approve', { method: 'POST', body: JSON.stringify({ files }) }),
 }
 
 // ── 레포를 이름으로 — 주소의 레포가 아니라(개편안 §7.1 「api.base() 가 주소의 레포에 묶임」) ─────────

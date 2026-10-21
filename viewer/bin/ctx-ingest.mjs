@@ -169,7 +169,7 @@ export async function runIngest(opt, env = process.env) {
     }
     job = jobReporter(api, base, run.job)
     await job.report(
-      plan.files.map((f) => ({ rel: f.rel, status: f.kind === 'record' ? (f.draft ? 'drafted' : 'planned') : f.kind === 'have' ? 'have' : f.kind === 'asset' ? 'asset' : 'skipped', ...(f.reason ? { reason: f.reason } : {}), ...(f.id ? { id: f.id } : {}) })),
+      plan.files.map((f) => ({ rel: f.rel, status: f.kind === 'record' ? (f.draft ? 'drafted' : 'planned') : f.kind === 'have' ? 'have' : f.kind === 'asset' ? 'asset' : 'skipped', ...(f.reason ? { reason: f.reason } : {}), ...(f.id ? { id: f.id } : {}), ...(f.draft ? draftReport(f.draft) : {}) })),
       'plan'
     )
   }
@@ -206,6 +206,18 @@ export async function runIngest(opt, env = process.env) {
     return 2
   }
   const approvals = parseReview(await fs.readFile(path.join(dir, 'review.md'), 'utf8').catch(() => ''))
+  // 화면의 승인(작업실 › 지식 생성 › 잡) — 있으면 그 파일은 review.md 보다 먼저다(G17 · 승인은 화면 · 적용은 CLI)
+  let fromScreen = 0
+  if (run.job) {
+    const r = await api.get(`${base}/jobs/${encodeURIComponent(run.job)}`)
+    for (const [rel, a] of Object.entries(r.ok ? r.body.approvals || {} : {})) {
+      const f = records.find((x) => x.rel === rel)
+      if (!f) continue
+      approvals.set(keyOf(f), { coords: a.coords || {}, vocab: a.vocab || {}, force: !!a.force })
+      fromScreen++
+    }
+    if (fromScreen) out(`화면의 승인 ${fromScreen}건을 쓴다(작업실 › 지식 생성)`)
+  }
   const items = []
   const vocab = new Map()
   const notes = []
@@ -285,6 +297,18 @@ function printPlan(plan, { runId, dir, serverNote }) {
 
 // ── 판단 ────────────────────────────────────────────────────────────────────
 
+// 잡에 싣는 초안 — 화면의 승인 표 재료(후보 · 인용 · 어휘 제안). 원문은 싣지 않는다
+const draftReport = (d) => ({
+  nature: d.nature,
+  coords: d.records.flatMap((x) => x.touches.map((t) => t.coord)).slice(0, 20),
+  draft: {
+    nature: d.nature,
+    why: d.why || null,
+    records: d.records.map((r) => ({ lines: r.lines, title: r.title, date: r.date, touches: r.touches, excluded: r.excluded, open: r.open })),
+    vocab: d.vocab,
+  },
+})
+
 async function analyze(records, { opt, env, dir, server, token, repo, job }) {
   if (!server || !token) {
     err('ctx ingest --analyze: 서버 · 토큰이 있어야 한다(claude 가 MCP 로 어휘를 대조한다) — ctx login')
@@ -331,7 +355,7 @@ async function analyze(records, { opt, env, dir, server, token, repo, job }) {
         f.draft = checkDraft(raw, { lines: f.lines })
         await writeJson(path.join(dir, 'draft', f.blob + '.json'), { draft: raw, rel: f.rel, at: new Date().toISOString(), usage: r.usage, cost: r.cost })
         out(`  ✓ ${f.rel} — ${f.draft.nature}${f.draft.records.length > 1 ? ` · ${f.draft.records.length}개로` : ''} · 좌표 후보 ${f.draft.records.reduce((a, x) => a + x.touches.length, 0)}`)
-        await job?.report([{ rel: f.rel, status: 'drafted', nature: f.draft.nature, coords: f.draft.records.flatMap((x) => x.touches.map((t) => t.coord)).slice(0, 20) }], 'analyze')
+        await job?.report([{ rel: f.rel, status: 'drafted', ...draftReport(f.draft) }], 'analyze')
         return
       } catch (e) {
         last = e.message

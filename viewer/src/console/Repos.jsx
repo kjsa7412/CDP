@@ -5,7 +5,8 @@
 // 세우면서 접근을 준다 — 전에는 세운 뒤 CLI 로 한 명씩 열어야 했다. 같은 함수(`buildRepo`)를 CLI `ctx repo new` 도 쓴다.
 // **세우는 자리는 여기 하나다** — 레포 화면의 관리 › 지식 레포(`POST /repos` · writer)는 없앴다(화면 · 권한 검토 v0.1 R1).
 // 세운 뒤의 둘도 여기다 — 「origin 연결」(세울 때 빠뜨린 원격 · 강제 push 없음) · 「삭제」(휴지통으로 옮김 · 이름을 쳐야 열림).
-// 「원천」 — 이 지식 레포가 따라가는 원천 문서 레포(git 주소 · 브랜치). 큐레이터의 MCP `source`(follow · update)가 서버의 사본을 본다(MCP 만으로 검토 M2).
+// 「원천」 — 이 지식 레포가 따라가는 원천 문서 레포(git 주소 · 브랜치). 잇고 바꾸는 자리는 그 레포의 작업실 › 출처다(지식 생성 · 작업실 검토 X9 —
+// 레포 하나의 설정을 서버 전부의 표에 두지 않는다). 여기 표에는 상태 글자와 그 자리로 가는 길만 남긴다.
 // 표에는 레포마다 큐레이션 대기 · 가장 오래된(개편안 S7) — 서버가 값을 낼 때만 열이 선다. 연결 · 삭제 · 내려받기 TODO K1~K7.
 // **작업 레포 대장은 펼침 열이다**(제품화 2 ⑥ · 옛 「작업 레포 대장」 페이지) — 레포마다 등록 수 · 낡음, 누르면 그 레포의 등록이 펼쳐진다.
 // `?wr=1`(옛 `/console/workrepos`)이면 전부 편다. 지식 레포가 없어진 등록(고아)은 표 아래 한 절 — 지울 자리가 여기뿐이다(F5).
@@ -65,7 +66,6 @@ export default function Repos({ say, route }) {
   // 세운 뒤의 둘 — 원격 잇기 · 치우기
   const [linking, setLinking] = useState(null)
   const [removing, setRemoving] = useState(null)
-  const [sourcing, setSourcing] = useState(null)
   const [gone, setGone] = useState(null)
   // `--mirror` 가 꺼져 있으면 이어도 save 뒤 자동 push 는 없다 — 창이 그 한 줄을 낸다
   const { data: srv } = useResource('/admin/server', admin.server)
@@ -171,23 +171,6 @@ export default function Repos({ say, route }) {
       } else say(`${name} — 원격은 적었지만 push 가 안 됐다: ${r.reasonText || r.reason || ''}${r.message ? ' — ' + r.message : ''}`, 14000)
       invalidate('/admin/')
       invalidate('/next')
-      await load()
-    } catch (e) {
-      if (e.message !== CANCELLED) say(e.message, 8000)
-    } finally {
-      setActing(null)
-    }
-  }
-  // 원천 — 적고 연결 시험(ls-remote). 안 닿아도 적어 둔다 — 자격을 고친 뒤 MCP source 가 받는다
-  const saveSource = async (name, url, branch) => {
-    setActing(name + ':source')
-    try {
-      const r = await withSudo(() => admin.repoSource(name, url, branch))
-      if (!r.source) say(`${name} — 원천 연결을 끊었다`)
-      else if (r.ok) say(`${name} — 원천을 적었다 · 연결 시험 통과${r.test?.head ? ' · ' + r.test.head : ''}`, 6000)
-      else say(`${name} — 원천은 적었지만 닿지 않는다: ${r.test?.reasonText || r.test?.reason || ''}${r.test?.message ? ' — ' + r.test.message : ''}`, 14000)
-      setSourcing(null)
-      invalidate('/admin/')
       await load()
     } catch (e) {
       if (e.message !== CANCELLED) say(e.message, 8000)
@@ -360,9 +343,9 @@ export default function Repos({ say, route }) {
                         <button className="abtn" disabled={!!acting} onClick={() => setLinking(r)} title={r.remote ? `origin: ${r.remote} — 바꾸거나 다시 보낸다` : '원격 저장소에 잇고 첫 push 를 한다'}>
                           {acting === r.name + ':origin' ? '잇는 중…' : r.remote ? 'origin' : 'origin 연결'}
                         </button>
-                        <button className="abtn" disabled={!!acting} onClick={() => setSourcing(r)} title={r.source ? `원천: ${r.source.url}${r.source.branch ? ' @' + r.source.branch : ''}` : '원천 문서 레포(git)를 잇는다 — 큐레이터의 source 도구가 따라간다'}>
-                          {acting === r.name + ':source' ? '적는 중…' : r.source ? '원천' : '원천 연결'}
-                        </button>
+                        <Link className="abtn" to={'/r/' + encodeURIComponent(r.name) + '/manage/sources'} title={r.source ? `원천: ${r.source.url}${r.source.branch ? ' @' + r.source.branch : ''} — 작업실 › 출처에서 바꾼다` : '원천 문서 레포 — 작업실 › 출처에서 잇는다'}>
+                          {r.source ? '원천 ›' : '출처 ›'}
+                        </Link>
                         <button className="abtn" disabled={!!acting} onClick={() => setRemoving(r)} title="휴지통(서버 data/trash)으로 옮긴다 — 영구 삭제는 없다">
                           삭제
                         </button>
@@ -441,7 +424,6 @@ export default function Repos({ say, route }) {
         />
       )}
       {linking && <Origin repo={linking} busy={acting === linking.name + ':origin'} mirrorOn={srv ? !!srv.mirror : null} onClose={() => setLinking(null)} onOk={(url) => link(linking.name, url)} />}
-      {sourcing && <Source repo={sourcing} busy={acting === sourcing.name + ':source'} onClose={() => setSourcing(null)} onOk={(url, branch) => saveSource(sourcing.name, url, branch)} />}
       {removing && <Remove repo={removing} busy={acting === removing.name + ':delete'} onClose={() => setRemoving(null)} onOk={() => remove(removing.name)} />}
       {adding && <NewRepo data={data} busy={busy} onClose={() => setAdding(false)} onOk={create} />}
       {orphanDel && (
@@ -622,8 +604,9 @@ function Origin({ repo, busy, mirrorOn, onClose, onOk }) {
   )
 }
 
-// 원천 문서 레포 — 주소 · 브랜치(선택). 서버가 <data>/sources/<레포>.git 로 받는다 · 원천에는 쓰지 않는다
-function Source({ repo, busy, onClose, onOk }) {
+// 원천 문서 레포 — 주소 · 브랜치(선택). 서버가 <data>/sources/<레포>.git 로 받는다 · 원천에는 쓰지 않는다.
+// 작업실 › 출처가 연다(관리자 · 재인증)
+export function Source({ repo, busy, onClose, onOk }) {
   const [url, setUrl] = useState('')
   const [branch, setBranch] = useState(repo.source?.branch || '')
   const u = url.trim()

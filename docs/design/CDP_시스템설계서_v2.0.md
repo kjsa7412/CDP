@@ -465,7 +465,8 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 | `POST /assets` | write | 첨부 올리기(10 MB · png · jpg · gif · webp · pdf · html — 내용으로 가린다 · 24시간 staging · 한 사람이 들고 있는 합 500 MB · 넘으면 413) → `ref` |
 | `POST /records` | write | 들이기의 묶음 save(§5.7) — `ctx ingest --apply` 가 부른다 |
 | `GET /sources[?run=]` | write | 정형 출처를 가진 기록 `{ id, path, blob, part, state }` · `policy: { llm }` — 이전 판 찾기 · `ctx ingest --status` |
-| `GET · POST /jobs` · `GET /jobs/<id>` · `POST /jobs/<id>/report · done · cancel` | write | 들이기 잡(§5.7) — 보고일 뿐(실행은 사람 PC) · `<data>/jobs/<레포>/` · 주인과 그 레포의 큐레이터만 본다(남의 것은 404) · 멈춤(15분 무보고)은 읽을 때 센다 |
+| `GET /upstream?op=map\|follow` | **curate** | 작업실 › 출처 — 원천 · 지도 검사 · 따라가기 누락(MCP `source` 의 map · follow 와 같은 계산) · 원천이 없으면 `{ source: null }` |
+| `GET · POST /jobs` · `GET /jobs/<id>` · `POST /jobs/<id>/report · done · cancel · approve` | write | 들이기 잡(§5.7) — 보고일 뿐(실행은 사람 PC) · `<data>/jobs/<레포>/` · 주인과 그 레포의 큐레이터만 본다(남의 것은 404) · 멈춤(15분 무보고)은 읽을 때 센다 |
 | `POST /curate` | **curate** | `{ verdict: 'keep', ids(1~50), reason }` → 큐레이션 기록을 지어 save |
 | `POST /docs-drop` | **curate** | `{ docs(1~10), reason, edits?, reviewed?, dryRun? }` → 정리 기록(`docs-prune`)을 지어 save |
 | `POST /baseline` | **curate** | `{ source, asof?, items, vocab?, managed?, dryRun? }` → 기준선 기록을 지어 save |
@@ -556,9 +557,8 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 | `ctx migrate <레포> [--dry --by <이름> --keep-tools]` | 제자리 이행(§10.2) |
 | `ctx login --server <주소> [--token-stdin]` · `whoami` · `logout` | 이 PC 의 CLI 가 붙을 서버 · 토큰(`/me` 로 확인). logout 은 서버 주소만 잊는다(토큰은 작업 레포 MCP 가 쓴다) |
 | `ctx ingest <파일 · 폴더>… --repo <레포> [--glob --exclude --max-files] [--analyze [--budget] \| --review \| --apply [--approve registered] [--yes] \| --status]` · `ingest list` · `ingest doctor [--live]` | 문서를 작업 기록으로 들이기 — 계획(기본 · 쓰지 않는다) → 묶음 save(§5.7). 상태는 이 PC 의 `~/.cdp/ingest/<run>/` |
-| `ctx import-dir <원본> --repo <지식레포>` | (곧 없앤다 → `ingest`) md 폴더를 로컬 클론의 `work/` 로 — save 를 비껴간다 |
 
-**없앤 명령** — `mcp`(stdio) · `setup` · `index` · `derive` · `apply` · `sync` · `examples` · `docs drop` · `package`. 부르면 무엇으로 바뀌었는지 한 줄로 답하고 exit 2 다(e252f40).
+**없앤 명령** — `mcp`(stdio) · `setup` · `index` · `derive` · `apply` · `sync` · `examples` · `docs drop` · `package` · `import-dir`(v1.9 → `ingest`). 부르면 무엇으로 바뀌었는지 한 줄로 답하고 exit 2 다(e252f40).
 
 ---
 

@@ -359,6 +359,9 @@ ctx ingest list                           이 PC 의 run
 > **구현에서 바꿨다(v1.8.0)** — 파일마다 따로 부르는 `plan` · `files/<n>` 대신 **`POST /jobs/<id>/report { phase, files: [{ rel, status, … }] }` 하나**로 모았다(한 번에 여럿 · 같은 rel 은 나중 것이 이긴다).
 > 파일 상태는 planned · drafted · saved · exists · have · skipped · asset · failed. 승인(`approve`)은 v1.9 그대로다 — 지금 승인은 CLI 의 `review.md`.
 > 잡은 `ctx ingest --analyze · --apply` 가 처음 돌 때 스스로 만들고(run.json 에 기억), 화면 「새 들이기」 가 만든 잡은 `--job <id>` 로 잇는다.
+>
+> **v1.9.0 — `approve` 는 서버가 save 하지 않는다.** 화면에서 체크한 좌표 · 어휘를 잡에 저장하고(`approvals[rel]` · 주인만), 다음 `ctx ingest --apply` 가 그것으로 기록을 짓는다.
+> 서버에는 원문이 없다 — 원문을 서버로 올려 서버가 지으면 「원천은 사람 PC 에 있다 · 서버는 파일을 읽지 않는다」 가 깨진다. 그래서 G17 은 「승인은 화면 · 적용은 CLI」 로 닫는다.
 
 | 요청 | 누가 | 하는 것 |
 |---|---|---|

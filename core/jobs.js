@@ -7,6 +7,9 @@
 //   상태   waiting(만들었다 · 명령을 아직 안 돌렸다) · running · review(판단 끝 · 승인 대기) · saved · partial · failed · cancelled
 //          · stopped — running 인데 보고가 STALL_MS 넘게 끊겼다(**계산이다** — 저장하지 않는다 · 불변조건 7: 짐작한 진행률을 그리지 않는다)
 //   파일   rel 마다 하나 — planned · drafted · saved · exists · have · skipped · asset · failed(+ 까닭 · 기록 id · 판단의 성격 · 좌표 후보)
+//          판단했으면 그 초안(`draft` — 후보 · 인용 · 어휘 제안)도 싣는다 — 화면이 승인 표를 그린다
+//   승인   `approvals[rel]` — 화면에서 체크한 좌표 · 어휘(G17). review.md 와 같은 모양 { coords: { "<조각>|<좌표>": bool }, vocab, force }.
+//          **승인은 화면, 적용은 CLI** — 서버는 원문이 없어 기록을 지을 수 없다. 다음 `ctx ingest --apply` 가 이것을 읽는다
 //
 // 쓰는 사람은 잡의 주인(그 CLI) 하나라 파일 하나에 잠금 없이 쓴다 — 같은 프로세스의 겹친 요청만 줄 세운다.
 
@@ -21,6 +24,7 @@ export const STATES = ['waiting', 'running', 'review', 'saved', 'partial', 'fail
 const DONE = ['review', 'saved', 'partial', 'failed', 'cancelled']
 const FILE_STATES = ['planned', 'drafted', 'saved', 'exists', 'have', 'skipped', 'asset', 'failed']
 const MAX_FILES = 2000
+const DRAFT_MAX = 64 * 1024
 const ID = /^\d{8}-[0-9a-f]{6}$/
 
 const dirOf = (root, repo) => path.join(root, 'jobs', encodeURIComponent(repo))
@@ -111,12 +115,33 @@ export async function reportJob(root, repo, id, by, { phase = null, files = [] }
         ...(str(x.nature, 20) ? { nature: str(x.nature, 20) } : cur.nature ? { nature: cur.nature } : {}),
         ...(Array.isArray(x.coords) ? { coords: x.coords.map((c) => str(c, 200)).filter(Boolean).slice(0, 20) } : cur.coords ? { coords: cur.coords } : {}),
         ...(ids.length ? { ids } : {}),
+        ...(x.draft && typeof x.draft === 'object' && JSON.stringify(x.draft).length <= DRAFT_MAX ? { draft: x.draft } : cur.draft && x.status !== 'failed' ? { draft: cur.draft } : {}),
         at: new Date(now).toISOString(),
       }
     }
     if (Object.keys(j.files).length > MAX_FILES) throw new CtxError('E_INPUT', `파일이 ${MAX_FILES}개를 넘는다`, { id })
     j.state = 'running'
     j.phase = ['plan', 'analyze', 'apply'].includes(phase) ? phase : j.phase
+    j.updated = new Date(now).toISOString()
+    await write(f, j)
+    return j
+  })
+}
+
+// 승인 — 잡의 주인만(그 사람의 save 가 될 판단이다). 파일마다 덮어쓴다 · 체크 값만 받는다
+export async function approveJob(root, repo, id, by, { files = {} } = {}, { now = Date.now() } = {}) {
+  if (!files || typeof files !== 'object' || Array.isArray(files)) throw new CtxError('E_INPUT', 'files 는 { 경로: { coords, vocab, force } } 다', { field: 'files' })
+  const f = fileOf(root, repo, id)
+  return serial(f, async () => {
+    const j = await read(f)
+    if (!j || j.by !== by) throw new CtxError('E_NOT_FOUND', '그런 잡이 없다', { id })
+    if (j.state === 'cancelled') throw new CtxError('E_INPUT', '취소된 잡이다', { id })
+    const bools = (o, re) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).filter(([k, v]) => re.test(k) && typeof v === 'boolean').slice(0, 500))
+    j.approvals = j.approvals || {}
+    for (const [rel, a] of Object.entries(files)) {
+      if (!j.files[rel]?.draft) continue
+      j.approvals[rel] = { coords: bools(a?.coords, /^\d{1,3}\|\S{1,200}$/), vocab: bools(a?.vocab, /^\S{1,200}$/), force: a?.force === true, by, at: new Date(now).toISOString() }
+    }
     j.updated = new Date(now).toISOString()
     await write(f, j)
     return j

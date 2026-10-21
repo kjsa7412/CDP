@@ -1803,9 +1803,31 @@ export async function runServe(opt = {}) {
           return json(res, 200, { sources: rows, policy: { llm: !llmOff(name) } })
         }
 
+        // GET /api/<repo>/upstream?op=map|follow — 작업실 › 출처(지식 생성 · 작업실 검토 G4 · D2). 큐레이터 · 읽기만 —
+        // MCP `source` 의 map(지도 검사) · follow(따라가기 누락)와 같은 계산(core/sourcerepo.js). 원천이 없으면 { source: null }
+        if (sub === '/upstream') {
+          const isCur = a.curate ? a.curate(name) : !!a.admin
+          if (!isCur) return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '출처는 그 레포의 큐레이터가 본다', detail: { need: 'curate' } } })
+          const op = url.searchParams.get('op') === 'follow' ? 'follow' : 'map'
+          try {
+            if (!dataDir) return json(res, 200, { source: null, note: '이 서버는 데이터 폴더가 없어 원천을 받지 않는다' })
+            const v = await store.view(name)
+            const out = await toolSource(v, { op }, { dataDir, name })
+            log.req({ ip, user: a.user, repo: name, method: 'GET', tool: '/upstream', key: op, ms: Date.now() - t0, status: 200 })
+            return json(res, 200, out)
+          } catch (e) {
+            const code = e?.code || 'E_REPO'
+            log.req({ ip, user: a.user, repo: name, method: 'GET', tool: '/upstream', key: op, ms: Date.now() - t0, status: 200, code })
+            if (code === 'E_NO_SOURCE') return json(res, 200, { source: null })
+            // 지도가 없다 · since 가 없다 · git 이 거절 — 답이다(화면이 문장을 그린다)
+            const cfg = (await loadSources(dataDir).catch(() => ({ repos: {} }))).repos?.[name] || null
+            return json(res, 200, { source: cfg ? { url: git.maskUrl(cfg.url), branch: cfg.branch || null } : null, error: { code, message: e?.message || String(e), detail: e?.detail } })
+          }
+        }
+
         // /api/<repo>/jobs — 들이기 잡(진행 보고 · 지식 생성 · 작업실 검토 §6.4). 쓰는 것은 그 CLI(잡의 주인) 하나 ·
         // 보는 것은 주인과 그 레포의 큐레이터. **남의 잡은 404** — PC 경로가 실려 있어 존재도 알리지 않는다(D4)
-        const jobM = /^\/jobs(?:\/([^/]+)(?:\/(report|done|cancel))?)?\/?$/.exec(sub)
+        const jobM = /^\/jobs(?:\/([^/]+)(?:\/(report|done|cancel|approve))?)?\/?$/.exec(sub)
         if (jobM) {
           const isCur = a.curate ? a.curate(name) : !!a.admin
           const send = (status, body, key = '') => {
@@ -1860,6 +1882,7 @@ export async function runServe(opt = {}) {
             const body = (await readJsonBody()) || {}
             if (act === 'report') return send(200, jobs.viewJob(await jobs.reportJob(jobsRoot, name, id, a.user, body)), id)
             if (act === 'done') return send(200, jobs.viewJob(await jobs.finishJob(jobsRoot, name, id, a.user, { state: body.state })), id)
+            if (act === 'approve') return send(200, jobs.viewJob(await jobs.approveJob(jobsRoot, name, id, a.user, body)), id)
             return send(200, jobs.viewJob(await jobs.finishJob(jobsRoot, name, id, a.user, { state: 'cancelled', curator: isCur })), id)
           } catch (e) {
             return fail(e)

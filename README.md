@@ -78,7 +78,8 @@ ctx self-update <tar.gz|url>                                           개인 �
 ctx serve --root … | --personal <레포> | --config <serve.json>         서버(MCP · 화면 · 관리 서비스) — serve.json 은 설정 한 장
 ctx serve doctor · init · user · token · git-auth                       서버 준비물 · 명부 · 토큰 · origin 자격
 ctx repo new <경로> [--title] [--origin <url>] [--records-from <옛 레포>]  빈 틀로 세우기(origin 이면 push) · 기록만 옮겨 다시 세우기
-ctx migrate · baseline · rebuild · forms · import-dir                   이행 · 기준선 · 스냅샷 · 서식집 · md 폴더 들이기
+ctx migrate · baseline · rebuild · forms                              이행 · 기준선 · 스냅샷 · 서식집
+ctx login · ingest                                                    문서 · 폴더 · 레포를 작업 기록으로(사람 PC · 서버 save)
 ```
 
 전체는 [개발자 설명서 부록 B](manual/개발자_설명서.md#부록-b-ctx-명령-전체). v0.x 의 없앤 명령은 바뀐 길을 한 줄로 답하고 exit 2.

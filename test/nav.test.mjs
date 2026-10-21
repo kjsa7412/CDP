@@ -45,7 +45,7 @@ test('보이는 묶음 — 역할 × 레포 얼굴(V18 · 묶음은 보이는 �
   const know = '지식:읽기·좌표 · 그래프'
   const make = '만든다:지식 생성·작업 레포 연결'
   const tidy = '정리한다:대기열·진단'
-  const build = '세운다:관리 문서 · 서식집·현황'
+  const build = '세운다:관리 문서 · 서식집·어휘·출처·현황'
   const buildW = '세운다:현황'
   const srv = '서버:현황·지식 레포·사람·서버'
   assert.deepEqual(groups({ face: 'repo', me: VIEWER, repo: 'alpha' }), [know], 'viewer — 보기 하나(작업실 묶음은 제목째 없다 · V18 정정)')
@@ -132,12 +132,12 @@ test('주소 — 메뉴의 to 와 match 가 짝이다(눌러 간 곳이 그 항�
   assert.deepEqual(CONSOLE_PAGES, ['overview', 'repos', 'people', 'server'])
 })
 
-test('메뉴 수 — viewer 2 · writer 5 · curator 8 · admin 12(작업실 검토 G3 — 작업실은 write 이상)', () => {
+test('메뉴 수 — viewer 2 · writer 5 · curator 10 · admin 14(작업실 검토 G3 — 작업실은 write 이상)', () => {
   const n = (me) => navItems({ face: 'repo', me, repo: 'alpha' }).length
   assert.equal(n(VIEWER), 2)
   assert.equal(n(WRITER), 5)
-  assert.equal(n(CURATOR), 8)
-  assert.equal(n(ADMIN), 12)
+  assert.equal(n(CURATOR), 10)
+  assert.equal(n(ADMIN), 14)
   assert.equal(new Set(NAV.map((it) => it.key)).size, NAV.length, '키는 하나씩')
 })
 

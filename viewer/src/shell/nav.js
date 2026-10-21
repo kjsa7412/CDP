@@ -106,6 +106,18 @@ export const NAV = [
     to: (r) => repoBase(r) + 'manage/docs',
     match: (rest) => manage(rest, 'docs') || (manageAny(rest, 'forms') && (rest.length === 2 || rest.length === 4)),
   },
+  // 어휘 — 좌표 · alias · 폐기 · 쓰임(읽기). 고치는 것은 큐레이터 세션의 save vocab[].op — 화면은 지시를 복사하게 한다
+  {
+    key: 'vocab', group: 'build', label: '어휘', icon: 'list', need: 'curate', scope: R, tab: 'vocab',
+    to: (r) => repoBase(r) + 'manage/vocab',
+    match: (rest) => manage(rest, 'vocab'),
+  },
+  // 출처 — 원천 문서 레포(세우기 · 따라가기). 레포 하나의 설정이라 콘솔이 아니라 여기다(X9) — 잇고 바꾸는 단추는 관리자에게만
+  {
+    key: 'sources', group: 'build', label: '출처', icon: 'sync', need: 'curate', scope: R, tab: 'sources',
+    to: (r) => repoBase(r) + 'manage/sources',
+    match: (rest) => manage(rest, 'sources'),
+  },
   // 현황 — 미러 · 검증 · 문서 상태 · 「시작하기」(write · curate 줄). viewer 의 숫자는 보기 첫 화면이 그린다(V18 정정)
   {
     key: 'overview', group: 'build', label: '현황', icon: 'check', need: 'write', scope: R, tab: 'overview',

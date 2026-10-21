@@ -65,7 +65,6 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx ingest <파일 · 폴더>… --repo <레포> [--glob <p>]… [--exclude <p>]… [--max-files N]   문서를 작업 기록으로 — 계획(쓰지 않는다)
   ctx ingest <…> --repo <레포> --analyze [--budget <토큰>] | --review   판단(이 PC 의 claude -p 가 좌표 후보 · 쓰지 않는다) · 승인 표(review.md)
   ctx ingest <…> --repo <레포> --apply [--approve registered] [--yes] | --status | ctx ingest list | doctor [--live]   들인다(묶음 save · 대기열 → 큐레이터) · 상태 · run 목록 · 준비물
-  ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   (곧 없앤다 → ctx ingest) md 폴더를 로컬 클론의 work/ 로
   ctx seed init|check [--from <문서 레포>]          문서 레포에서 세우기 — 지도(cdp-sources.json) 뼈대 · 검사
   ctx seed plan|apply --server <주소> --repo <레포> [--from …] [--at <sha>] [--stage baseline|managed|records] [--only <key|id>] [--date <YYYY-MM-DD>]
                                             지도대로 세운다(큐레이터 · plan = 전부 dryRun) — 세우는 흔적은 _seed.json 하나 · 세운 기록은 반영됨
@@ -719,9 +718,11 @@ export async function main(argv = process.argv.slice(2)) {
     apply: '파생은 큐레이션이다 — 서버 화면 「큐레이션 › 대기열」 · MCP section(미반영 기록이 같이 온다)',
     sync: '원격과의 차이는 brief 가 낸다(미러) — ctx brief · MCP brief',
     examples: '서식 예시는 레포에 두지 않는다 — 옛 레포는 ctx migrate <레포> 가 지운다',
+    // v1.9 — 로컬 클론에 직접 써서 save 를 비껴갔다(I2). 같은 일을 서버 save 로 하는 것이 ingest 다(지식 생성 · 작업실 검토 G16)
+    'import-dir': 'md 폴더 들이기는 ctx ingest <폴더> --repo <레포> 다 — 서버 save 로(로컬 클론 · 손 커밋 없이) · 변환 · 판단 · 다시 돌리기까지',
   }
   if (gone[opt.cmd] || (opt.cmd === 'docs' && opt.args[0] === 'drop')) {
-    err(`ctx ${opt.cmd}${opt.cmd === 'docs' ? ' drop' : ''}: v1.0 에서 없앴다 — ${gone[opt.cmd] || '관리 문서 지우기는 큐레이터의 save managed drop(화면 「관리 문서」 탭)이다'}`)
+    err(`ctx ${opt.cmd}${opt.cmd === 'docs' ? ' drop' : ''}: ${opt.cmd === 'import-dir' ? 'v1.9' : 'v1.0'} 에서 없앴다 — ${gone[opt.cmd] || '관리 문서 지우기는 큐레이터의 save managed drop(화면 「관리 문서」 탭)이다'}`)
     return 2
   }
   // 패키지 · 레포 · 이관 — 지식 레포 **밖**에서 도는 명령이다. findRepo 를 타지 않는다.
@@ -768,12 +769,6 @@ export async function main(argv = process.argv.slice(2)) {
   if (opt.cmd === 'login' || opt.cmd === 'whoami' || opt.cmd === 'logout') {
     const m = await import('./ctx-login.mjs')
     return opt.cmd === 'login' ? m.runLogin(opt) : opt.cmd === 'whoami' ? m.runWhoami(opt) : m.runLogout(opt)
-  }
-  if (opt.cmd === 'import-dir') {
-    // 곧 없앤다(지식 생성 · 작업실 검토 G16) — 로컬 클론에 직접 써서 save 를 비껴간다(I2). 같은 일을 서버 save 로 하는 것이 ingest 다
-    err('ctx import-dir: 다음 판에 없앤다 — ctx ingest <폴더> --repo <레포> 가 같은 일을 서버 save 로 한다(로컬 클론 · 손 커밋 없이)')
-    const { runImportDir } = await import('./ctx-import.mjs')
-    return runImportDir(opt)
   }
   if (opt.cmd === 'serve') {
     // `serve doctor` · `serve init` — 준비물 검사와 첫 사용자. 서버를 띄우지 않는다.

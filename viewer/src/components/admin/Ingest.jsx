@@ -5,7 +5,8 @@
 //   목록        내 잡(큐레이터는 모두) — 보고된 것만 그린다(대기 · 실행 중 · 승인 대기 · 저장됨 · 일부 실패 · 멈춤)
 //   잡 하나     파일마다 결과 · 판단(성격 · 좌표 후보) · 들어간 기록과 그 큐레이션 상태 · 다시 돌릴 명령
 // 진행률(%)은 짐작하지 않는다(불변조건 7) — 보고된 파일 수만. 멈춤은 15분 넘게 보고가 없는 것(서버가 센다).
-// 승인(어느 좌표를 올리나)은 지금 CLI 의 review.md 다 — 화면 승인은 다음 판(G17).
+// **승인은 여기, 적용은 CLI**(G17) — 판단한 파일마다 좌표 후보 · 어휘 제안을 체크해 저장하면 다음 `--apply` 가 그것으로 들인다.
+// 서버가 대신 들이지 않는 것은 원문이 그 사람 PC 에만 있어서다. 기본 체크는 review.md 와 같다 — 등재 + 인용.
 
 import { useMemo, useState } from 'react'
 import { api, currentRepo } from '../../lib/api.js'
@@ -247,11 +248,25 @@ function Commands({ cmds, shell, setShell, job, repo }) {
   )
 }
 
+// 기본 체크 — 등재된 좌표 + 인용 있음(core/judge.js 의 defaultOn 과 같다)
+const defaultOn = (t) => !!t.registered && !!t.quote
+const approvalOf = (f, saved) => {
+  const a = saved || { coords: {}, vocab: {}, force: false }
+  const coords = {}
+  ;(f.draft?.records || []).forEach((r, i) => r.touches.forEach((t) => (coords[`${i}|${t.coord}`] = a.coords?.[`${i}|${t.coord}`] ?? defaultOn(t))))
+  const vocab = {}
+  for (const v of f.draft?.vocab || []) vocab[v.coord] = a.vocab?.[v.coord] ?? false
+  return { coords, vocab, force: !!a.force }
+}
+
 function JobView({ me, say, repo, id }) {
   const key = `api:${repo}/jobs/${id}`
   const { data: j, error, refresh } = useResource(key, () => api.job(id), { ttl: 10_000 })
   const [shell, setShell] = useState(guessShell)
   const [filter, setFilter] = useState('all')
+  const [open, setOpen] = useState(null)
+  const [edits, setEdits] = useState({})
+  const [saving, setSaving] = useState(false)
   const base = repoBase(repo)
   const files = useMemo(() => Object.entries(j?.files || {}).sort((a, b) => (a[0] < b[0] ? -1 : 1)), [j])
   if (error) return <Note tone="warn">{error.status === 404 ? '그런 잡이 없다 — 남의 잡이거나 지워졌다' : '잡을 읽지 못했다 — ' + error.message}</Note>
@@ -261,6 +276,22 @@ function JobView({ me, say, repo, id }) {
   const mine = j.by === me?.user
   const paths = j.path.split(' · ')
   const cmds = ingestCommands(shell, { origin: window.location.origin, repo, job: j.id, paths, llm: !!j.options?.llm }).slice(1)
+  const pending = Object.keys(edits).length
+  const stateOf = (rel, f) => edits[rel] || approvalOf(f, j.approvals?.[rel])
+  const setOne = (rel, f, fn) => setEdits((e) => ({ ...e, [rel]: fn(structuredClone(stateOf(rel, f))) }))
+  const saveApprovals = async () => {
+    setSaving(true)
+    try {
+      await api.jobApprove(j.id, edits)
+      setEdits({})
+      await refresh()
+      say?.(`승인 ${pending}건을 저장했다 — 그 PC 에서 --apply 를 돌리면 이대로 들어간다`, 6000)
+    } catch (e) {
+      say?.(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
   const cancel = async () => {
     try {
       await api.jobCancel(j.id)
@@ -329,9 +360,18 @@ function JobView({ me, say, repo, id }) {
                 </tr>
               </thead>
               <tbody>
-                {shown.map(([rel, f]) => (
+                {shown.flatMap(([rel, f]) => [
                   <tr key={rel} className={f.status === 'skipped' || f.status === 'asset' ? 'is-idle' : ''}>
-                    <td className="amono">{rel}</td>
+                    <td className="amono">
+                      {f.draft && mine && !['saved', 'exists', 'have'].includes(f.status) ? (
+                        <button type="button" className="qtable__title" aria-expanded={open === rel} onClick={() => setOpen(open === rel ? null : rel)} title="판단의 후보를 보고 고른다">
+                          {open === rel ? '▾' : '▸'} {rel}
+                          {j.approvals?.[rel] || edits[rel] ? <span className="cchip">승인{edits[rel] ? ' · 저장 전' : ''}</span> : null}
+                        </button>
+                      ) : (
+                        rel
+                      )}
+                    </td>
                     <td>
                       {f.status === 'failed' ? <Mark kind="bad" /> : null} {FILE[f.status] || f.status}
                     </td>
@@ -348,10 +388,26 @@ function JobView({ me, say, repo, id }) {
                       ))}
                     </td>
                     <td className="amuted">{f.error || f.reason || ''}</td>
-                  </tr>
-                ))}
+                  </tr>,
+                  open === rel && f.draft ? (
+                    <tr key={rel + ':a'} className="qrun__item">
+                      <td colSpan={5}>
+                        <Approve f={f} st={stateOf(rel, f)} onChange={(fn) => setOne(rel, f, fn)} />
+                      </td>
+                    </tr>
+                  ) : null,
+                ])}
               </tbody>
             </table>
+          </div>
+        )}
+        {mine && files.some(([, f]) => f.draft) && (
+          <div className="qfoot">
+            <span className="amuted">{pending ? `저장 전 승인 ${pending}건` : '판단한 파일을 펴서 좌표 · 어휘를 고른다 — 적용은 그 PC 의 --apply'}</span>
+            <span className="topbar__spacer" />
+            <Btn kind="accent" onClick={saveApprovals} disabled={!pending || saving}>
+              {saving ? '저장하는 중…' : '승인 저장'}
+            </Btn>
           </div>
         )}
       </Card>
@@ -374,5 +430,61 @@ function JobView({ me, say, repo, id }) {
         </Card>
       )}
     </>
+  )
+}
+
+// 파일 하나의 승인 — 조각마다 좌표 후보(인용) · 어휘 제안 · 「제외」 판단이면 그래도 들이기
+function Approve({ f, st, onChange }) {
+  const d = f.draft
+  if (d.nature === '제외') {
+    return (
+      <label data-ui="ingest-approve">
+        <input type="checkbox" checked={st.force} onChange={(e) => onChange((s) => ((s.force = e.target.checked), s))} /> 판단은 「제외」({d.why || '들일 것이 아니다'}) — 그래도 들인다
+      </label>
+    )
+  }
+  return (
+    <div data-ui="ingest-approve">
+      {d.records.map((r, i) => (
+        <div key={i} style={{ marginBottom: 8 }}>
+          <div className="amuted">
+            {d.records.length > 1 ? `${i + 1}. ` : ''}
+            {r.title || ''} · 줄 {r.lines[0]}–{r.lines[1]}
+            {r.date ? ` · ${r.date}` : ''}
+          </div>
+          {!r.touches.length && <div className="amuted">좌표 후보 없음</div>}
+          {r.touches.map((t) => (
+            <label key={t.coord} style={{ display: 'block' }}>
+              <input type="checkbox" checked={!!st.coords[`${i}|${t.coord}`]} onChange={(e) => onChange((s) => ((s.coords[`${i}|${t.coord}`] = e.target.checked), s))} /> <code>{t.coord}</code>
+              {t.registered ? '' : <span className="cchip cchip--new">미등재</span>}
+              {t.verb ? ` ${t.verb}` : ''}
+              {t.quote ? <span className="amuted"> — 「{t.quote}」</span> : null}
+            </label>
+          ))}
+          {(r.excluded || []).map((x) => (
+            <div key={x.coord} className="amuted">
+              뺀 것 <code>{x.coord}</code>
+              {x.why ? ` — ${x.why}` : ''}
+            </div>
+          ))}
+          {(r.open || []).map((q) => (
+            <div key={q} className="amuted">
+              열린 물음 — {q}
+            </div>
+          ))}
+        </div>
+      ))}
+      {d.vocab?.length > 0 && (
+        <div>
+          <div className="amuted">어휘 제안 — 미등재 좌표를 올리려면 같이 고른다</div>
+          {d.vocab.map((v) => (
+            <label key={v.coord} style={{ display: 'block' }}>
+              <input type="checkbox" checked={!!st.vocab[v.coord]} onChange={(e) => onChange((s) => ((s.vocab[v.coord] = e.target.checked), s))} /> <code>{v.coord}</code> {v.label || ''}
+              {v.aliases?.length ? <span className="amuted"> (aliases: {v.aliases.join(', ')})</span> : null}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
