@@ -1,6 +1,7 @@
 // save — 유일한 쓰기 도구(I2). 설계서 §4.5 · v1.0 개편안 §5.2.
 //
 // 단위는 **작업 기록 1건 + (큐레이터면) 관리 문서 섹션 · 등록부 + 어휘 등재**이고 한 커밋이다(§0).
+// 예외는 들이기의 묶음(`saveRecords` — 기록 ≤20 · 어휘 더하기 · 첨부만 · 한 커밋)이다 — 지식 생성 · 작업실 검토 G12.
 //
 // **v1.0 — 역할이 입력을 가른다.** writer 는 작업 기록(`work` · `vocab` · `assets`)만 쓴다 — 관리 문서는
 // 큐레이션으로만 바뀐다(I6). 섹션 · 등록부 · 섹션 밖 손질 · 서식 예시 정리 · 큐레이션 판정(`work.curates`)은
@@ -40,6 +41,7 @@ import { checkDrop, dropVocab, dropRefs, refsError } from './docdrop.js'
 import { suggestEdit, isRefFile } from './docrefs.js'
 import { checkVocabShape, planVocab } from './vocabops.js'
 import { whyMissing } from './sourcerepo.js'
+import { blobOf } from './provenance.js'
 
 const NL = String.fromCharCode(10)
 const SETTINGS = { settledness: { excludeTypes: ['domain'] } }
@@ -421,41 +423,7 @@ export async function save(root, input, { user, write = false, admin = false, cu
       }
     }
 
-    // 10 커밋 — 바뀐 경로만. 실패하면 되돌린다 — **git 이 정말 커밋하지 않았을 때만.**
-    //
-    // 시간이 다 돼 실패로 돌아와도 Windows 에서는 진짜 git 이 살아서 커밋을 마쳤다. 그때 곧장 되돌리면
-    // 빈 커밋(되돌린 색인) + 옛 파일이 남고 호출자는 실패를 듣는다 — 작업 기록 하나가 사라진다(도구 층에서
-    // 2026-09-29 실측). `commitPaths` 는 이제 시간이 다 되면 git 을 나무째 죽이고 돌아온다 — 그래도 죽기
-    // 직전에 커밋을 마쳤을 수 있고 누가 `index.lock` 을 쥐었을 수 있으니, 잠금이 풀린 뒤 HEAD 로 판정한다.
-    const paths = r.snap.paths()
-    const head0 = await git.headSha(root)
-    // 커밋 훅은 돌리지 않는다(v1.0 V5) — 8단계가 커밋할 트리를 이미 검사했다. `commitHooks` 는 실패 경로를 시험하는 자리만 쓴다
-    const commit = () => git.commitPaths(root, paths, { message: r.title, author: user, timeout: commitTimeout, hooks: commitHooks })
-    let c = await commit()
-    for (let retry = 0; !c.ok; retry++) {
-      if (!(await git.waitIndexUnlocked(root))) {
-        // 5분이 지나도 잠겨 있다 — 커밋이 됐는지 모르니 손대지 않는다. 트리가 더러워 다음 save 가 알린다.
-        throw new CtxError('E_GIT', '커밋이 됐는지 알 수 없다 — .git/index.lock 이 풀리지 않아 파일은 쓴 채로 두었다. 셸에서 git status · git log 로 확인한다', {
-          reason: 'locked',
-          message: c.message,
-        })
-      }
-      const head1 = await git.headSha(root)
-      if (head1 && head1 !== head0) {
-        // 커밋은 됐다 — 호출만 늦게 실패로 돌아왔다. 색인 · 파일 · INDEX 는 add 한 그대로다.
-        c = { ok: true, commit: await git.headSha(root, { short: true }) }
-        r.warnings.push(`커밋이 ${Math.round(commitTimeout / 1000)}초를 넘겨 늦게 끝났다 — 커밋 훅(check · index)이 느리다`)
-      } else if (c.reason !== 'timeout' && /index\.lock/.test(c.message || '') && retry < LOCK_RETRIES) {
-        // 남이 index.lock 을 잠깐 쥐어 add · commit 이 시작도 못 했다(HEAD 그대로) — 풀린 뒤 다시 한다.
-        // 뮤텍스 밖의 읽기는 이제 잠그지 않지만(`git.status`), 사람의 셸 · 다른 도구는 여전히 쥘 수 있다.
-        c = await commit()
-      } else {
-        // 색인에 올린 것을 먼저 내린다 — 파일만 돌리면 색인에 남아 다음 save 가 「더러운 트리」 로 막힌다
-        await git.unstage(root, paths)
-        await r.snap.restore()
-        throw new CtxError('E_GIT', c.reason === 'timeout' ? `${c.message} — 되돌렸다` : '커밋하지 못했다 — 되돌렸다', { reason: c.reason, message: c.message })
-      }
-    }
+    const c = await commitRun(root, r, { user, commitTimeout, commitHooks })
 
     return {
       commit: c.commit,
@@ -504,6 +472,46 @@ export async function save(root, input, { user, write = false, admin = false, cu
     }
   }
   return out
+}
+
+// 10 커밋 — 단건 save 와 묶음(saveRecords)이 같이 쓴다. `r` 은 `{ snap, title, warnings }`
+async function commitRun(root, r, { user, commitTimeout, commitHooks }) {
+  // 10 커밋 — 바뀐 경로만. 실패하면 되돌린다 — **git 이 정말 커밋하지 않았을 때만.**
+  //
+  // 시간이 다 돼 실패로 돌아와도 Windows 에서는 진짜 git 이 살아서 커밋을 마쳤다. 그때 곧장 되돌리면
+  // 빈 커밋(되돌린 색인) + 옛 파일이 남고 호출자는 실패를 듣는다 — 작업 기록 하나가 사라진다(도구 층에서
+  // 2026-09-29 실측). `commitPaths` 는 이제 시간이 다 되면 git 을 나무째 죽이고 돌아온다 — 그래도 죽기
+  // 직전에 커밋을 마쳤을 수 있고 누가 `index.lock` 을 쥐었을 수 있으니, 잠금이 풀린 뒤 HEAD 로 판정한다.
+  const paths = r.snap.paths()
+  const head0 = await git.headSha(root)
+  // 커밋 훅은 돌리지 않는다(v1.0 V5) — 8단계가 커밋할 트리를 이미 검사했다. `commitHooks` 는 실패 경로를 시험하는 자리만 쓴다
+  const commit = () => git.commitPaths(root, paths, { message: r.title, author: user, timeout: commitTimeout, hooks: commitHooks })
+  let c = await commit()
+  for (let retry = 0; !c.ok; retry++) {
+    if (!(await git.waitIndexUnlocked(root))) {
+      // 5분이 지나도 잠겨 있다 — 커밋이 됐는지 모르니 손대지 않는다. 트리가 더러워 다음 save 가 알린다.
+      throw new CtxError('E_GIT', '커밋이 됐는지 알 수 없다 — .git/index.lock 이 풀리지 않아 파일은 쓴 채로 두었다. 셸에서 git status · git log 로 확인한다', {
+        reason: 'locked',
+        message: c.message,
+      })
+    }
+    const head1 = await git.headSha(root)
+    if (head1 && head1 !== head0) {
+      // 커밋은 됐다 — 호출만 늦게 실패로 돌아왔다. 색인 · 파일 · INDEX 는 add 한 그대로다.
+      c = { ok: true, commit: await git.headSha(root, { short: true }) }
+      r.warnings.push(`커밋이 ${Math.round(commitTimeout / 1000)}초를 넘겨 늦게 끝났다 — 커밋 훅(check · index)이 느리다`)
+    } else if (c.reason !== 'timeout' && /index\.lock/.test(c.message || '') && retry < LOCK_RETRIES) {
+      // 남이 index.lock 을 잠깐 쥐어 add · commit 이 시작도 못 했다(HEAD 그대로) — 풀린 뒤 다시 한다.
+      // 뮤텍스 밖의 읽기는 이제 잠그지 않지만(`git.status`), 사람의 셸 · 다른 도구는 여전히 쥘 수 있다.
+      c = await commit()
+    } else {
+      // 색인에 올린 것을 먼저 내린다 — 파일만 돌리면 색인에 남아 다음 save 가 「더러운 트리」 로 막힌다
+      await git.unstage(root, paths)
+      await r.snap.restore()
+      throw new CtxError('E_GIT', c.reason === 'timeout' ? `${c.message} — 되돌렸다` : '커밋하지 못했다 — 되돌렸다', { reason: c.reason, message: c.message })
+    }
+  }
+  return c
 }
 
 // 큐레이터만 쓰는 입력과 예약 태그 — writer 가 보내면 파일을 만지기 전에 거절한다(H7)
@@ -727,6 +735,10 @@ async function run(root, input, { user, write, admin, curate, mirror, now, stagi
 
     // 5 좌표 — 어휘 등재 **뒤에** 본다. 새 좌표를 같은 save 에서 등재하고 쓰는 것이 정상이다.
     const r0 = await loadRepo(root, { settings: SETTINGS })
+    // 5.0- 같은 원본 — 정형 출처(`…#blob:<sha>`)가 같은 기록이 있으면 거절한다(G10). 뮤텍스 안이라 두 사람이 같은 파일을 동시에 들여도
+    // 하나만 들어간다. 판정은 `core/provenance.js` 의 blob 하나
+    const dupOf = sameBlob(r0, w.source)
+    if (dupOf) throw new CtxError('E_EXISTS', `같은 원본(blob ${blobOf(w.source).slice(0, 7)})의 작업 기록이 이미 있다 — ${dupOf}`, { id: w.id, existing: dupOf, blob: blobOf(w.source) })
     // 쓰기 전 검사 — 8단계가 「이 save 가 새로 만든 오류」 만 가리는 기준(v1.0 I10 · V21). 어휘 추가는 오류를 만들지 않는다
     const before = checkOf(r0)
     // 5.0 큐레이션 판정의 대상 — 있는 기록이고 사람의 작업 기록이어야 한다.
@@ -1178,4 +1190,206 @@ function fmtLocal(ms) {
 function yamlStr(s) {
   const v = String(s ?? '')
   return /[:#\[\]{}&*!|>'"%@`,]|^\s|\s$|^$/.test(v) ? JSON.stringify(v) : v
+}
+
+// ── 같은 원본 ───────────────────────────────────────────────────────────────
+
+// 이 정형 출처와 blob 이 같은 기록의 id — 없으면 null. 손으로 적은 출처(blob 없음)는 비교하지 않는다
+function sameBlob(r, source) {
+  const b = blobOf(source)
+  if (!b) return null
+  return r.works.find((d) => blobOf(d.source) === b)?.id || null
+}
+
+// ── 묶음 — 들이기(`ctx ingest`)의 쓰기 ───────────────────────────────────────
+//
+// 지식 생성 · 작업실 검토 v0.1 §5.1 · G12. 폴더 하나에 수백 파일이면 save 를 수백 번 부른다 — 한 번마다 레포를 두 번 읽고(`loadRepo`)
+// 검사를 두 번 돌려 뮤텍스를 수십 분 쥔다(실측 585건 3.6초/회). 묶음은 뮤텍스 한 번 · 읽기 두 번 · 커밋 하나로 N 건을 쓴다.
+//
+//   받는 것    records[] { work, assets? } ≤ RECORDS_MAX · vocab(더하기만) · dryRun · skipExisting
+//   안 받는 것 sections · managed · edits · vocab op · 큐레이션 · 기준선 · 스냅샷 · 세우기 — 관리 문서 층은 큐레이터의 단건 save 다.
+//              그래서 applied 대조가 생기지 않는다(낙관 잠금의 뜻이 그대로다)
+//   전부 또는 전무  검사에서 걸리면 아무것도 커밋하지 않는다 · 오류는 기록 id 로 말한다(부르는 쪽이 그것만 빼고 다시 보낸다)
+//   있는 것    같은 id · 같은 원본(blob) — `skipExisting` 이면 건너뛰고 `skipped` 로 답한다(다시 돌리기가 그대로 되게). 아니면 E_EXISTS
+//   미러       기다리지 않는다 — 큐에 넣고 `queued`(묶음을 잇달아 보내는 쪽이 매번 1.5초를 쉬지 않게)
+export const RECORDS_MAX = 20
+const RECORDS_KEYS = ['records', 'vocab', 'dryRun', 'skipExisting']
+
+export async function saveRecords(root, input, { user, write = false, mirror = false, now = Date.now(), log = null, commitTimeout = COMMIT_TIMEOUT_MS, staging = null, commitHooks = false, curate = false } = {}) {
+  const out = await withLock(path.resolve(root), async () => {
+    const r = await runRecords(root, input, { user, write, curate, now, staging })
+    const base = { ids: r.ids, skipped: r.skipped, vocab: r.vocab, ...(r.assets.length ? { assets: r.assets } : {}), warnings: r.warnings, mirror: 'off' }
+    if (r.dryRun || !r.ids.length) {
+      await r.snap.restore()
+      return { ...(r.dryRun ? { dryRun: true } : { commit: null }), ...base }
+    }
+    const c = await commitRun(root, r, { user, commitTimeout, commitHooks })
+    return { commit: c.commit, ...base }
+  })
+  if (mirror && out.commit) {
+    enqueuePush(root, { log }).catch((e) => log?.('미러 오류: ' + (e?.message || e)))
+    out.mirror = 'queued'
+  }
+  return out
+}
+
+async function runRecords(root, input, { user, write, curate, now, staging }) {
+  if (!write) throw new CtxError('E_FORBIDDEN', '쓰기 권한이 없다', { user, need: 'write' })
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new CtxError('E_INPUT', '몸통은 { records: [...] } 다', { field: 'records' })
+  for (const k of Object.keys(input)) {
+    if (!RECORDS_KEYS.includes(k)) throw new CtxError('E_INPUT', `묶음은 작업 기록 · 어휘 더하기 · 첨부만 받는다 — ${k} 는 단건 save 로 보낸다`, { field: k })
+  }
+  const list = input.records
+  if (!Array.isArray(list) || !list.length) throw new CtxError('E_INPUT', `records 는 작업 기록 1~${RECORDS_MAX}건이다`, { field: 'records' })
+  if (list.length > RECORDS_MAX) throw new CtxError('E_INPUT', `records 는 한 번에 ${RECORDS_MAX}건까지다 — 나눠 보낸다`, { field: 'records', count: list.length })
+  for (const k of ['dryRun', 'skipExisting']) if (input[k] != null && typeof input[k] !== 'boolean') throw new CtxError('E_INPUT', `${k} 는 true · false 다`, { field: k })
+  const vocab = checkVocabShape(input.vocab, checkCoord)
+  if (vocab.some((v) => v.op && v.op !== 'add')) throw new CtxError('E_FORBIDDEN', '묶음의 어휘는 더하기만이다 — 고치기 · 폐기 · 이름은 큐레이터의 단건 save', { user, need: 'curate', fields: ['vocab(op)'] })
+
+  // 2 기록마다 — 단건 save 와 같은 스키마 · 같은 역할 검사. 어긋나면 몇 번째 · 어느 id 인지 붙인다
+  const recs = list.map((x, i) => {
+    if (!x || typeof x !== 'object' || Array.isArray(x)) throw new CtxError('E_INPUT', `records[${i}] 는 { work, assets? } 다`, { index: i })
+    for (const k of Object.keys(x)) if (!['work', 'assets'].includes(k)) throw new CtxError('E_INPUT', `records[${i}].${k} 는 받지 않는다 — 기록은 work · assets 만`, { index: i, field: k })
+    const one = { work: x.work, assets: x.assets }
+    let w
+    try {
+      w = checkSchema(one)
+    } catch (e) {
+      if (e instanceof CtxError) e.detail = { ...(e.detail || {}), index: i, id: x.work?.id ?? null }
+      throw e
+    }
+    const why = curatorOnly({}, w)
+    if (why.length) throw new CtxError(curate ? 'E_INPUT' : 'E_FORBIDDEN', `records[${i}](${w.id}) — 묶음에는 사람의 작업 기록만 싣는다: ${why.join(' · ')} 는 단건 save`, { index: i, id: w.id, fields: why, ...(curate ? {} : { need: 'curate' }) })
+    if (!(w.touches || []).length && !w.touchesEmpty) {
+      throw new CtxError('E_INPUT', `records[${i}](${w.id}) — touches 가 비었다. 좌표를 판정하지 않고 들이면 work.touchesEmpty 에 사유를 적는다(큐레이터가 판정한다)`, { index: i, id: w.id, field: 'work.touches' })
+    }
+    return { w, assets: one.assets || [], index: i }
+  })
+  const seenId = new Set()
+  for (const x of recs) {
+    const k = nfc(x.w.id)
+    if (seenId.has(k)) throw new CtxError('E_INPUT', `records 에 같은 id 가 두 번 나온다 — ${x.w.id}`, { id: x.w.id })
+    seenId.add(k)
+  }
+
+  // 3.5 트리 — 단건 save 와 같다(더러우면 거절)
+  const st = await git.status(root).catch(() => ({ repo: false }))
+  if (st.repo && st.dirty > 0) {
+    throw new CtxError('E_GIT', `서버 트리에 커밋 안 된 변경 ${st.dirty}건이 있어 save 를 거절했다 (${st.dirtyPaths.slice(0, 5).join(' · ')}${st.dirty > 5 ? ' …' : ''}). 콘솔 > 지식 레포 > 「트리 되돌리기」`, {
+      reason: 'dirty',
+      dirty: st.dirty,
+      paths: st.dirtyPaths,
+    })
+  }
+
+  const snap = new Snap(root)
+  const warnings = []
+  try {
+    const r0 = await loadRepo(root, { settings: SETTINGS })
+    const before = checkOf(r0)
+
+    // 3 있는 것 — 같은 id · 같은 원본. 묶음 안에서 같은 원본이 두 번이면 뒤의 것이 「있는 것」 이다
+    const names = new Set(await fs.readdir(path.join(root, 'work')).then((ns) => ns.map(nfc)).catch(() => []))
+    const byBlob = new Map()
+    for (const d of r0.works) {
+      const b = blobOf(d.source)
+      if (b && !byBlob.has(b)) byBlob.set(b, d.id)
+    }
+    const skipped = []
+    const todo = []
+    for (const x of recs) {
+      const id = x.w.id
+      const b = blobOf(x.w.source)
+      const sameId = names.has(nfc(id + '.md'))
+      const dup = !sameId && b ? byBlob.get(b) : null
+      if (sameId || dup) {
+        const reason = sameId ? '같은 id 의 작업 기록이 있다' : `같은 원본(blob ${b.slice(0, 7)})의 작업 기록이 있다`
+        if (!input.skipExisting) throw new CtxError('E_EXISTS', `records[${x.index}](${id}) — ${reason}${dup ? ' — ' + dup : ''}`, { index: x.index, id, existing: sameId ? id : dup, ...(b ? { blob: b } : {}) })
+        skipped.push({ id, existing: sameId ? id : dup, reason })
+        continue
+      }
+      if (b) byBlob.set(b, id)
+      todo.push(x)
+    }
+    if (!todo.length) return { snap, ids: [], skipped, vocab: 0, assets: [], warnings, dryRun: !!input.dryRun, title: '' }
+
+    // 3.8 첨부 — 묶음 전체의 상한(개수 · 합)
+    const pulled = new Map()
+    const nAssets = todo.reduce((a, x) => a + x.assets.length, 0)
+    if (nAssets && !staging) throw new CtxError('E_INPUT', '이 서버는 첨부를 받지 않는다(올리기 자리가 없다)', { field: 'assets' })
+    if (nAssets > ASSETS_COUNT_MAX) throw new CtxError('E_INPUT', `첨부는 묶음 한 번에 ${ASSETS_COUNT_MAX}개까지다 — 묶음을 나눈다`, { count: nAssets })
+    let total = 0
+    for (const x of todo) {
+      const got = []
+      for (const a of x.assets) {
+        const t = await takeAsset(staging, a.ref, { now })
+        const ext = path.extname(a.name).toLowerCase()
+        if (!t.ext.includes(ext)) throw new CtxError('E_INPUT', `${x.w.id} — assets[].name 의 확장자(${ext})가 올린 파일의 종류(${t.type})와 다르다`, { id: x.w.id, name: a.name, type: t.type })
+        total += t.buf.length
+        if (total > ASSETS_TOTAL_MAX) throw new CtxError('E_INPUT', `첨부는 묶음 한 번에 합 ${ASSETS_TOTAL_MAX / 1024 / 1024} MB 까지다 — 묶음을 나눈다`, { total })
+        got.push({ name: a.name, buf: t.buf, type: t.type })
+      }
+      pulled.set(x.w.id, got)
+    }
+
+    // 4 어휘 — 더하기만
+    const vocabPath = '_vocab.md'
+    const vp = planVocab(await fs.readFile(path.join(root, vocabPath), 'utf8'), vocab, { today: fmtLocal(now).slice(0, 10) })
+    if (vp.added) await snap.write(vocabPath, vp.text)
+    warnings.push(...vp.warnings)
+    for (const t of vp.newTypes) warnings.push(`새 어휘 타입 "${t}" 을 만들었다 (_vocab.md 끝) — 의도한 타입이 맞는지 본다`)
+
+    // 5 좌표 — 어휘에 있어야 한다
+    const known = new Set(r0.vocab.coords.keys())
+    for (const v of vocab) known.add(v.coord)
+    for (const x of todo) {
+      for (const c of x.w.touches || []) {
+        if (!known.has(c)) throw new CtxError('E_INPUT', `${x.w.id} — 어휘에 없는 좌표다(${c}) — vocab 에 같이 보내거나 먼저 등재한다`, { id: x.w.id, coord: c })
+      }
+    }
+
+    // 6.5 · 7 첨부 · 기록
+    const assetsOut = []
+    for (const x of todo) {
+      const paths = []
+      for (const a of pulled.get(x.w.id) || []) {
+        const rel = `work/assets/${x.w.id}/${a.name}`
+        await snap.writeBin(rel, a.buf)
+        paths.push(rel.slice('work/'.length))
+        assetsOut.push({ path: rel, size: a.buf.length })
+      }
+      await snap.write('work/' + x.w.id + '.md', renderWork(x.w, user, paths))
+    }
+
+    // 8 검사 — 이 묶음이 새로 만든 오류면 전부 되돌린다
+    const r1 = await loadRepo(root, { settings: SETTINGS })
+    const res = checkOf(r1)
+    const errors = newErrors(before, res)
+    if (errors.length) {
+      await snap.restore()
+      const text = JSON.stringify(errors)
+      throw new CtxError('E_CHECK', '검사에서 이 묶음이 만든 오류가 났다 — 아무것도 커밋하지 않았다. ids 의 기록을 빼거나 고쳐 다시 보낸다', {
+        findings: errors,
+        ids: todo.map((x) => x.w.id).filter((id) => text.includes(id)),
+      })
+    }
+    const old = res.findings.filter((f) => f.sev === 'error')
+    if (old.length) warnings.push(`레포에 원래 있던 오류 ${old.reduce((a, f) => a + f.items.length, 0)}건 — 이 묶음과 무관해 막지 않았다(${old.map((f) => f.label).join(' · ')})`)
+    for (const f of res.findings.filter((x) => x.sev === 'warn' && (curate || x.kind !== 'curation-stale'))) warnings.push(`${f.label} ${f.items.length}건`)
+
+    const ids = todo.map((x) => x.w.id)
+    return {
+      snap,
+      ids,
+      skipped,
+      vocab: vp.added,
+      assets: assetsOut,
+      warnings,
+      dryRun: !!input.dryRun,
+      title: `들이기 — 작업 기록 ${ids.length}건 (${ids[0]}${ids.length > 1 ? ' …' : ''})`,
+    }
+  } catch (e) {
+    await snap.restore()
+    throw e
+  }
 }

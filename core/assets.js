@@ -16,6 +16,8 @@ export const ASSET_MAX = 10 * 1024 * 1024 // 한 파일
 export const ASSETS_TOTAL_MAX = 30 * 1024 * 1024 // save 한 번
 export const ASSETS_COUNT_MAX = 20
 export const STAGING_TTL_MS = 24 * 60 * 60 * 1000
+// 한 사람이 들고 있는(아직 save 에 안 실린 · 만료 전) 첨부의 합 — 들이기가 폴더째 올려도 서버 디스크가 끝없이 차지 않게(G14)
+export const STAGING_USER_MAX = 500 * 1024 * 1024
 
 // 종류는 **바이트로** 가린다 — 확장자 · content-type 은 부르는 쪽이 아무렇게나 적을 수 있다.
 // svg 는 받지 않는다: 스크립트를 담는 문서이고 파일 API 로 새 탭에 열면 이 출처에서 돈다(G5 · A4).
@@ -94,8 +96,21 @@ export function sniff(buf) {
 
 const REF = /^sha256:([0-9a-f]{64})$/
 
-/** 올린 바이트를 들고 있는다 → `{ ref, size, type }`. 모르는 종류 · 빈 몸통 · 상한 초과는 CtxError */
-export async function stage(dir, buf, { now = Date.now() } = {}) {
+/** 이 사람이 들고 있는 첨부의 합(만료 전) — 같은 내용을 여럿이 올렸으면 마지막에 올린 사람의 것으로 센다 */
+export async function usageOf(dir, by, { now = Date.now() } = {}) {
+  let total = 0
+  for (const e of await fs.readdir(dir).catch(() => [])) {
+    if (!e.endsWith('.json')) continue
+    const meta = await fs.readFile(path.join(dir, e), 'utf8').then(JSON.parse).catch(() => null)
+    if (!meta || meta.by !== by || now - Number(meta.at || 0) > STAGING_TTL_MS) continue
+    total += Number(meta.size || 0)
+  }
+  return total
+}
+
+/** 올린 바이트를 들고 있는다 → `{ ref, size, type }`. 모르는 종류 · 빈 몸통 · 상한 초과는 CtxError.
+ *  `by` 를 주면 그 사람의 합이 `userMax` 를 넘을 때 E_TOO_LARGE(413) — 이미 들고 있는 같은 내용은 다시 세지 않는다 */
+export async function stage(dir, buf, { now = Date.now(), by = null, userMax = STAGING_USER_MAX } = {}) {
   if (!buf?.length) throw new CtxError('E_INPUT', '몸통이 비었다 — 파일 바이트를 그대로 보낸다(curl --data-binary @파일)')
   if (buf.length > ASSET_MAX) throw new CtxError('E_INPUT', `파일 하나는 ${ASSET_MAX / 1024 / 1024} MB 까지다`, { size: buf.length })
   const kind = sniff(buf)
@@ -105,13 +120,21 @@ export async function stage(dir, buf, { now = Date.now() } = {}) {
   const sha = crypto.createHash('sha256').update(buf).digest('hex')
   await fs.mkdir(dir, { recursive: true })
   const file = path.join(dir, sha)
+  if (by) {
+    const had = await fs.readFile(file + '.json', 'utf8').then(JSON.parse).catch(() => null)
+    const mine = had && had.by === by && now - Number(had.at || 0) <= STAGING_TTL_MS
+    const used = await usageOf(dir, by, { now })
+    if (!mine && used + buf.length > userMax) {
+      throw new CtxError('E_TOO_LARGE', `올려 둔 첨부가 ${Math.round(used / 1024 / 1024)} MB 다 — 한 사람 ${userMax / 1024 / 1024} MB 까지. save 에 실어 들이거나 ${STAGING_TTL_MS / 3600000}시간 뒤 비워진 다음 올린다`, { used, size: buf.length, max: userMax })
+    }
+  }
   if (!(await fs.stat(file).then((s) => s.size === buf.length).catch(() => false))) {
     // 반쯤 쓴 파일을 take 가 읽지 않게 — 옆 이름으로 쓰고 옮긴다
     const tmp = file + '.' + process.pid + '.' + crypto.randomBytes(4).toString('hex')
     await fs.writeFile(tmp, buf)
     await fs.rename(tmp, file)
   }
-  await fs.writeFile(file + '.json', JSON.stringify({ type: kind.type, size: buf.length, at: now }))
+  await fs.writeFile(file + '.json', JSON.stringify({ type: kind.type, size: buf.length, at: now, ...(by ? { by } : {}) }))
   return { ref: 'sha256:' + sha, size: buf.length, type: kind.type, ext: kind.ext }
 }
 

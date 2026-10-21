@@ -60,6 +60,16 @@ const cmpDateAsc = (a, b) => -cmpDateDesc(a, b)
 
 const slim = (d) => ({ id: d.id, title: d.title ?? null, date: d.date ?? null, author: d.author ?? null })
 
+// 들인 기록(`ctx ingest`)의 들인 날 — 태그 `ingest/<YYYYMMDD>-<해시>` 의 앞 조각. 기록의 date 는 **원문의 날**이라
+// 몇 해 전일 수 있다 — 그걸로 대기 나이를 재면 들이자마자 「대기 N일」 이 뜬다(지식 생성 · 작업실 검토 E8). 계산이다(I8)
+export function ingestedOf(d) {
+  for (const t of d.tags || []) {
+    const m = /^ingest\/(\d{4})(\d{2})(\d{2})-/.exec(String(t))
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`
+  }
+  return null
+}
+
 function daysSince(date, today) {
   if (!date) return null
   const at = Date.parse(String(date).slice(0, 10) + 'T00:00:00Z')
@@ -241,7 +251,8 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
 
   const queueRows = queue.map((d) => ({
     ...slim(d),
-    ageDays: daysSince(d.date, today),
+    // 대기 나이 — 들인 기록은 들인 날부터(원문 날짜가 아니라)
+    ageDays: daysSince(ingestedOf(d) || d.date, today),
     zero: !(d.touches || []).length,
     coords: (d.touches || []).map((c) => ({ coord: c, cls: coordClass(managedIndex, c) })),
   }))
@@ -279,7 +290,9 @@ export function buildCuration({ works, sections = [], managedIndex = null, coord
   }
 
   const last = curations.length ? slim(curations[curations.length - 1]) : null
-  const oldestDays = queueRows.length ? queueRows[0].ageDays : null
+  // 가장 오래 기다린 것 — 줄은 원문 날짜 순이라 첫 줄이 가장 오래 기다린 것이 아닐 수 있다(들인 기록)
+  const ages = queueRows.map((x) => x.ageDays).filter((n) => n != null)
+  const oldestDays = ages.length ? Math.max(...ages) : null
 
   return {
     implicit,

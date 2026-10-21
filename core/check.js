@@ -334,7 +334,8 @@ export function runBuiltinCheck({ docs, vocab, validity, indexInfo, managedIndex
       '큐레이터가 cdp-curate 로 대기열을 다룬다'
     )
     if (curation?.stats?.stale) {
-      const q = curation.queue[0]
+      // 가장 오래 기다린 줄 — 첫 줄(원문 날짜가 가장 이른 것)이 아닐 수 있다(들인 기록은 들인 날부터 잰다)
+      const q = curation.queue.reduce((m, x) => ((x.ageDays ?? -1) > (m?.ageDays ?? -1) ? x : m), null)
       push(
         'warn',
         'curation-stale',

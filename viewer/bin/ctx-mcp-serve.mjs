@@ -17,7 +17,8 @@ import fs from 'node:fs/promises'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
-import { save as doSave } from '../../core/save.js'
+import { save as doSave, saveRecords } from '../../core/save.js'
+import { parseSource } from '../../core/provenance.js'
 import { CtxError, driftOf, toolDrift } from '../../core/tools.js'
 import { zip } from '../../core/zip.js'
 import * as wr from '../../core/workrepos.js'
@@ -1724,7 +1725,7 @@ export async function runServe(opt = {}) {
           }
           try {
             await assets.sweep(stagingDir).catch(() => 0)
-            const st = await assets.stage(stagingDir, got)
+            const st = await assets.stage(stagingDir, got, { by: a.user })
             log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/assets', key: st.ref.slice(7, 19) + ' ' + st.size + 'B', ms: Date.now() - t0, status: 200 })
             return json(res, 200, {
               ref: st.ref,
@@ -1734,10 +1735,65 @@ export async function runServe(opt = {}) {
               next: `save 의 assets 에 { ref: "${st.ref}", name: "<이름>${st.ext[0]}" } 를 싣는다 — work/assets/<작업 기록 id>/<이름> 에 들어간다`,
             })
           } catch (e) {
-            const status = /종류/.test(e?.message || '') ? 415 : 400
+            const status = e?.code === 'E_TOO_LARGE' ? 413 : /종류/.test(e?.message || '') ? 415 : 400
             log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/assets', ms: Date.now() - t0, status, code: e?.code || 'E_INPUT' })
             return json(res, status, { error: { code: e?.code || 'E_INPUT', message: e?.message || String(e), detail: e?.detail } })
           }
+        }
+
+        // POST /api/<repo>/records — 들이기의 묶음 save(지식 생성 · 작업실 검토 G12). `ctx ingest --apply` 가 부른다.
+        // 몸통 { records: [{ work, assets? }] ≤20, vocab?, dryRun?, skipExisting? }. writer 이상 · 사람의 토큰 — author 는 토큰의 user.
+        // 기록 · 어휘 더하기 · 첨부만 받는다(관리 문서 층은 큐레이터의 단건 save). 한 묶음이 커밋 하나다
+        if (sub === '/records') {
+          if (req.method !== 'POST') return json(res, 405, { error: { code: 'E_INPUT', message: 'POST 다' } })
+          if (!a.write) {
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/records', ms: Date.now() - t0, status: 403, code: 'E_FORBIDDEN' })
+            return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '들이기는 쓰기 권한(writer 이상)이 있어야 한다', detail: { need: 'write' } } })
+          }
+          const got = await readBody(req, MAX_BODY)
+          let body = null
+          try {
+            body = got?.tooLarge ? null : JSON.parse(got.toString('utf8') || '{}')
+          } catch {}
+          try {
+            if (!body) throw new CtxError('E_INPUT', got?.tooLarge ? '몸통이 너무 크다 — 묶음을 나눈다' : '몸통이 JSON 이 아니다', { field: 'records' })
+            const out = await saveRecords(found.root, body, {
+              user: a.user,
+              write: a.write,
+              curate: a.curate ? a.curate(name) : !!a.admin,
+              mirror: !!opt.mirror,
+              staging: stagingDir,
+              log: (m) => log.line(m),
+            })
+            if (out.commit) await store.reload(name)
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/records', key: `${out.dryRun ? '미리보기 ' : ''}${out.ids.length}건 · 건너뜀 ${out.skipped.length}`, ms: Date.now() - t0, status: 200 })
+            return json(res, 200, out)
+          } catch (e) {
+            const code = e?.code || 'E_REPO'
+            const status = code === 'E_FORBIDDEN' ? 403 : code === 'E_EXISTS' ? 409 : code === 'E_NOT_FOUND' ? 404 : 400
+            log.req({ ip, user: a.user, repo: name, method: 'POST', tool: '/records', ms: Date.now() - t0, status, code })
+            return json(res, status, { error: { code, message: e?.message || String(e), detail: e?.detail } })
+          }
+        }
+
+        // GET /api/<repo>/sources[?run=<runId>] — 들인 기록의 출처(정형 `…#blob:` 만) · 큐레이션 상태. `ctx ingest --status` 와
+        // 이전 판 찾기가 읽는다. 원천 경로가 실리므로 쓰기 권한이 있는 사람에게만(읽는 사람의 화면에는 출처가 본문에 있다)
+        if (sub === '/sources') {
+          if (req.method !== 'GET') return json(res, 405, { error: { code: 'E_INPUT', message: 'GET 이다' } })
+          if (!a.write) return json(res, 403, { error: { code: 'E_FORBIDDEN', message: '쓰기 권한(writer 이상)이 있어야 한다', detail: { need: 'write' } } })
+          const v = await store.view(name)
+          const run = url.searchParams.get('run')
+          const tag = run ? 'ingest/' + run : null
+          const rows = []
+          for (const d of v.works || []) {
+            const src = parseSource(d.source)
+            if (!src) continue
+            if (tag && !(d.tags || []).includes(tag)) continue
+            const st = v.curation?.statusOf?.(d.id) || null
+            rows.push({ id: d.id, date: d.date ?? null, author: d.author ?? null, source: d.source, name: src.name, path: src.path, blob: src.blob, state: st?.state || null })
+          }
+          log.req({ ip, user: a.user, repo: name, method: 'GET', tool: '/sources', key: String(rows.length), ms: Date.now() - t0, status: 200 })
+          return json(res, 200, { sources: rows })
         }
 
         // POST /api/<repo>/docs-drop — 안 쓰는 관리 문서 지우기(관리문서 정리 검토 §4.9). **그 레포의 큐레이터**(v1.0 — 관리 문서는
