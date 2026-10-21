@@ -213,3 +213,24 @@ test('saveRecords — LLM 을 쓰지 않는 레포(llm: false)는 판단을 거�
     await t.rm()
   }
 })
+
+test('saveRecords — 들이는 동안 남의 단건 save 는 묶음 하나만 기다린다(묶음 사이에 끼어든다 · 뮤텍스 FIFO)', { skip }, async () => {
+  const t = await repo()
+  try {
+    const batch = (k) => ({ records: Array.from({ length: 20 }, (_, i) => rec(`2026-0814-b${k}-${String(i).padStart(2, '0')}`)) })
+    const order = []
+    const t0 = Date.now()
+    // CLI 처럼 묶음을 하나씩 순서대로 보낸다 — 첫 묶음이 뮤텍스를 쥔 동안 남의 단건 save 가 줄을 선다
+    const cli = (async () => {
+      await saveRecords(t.r, batch(1), W).then(() => order.push(['batch1', Date.now() - t0]))
+      await saveRecords(t.r, batch(2), W).then(() => order.push(['batch2', Date.now() - t0]))
+    })()
+    await new Promise((r) => setTimeout(r, 50))
+    const single = save(t.r, rec('2026-0814-사람-기록'), { user: 'park', write: true }).then(() => order.push(['single', Date.now() - t0]))
+    await Promise.all([cli, single])
+    assert.deepEqual(order.map((x) => x[0]), ['batch1', 'single', 'batch2'], '단건은 첫 묶음 뒤 · 둘째 묶음 앞')
+    assert.equal(await porcelain(t.r), '')
+  } finally {
+    await t.rm()
+  }
+})

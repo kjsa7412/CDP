@@ -24,7 +24,7 @@
 - [x] B7 대기열 — ingest 기록의 대기 나이는 들어온 커밋 시각(`curation.js` · `check.js` stale)
 - [x] B8 스킬 `cdp-curate` — `touches/` · `touches?/` 태그를 읽고 좌표를 정하는 절차(E4)
 - [x] B9 staging 사용자별 총량 상한 500MB · 413
-- [x] B10 시험 — `ops/verify` 대신 `test/ingest.test.mjs`(서버 하나로 끝까지) · `test/save-records.test.mjs`. **「수집 중 단건 save 지연이 묶음 하나 이하」 는 재지 않았다**(남은 것). 원래 문구: 하네스(`ops/verify`) — 3파일 폴더 → 기록 3 · 다시 돌리면 0 · 한 파일 수정 → 1(이전 판 머리줄) · 두 클라이언트 동시 → 중복 0 · 묶음 20 → 커밋 1 · 묶음 중 하나 E_CHECK → 전부 거절 · 수집 중 단건 save 지연이 묶음 하나 이하
+- [x] B10 시험 — `ops/verify` 대신 `test/ingest.test.mjs`(서버 하나로 끝까지) · `test/save-records.test.mjs`. 「수집 중 단건 save 지연이 묶음 하나 이하」 는 2026-10-21 시험으로 고정(`save-records` — 묶음 둘 사이에 단건이 끼어든다 · 뮤텍스 FIFO). 원래 문구: 하네스(`ops/verify`) — 3파일 폴더 → 기록 3 · 다시 돌리면 0 · 한 파일 수정 → 1(이전 판 머리줄) · 두 클라이언트 동시 → 중복 0 · 묶음 20 → 커밋 1 · 묶음 중 하나 E_CHECK → 전부 거절 · 수집 중 단건 save 지연이 묶음 하나 이하
 - [x] B11 문서 — MCP 만으로 M1 예외 문구(G18) · 시스템 설계서 save 절 · 사용자 설명서 「문서 · 폴더에서 들이기」
 
 ## v1.8.0 ingest 2 — 변환 · 판단 · 진행(G6~G9 · G13 · G19)
