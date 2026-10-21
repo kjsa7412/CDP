@@ -61,7 +61,10 @@ const USAGE = `ctx - 지식 레포 도구  (번들 __CTX_BUILT__)
   ctx rebuild snapshot --server <주소> --repo <레포> [--doc <문서>] [--all] [--dry]   근거 없는 섹션을 정본 스냅샷 기록으로 뜬다(큐레이터 · 200 개씩 · 기록을 인용하는 섹션은 --all 일 때만)
   ctx forms list|show <id>|check [--forms <dir>] [--data <dir>]   서식집 — 목록 · 서식 하나(찍힐 빈 문서까지) · 번들과 팀 서식(<data>/forms) 검사
   ctx migrate <레포> [--dry] [--by <이름>] [--keep-tools]   제자리 이행 — 전환 기록 하나 · 서식 예시 · 도구 층 걷기(서버를 멈추고)
-  ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   md 폴더를 work/ 로 들인다
+  ctx login --server <주소> [--token-stdin]   이 PC 의 CLI 가 붙을 서버 · 토큰(숨김 입력) — /me 로 확인 · ctx whoami · ctx logout
+  ctx ingest <파일 · 폴더>… --repo <레포> [--glob <p>]… [--exclude <p>]… [--max-files N]   문서를 작업 기록으로 — 계획(쓰지 않는다)
+  ctx ingest <…> --repo <레포> --apply [--yes] | --status | ctx ingest list   들인다(묶음 save · 대기열 → 큐레이터) · 상태 · run 목록
+  ctx import-dir <원본> --repo <지식레포> [--dry] [--author <이름>]   (곧 없앤다 → ctx ingest) md 폴더를 로컬 클론의 work/ 로
   ctx seed init|check [--from <문서 레포>]          문서 레포에서 세우기 — 지도(cdp-sources.json) 뼈대 · 검사
   ctx seed plan|apply --server <주소> --repo <레포> [--from …] [--at <sha>] [--stage baseline|managed|records] [--only <key|id>] [--date <YYYY-MM-DD>]
                                             지도대로 세운다(큐레이터 · plan = 전부 dryRun) — 세우는 흔적은 _seed.json 하나 · 세운 기록은 반영됨
@@ -184,6 +187,14 @@ function parseArgs(argv) {
     else if (a === '--date') out.date = argv[++i]
     else if (a === '--save') out.saveDraft = argv[++i]
     else if (a === '--go') out.go = true
+    // 들이기(ctx ingest) · 로그인(ctx login)
+    else if (a === '--apply') out.apply = true
+    else if (a === '--status') out.status = true
+    else if (a === '--no-llm') out.noLlm = true
+    else if (a === '--glob') (out.globs ||= []).push(argv[++i])
+    else if (a === '--exclude') (out.excludes ||= []).push(argv[++i])
+    else if (a === '--max-files') out.maxFiles = argv[++i]
+    else if (a === '--token-stdin') out.tokenStdin = true
     else if (a === '-h' || a === '--help' || a === 'help') out.cmd = out.cmd || 'help'
     else if (!out.cmd) out.cmd = a
     else out.args.push(a)
@@ -739,7 +750,17 @@ export async function main(argv = process.argv.slice(2)) {
     const { runBaseline } = await import('./ctx-baseline.mjs')
     return runBaseline(opt)
   }
+  if (opt.cmd === 'ingest') {
+    const { runIngest } = await import('./ctx-ingest.mjs')
+    return runIngest(opt)
+  }
+  if (opt.cmd === 'login' || opt.cmd === 'whoami' || opt.cmd === 'logout') {
+    const m = await import('./ctx-login.mjs')
+    return opt.cmd === 'login' ? m.runLogin(opt) : opt.cmd === 'whoami' ? m.runWhoami(opt) : m.runLogout(opt)
+  }
   if (opt.cmd === 'import-dir') {
+    // 곧 없앤다(지식 생성 · 작업실 검토 G16) — 로컬 클론에 직접 써서 save 를 비껴간다(I2). 같은 일을 서버 save 로 하는 것이 ingest 다
+    err('ctx import-dir: 다음 판에 없앤다 — ctx ingest <폴더> --repo <레포> 가 같은 일을 서버 save 로 한다(로컬 클론 · 손 커밋 없이)')
     const { runImportDir } = await import('./ctx-import.mjs')
     return runImportDir(opt)
   }

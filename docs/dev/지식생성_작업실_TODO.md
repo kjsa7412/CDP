@@ -15,17 +15,17 @@
 
 ## v1.7.0 ingest 1 — 결정론 · save 경로(G5 · G10~G12 · G14~G16)
 
-- [ ] B1 `core/save.js` 묶음 입력 `records[]` — 20건 이하 · 기록 · 첨부 · 어휘 add 만 받고 `sections` · `managed` · `edits` · `vocab op` 는 거절 · 뮤텍스 한 번 · `loadRepo` 2회 · 커밋 하나 · 전부 또는 전무 · 오류는 기록 id 별 · 미러 대기 생략
-- [ ] B2 source 정형 `<이름>@<commit|->/<경로>#blob:<sha>` 파서 · 같은 blob 의 기록이 있으면 뮤텍스 안에서 `E_EXISTS` + 그 id(G10). 판정은 core 한 곳
-- [ ] B3 `core/ingest.js`(새것) — 목록(파일 · 폴더 · git, `openSource` 재사용) · blob sha · id 짓기(날짜 근거는 `planImport` 재사용) · 이전 판 머리줄(G11) · 크기 상한 미리 거르기
-- [ ] B4 `viewer/bin/ctx-ingest.mjs` — `--plan`(기본) · `--apply` · `--status` · `--resume` · `--no-llm` · 상태 폴더 `.cdp-ingest/<runId>/`(지식 레포 클론 안이면 거절)
-- [ ] B5 `ctx login --server <url>` · `whoami` · `logout` — tokenstore 재사용 · `/me` 로 역할과 레포 출력
-- [ ] B6 `ctx import-dir` → `ingest --no-llm` 별칭 · 안내 한 줄
-- [ ] B7 대기열 — ingest 기록의 대기 나이는 들어온 커밋 시각(`curation.js` · `check.js` stale)
-- [ ] B8 스킬 `cdp-curate` — `touches/` · `touches?/` 태그를 읽고 좌표를 정하는 절차(E4)
-- [ ] B9 staging 사용자별 총량 상한 500MB · 413
-- [ ] B10 하네스(`ops/verify`) — 3파일 폴더 → 기록 3 · 다시 돌리면 0 · 한 파일 수정 → 1(이전 판 머리줄) · 두 클라이언트 동시 → 중복 0 · 묶음 20 → 커밋 1 · 묶음 중 하나 E_CHECK → 전부 거절 · 수집 중 단건 save 지연이 묶음 하나 이하
-- [ ] B11 문서 — MCP 만으로 M1 예외 문구(G18) · 시스템 설계서 save 절 · 사용자 설명서 「문서 · 폴더에서 들이기」
+- [x] B1 `core/save.js` 묶음 입력 `records[]` — 20건 이하 · 기록 · 첨부 · 어휘 add 만 받고 `sections` · `managed` · `edits` · `vocab op` 는 거절 · 뮤텍스 한 번 · `loadRepo` 2회 · 커밋 하나 · 전부 또는 전무 · 오류는 기록 id 별 · 미러 대기 생략
+- [x] B2 source 정형 `<이름>@<commit|->/<경로>#blob:<sha>` 파서 · 같은 blob 의 기록이 있으면 뮤텍스 안에서 `E_EXISTS` + 그 id(G10). 판정은 core 한 곳
+- [x] B3 `core/ingest.js`(새것) — 목록(파일 · 폴더 · git, `openSource` 재사용) · blob sha · id 짓기(날짜 근거는 `planImport` 재사용) · 이전 판 머리줄(G11) · 크기 상한 미리 거르기
+- [x] B4 `viewer/bin/ctx-ingest.mjs` — `--plan`(기본) · `--apply` · `--status` · `--resume` · `--no-llm` · 상태 폴더 `.cdp-ingest/<runId>/`(지식 레포 클론 안이면 거절)
+- [x] B5 `ctx login --server <url>` · `whoami` · `logout` — tokenstore 재사용 · `/me` 로 역할과 레포 출력
+- [x] B6 `ctx import-dir` → `ingest --no-llm` 별칭 · 안내 한 줄
+- [x] B7 대기열 — ingest 기록의 대기 나이는 들어온 커밋 시각(`curation.js` · `check.js` stale)
+- [x] B8 스킬 `cdp-curate` — `touches/` · `touches?/` 태그를 읽고 좌표를 정하는 절차(E4)
+- [x] B9 staging 사용자별 총량 상한 500MB · 413
+- [x] B10 시험 — `ops/verify` 대신 `test/ingest.test.mjs`(서버 하나로 끝까지) · `test/save-records.test.mjs`. **「수집 중 단건 save 지연이 묶음 하나 이하」 는 재지 않았다**(남은 것). 원래 문구: 하네스(`ops/verify`) — 3파일 폴더 → 기록 3 · 다시 돌리면 0 · 한 파일 수정 → 1(이전 판 머리줄) · 두 클라이언트 동시 → 중복 0 · 묶음 20 → 커밋 1 · 묶음 중 하나 E_CHECK → 전부 거절 · 수집 중 단건 save 지연이 묶음 하나 이하
+- [x] B11 문서 — MCP 만으로 M1 예외 문구(G18) · 시스템 설계서 save 절 · 사용자 설명서 「문서 · 폴더에서 들이기」
 
 ## v1.8.0 ingest 2 — 변환 · 판단 · 진행(G6~G9 · G13 · G19)
 
@@ -52,4 +52,15 @@
 
 ## 나온 것
 
-(구현하면서 채운다)
+| 항목 | 정한 것 | 왜 |
+|---|---|---|
+| 상태 폴더 | `~/.cdp/ingest/<run 해시>/`(CDP_INGEST_DIR) — 검토의 「지금 폴더 `.cdp-ingest/`」 를 바꿨다 | 원천 안에서 `ctx ingest .` 를 돌리면 원천을 더럽힌다 |
+| run | 해시 = 대상 · 거름 · 레포 · runId = 처음 만든 날 + 해시 · 태그 `ingest/<runId>` | 다시 돌리면 같은 상태 · 대기 나이를 태그의 날로 잰다(계산 · I8) |
+| 「이미 들임」 | 계획이 서버 `GET /sources` + 이 PC 원장을 보고 셈 · 적용은 `skipExisting` 으로 서버가 한 번 더(뮤텍스 안) | 두 PC 가 원장 없이 동시에 돌려도 중복 0(시험) |
+| 이전 판 | 같은 원천 이름 · 같은 경로 · 다른 blob → 새 기록 + 머리줄 | supersedes 는 정정 전용(G11) |
+| 판단 단계 | 아직 없다 — `--no-llm` 이 없어도 같은 동작이고 그렇다고 한 줄 알린다 | v1.8 |
+| import-dir | 그대로 돌되 첫 줄에 「다음 판에 없앤다 → ingest」 | 한 판 별칭(G16) — 개인 · 오프라인 사용을 바로 끊지 않는다 |
+| logout | 서버 주소만 잊는다 · 토큰은 남긴다 | 같은 토큰을 작업 레포의 MCP 가 쓴다 |
+| `/sources` | write 이상 | 원천 경로(PC 경로 조각)가 실린다 |
+| 링크 | 공백 든 대상도 잡는다(꺾쇠 없이) · 코드 안은 그대로 | 실제 문서가 그렇게 쓴다(importdir 실측) |
+

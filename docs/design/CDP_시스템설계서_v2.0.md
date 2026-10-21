@@ -395,6 +395,13 @@ writer 가 큐레이터만 받는 입력(위 표에서 writer 칸이 — 인 줄
 - 커밋 상한 120초 — 넘으면 git 을 **프로세스 나무째** 죽이고 돌아온 뒤 `index.lock` 이 풀리기를 기다려 **HEAD 로** 판정한다(커밋이 이미 됐으면 성공 · 남이 쥔 잠금이면 두 번까지 다시 · 5분이 지나도 잠겨 있으면 파일을 둔 채 `E_GIT { reason: 'locked' }`).
 - **뮤텍스는 레포당 하나**(`core/lock.js`) — save · 미러 push 큐 · 「origin 과 맞추기」 · 「트리 되돌리기」 가 같은 줄에 선다. 미러 push 는 뮤텍스 밖이다.
 
+### 5.7 들이기 — 묶음 save · 같은 원본(v1.7.0 · [지식 생성 · 작업실 검토](CDP_지식생성_작업실_검토_v0.1.md) G10 · G12)
+
+- **묶음 `saveRecords`** — `records[] { work, assets? }` ≤ 20 · `vocab`(더하기만) · `dryRun` · `skipExisting`. 뮤텍스 한 번 · `loadRepo` 두 번 · 커밋 하나로 N 건을 쓴다(단건을 300 번 부르면 뮤텍스를 수십 분 쥔다 — 실측 585건 3.6초/회). 섹션 · 등록부 · 어휘 연산 · 큐레이션 · 기준선 · 스냅샷 · 세우기는 받지 않는다 — 관리 문서 층은 큐레이터의 단건 save 다(applied 대조가 생기지 않는다). **전부 또는 전무** — 검사 오류는 `E_CHECK { ids }`. 미러는 기다리지 않는다(`queued`).
+- **같은 원본** — 정형 출처 `<이름>@<commit|->/<경로>#blob:<git blob sha>`(`core/provenance.js`). 같은 blob 의 기록이 있으면 단건 save 도 묶음도 뮤텍스 안에서 `E_EXISTS { existing }` — 두 사람이 같은 폴더를 동시에 들여도 하나만 들어간다. `skipExisting` 이면 묶음은 건너뛰고 `skipped` 로 답한다(다시 돌리기). 손으로 적은 출처(blob 없음)는 비교하지 않는다.
+- 원본이 바뀌면 **새 기록**이다 — 머리줄에 「이전 판 `<id>`」. `supersedes` 는 쓰지 않는다(정정 전용 · G11).
+- 들인 기록의 대기 나이는 태그 `ingest/<YYYYMMDD>-<해시>` 의 날부터 잰다(원문 날짜가 아니다 · `curation.ingestedOf`).
+
 ---
 
 ## 6. 검사 v1.0
@@ -452,7 +459,9 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 | `GET /queue/<id>` | **curate** | 판정 재료 + 등록부 없는 타입마다 비슷한 서식 5 · `canonical`(= `together`) |
 | `GET /curations` | read | 큐레이션 이력 — 판정 · 반영 섹션 수 · 새 문서 |
 | `GET /forms` · `/forms/<묶음>/<번호>` | read | 서식 목록(이 레포가 쓰는 서식은 `used`) · 서식 하나(`stamp` 포함) |
-| `POST /assets` | write | 첨부 올리기(10 MB · png · jpg · gif · webp · pdf · html — 내용으로 가린다 · 24시간 staging) → `ref` |
+| `POST /assets` | write | 첨부 올리기(10 MB · png · jpg · gif · webp · pdf · html — 내용으로 가린다 · 24시간 staging · 한 사람이 들고 있는 합 500 MB · 넘으면 413) → `ref` |
+| `POST /records` | write | 들이기의 묶음 save(§5.7) — `ctx ingest --apply` 가 부른다 |
+| `GET /sources[?run=]` | write | 정형 출처를 가진 기록 `{ id, path, blob, state }` — 이전 판 찾기 · `ctx ingest --status` |
 | `POST /curate` | **curate** | `{ verdict: 'keep', ids(1~50), reason }` → 큐레이션 기록을 지어 save |
 | `POST /docs-drop` | **curate** | `{ docs(1~10), reason, edits?, reviewed?, dryRun? }` → 정리 기록(`docs-prune`)을 지어 save |
 | `POST /baseline` | **curate** | `{ source, asof?, items, vocab?, managed?, dryRun? }` → 기준선 기록을 지어 save |
@@ -528,7 +537,7 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 
 ## 8. CLI — `ctx`
 
-**읽기와 서버 관리만 한다** — 쓰기 길은 서버 save 하나다(I2). 서버 번들의 `bin/ctx.mjs` 하나로 돈다 — 지식 레포 안에는 더 들어가지 않는다.
+**읽기와 서버 관리 · 들이기만 한다** — 쓰기 길은 서버 save 하나다(I2 · 들이기도 서버의 묶음 save 로 쓴다). 서버 번들의 `bin/ctx.mjs` 하나로 돈다 — 지식 레포 안에는 더 들어가지 않는다.
 
 | 명령 | 하는 것 |
 |---|---|
@@ -541,7 +550,9 @@ finding 은 `{ sev, kind, label, items, fix? }` — `fix` 는 누가 무엇으�
 | `ctx repo new <경로> [--title --origin --push --dry --records-from <옛 레포>]` · `repo list --root <폴더>` | 레포 세우기 · 다시 세우기 · 목록 |
 | `ctx baseline extract <옛 레포> --doc <문서> [--src --asof --form --to]` · `baseline push <json> --server <주소> --repo <레포>` | 기준선 뽑기 · 올리기(`CDP_TOKEN` = 큐레이터) |
 | `ctx migrate <레포> [--dry --by <이름> --keep-tools]` | 제자리 이행(§10.2) |
-| `ctx import-dir <원본> --repo <지식레포>` | md 폴더를 `work/` 로 들이기 |
+| `ctx login --server <주소> [--token-stdin]` · `whoami` · `logout` | 이 PC 의 CLI 가 붙을 서버 · 토큰(`/me` 로 확인). logout 은 서버 주소만 잊는다(토큰은 작업 레포 MCP 가 쓴다) |
+| `ctx ingest <파일 · 폴더>… --repo <레포> [--glob --exclude --max-files] [--apply [--yes] \| --status]` · `ingest list` | 문서를 작업 기록으로 들이기 — 계획(기본 · 쓰지 않는다) → 묶음 save(§5.7). 상태는 이 PC 의 `~/.cdp/ingest/<run>/` |
+| `ctx import-dir <원본> --repo <지식레포>` | (곧 없앤다 → `ingest`) md 폴더를 로컬 클론의 `work/` 로 — save 를 비껴간다 |
 
 **없앤 명령** — `mcp`(stdio) · `setup` · `index` · `derive` · `apply` · `sync` · `examples` · `docs drop` · `package`. 부르면 무엇으로 바뀌었는지 한 줄로 답하고 exit 2 다(e252f40).
 

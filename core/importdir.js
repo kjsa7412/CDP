@@ -30,9 +30,9 @@ import { CtxError } from './tools.js'
 
 const NL = String.fromCharCode(10)
 const FM = /^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/
-const KNOWN = new Set(['id', 'title', 'date', 'author', 'source', 'status', 'touches', 'supersedes', 'attachments', 'tags'])
-const SKIP_DIRS = new Set(['.git', 'node_modules', '.claude', '.vite', '.idea', '.vscode', '__pycache__'])
-const COORD = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*:\S+$/
+export const KNOWN = new Set(['id', 'title', 'date', 'author', 'source', 'status', 'touches', 'supersedes', 'attachments', 'tags'])
+export const SKIP_DIRS = new Set(['.git', 'node_modules', '.claude', '.vite', '.idea', '.vscode', '__pycache__'])
+export const COORD = /^[A-Za-z가-힣][A-Za-z0-9가-힣_-]*:\S+$/
 const MAX_NAME = 150
 
 function git(cwd, args) {
@@ -43,7 +43,7 @@ function git(cwd, args) {
   })
 }
 
-async function* walk(root, rel = '') {
+export async function* walk(root, rel = '') {
   const dir = rel ? path.join(root, rel) : root
   let ents
   try {
@@ -61,7 +61,7 @@ async function* walk(root, rel = '') {
   }
 }
 
-function splitFrontmatter(text) {
+export function splitFrontmatter(text) {
   const m = text.match(FM)
   if (!m) return { fm: {}, body: text, hadFm: false }
   let fm = {}
@@ -72,7 +72,7 @@ function splitFrontmatter(text) {
   return { fm, body: text.slice(m[0].length), hadFm: true }
 }
 
-function normDate(v) {
+export function normDate(v) {
   if (v == null) return null
   if (v instanceof Date) {
     const iso = v.toISOString()
@@ -86,7 +86,7 @@ function normDate(v) {
 
 // 출처 조각 — 원 폴더 경로에서 공백 · 쉼표 · 구분자를 `-` 로. `sh` 와 훅이 인용
 // 없이 다뤄도 깨지지 않게(02 §4.2). 앞의 번호 접두(`01_`) 는 뗀다.
-function slugOf(s) {
+export function slugOf(s) {
   return String(s || '')
     .split(/[\\/]+/)
     .map((seg) => seg.replace(/^\d+[._-]\s*/, ''))
@@ -98,7 +98,7 @@ function slugOf(s) {
 }
 
 // 파일명 앞의 날짜를 뗀다 — `2026-09-05_ops로그-…` · `20260905-…` · `2026-0905-…`
-function stripLeadingDate(base) {
+export function stripLeadingDate(base) {
   const m = base.match(/^(\d{4})[-.]?(\d{2})[-.]?(\d{2})[-_. ]*(.*)$/)
   if (m) return { date: `${m[1]}-${m[2]}-${m[3]}`, rest: m[4] || '' }
   return { date: null, rest: base }
@@ -138,7 +138,7 @@ function rewriteLinks(body, fromDir, moved) {
   })
 }
 
-function firstH1(body) {
+export function firstH1(body) {
   let fence = null
   for (const line of body.split(NL)) {
     const f = line.match(/^\s{0,3}(`{3,}|~{3,})/)
@@ -154,7 +154,7 @@ function firstH1(body) {
   return null
 }
 
-const toArr = (v) => (v == null ? [] : Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : [String(v).trim()].filter(Boolean))
+export const toArr = (v) => (v == null ? [] : Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : [String(v).trim()].filter(Boolean))
 
 /**
  * 계획 — 파일을 쓰지 않는다.

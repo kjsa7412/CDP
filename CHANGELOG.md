@@ -3,6 +3,20 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## (다음 판) — v1.7.0
+
+**문서 · 폴더 · 레포에서 지식을 들인다 — `ctx ingest`.** 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md`(G5 · G10~G16) · 실행 `docs/dev/지식생성_작업실_TODO.md`.
+
+- **`ctx ingest <파일 · 폴더>… --repo <레포>`** — 계획(기본 · 쓰지 않는다) → `--apply` 로 작업 기록을 들인다(대기열 → 큐레이터). md · markdown · txt · 본문이 가리키는 그림 · pdf 는 그 기록의 첨부로. 원문 그대로 · 머리에 들임 한 줄 · 날짜는 원문의 날(근거를 남긴다) · 좌표는 비우고 원문의 touches 는 태그 `touches/…`. `--status` · `ingest list` · `--glob` · `--exclude` · `--max-files`. 상태는 이 PC 의 `~/.cdp/ingest/`
+- **`ctx login --server <주소>`** · `whoami` · `logout` — 토큰을 숨김 입력으로 받아 `/me` 로 확인하고 지금 자리(작업 레포가 쓰는 곳)에 둔다
+- **묶음 save** — `POST /api/<레포>/records`(writer) · `core/save.js` 의 `saveRecords`: 기록 ≤20 · 어휘 더하기 · 첨부만 · 한 커밋 · 전부 또는 전무 · `skipExisting`
+- **같은 원본은 한 번만** — 정형 출처 `<이름>@<commit|->/<경로>#blob:<sha>`. 같은 blob 의 기록이 있으면 단건 save 도 `E_EXISTS { existing }`. 원본이 바뀌면 새 기록 + 「이전 판」 머리줄
+- `GET /api/<레포>/sources` — 들인 기록의 출처 · 상태(write 이상)
+- 대기열 — 들인 기록의 대기 나이는 들인 날부터(원문 날짜가 오래돼도 「대기 N일」 이 바로 뜨지 않는다) · 가장 오래 기다린 것으로 경고
+- 첨부 staging — 한 사람이 들고 있는 합 500 MB(넘으면 413)
+- `ctx import-dir` — 다음 판에 없앤다(첫 줄에 안내 · 같은 일은 `ingest` 가 서버 save 로)
+- 스킬 `cdp-curate` — 들인 기록(태그 `ingest/…`) 판정 절
+
 ## (다음 판) — v1.6.0
 
 **화면을 보기 · 작업실 · 서버 세 영역으로 나눈다.** 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md`(G1~G4) · 실행 `docs/dev/지식생성_작업실_TODO.md`.
