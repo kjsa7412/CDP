@@ -19,6 +19,7 @@ import * as git from '../../core/git.js'
 import * as auth from '../../core/auth.js'
 import { save as doSave, saveRecords } from '../../core/save.js'
 import { parseSource } from '../../core/provenance.js'
+import * as jobs from '../../core/jobs.js'
 import { CtxError, driftOf, toolDrift } from '../../core/tools.js'
 import { zip } from '../../core/zip.js'
 import * as wr from '../../core/workrepos.js'
@@ -533,6 +534,11 @@ export async function runServe(opt = {}) {
   const dataDir = opt.data ? path.resolve(opt.data) : null
   // 올린 첨부를 save 전까지 두는 자리(그림 · 첨부 검토 A3) — 레포 밖. `--data` 가 없으면 임시 폴더
   const stagingDir = dataDir ? path.join(dataDir, 'staging') : path.join(os.tmpdir(), 'cdp-staging')
+  // 들이기 잡(core/jobs.js) — git 밖 · 데이터 폴더. 개인 서버도 데이터 폴더가 있다
+  const jobsRoot = dataDir || path.join(os.tmpdir(), 'cdp-data')
+  // LLM 판단을 쓰지 않는 레포(지식 생성 · 작업실 검토 G19) — --no-llm-ingest <레포,…|*> · serve.json noLlmIngest
+  const llmOffList = (Array.isArray(opt.noLlmIngest) ? opt.noLlmIngest : String(opt.noLlmIngest || '').split(',')).map((x) => String(x).trim()).filter(Boolean)
+  const llmOff = (name) => llmOffList.includes('*') || llmOffList.includes(name)
   const log = makeLog(dataDir, { quietReq: !!opt.quietPersonal })
 
   if (!LOOPBACK.test(bind) && !opt.auth) {
@@ -1760,6 +1766,7 @@ export async function runServe(opt = {}) {
             const out = await saveRecords(found.root, body, {
               user: a.user,
               write: a.write,
+              llm: !llmOff(name),
               curate: a.curate ? a.curate(name) : !!a.admin,
               mirror: !!opt.mirror,
               staging: stagingDir,
@@ -1790,10 +1797,73 @@ export async function runServe(opt = {}) {
             if (!src) continue
             if (tag && !(d.tags || []).includes(tag)) continue
             const st = v.curation?.statusOf?.(d.id) || null
-            rows.push({ id: d.id, date: d.date ?? null, author: d.author ?? null, source: d.source, name: src.name, path: src.path, blob: src.blob, state: st?.state || null })
+            rows.push({ id: d.id, date: d.date ?? null, author: d.author ?? null, source: d.source, name: src.name, path: src.path, blob: src.blob, part: src.part, state: st?.state || null })
           }
           log.req({ ip, user: a.user, repo: name, method: 'GET', tool: '/sources', key: String(rows.length), ms: Date.now() - t0, status: 200 })
-          return json(res, 200, { sources: rows })
+          return json(res, 200, { sources: rows, policy: { llm: !llmOff(name) } })
+        }
+
+        // /api/<repo>/jobs — 들이기 잡(진행 보고 · 지식 생성 · 작업실 검토 §6.4). 쓰는 것은 그 CLI(잡의 주인) 하나 ·
+        // 보는 것은 주인과 그 레포의 큐레이터. **남의 잡은 404** — PC 경로가 실려 있어 존재도 알리지 않는다(D4)
+        const jobM = /^\/jobs(?:\/([^/]+)(?:\/(report|done|cancel))?)?\/?$/.exec(sub)
+        if (jobM) {
+          const isCur = a.curate ? a.curate(name) : !!a.admin
+          const send = (status, body, key = '') => {
+            log.req({ ip, user: a.user, repo: name, method: req.method, tool: '/jobs', key, ms: Date.now() - t0, status })
+            return json(res, status, body)
+          }
+          const fail = (e) => {
+            const code = e?.code || 'E_REPO'
+            const status = code === 'E_NOT_FOUND' ? 404 : code === 'E_FORBIDDEN' ? 403 : 400
+            return send(status, { error: { code, message: e?.message || String(e), detail: e?.detail } })
+          }
+          if (!a.write) return send(403, { error: { code: 'E_FORBIDDEN', message: '들이기는 쓰기 권한(writer 이상)이 있어야 한다', detail: { need: 'write' } } })
+          const readJsonBody = async () => {
+            const got = await readBody(req, 4 * 1024 * 1024)
+            try {
+              return got?.tooLarge ? null : JSON.parse(got.toString('utf8') || '{}')
+            } catch {
+              return null
+            }
+          }
+          try {
+            const [, id, act] = jobM
+            if (!id) {
+              if (req.method === 'POST') {
+                const body = await readJsonBody()
+                if (!body) throw new CtxError('E_INPUT', '몸통이 JSON 이 아니다')
+                if (body.options?.llm && llmOff(name)) throw new CtxError('E_FORBIDDEN', '이 레포는 LLM 판단을 쓰지 않는다(서버 설정) — 판단 없이(--no-llm) 들인다', { need: 'llm' })
+                const j = await jobs.createJob(jobsRoot, name, { by: a.user, kind: body.kind, path: body.path, runId: body.runId, options: body.options || {} })
+                return send(200, jobs.viewJob(j), j.id)
+              }
+              if (req.method !== 'GET') return send(405, { error: { code: 'E_INPUT', message: 'GET · POST 다' } })
+              const mine = url.searchParams.get('mine') === '1' || !isCur
+              const list = await jobs.listJobs(jobsRoot, name, { by: mine ? a.user : null })
+              return send(200, { jobs: list.map((j) => { const v = jobs.viewJob(j); delete v.files; return v }), all: !mine, curator: isCur }, String(list.length))
+            }
+            if (!act) {
+              if (req.method !== 'GET') return send(405, { error: { code: 'E_INPUT', message: 'GET 이다' } })
+              const j = await jobs.getJob(jobsRoot, name, id)
+              if (j.by !== a.user && !isCur) throw new CtxError('E_NOT_FOUND', '그런 잡이 없다', { id })
+              // 들어간 기록의 지금 큐레이션 상태 — 저장하지 않고 읽을 때 센다
+              const v = jobs.viewJob(j)
+              const view = await store.view(name)
+              let queued = 0
+              for (const f of Object.values(v.files)) {
+                f.states = (f.ids || []).map((x) => view.curation?.statusOf?.(x)?.state || null)
+                queued += f.states.filter((s) => s === 'queued').length
+              }
+              v.counts.queued = queued
+              return send(200, v, id)
+            }
+            if (req.method !== 'POST') return send(405, { error: { code: 'E_INPUT', message: 'POST 다' } })
+            const body = (await readJsonBody()) || {}
+            if (act === 'report') return send(200, jobs.viewJob(await jobs.reportJob(jobsRoot, name, id, a.user, body)), id)
+            if (act === 'done') return send(200, jobs.viewJob(await jobs.finishJob(jobsRoot, name, id, a.user, { state: body.state })), id)
+            return send(200, jobs.viewJob(await jobs.finishJob(jobsRoot, name, id, a.user, { state: 'cancelled', curator: isCur })), id)
+          } catch (e) {
+            return fail(e)
+          }
         }
 
         // POST /api/<repo>/docs-drop — 안 쓰는 관리 문서 지우기(관리문서 정리 검토 §4.9). **그 레포의 큐레이터**(v1.0 — 관리 문서는

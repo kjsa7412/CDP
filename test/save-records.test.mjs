@@ -50,7 +50,8 @@ test('provenance — git 과 같은 blob · 정형 출처 읽고 쓰기', () => 
   assert.equal(blobSha(Buffer.from('hello\n')), 'ce013625030ba8dba906f756967f9e9ca394464a', 'git hash-object 와 같다')
   const s = formatSource({ name: 'spec', commit: 'abc1234', path: 'a\\b.md', blob: blobSha('x') })
   assert.match(s, /^spec@abc1234\/a\/b\.md#blob:[0-9a-f]{40}$/)
-  assert.deepEqual(parseSource(s), { name: 'spec', commit: 'abc1234', path: 'a/b.md', blob: blobSha('x') })
+  assert.deepEqual(parseSource(s), { name: 'spec', commit: 'abc1234', path: 'a/b.md', blob: blobSha('x'), part: null })
+  assert.equal(blobOf(formatSource({ name: 'spec', path: 'a.md', blob: blobSha('x'), part: 2 })), blobSha('x') + ':2', '조각은 열쇠에 붙는다')
   assert.equal(parseSource(formatSource({ name: 'D:\\x', path: 'a.md', blob: blobSha('x') })).commit, null, 'git 이 아니면 -')
   assert.equal(blobOf('dpms_docs@1a2b3c4/설계/a.md'), null, 'seed 의 출처는 blob 이 없다')
   assert.equal(blobOf(null), null)
@@ -197,5 +198,18 @@ test('staging — 한 사람의 합 상한(413) · 같은 내용은 다시 세�
     assert.ok(a.ref.startsWith('sha256:'))
   } finally {
     await fs.rm(d, { recursive: true, force: true })
+  }
+})
+
+test('saveRecords — LLM 을 쓰지 않는 레포(llm: false)는 판단을 거친 기록(ingest-llm)을 받지 않는다', { skip }, async () => {
+  const t = await repo()
+  try {
+    const judged = rec('2026-0814-spec-llm', { tags: ['ingest/20261021-abcd1234', 'ingest-llm'] })
+    await assert.rejects(saveRecords(t.r, { records: [judged] }, { ...W, llm: false }), (e) => e.code === 'E_FORBIDDEN' && e.detail.need === 'llm')
+    const plain = rec('2026-0814-spec-plain')
+    const out = await saveRecords(t.r, { records: [plain] }, { ...W, llm: false })
+    assert.deepEqual(out.ids, [plain.work.id])
+  } finally {
+    await t.rm()
   }
 })

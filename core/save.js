@@ -1215,9 +1215,9 @@ function sameBlob(r, source) {
 export const RECORDS_MAX = 20
 const RECORDS_KEYS = ['records', 'vocab', 'dryRun', 'skipExisting']
 
-export async function saveRecords(root, input, { user, write = false, mirror = false, now = Date.now(), log = null, commitTimeout = COMMIT_TIMEOUT_MS, staging = null, commitHooks = false, curate = false } = {}) {
+export async function saveRecords(root, input, { user, write = false, mirror = false, now = Date.now(), log = null, commitTimeout = COMMIT_TIMEOUT_MS, staging = null, commitHooks = false, curate = false, llm = true } = {}) {
   const out = await withLock(path.resolve(root), async () => {
-    const r = await runRecords(root, input, { user, write, curate, now, staging })
+    const r = await runRecords(root, input, { user, write, curate, now, staging, llm })
     const base = { ids: r.ids, skipped: r.skipped, vocab: r.vocab, ...(r.assets.length ? { assets: r.assets } : {}), warnings: r.warnings, mirror: 'off' }
     if (r.dryRun || !r.ids.length) {
       await r.snap.restore()
@@ -1233,7 +1233,7 @@ export async function saveRecords(root, input, { user, write = false, mirror = f
   return out
 }
 
-async function runRecords(root, input, { user, write, curate, now, staging }) {
+async function runRecords(root, input, { user, write, curate, now, staging, llm = true }) {
   if (!write) throw new CtxError('E_FORBIDDEN', '쓰기 권한이 없다', { user, need: 'write' })
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new CtxError('E_INPUT', '몸통은 { records: [...] } 다', { field: 'records' })
   for (const k of Object.keys(input)) {
@@ -1260,6 +1260,8 @@ async function runRecords(root, input, { user, write, curate, now, staging }) {
     }
     const why = curatorOnly({}, w)
     if (why.length) throw new CtxError(curate ? 'E_INPUT' : 'E_FORBIDDEN', `records[${i}](${w.id}) — 묶음에는 사람의 작업 기록만 싣는다: ${why.join(' · ')} 는 단건 save`, { index: i, id: w.id, fields: why, ...(curate ? {} : { need: 'curate' }) })
+    // LLM 판단을 쓰지 않는 레포(G19) — 판단 단계를 거친 기록(태그 ingest-llm)은 받지 않는다
+    if (!llm && (w.tags || []).includes('ingest-llm')) throw new CtxError('E_FORBIDDEN', `records[${i}](${w.id}) — 이 레포는 LLM 판단을 쓰지 않는다(서버 설정). 판단 없이(--no-llm) 들인다`, { index: i, id: w.id, need: 'llm' })
     if (!(w.touches || []).length && !w.touchesEmpty) {
       throw new CtxError('E_INPUT', `records[${i}](${w.id}) — touches 가 비었다. 좌표를 판정하지 않고 들이면 work.touchesEmpty 에 사유를 적는다(큐레이터가 판정한다)`, { index: i, id: w.id, field: 'work.touches' })
     }

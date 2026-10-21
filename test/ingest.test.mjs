@@ -66,7 +66,7 @@ test('planIngest — id · 날짜 근거 · 원문 좌표는 tags · 그림은 �
     assert.equal(rec.work.touches, undefined, '좌표를 추측하지 않는다')
     assert.ok(rec.work.touchesEmpty)
     assert.deepEqual(rec.work.tags, [`ingest/${RUN}`, 'touches/table:pj_plan_mst', 'owner/kim'], '좌표 모양만 보존 · status 는 소거')
-    assert.deepEqual(parseSource(rec.work.source), { name: '설계문서', commit: null, path: '회의록/2026-08-14_정산회의.md', blob: rec.blob })
+    assert.deepEqual(parseSource(rec.work.source), { name: '설계문서', commit: null, path: '회의록/2026-08-14_정산회의.md', blob: rec.blob, part: null })
     assert.deepEqual(rec.assets.map((a) => a.name), ['구성 도.png', '명세.pdf'])
     assert.ok(rec.work.body.includes(`](<assets/${rec.id}/구성 도.png>)`), '공백 든 경로는 꺾쇠로')
     assert.ok(rec.work.body.includes(`](assets/${rec.id}/명세.pdf)`))
@@ -155,6 +155,9 @@ async function server() {
   await run(process.execPath, [CLI, 'serve', 'user', 'add', '--auth', auth, '--name', 'hong', '--role', 'viewer', '--repos', 'kb'])
   const vt = await run(process.execPath, [CLI, 'serve', 'token', '--auth', auth, '--user', 'hong'])
   const viewerToken = String(vt.stdout || '').split(NL).map((l) => l.trim()).find((l) => /^[A-Za-z0-9_-]{30,}$/.test(l))
+  await run(process.execPath, [CLI, 'serve', 'user', 'add', '--auth', auth, '--name', 'lee', '--role', 'writer', '--repos', 'kb'])
+  const wt = await run(process.execPath, [CLI, 'serve', 'token', '--auth', auth, '--user', 'lee'])
+  const writerToken = String(wt.stdout || '').split(NL).map((l) => l.trim()).find((l) => /^[A-Za-z0-9_-]{30,}$/.test(l))
   const port = 7500 + Math.floor(Math.random() * 60)
   const srv = spawn(process.execPath, [CLI, 'serve', '--root', root, '--auth', auth, '--data', path.join(base, 'data'), '--port', String(port)], { stdio: 'ignore' })
   const url = `http://127.0.0.1:${port}`
@@ -177,7 +180,7 @@ async function server() {
     await new Promise((r) => setTimeout(r, 300))
     await fs.rm(base, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 })
   }
-  return { base, url, token, viewerToken, ctx, commits, works, rm, kb: path.join(root, 'kb') }
+  return { base, url, token, viewerToken, writerToken, ctx, commits, works, rm, kb: path.join(root, 'kb') }
 }
 
 test('ctx ingest — 끝까지: 계획 · 들이기(커밋 1) · 다시 0 · 고치면 1(이전 판) · 두 PC 동시 · 권한', { skip: !hasGit && 'git 이 없다', timeout: 300_000 }, async () => {
@@ -307,6 +310,74 @@ test('planIngest — docx 를 변환해 들인다 · 그림은 그 기록의 첨
     assert.ok(r.work.body.includes('결정 — 한도 10MB'))
     assert.equal(parseSource(r.work.source).blob, blobSha(buf), '출처는 원본(docx)의 blob')
   } finally {
+    await s.rm()
+  }
+})
+
+test('ctx ingest --analyze · review · apply — 가짜 claude 로 끝까지: 후보 · 승인 · 나눔 · 어휘 · 잡 · 남의 잡 404', { skip: !hasGit && 'git 이 없다', timeout: 300_000 }, async () => {
+  const S = await server()
+  const s = await srcDir({ 'a.md': '# A\n\nPLC 를 정의한다. 새것을 들인다.\n', 'b.md': '# B\n\n첫 결정 PLC.\n\n## 둘째\n\n다른 결정.\n', 'c.md': '# 서식\n\n(빈칸)\n', 'd.md': '# D\n\n깨짐\n' })
+  const H = { authorization: 'Bearer ' + S.token, 'content-type': 'application/json' }
+  try {
+    // 어휘 — term:PLC 를 먼저 등재해 둔다(writer 의 어휘 더하기)
+    const seed = await fetch(S.url + '/api/kb/records', { method: 'POST', headers: H, body: JSON.stringify({ records: [{ work: { id: '2026-0101-씨앗', title: '씨앗', date: '2026-01-01', touches: ['term:PLC'], body: 'PLC 등재' } }], vocab: [{ coord: 'term:PLC', label: 'PLC' }] }) })
+    assert.equal(seed.status, 200, await seed.text())
+    const extra = { CDP_CLAUDE: path.join(HERE, 'fixtures', 'fake-claude.mjs'), CDP_KIT: path.join(HERE, '..', 'agent') }
+    const an = await S.ctx(['ingest', s.root, '--analyze'], { extra })
+    assert.equal(an.code, 1, an.text) // d.md 는 판단이 깨진다
+    assert.match(an.text, /✓ a\.md — 결정 · 좌표 후보 2/)
+    assert.match(an.text, /✓ b\.md — 결정 · 2개로/)
+    assert.match(an.text, /✓ c\.md — 제외/)
+    assert.match(an.text, /✗ d\.md — /)
+    const dir = path.join(S.base, 'ingest-a')
+    const run = (await fs.readdir(dir))[0]
+    const reviewPath = path.join(dir, run, 'review.md')
+    let review = await fs.readFile(reviewPath, 'utf8')
+    assert.match(review, /- \[x\] `term:PLC` 정의/)
+    assert.match(review, /- \[ \] `term:새것` \(미등재\)/)
+    assert.ok(!(await fs.readdir(path.join(dir, run))).includes('mcp.json'), 'MCP 설정(토큰)은 끝나면 지운다')
+    // 사람이 고친다 — a 의 새것과 그 어휘를 고른다
+    review = review.replace('- [ ] `term:새것` (미등재)', '- [x] `term:새것` (미등재)').replace('- [ ] `term:새것` 새것', '- [x] `term:새것` 새것')
+    await fs.writeFile(reviewPath, review)
+    // 다시 판단해도 이미 한 것은 건너뛴다 · 체크는 남는다
+    const an2 = await S.ctx(['ingest', s.root, '--analyze'], { extra })
+    assert.match(an2.text, /판단 1건/, '깨진 d.md 만 다시')
+    assert.match(await fs.readFile(reviewPath, 'utf8'), /- \[x\] `term:새것` \(미등재\)/)
+
+    const ap = await S.ctx(['ingest', s.root, '--apply'], { extra })
+    assert.equal(ap.code, 0, ap.text)
+    assert.match(ap.text, /들임 4 · /, ap.text) // a · b 둘 · d(판단 없이) — c 는 제외
+    const texts = await Promise.all((await S.works()).map(async (n) => [n, await fs.readFile(path.join(S.kb, 'work', n), 'utf8')]))
+    const a = texts.find(([, t]) => t.includes('새것을 들인다'))[1]
+    assert.match(a, /touches:\n {2}- term:PLC\n {2}- term:새것/)
+    assert.match(a, /ingest-llm/)
+    const vocabText = await fs.readFile(path.join(S.kb, '_vocab.md'), 'utf8')
+    assert.match(vocabText, /term:새것/, '고른 어휘가 들어갔다')
+    const parts = texts.filter(([n]) => /-[12]\.md$/.test(n))
+    assert.equal(parts.length, 2, 'b 는 둘로')
+    assert.ok(parts.some(([n]) => n.startsWith('2026-0301-')), '판단의 날짜')
+    assert.ok(parts.every(([, t]) => /나눔 [12]\/2/.test(t)))
+    assert.ok(!texts.some(([, t]) => t.includes('(빈칸)')), '제외는 들이지 않는다')
+    const d = texts.find(([, t]) => t.includes('깨짐'))[1]
+    assert.ok(!d.includes('ingest-llm'), '판단이 깨진 것은 판단 없이')
+
+    // 잡 — 주인 · 큐레이터는 본다 · 남(writer)은 404 · viewer 는 403
+    const list = await (await fetch(S.url + '/api/kb/jobs', { headers: H })).json()
+    assert.equal(list.jobs.length, 1)
+    const j = list.jobs[0]
+    assert.equal(j.state, 'saved')
+    assert.equal(j.kind, 'folder')
+    const detail = await (await fetch(S.url + '/api/kb/jobs/' + j.id, { headers: H })).json()
+    assert.equal(detail.files['a.md'].status, 'saved')
+    assert.equal(detail.files['c.md'].status, 'skipped', '판단 「제외」')
+    assert.equal(detail.counts.queued, 4, '들인 기록이 대기열에')
+    const W = { authorization: 'Bearer ' + S.writerToken, 'content-type': 'application/json' }
+    assert.equal((await fetch(S.url + '/api/kb/jobs/' + j.id, { headers: W })).status, 404, '남의 잡은 없는 것')
+    assert.equal((await (await fetch(S.url + '/api/kb/jobs', { headers: W })).json()).jobs.length, 0)
+    assert.equal((await fetch(S.url + '/api/kb/jobs/' + j.id + '/report', { method: 'POST', headers: W, body: '{"files":[]}' })).status, 404)
+    assert.equal((await fetch(S.url + '/api/kb/jobs', { headers: { authorization: 'Bearer ' + S.viewerToken } })).status, 403)
+  } finally {
+    await S.rm()
     await s.rm()
   }
 })

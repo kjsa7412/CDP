@@ -334,14 +334,18 @@ export async function planIngest(inputs, { include = [], exclude = [], maxFiles 
 
       const att = c ? convAssets(c, { abs, rel, id, size: raw.length }) : md ? await attachOf(body, { root: t.root, rel, id }) : { assets: [], body, warnings: [] }
       row.warnings.push(...att.warnings)
-      const head = [
-        `> 들임 — 원문 \`${rel}\`${commit ? ` @ ${commit}` : ''}`,
-        writer ? ` · 원문 작성 ${writer}` : '',
-        ` · 들인 날 ${today}`,
-        c ? ` · 변환 ${ext.slice(1)} → md` : '',
-        dateSource !== 'frontmatter' ? ` · 날짜 근거 ${dateSource}` : '',
-        prev ? ` · 이전 판 [\`${prev.id}\`](${prev.id}.md)` : '',
-      ].join('')
+      // 머리줄 — 판단 단계가 나누거나 날짜를 고치면 그 몫을 더해 다시 짓는다(core/judge.js 의 recordsFrom)
+      const headOf = ({ part = null, of = 1, lines = null, date: dj = null } = {}) =>
+        [
+          `> 들임 — 원문 \`${rel}\`${commit ? ` @ ${commit}` : ''}`,
+          part ? ` · 나눔 ${part}/${of} · 원문 줄 ${lines[0]}–${lines[1]}` : '',
+          writer ? ` · 원문 작성 ${writer}` : '',
+          ` · 들인 날 ${today}`,
+          c ? ` · 변환 ${ext.slice(1)} → md` : '',
+          dj ? ` · 날짜 근거 판단${dj.evidence ? ` — ${dj.evidence.replace(/\n/g, ' ')}` : ''}` : dateSource !== 'frontmatter' ? ` · 날짜 근거 ${dateSource}` : '',
+          prev ? ` · 이전 판 [\`${prev.id}\`](${prev.id}.md)` : '',
+        ].join('')
+      const head = headOf()
       const out = [head, '', att.body.replace(/^\s*\n/, '').replace(/\s*$/, ''), ''].join(NL)
       if (Buffer.byteLength(out, 'utf8') > MAX_BODY_BYTES) {
         row.reason = `본문이 ${Math.round(Buffer.byteLength(out, 'utf8') / 1024)} KB — 한 번에 보낼 상한 밖 · 나눠 들인다`
@@ -360,6 +364,15 @@ export async function planIngest(inputs, { include = [], exclude = [], maxFiles 
         prev: prev?.id || null,
         coords,
         assets: att.assets,
+        // 판단 단계의 재료 — 줄 번호는 이 글(링크를 다시 이은 원문)의 것이다
+        bodyText: att.body.replace(/^\s*\n/, '').replace(/\s*$/, ''),
+        lines: att.body.replace(/^\s*\n/, '').replace(/\s*$/, '').split(NL).length,
+        head: headOf,
+        idOf: (d, part) => {
+          let x = idOf(d, t.name, rel, blob)
+          return part ? x + '-' + part : x
+        },
+        sourceOf: (part) => formatSource({ name: t.name, commit, path: rel, blob, part }),
         work: {
           id,
           title,

@@ -13,7 +13,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { hereDir } from '../server/runtime.js'
 
-export const CONFIG_KEYS = ['root', 'auth', 'data', 'web', 'bind', 'port', 'mirror', 'adminFrom', 'publicUrl', 'manual', 'forms', 'kit']
+export const CONFIG_KEYS = ['root', 'auth', 'data', 'web', 'bind', 'port', 'mirror', 'adminFrom', 'publicUrl', 'manual', 'forms', 'kit', 'noLlmIngest']
 
 export async function findServeConfig({ explicit = null, env = process.env, binDir = hereDir(import.meta.url) } = {}) {
   const cands = [explicit, env.CDP_SERVE_CONFIG, path.resolve(binDir, '..', 'serve.json')].filter(Boolean)
