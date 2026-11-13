@@ -884,7 +884,7 @@ await check(106, '받은 설치기 한 줄로 빈 레포에 설치 → 대장 �
   must(/대장에 보고했습니다/.test(a.stdout), '보고 없음 — ' + a.stdout.slice(-120))
   const mcp = JSON.parse(await fs.readFile(path.join(W3, '.mcp.json'), 'utf8')).mcpServers
   must(mcp.other && mcp.cdp, '다른 MCP 서버가 사라졌거나 cdp 가 없다')
-  must(mcp.cdp.headers.Authorization === 'Bearer ${CDP_TOKEN}', '원문이 박혔다')
+  must(mcp.cdp.headersHelper && !JSON.stringify(mcp.cdp).includes(TK3), '원문이 박혔거나 headersHelper 가 없다')
   const skills = await fs.readdir(path.join(W3, '.claude', 'skills'))
   must(kitSkillsOk(skills), `스킬 ${skills.join(' · ')}`)
   const rows = (await (await H.call('/workrepos', bearer(TK3))).json()).repos

@@ -47,7 +47,7 @@ curl.exe -fsSLo "$env:TEMP\cdp-install.mjs" http://<서버>:7374/install.mjs; if
 4. **병합** — `core/setup.js` 한 벌. 바뀔 것을 보여 주고 묻는다(`--dry` 는 보기만 · `--yes` 는 묻지 않는다).
 
    ```
-   .mcp.json             cdp 항목만 — 서버 /mcp/<레포> · Authorization: Bearer ${CDP_TOKEN}. 다른 MCP 서버는 그대로
+   .mcp.json             cdp 항목만 — 서버 /mcp/<레포> · headersHelper(연결마다 CDP_TOKEN → ~/.config/cdp/token 을 읽는 node 한 줄). 다른 MCP 서버는 그대로
    .claude/cdp.json      { "server": …, "repo": … }
    .claude/skills/cdp-*  cdp- 로 시작하는 것만 간다 — kit 에서 사라진 cdp- 스킬은 치운다 · 남의 스킬은 둔다
    CLAUDE.md             <!-- cdp:begin --> … <!-- cdp:end --> 블록만 · 첫 줄 <!-- cdp:kit <해시> --> · 나머지는 그대로

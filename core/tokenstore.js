@@ -1,6 +1,8 @@
 // 토큰을 이 PC 에 둔다 — 설치기(`viewer/bin/cdp-install.mjs`)가 부른다. 설치 한 줄 TODO I4.
 //
-// **왜 환경변수인가.** `.mcp.json` 의 `Authorization: Bearer ${CDP_TOKEN}` 을 Claude Code 가 시작할 때
+// MCP 연결은 이제 `.mcp.json` 의 headersHelper 가 이 파일을 직접 읽는다(D3 · `core/setup.js` TOKEN_HELPER) — 아래 rc 줄은
+// CLI(`ctx` · curl)를 위해 남는다. 아래는 그 전의 까닭이다.
+// **왜 환경변수였나.** `.mcp.json` 의 `Authorization: Bearer ${CDP_TOKEN}` 을 Claude Code 가 시작할 때
 // **프로세스 환경변수로만** 채운다 — `.claude/settings.local.json` 의 `env` 로는 안 채워졌다
 // (실측 · Claude Code 2.1.92 · I5). 그래서 파일 한 곳이 아니라 이 사람의 환경에 둔다.
 //

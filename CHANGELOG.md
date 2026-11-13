@@ -3,6 +3,10 @@
 태그마다 한 절. 릴리스 노트는 여기서 나온다(`.github/workflows/release.yml`).
 **무엇이 바뀌었나**만 적는다 — 왜는 커밋 메시지와 설계서에 있다.
 
+## 다음 판
+
+- **`.mcp.json` 의 토큰을 `headersHelper` 로** — 연결마다 `node -e` 한 줄이 `CDP_TOKEN` → `~/.config/cdp/token` 을 읽어 헤더로 낸다. 전의 `Bearer ${CDP_TOKEN}` 은 rc 를 안 읽고 뜬 데스크톱 앱(Dock)에서 비어 401(「토큰을 찾을 수 없다」)이었다. 있는 레포는 `install.mjs --update` 로 바뀐다
+
 ## v1.9.0
 
 **화면을 보기 · 작업실 · 서버로 나누고, 문서 · 폴더 · 레포에서 지식을 들인다(`ctx ingest`).** v1.6 ~ v1.9 의 네 단계를 한 판으로 낸다. 검토 `docs/design/CDP_지식생성_작업실_검토_v0.1.md` · 실행 `docs/dev/지식생성_작업실_TODO.md`.

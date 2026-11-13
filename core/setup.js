@@ -256,11 +256,32 @@ export function mergeCuratorFile(rel, data, cur, kit) {
   return data
 }
 
+// ── 토큰 헤더 — `headersHelper` (제품화 2 D3) ─────────────────────────────
+//
+// 전에는 `headers: { Authorization: 'Bearer ${CDP_TOKEN}' }` 였다. 그 값은 Claude Code 가 **뜰 때의 환경변수**로만
+// 채워진다 — rc 를 읽지 않고 뜬 호스트(Dock 에서 연 데스크톱 앱 · IDE)는 빈 값을 보내 401(「토큰을 찾을 수
+// 없다」)이 났다(2026-11-13 실측). `headersHelper` 는 연결할 때마다 명령을 돌려 stdout 의 JSON 을 헤더로 쓴다.
+//
+// 읽는 순서는 `loadToken` 과 같다 — env `CDP_TOKEN` → `CDP_CONFIG_DIR/token` → `~/.config/cdp/token`.
+// Windows 는 사용자 환경변수(HKCU)라 새로 뜬 프로세스의 env 에 이미 있다.
+//
+// **명령이 한 줄이어야 하는 까닭.** 도우미는 Claude Code 를 띄운 폴더(하위 폴더일 수 있다)에서 돈다 — 레포 안
+// 스크립트를 상대 경로로 부를 수 없다(실측: pwd 가 띄운 하위 폴더). `node` 는 설치기를 돌린 PC 에 이미 있다.
+// sh 와 cmd 의 큰따옴표 안에서 둘 다 그대로 넘도록 코드에 `$` · `%` · 백틱 · 역슬래시 · 큰따옴표를 쓰지 않는다.
+const HELPER_JS = [
+  "const f=require('fs'),p=require('path'),o=require('os'),e=process.env;",
+  "let t=(e.CDP_TOKEN||'').trim();",
+  "if(!t)try{t=f.readFileSync(p.join(e.CDP_CONFIG_DIR||p.join(o.homedir(),'.config','cdp'),'token'),'utf8').trim()}catch(x){}",
+  "if(!t){process.stderr.write('cdp: no token - CDP_TOKEN or ~/.config/cdp/token');process.exit(1)}",
+  "process.stdout.write(JSON.stringify({Authorization:'Bearer '+t}))",
+].join('')
+export const TOKEN_HELPER = `node -e "${HELPER_JS}"`
+
 export function mcpEntryServer(server, repo) {
   return {
     type: 'http',
     url: String(server).replace(/\/+$/, '') + '/mcp/' + repo,
-    headers: { Authorization: 'Bearer ${CDP_TOKEN}' },
+    headersHelper: TOKEN_HELPER,
   }
 }
 

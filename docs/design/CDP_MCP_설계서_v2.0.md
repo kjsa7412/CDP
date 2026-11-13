@@ -28,7 +28,7 @@
 
 ```
 호스트(Claude Code) ──HTTP POST /mcp/<레포>── ctx serve ──┬── 인증(명부 · Bearer)            core/auth.js
-   .mcp.json: type http · Bearer ${CDP_TOKEN}             ├── buildServer(요청마다)          viewer/bin/ctx-mcp.mjs
+   .mcp.json: type http · headersHelper(토큰)             ├── buildServer(요청마다)          viewer/bin/ctx-mcp.mjs
                                                           │     도구 · 리소스 · prompts · instructions
                                                           ├── 레포 캐시(HEAD sha)             makeRepoCache
                                                           └── saver → core/save.js           뮤텍스 · 검사 · 커밋 · 미러
@@ -299,7 +299,7 @@ node cdp-install.mjs --folder --repo <레포> <skills 폴더>                   
 개인 서버는 `ctx up <레포> --install … --curator … --skills …` 가 같은 설치기를 personal 토큰으로 부른다(토큰 복사 0 · 제품화 2 ③).
 **토큰 자리** — `CDP_TOKEN` → `~/.config/cdp/token`(`CDP_CONFIG_DIR` 이면 그 폴더 · Windows 는 사용자 환경변수). rc 를 안 읽는 셸 · cron 에서도 `--update --yes` 가 돈다.
 **설치 목록**(`core/localreg.js`)의 행은 `kind` — `work` · `curator` · `folder` — 셋 다 `--update` 가 돈다. 서버 주소의 루프백 별칭(localhost · 127.0.0.1 · [::1])은 하나로 본다.
-**`.mcp.json` 의 토큰 전달** — 지금은 `${CDP_TOKEN}` 헤더(시작할 때 환경변수로만 채워진다 → 설치 뒤 Claude Code 재시작). Claude Code 가 문서화한 `headersHelper`(연결마다 명령의 stdout JSON 을 헤더로 · `/mcp` 재연결로 새 토큰)로 바꾸면 rc 줄과 재시작이 빠진다 — 프로젝트 신뢰 승인이 있어야 돌고 Windows 동작은 문서에 없어 **실측 뒤** 바꾼다(제품화 2 D3).
+**`.mcp.json` 의 토큰 전달** — `headersHelper`(제품화 2 D3 · `core/setup.js` 의 `TOKEN_HELPER`). 연결마다 `node -e` 한 줄이 `CDP_TOKEN` → `CDP_CONFIG_DIR/token` → `~/.config/cdp/token` 순으로 읽어 `{"Authorization":"Bearer …"}` 를 낸다 · 없으면 exit 1. 전의 `Bearer ${CDP_TOKEN}` 헤더는 Claude Code 가 **뜰 때의 환경변수**로만 채워서, rc 를 안 읽고 뜬 데스크톱 앱(Dock)은 빈 값을 보내 401 이었다. 실측(2026-11-13 · Claude Code 2.1.216 · macOS): `CDP_TOKEN` 을 뺀 프로세스에서 `--mcp-config` 로 붙어 `tools/list` 200 · 도우미의 pwd 는 띄운 **하위 폴더**(레포 안 스크립트를 상대 경로로 못 부른다 → 한 줄). 코드에 `$` · `%` · 백틱 · 역슬래시 · 큰따옴표가 없어 sh 와 cmd 의 큰따옴표를 둘 다 넘는다 — **Windows 실기기는 아직 안 쟀다.** rc 줄은 CLI(`ctx` · curl)를 위해 남긴다.
 
 | 길 | 하는 것 |
 |---|---|
@@ -310,7 +310,7 @@ node cdp-install.mjs --folder --repo <레포> <skills 폴더>                   
 `.mcp.json` 의 항목 —
 
 ```json
-{ "mcpServers": { "cdp": { "type": "http", "url": "<서버>/mcp/<레포>", "headers": { "Authorization": "Bearer ${CDP_TOKEN}" } } } }
+{ "mcpServers": { "cdp": { "type": "http", "url": "<서버>/mcp/<레포>", "headersHelper": "node -e \"…토큰을 읽어 {Authorization} JSON…\"" } } }
 ```
 
 `.claude/cdp.json` 은 `{ server, repo }` — PC 와 무관하므로 커밋한다. 팀원은 `git pull` 과 토큰만으로 끝난다.

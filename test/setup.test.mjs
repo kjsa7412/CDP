@@ -6,7 +6,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
-import { BEGIN, END, KIT_MARK, kitOf, mergeClaude, mergeMcpJson, mcpEntryServer } from '../core/setup.js'
+import { BEGIN, END, KIT_MARK, kitOf, mergeClaude, mergeMcpJson, mcpEntryServer, TOKEN_HELPER } from '../core/setup.js'
 
 const BODY = '## 업무 맥락\n\n지식 레포가 딸려 있다.\n'
 
@@ -68,9 +68,43 @@ test('mergeMcpJson — cdp 키만 병합 · 다른 서버는 그대로 · 깨진
   assert.ok(mergeMcpJson(null, entry).endsWith('\n'))
 })
 
-test('mcpEntryServer — 끝 슬래시를 떼고 /mcp/<repo> · 토큰은 환경변수 자리표시자', () => {
+test('mcpEntryServer — 끝 슬래시를 떼고 /mcp/<repo> · 토큰은 headersHelper 가 연결 때 읽는다', () => {
   const e = mcpEntryServer('http://10.10.20.188:7374///', 'gdi')
   assert.equal(e.type, 'http')
   assert.equal(e.url, 'http://10.10.20.188:7374/mcp/gdi')
-  assert.equal(e.headers.Authorization, 'Bearer ${CDP_TOKEN}')
+  assert.equal(e.headersHelper, TOKEN_HELPER)
+  // 정적 헤더를 두지 않는다 — ${CDP_TOKEN} 이 비면 그 빈 값이 나가 401 이었다(D3)
+  assert.equal(e.headers, undefined)
+})
+
+test('TOKEN_HELPER — sh · cmd 의 큰따옴표 안에서 넘는 글자만 · env → CDP_CONFIG_DIR/token 순 · 없으면 exit 1', async () => {
+  const { spawnSync } = await import('node:child_process')
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  assert.match(TOKEN_HELPER, /^node -e "[^"]+"$/)
+  assert.doesNotMatch(TOKEN_HELPER.slice(9, -1), /[$%`\\]/)
+  // 셸을 거치지 않고 같은 코드를 돌린다 — 따옴표를 벗긴 그 문자열이 셸이 node 에 넘기는 것이다
+  const code = TOKEN_HELPER.slice(9, -1)
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cdp-helper-'))
+  const env = (extra) => {
+    const e = { ...process.env, ...extra }
+    for (const k of Object.keys(extra)) if (extra[k] === undefined) delete e[k]
+    return e
+  }
+  const run = (extra) => spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', env: env(extra) })
+  try {
+    let r = run({ CDP_TOKEN: ' abc ', CDP_CONFIG_DIR: dir })
+    assert.deepEqual(JSON.parse(r.stdout), { Authorization: 'Bearer abc' })
+    fs.writeFileSync(path.join(dir, 'token'), 'zz\n')
+    r = run({ CDP_TOKEN: undefined, CDP_CONFIG_DIR: dir })
+    assert.deepEqual(JSON.parse(r.stdout), { Authorization: 'Bearer zz' })
+    fs.rmSync(path.join(dir, 'token'))
+    r = run({ CDP_TOKEN: undefined, CDP_CONFIG_DIR: dir })
+    assert.equal(r.status, 1)
+    assert.equal(r.stdout, '')
+    assert.match(r.stderr, /no token/)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
